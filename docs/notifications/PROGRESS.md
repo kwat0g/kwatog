@@ -34,7 +34,7 @@
 | F-05. CRM inquiry badge filter parity | `notifications/fix-inquiry-badge-parity` | [#342](https://github.com/kwat0g/kwatog/pull/342) | merged as `2c0a78dd` |
 | F-36. CRM inquiry triage audience | `notifications/triage-inquiry-badge` | [#384](https://github.com/kwat0g/kwatog/pull/384) | merged as `cc377cc4` |
 | F-37. MRB held-list badge | `notifications/mrb-holds-sidebar-main` | [#490](https://github.com/kwat0g/kwatog/pull/490) | merged as `bac068db` |
-| F-38. Mid-pipe shipment badge | `notifications/mid-pipe-shipments` | [#386](https://github.com/kwat0g/kwatog/pull/386) | pending |
+| F-38. Mid-pipe shipment badge | `notifications/mid-pipe-shipments` | [#386](https://github.com/kwat0g/kwatog/pull/386) | `39012119` |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -74,9 +74,9 @@
 - NotificationService call sites inventoried: **129 / 129** found by scan and cross-check; all 129 remain on existing entry points.
 - Direct `Mail::to(...)` call sites inventoried: **27 / 27** under `api/app`; mail recipient runtime outcomes not tested.
 - Direct Laravel `->notify()` / `Notification::send()` and central preference email paths inventoried in discovery; mail-only account/security and summary paths remain separate.
-- Internal sidebar routes inventoried: **73 / 73**; portal routes: **19 / 19**; compact-shell links: **9 / 9**.
-- Phase 2 catalog now defines **88** signal IDs after splitting the budget and transfer approval queues by source list; this keeps the approved maker-checker recipient rule unchanged. Static cross-reference found no undefined IDs in the 73 internal, 19 portal, or 9 compact route rows. Disabled/deferred signals stay labeled in the policy table.
-- Badge definitions inventoried: **29**; currently wired to internal nav: **22**; unwired: **7**.
+- Internal sidebar routes: **73** in the Phase 0 baseline; current branches add `/budgeting/transfers`, `/inventory/mrb`, and `/supply-chain/shipments` (**76 current**); portal routes: **19**; compact-shell links: **9**.
+- Phase 2 approved **87** signal IDs; the budget/transfer split, MRB holds, and mid-pipe shipments bring implementation to **90** without changing notification recipients. Baseline cross-reference covered 73 internal, 19 portal, and nine compact routes.
+- Badge definitions inventoried: **29**; AP unpaid and due-soon add two signals (**31**); baseline wired to internal nav: **22**; current branches wire **28**, leaving **3** unattached.
 - Local role slugs: **17**; existing role-access audit says **16**. Reconcile before role-complete claim.
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
 - Unit 1 code changes are limited to `NotificationService` envelope normalization, its unit and portal tests, the SPA notification data type, and schema/progress documentation. No database migration or existing-row rewrite is needed.
