@@ -35,7 +35,7 @@ class NotifyOnOvertimeSubmitted implements ShouldQueue
                 ->filter(fn (User $user): bool => $user->hasPermission('attendance.ot.approve'))
                 ->values();
 
-            $this->notifications->send($audience, 'attendance.ot_submitted', [
+            $this->notifications->sendForSubject($ot, $audience, 'attendance.ot_submitted', [
                 'title'       => "OT Request from {$emp->full_name}",
                 'message'     => "{$ot->hours_requested}h on {$ot->date->format('M j, Y')}.",
                 'link_to'     => "/hr/attendance/overtime/{$ot->hash_id}",
