@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -161,6 +162,30 @@ class NotificationServiceTest extends TestCase
         Notification::assertNotSentTo($deleted, PasswordResetLinkNotification::class);
     }
 
+    public function test_empty_recipient_audiences_are_logged_without_fallback_delivery(): void
+    {
+        Event::fake([UserNotificationCreated::class]);
+        Notification::fake();
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('Notification delivery skipped: no eligible recipients.', ['type' => 'empty.audience.test']);
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('Laravel notification delivery skipped: no eligible recipients.', [
+                'notification_class' => PasswordResetLinkNotification::class,
+            ]);
+
+        $this->service->send([], 'empty.audience.test', ['title' => 'No recipients']);
+        $this->service->sendLaravelNotification(
+            [],
+            new PasswordResetLinkNotification('https://ogami.test/reset?token=opaque', 30),
+        );
+
+        $this->assertDatabaseMissing('notifications', ['type' => 'empty.audience.test']);
+        Event::assertNotDispatched(UserNotificationCreated::class);
+        Notification::assertNothingSent();
+    }
+
     public function test_dedupe_key_makes_replayed_send_idempotent(): void
     {
         $user = User::factory()->create();
@@ -237,5 +262,24 @@ class NotificationServiceTest extends TestCase
         config(['dss.notification_daily_cap' => 0]);
         $this->assertFalse($this->service->sendDssRecommendationInApp($user, ['title' => 'No notice', 'message' => 'Publishing disabled.'], 'disabled-cap'));
         $this->assertSame(0, DB::table('notifications')->where('notifiable_id', $user->id)->where('type', 'dss.recommendation')->count());
+    }
+
+    public function test_dss_recommendation_skips_and_logs_an_inactive_recipient(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+        config(['dss.notification_daily_cap' => 1]);
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('DSS recommendation delivery skipped: no active recipient.', ['type' => 'dss.recommendation']);
+
+        $this->assertFalse($this->service->sendDssRecommendationInApp(
+            $user,
+            ['title' => 'No notice', 'message' => 'Recipient inactive.'],
+            'inactive-recipient',
+        ));
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $user->id,
+            'type' => 'dss.recommendation',
+        ]);
     }
 }
