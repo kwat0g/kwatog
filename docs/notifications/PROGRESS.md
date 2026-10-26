@@ -493,7 +493,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `NotificationServiceHardeningTest.php`: **22 passed / 62 assertions**. PHP syntax, targeted Pint, and `git diff --check` pass. Test used a temporary local workaround for inherited F-22 and restored that file exactly.
 - Production behavior is unchanged. The fix is isolated from notification feature work.
 
-## Phase 3 Accounting invoice subject access gate (draft PR pending)
+## Phase 3 Accounting invoice subject access gate (draft PR [#414](https://github.com/kwat0g/kwatog/pull/414))
 
 - Registered Invoice subjects with the detail-route access rule: `modules.accounting` must be enabled and the user must have `accounting.invoices.view`. Invoice list/detail have no row scope for internal users. Unknown subject types continue to fail closed.
 - Routed internal invoice notices through `sendForSubject()`: prebill approval/outcome, payment-submission review, AR dunning escalation, draft-invoice-ready after delivery, and invoice/official-receipt/dunning email-failure fallbacks. Email-failure notices remain in-app only. Official-receipt fallbacks are skipped and logged if the linked invoice was deleted or is unavailable, because their target route is the invoice detail page.
