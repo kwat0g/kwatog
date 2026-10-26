@@ -211,6 +211,8 @@ class NotificationService
             ]);
         }
 
+        $data['subject_type'] = $class;
+        $data['subject_id'] = (string) $subject->getKey();
         $this->dispatch($eligible, $type, $data, true, $dedupeKey, $recipientReasons);
     }
 
