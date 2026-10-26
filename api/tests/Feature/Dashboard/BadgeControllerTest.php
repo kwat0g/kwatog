@@ -496,6 +496,21 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(1, $resp['overdue_bills']['count']);
         $this->assertSame(2, $resp['open_postings']['count']);
         $this->assertSame(2, $resp['training_upcoming']['count']);
+
+        $qualityUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $inspectionList = $this->actingAs($qualityUser, 'sanctum')
+            ->getJson('/api/v1/quality/inspections?work_queue=to_inspect')
+            ->assertOk();
+        $inspectionBadge = $this->actingAs($qualityUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.pending_inspections.count');
+
+        $this->assertSame(2, $inspectionList->json('meta.total'));
+        $this->assertSame($inspectionList->json('meta.total'), $inspectionBadge);
+        $this->assertEqualsCanonicalizing(['draft', 'in_progress'], $inspectionList->json('data.*.status'));
     }
 
     public function test_pending_grn_badge_matches_the_filtered_receipt_list(): void

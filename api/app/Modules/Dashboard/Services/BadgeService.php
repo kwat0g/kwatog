@@ -39,7 +39,6 @@ use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
-use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
@@ -455,7 +454,7 @@ class BadgeService
                 'label'       => 'Inspections',
                 'description' => 'Inspections awaiting completion',
                 'counter'     => fn (): int => Inspection::query()
-                    ->whereIn('status', [InspectionStatus::Draft->value, InspectionStatus::InProgress->value])
+                    ->toInspect()
                     ->count(),
             ],
 

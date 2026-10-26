@@ -384,6 +384,11 @@ class Inspection extends Model
         return $q->where('stage', $stage instanceof InspectionStage ? $stage->value : $stage);
     }
 
+    public function scopeToInspect(Builder $query): Builder
+    {
+        return $query->whereIn('status', [InspectionStatus::Draft->value, InspectionStatus::InProgress->value]);
+    }
+
     public function scopeStatus(Builder $q, InspectionStatus|string $status): Builder
     {
         return $q->where('status', $status instanceof InspectionStatus ? $status->value : $status);
