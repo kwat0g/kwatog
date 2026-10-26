@@ -79,8 +79,8 @@ export function focusFirstInvalidField(): void {
 
 export function onFormInvalid<T extends FieldValues>(
   labels?: Partial<Record<keyof T & string, string>>,
-): (errors: FieldErrors<T>) => void {
-  return (errors) => {
+): <TInput extends FieldValues>(errors: FieldErrors<TInput>) => void {
+  return <TInput extends FieldValues>(errors: FieldErrors<TInput>) => {
     focusFirstInvalidField();
     const messages = collectMessages(errors as Record<string, unknown>).map(({ path, message }) =>
       formatValidationMessage(path, message, labels as Record<string, string> | undefined),

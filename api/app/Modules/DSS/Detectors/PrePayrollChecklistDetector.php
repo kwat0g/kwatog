@@ -6,6 +6,7 @@ namespace App\Modules\DSS\Detectors;
 
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\Payroll\Enums\PayrollAnomalyType;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollAnomalyFlag;
@@ -60,7 +61,7 @@ class PrePayrollChecklistDetector implements DetectorInterface
     }
 
     /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
         $maxEvidence = max(1, (int) ($context['max_evidence'] ?? $this->defaultParams()['max_evidence_per_period']));
 
@@ -75,7 +76,7 @@ class PrePayrollChecklistDetector implements DetectorInterface
             ->get();
 
         if ($flags->isEmpty()) {
-            return [];
+            return new DetectorScanResult([]);
         }
 
         $byPeriod = $flags->groupBy('payroll_period_id');
@@ -125,6 +126,6 @@ class PrePayrollChecklistDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $flags->count());
     }
 }

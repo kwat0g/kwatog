@@ -62,4 +62,9 @@ export const backupsApi = {
  client
  .post<{ data: { id: string; type: string; status: string }; message: string }>('/admin/backups/restore', data)
  .then((r) => r.data),
+
+ verifyLegacy: (data: { database_filename: string }) =>
+ client
+ .post<{ data: unknown; message: string }>('/admin/backups/verify-legacy', data)
+ .then((r) => r.data),
 };

@@ -269,8 +269,8 @@ class RecruitmentApplicationTest extends TestCase
             return $mail->hasTo('juan@test.com')
                 && $mail->previousStage === 'new'
                 && $mail->currentStage === 'screening'
-                && str_contains($html, '<title>Application status updated</title>')
-                && str_contains($html, 'Check application status')
+                && str_contains($html, '<title>Application status update</title>')
+                && str_contains($html, 'View application status')
                 && ! str_contains($html, 'screening');
         });
     }
@@ -383,7 +383,7 @@ class RecruitmentApplicationTest extends TestCase
         ]);
         Mail::assertQueued(ApplicationStatusUpdatedMail::class, function (ApplicationStatusUpdatedMail $mail): bool {
             $mail->assertSeeInText('Not Selected');
-            $mail->assertSeeInText('move forward with other candidates');
+            $mail->assertSeeInText('We will not be progressing your application for this position.');
 
             return $mail->hasTo('juan@test.com')
                 && $mail->currentStage === 'rejected';
@@ -422,14 +422,16 @@ class RecruitmentApplicationTest extends TestCase
             $mail->assertSeeInText('Maria Santos');
             $mail->assertSeeInText('RCT-TEST01');
 
-            return $mail->hasTo('juan@test.com')
-                && $mail->applicantName === 'Juan Test'
-                && $mail->positionTitle === 'Test Position'
-                && $mail->interviewerName === 'Maria Santos'
-                && $mail->location === 'HR Office, 2nd Floor'
-                && $mail->scheduledAt === $expectedScheduledAt
-                && str_contains($html, '<title>Interview scheduled</title>')
-                && str_contains($html, 'Check application status');
+            $this->assertTrue($mail->hasTo('juan@test.com'));
+            $this->assertSame('Juan Test', $mail->applicantName);
+            $this->assertSame('Test Position', $mail->positionTitle);
+            $this->assertSame('Maria Santos', $mail->interviewerName);
+            $this->assertSame('HR Office, 2nd Floor', $mail->location);
+            $this->assertSame($expectedScheduledAt, $mail->scheduledAt);
+            $this->assertStringContainsString('<title>Interview scheduled</title>', $html);
+            $this->assertStringContainsString('View application status', $html);
+
+            return true;
         });
     }
 

@@ -70,7 +70,7 @@ export function LeaveTypesManager() {
  });
  const items = data?.data ?? [];
 
- const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
+ const { register, handleSubmit, reset, formState: { errors } } = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { is_paid: true, is_active: true },
  });

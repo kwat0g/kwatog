@@ -31,7 +31,7 @@ export function CreateAccountModal({ isOpen, onClose, employeeId }: Props) {
  setError,
  reset,
  formState: { isSubmitting },
- } = useForm<FormValues>({
+ } = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { send_welcome: true },
  });
