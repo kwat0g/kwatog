@@ -1,6 +1,6 @@
 # Notification and badge remediation progress
 
-**Updated:** 2026-10-25
+**Updated:** 2026-10-26
 **Current gate:** Phase 2 approved; Phase 3 foundation in progress on `notifications/phase3-recipient-resolver`.
 
 ## Phase status
@@ -48,6 +48,7 @@ See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge sco
 - Pint passed on all six changed PHP files. Tests exercise per-user reasons, direct approvers, active delegates, missing view access, inactive/unrelated users, submitter/actor exclusions, and the real approval record path.
 - This is a core `ApprovalService` slice, not whole-project recipient coverage. Custom approval queues, escalations/reminders, submitter outcomes, and other module dispatch sites remain unmigrated or unverified.
 - Local follow-up on PR #333 adds per-type/step action-permission metadata and negative cases for a viewable user whose action permission is revoked, a viewable delegate blocked by the route, an inactive delegate, and an expired delegation. Verification is pending while API CI runs are active. PHP is unavailable locally.
+- Follow-up commit `3ad0067a` adds a registry-wide assertion that every core approval type declares action permission metadata included in its registry permission list; this assertion is unverified pending PR CI.
 
 ## Outstanding proof / risks
 
