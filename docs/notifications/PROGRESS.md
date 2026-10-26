@@ -371,6 +371,15 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `NotificationCatalogTest`: **9 passed / 74 assertions**. Focused Pint passes for `NotificationService`; the existing `NotificationCatalogTest` file retains baseline style debt. PHP syntax and `git diff --check` pass.
 - F-33 was discovered while checking an HR mail exception and logged separately. No email sender migration or browser verification is included.
 
+## Centralize remaining Laravel notification dispatches (draft PR #402)
+
+- Migrates the seven inventoried direct Laravel Notification sends into `NotificationService::sendLaravelNotification()`. Original recipients, notification classes, channels, and dispatch timing stay unchanged.
+- `NotificationCatalogTest` now requires no direct Laravel Notification dispatch outside `NotificationService`, while retaining the no-legacy-wrapper assertion and mail-only channel checks. `NotificationServiceTest` verifies duplicate explicit recipients produce one send and an unrelated user receives none.
+- This is a stacked integration of the existing PR #370 unit with the #397 dispatch guard. The old #370 branch's test expected direct send sites; its expectation is reconciled here. The HR password-reset class remains blocked by F-33 until PR #372 reaches this stack.
+- Targeted API results on the integrated stack: `NotificationServiceTest`: **9 passed / 28 assertions**; `NotificationCatalogTest`: **9 passed / 74 assertions**; `PasswordResetTest.php`: **13 passed / 40 assertions**; `EmployeeWelcomeNotificationTest.php`: **3 passed / 11 assertions**; focused admin welcome: **1 passed / 4 assertions**. Direct PHPUnit was used because `php artisan test --filter=...` hits the existing `RecommendationAudienceScopeTest` fake-detector signature fatal before filtering.
+- PHP syntax and `git diff --check` pass. Targeted Pint reports four style issues in touched legacy files (`AlertEngineService`, daily production summary, `UserProvisioningService`, and `NotificationCatalogTest`); broad formatting was avoided. Full provisioning/reset verification remains blocked by F-33 until #372 reaches this stack.
+- This unit centralizes delivery only; policy recipient resolution, subject authorization, preferences for Laravel Notification classes, and lifecycle handling remain open.
+
 ## Separate finding fix: F-12 chain broadcast payload (draft PR #398)
 
 - `ChainStepAdvanced` now broadcasts only `{refresh: true}` under the new `.chain.refresh` event name. The SPA only invalidates its current record and chain queries; it no longer needs status, document number, completed steps, or actor name from the channel.

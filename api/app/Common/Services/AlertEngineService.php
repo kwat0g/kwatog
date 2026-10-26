@@ -28,7 +28,6 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
 /**
@@ -830,7 +829,7 @@ class AlertEngineService
                 throw new \RuntimeException('No configured critical-alert recipient has a usable email address.');
             }
 
-            Notification::send($emailUsers, new CriticalAlertEmail($claimed));
+            app(NotificationService::class)->sendLaravelNotification($emailUsers, new CriticalAlertEmail($claimed));
             Alert::query()->whereKey($claimed->getKey())->update([
                 'email_status' => 'sent',
                 'notified_email_at' => now(),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Controllers;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\NotificationService;
 use App\Modules\Admin\Enums\AdminUserStatus;
 use App\Modules\Admin\Requests\BulkChangeUserRoleRequest;
 use App\Modules\Admin\Requests\ChangeUserRoleRequest;
@@ -84,7 +85,10 @@ class UserAdminController
         if ($payload['send_welcome'] && $created->tempPassword !== '') {
             try {
                 $setup = app(PasswordResetService::class)->createResetLink($created->user);
-                $created->user->notify(new WelcomeNotification($setup['url'], $setup['expiry_minutes']));
+                app(NotificationService::class)->sendLaravelNotification(
+                    $created->user,
+                    new WelcomeNotification($setup['url'], $setup['expiry_minutes']),
+                );
             } catch (\Throwable $e) {
                 app(EmailDeliveryFailureNotifier::class)->notifyPermission(
                     'admin.users.manage',

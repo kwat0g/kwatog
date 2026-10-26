@@ -7,11 +7,13 @@ namespace Tests\Unit;
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class NotificationServiceTest extends TestCase
@@ -105,6 +107,21 @@ class NotificationServiceTest extends TestCase
 
         $this->assertEquals(3, DB::table('notifications')->where('type', 'multi.type')->count());
         Event::assertDispatched(UserNotificationCreated::class, 3);
+    }
+
+    public function test_laravel_notifications_use_the_central_dispatcher_for_explicit_recipients(): void
+    {
+        $recipient = User::factory()->create();
+        $other = User::factory()->create();
+        Notification::fake();
+
+        $this->service->sendLaravelNotification(
+            [$recipient, $recipient],
+            new PasswordResetLinkNotification('https://ogami.test/reset?token=opaque', 30),
+        );
+
+        $this->assertCount(1, Notification::sent($recipient, PasswordResetLinkNotification::class));
+        Notification::assertNotSentTo($other, PasswordResetLinkNotification::class);
     }
 
     public function test_dedupe_key_makes_replayed_send_idempotent(): void

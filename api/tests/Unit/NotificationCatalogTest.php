@@ -238,7 +238,7 @@ class NotificationCatalogTest extends TestCase
         ));
     }
 
-    public function test_native_laravel_notification_dispatch_is_limited_to_mail_only_flows(): void
+    public function test_laravel_notification_dispatch_is_centralized_and_mail_only_classes_stay_mail_only(): void
     {
         $appPath = dirname(__DIR__, 2).'/app';
         $nativeCalls = [];
@@ -257,6 +257,10 @@ class NotificationCatalogTest extends TestCase
                 '',
                 str_replace('\\', '/', $file->getPathname()),
             );
+            if ($relative === 'Common/Services/NotificationService.php') {
+                continue;
+            }
+
             $calls = [];
             if (preg_match('/->notify\(\s*new\s+/', $source)) {
                 $calls[] = 'user.notify';
@@ -264,7 +268,7 @@ class NotificationCatalogTest extends TestCase
             if (preg_match('/->notify\(\s*\$notification\b/', $source)) {
                 $calls[] = 'user.notify.variable';
             }
-            if (preg_match('/\bNotification::(?:send|sendNow)\s*\(/', $source)) {
+            if (preg_match('/\bNotification(?:Facade)?::(?:send|sendNow)\s*\(/', $source)) {
                 $calls[] = 'Notification.send';
             }
             if (preg_match('/\bNotification::route\s*\(/', $source)) {
@@ -279,14 +283,14 @@ class NotificationCatalogTest extends TestCase
         ksort($nativeCalls);
         $notificationService = (string) file_get_contents($appPath.'/Common/Services/NotificationService.php');
         $this->assertDoesNotMatchRegularExpression('/public function notify\s*\(/', $notificationService);
-        $this->assertSame([
-            'Common/Services/AlertEngineService.php' => ['Notification.send'],
-            'Console/Commands/SendDailyProductionSummary.php' => ['Notification.send'],
-            'Console/Commands/SendWeeklyProductionSummary.php' => ['Notification.send'],
-            'Modules/Admin/Controllers/UserAdminController.php' => ['user.notify'],
-            'Modules/Auth/Services/PasswordResetService.php' => ['user.notify'],
-            'Modules/HR/Services/UserProvisioningService.php' => ['user.notify'],
-        ], $nativeCalls, 'Only inventoried mail-only auth, report, and critical-alert flows may use Laravel Notification directly.');
+        $this->assertSame([], $nativeCalls, sprintf(
+            "Laravel Notification dispatches must use NotificationService::sendLaravelNotification().\n  %s",
+            implode("\n  ", array_map(
+                static fn (string $path, array $calls): string => $path.' ('.implode(', ', $calls).')',
+                array_keys($nativeCalls),
+                array_values($nativeCalls),
+            )),
+        ));
 
         $mailOnlyNotifications = [
             new WelcomeNotification('https://example.test/setup', 60),
