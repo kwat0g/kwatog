@@ -87,6 +87,8 @@ class BillService
         }
         if (($filters['signal'] ?? null) === 'unpaid') {
             $q->unpaid();
+        } elseif (($filters['signal'] ?? null) === 'due_soon') {
+            $q->dueSoon();
         }
         if (! empty($filters['search'])) {
             $term = $filters['search'];

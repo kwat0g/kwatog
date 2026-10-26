@@ -102,6 +102,7 @@ class BadgeService
         'draft_invoices' => 'accounting',
         'overdue_bills' => 'accounting',
         'unpaid_bills' => 'accounting',
+        'due_soon_bills' => 'accounting',
         'pending_budgets' => 'budgeting',
         'pending_transfers' => 'budgeting',
     ];
@@ -205,7 +206,8 @@ class BadgeService
             return $billSignalCounts ??= DB::query()
                 ->selectSub(Bill::query()->overdue()->selectRaw('COUNT(*)'), 'overdue')
                 ->selectSub(Bill::query()->unpaid()->selectRaw('COUNT(*)'), 'unpaid')
-                ->first() ?? (object) ['overdue' => 0, 'unpaid' => 0];
+                ->selectSub(Bill::query()->dueSoon()->selectRaw('COUNT(*)'), 'due_soon')
+                ->first() ?? (object) ['overdue' => 0, 'unpaid' => 0, 'due_soon' => 0];
         };
 
         return [
@@ -557,6 +559,13 @@ class BadgeService
                 'label'       => 'Unpaid',
                 'description' => 'Open bills with an unpaid balance',
                 'counter'     => fn (): int => (int) $countBillSignals()->unpaid,
+            ],
+
+            'due_soon_bills' => [
+                'permissions' => ['accounting.bills.view'],
+                'label'       => 'Due soon',
+                'description' => 'Open bills due within 3 days',
+                'counter'     => fn (): int => (int) $countBillSignals()->due_soon,
             ],
 
             // Finance > Budgeting — submitted budgets awaiting a checker.

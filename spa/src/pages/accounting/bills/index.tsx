@@ -61,8 +61,8 @@ export default function BillsPage() {
  ...(billOptions?.statuses ?? []),
  ] },
  {
- key: 'signal', label: 'Balance', type: 'select',
- options: [{ value: '', label: 'All' }, { value: 'unpaid', label: 'Open balance' }] },
+ key: 'signal', label: 'Signal', type: 'select',
+ options: [{ value: '', label: 'All' }, { value: 'unpaid', label: 'Open balance' }, { value: 'due_soon', label: 'Due within 3 days' }] },
  {
  key: 'overdue', label: 'Overdue', type: 'select',
  options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }] },

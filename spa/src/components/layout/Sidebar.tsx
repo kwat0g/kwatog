@@ -115,6 +115,12 @@ type SidebarBadgeSignal = {
   to: string;
 };
 
+const BADGE_SEVERITY_PRIORITY: Record<BadgeSeverity, number> = {
+  danger: 2,
+  warning: 1,
+  neutral: 0,
+};
+
 function badgeDestination(path: string, key: string): string {
   const filters: Record<string, string> = {
     purchase_requests: 'signal=awaiting_my_approval',
@@ -125,6 +131,7 @@ function badgeDestination(path: string, key: string): string {
     open_complaints: 'signal=open',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
+    due_soon_bills: 'signal=due_soon',
   };
   const filter = filters[key];
   return filter ? `${path}?${filter}` : path;
@@ -593,7 +600,7 @@ export const SECTIONS: NavSection[] = [
         feature: 'accounting',
         permission: 'accounting.bills.view',
         badgeKey: 'overdue_bills',
-        badgeKeys: ['overdue_bills', 'unpaid_bills'],
+        badgeKeys: ['overdue_bills', 'unpaid_bills', 'due_soon_bills'],
       },
       {
         to: '/accounting/vendors',
@@ -1163,7 +1170,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
           severity: signal.severity,
           to: badgeDestination(item.to, key),
         }];
-      });
+      }).sort((left, right) => BADGE_SEVERITY_PRIORITY[right.severity] - BADGE_SEVERITY_PRIORITY[left.severity]);
       const target = signals[0]?.to ?? item.to;
       return (
         <li key={item.to}>
