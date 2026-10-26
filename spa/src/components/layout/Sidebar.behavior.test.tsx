@@ -104,7 +104,6 @@ it('opens overdue bills when the AP badge is positive', () => {
       <Sidebar roleSlug="finance_officer" />
     </MemoryRouter>,
   );
-  fireEvent.click(screen.getByRole('button', { name: /Finance:/ }));
   expect(screen.getByRole('link', { name: /Accounts Payable Bills/ })).toHaveAttribute(
     'href',
     '/accounting/bills?overdue=1',
