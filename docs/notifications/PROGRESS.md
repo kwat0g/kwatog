@@ -547,7 +547,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - PHP syntax and `git diff --check` pass. Pint passes the registry, submitted listener, and new unit test; it flags `unary_operator_spaces` in the existing decision listener and `blank_line_before_statement` in the existing feature test. No broad formatting applied. Tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #420 is based on supplier-listing subject gate PR #419; API quality/PHPUnit fails before tests on the inherited F-22 duplicate method, and finding-lifecycle passes.
 
 
-## Phase 3 Production work-order subject access gate (draft PR pending)
+## Phase 3 Production work-order subject access gate (draft PR [#421](https://github.com/kwat0g/kwatog/pull/421))
 
 - Registered `WorkOrder` with the actual read routes: Production must be enabled, then either the recipient has both `production.view` and `production.work_orders.view`, or the recipient is an active employee with current or historical crew membership. The employee check reuses `WorkOrderAssignmentService::historicalCrewQuery()`, which is the same scope used by the self-service detail route.
 - Migrated all 12 discovered WorkOrder-subject dispatches in Production and the QC recovery command to `sendForSubject()`: crew assigned/changed, staffing review, upcoming schedule reminders, rework states, paused/completed work orders, assignment review, and missing outgoing-QC escalation. Existing audiences and event timing stay unchanged; email remains disabled for prior `sendInApp()` paths and enabled where prior `send()` was used.
