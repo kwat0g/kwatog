@@ -17,10 +17,9 @@ use Illuminate\Queue\SerializesModels;
  * employees.
  *
  * Private, not public: a payroll run's headcount is company-wide compensation
- * metadata. routes/channels.php already gates this channel on
- * payroll.periods.view, and the SPA's useEcho() subscribes via echo.private() —
- * a public Channel here meant the authorisation was never consulted AND the
- * SPA could not receive the events at all.
+ * metadata. routes/channels.php mirrors the period detail route's enabled
+ * module, read permission, and record-existence checks; the SPA subscribes via
+ * echo.private(). A public Channel would skip authorization entirely.
  *
  * The SPA falls back to TanStack Query polling at 3s, and
  * PayrollProgressTracker caches each snapshot so a mid-run page load renders a

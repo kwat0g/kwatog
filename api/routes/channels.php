@@ -70,12 +70,8 @@ Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId
 /* Sprint 8 — Task 78. New channels. */
 
 // Payroll period progress contains company-wide run metadata.
-Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => $canViewSubject(
-    $user,
-    $hashId,
-    'payroll.periods.view',
-    PayrollPeriod::class,
-)
+Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => app(SettingsService::class)->requiredBool('modules.payroll')
+    && $canViewSubject($user, $hashId, 'payroll.periods.view', PayrollPeriod::class)
 );
 
 // Maintenance dashboard — open WO updates push live
