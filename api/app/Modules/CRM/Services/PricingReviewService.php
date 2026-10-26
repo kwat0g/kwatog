@@ -151,12 +151,13 @@ class PricingReviewService
                 || bccomp($receiptCost, (string) $item->standard_cost, 4) === 0) {
                 continue;
             }
+            $review = app(ItemCostReviewService::class)->capture($line, $receiptCost, notify: false);
             $this->notify('inventory.receipt_cost_changed', "Supplier cost needs review: {$item->code}",
                 "{$grn->grn_number}: accepted unit cost {$receiptCost} per {$item->unit_of_measure}; inventory standard cost {$item->standard_cost}. Review the approved standard cost. BOM estimates refresh when that standard changes.",
-                '/crm/price-agreements/cost-reviews',
+                '/crm/price-agreements/cost-reviews?review='.$review->hash_id,
                 'pricing:receipt:'.$line->id.':'.$receiptCost.':'.$item->standard_cost,
-                ['purchasing_officer', 'finance_officer', 'ppc_head', 'warehouse_staff', 'system_admin']);
-            app(ItemCostReviewService::class)->capture($line, $receiptCost);
+                ['purchasing_officer', 'finance_officer', 'ppc_head', 'warehouse_staff', 'system_admin'],
+                $review);
         }
     }
 
@@ -198,12 +199,13 @@ class PricingReviewService
         array $roles,
         ?ItemCostReview $subject = null,
     ): void {
-        if ($link === '/crm/price-agreements/cost-reviews'
+        $linkPath = parse_url($link, PHP_URL_PATH);
+        if ($linkPath === '/crm/price-agreements/cost-reviews'
             && app(SettingsService::class)->get('modules.inventory', false) !== true) {
             return;
         }
 
-        $permission = $link === '/crm/price-agreements/cost-reviews' ? 'inventory.costs.review' : (str_starts_with($link, '/mrp') ? 'mrp.boms.view' : (str_starts_with($link, '/inventory') ? 'inventory.view' : 'crm.price_agreements.view'));
+        $permission = $linkPath === '/crm/price-agreements/cost-reviews' ? 'inventory.costs.review' : (str_starts_with($linkPath, '/mrp') ? 'mrp.boms.view' : (str_starts_with($linkPath, '/inventory') ? 'inventory.view' : 'crm.price_agreements.view'));
         $users = $this->activeUsers ??= User::query()->where('is_active', true)->get();
         $roleSlugs = array_fill_keys($roles, true);
         $audience = $users->filter(fn (User $user): bool => $user->hasPermission($permission)
@@ -220,6 +222,6 @@ class PricingReviewService
     public function notifyCostReview(ItemCostReview $review, string $message): void
     {
         $this->notify('inventory.receipt_cost_changed', 'Supplier cost review: '.$review->item->code, $message,
-            '/crm/price-agreements/cost-reviews', 'pricing:cost-review:'.$review->id.':'.$review->version, [], $review);
+            '/crm/price-agreements/cost-reviews?review='.$review->hash_id, 'pricing:cost-review:'.$review->id.':'.$review->version, [], $review);
     }
 }

@@ -82,13 +82,13 @@ const page = <T,>(data: T[]) => ({
   },
   links: { first: '', last: '', prev: null, next: null },
 });
-function show(component: React.ReactNode, permissions: string[]) {
+function show(component: React.ReactNode, permissions: string[], initialEntry = '/') {
   useAuthStore.setState({ permissions: new Set(permissions), user: null });
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <MemoryRouter>{component}</MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>{component}</MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -190,4 +190,30 @@ it('keeps supplier cost details readable without giving review-only staff approv
   expect(screen.getByText('Awaiting independent Finance review')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Approve standard cost' })).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Approval or rejection reason')).not.toBeInTheDocument();
+});
+
+it('opens the exact linked supplier cost review', async () => {
+  vi.mocked(pricingRequestsApi.costs).mockResolvedValue(page([cost]));
+  show(
+    <CostReviewsPage />,
+    ['inventory.costs.review'],
+    '/crm/price-agreements/cost-reviews?review=cost-1',
+  );
+  expect(
+    await screen.findByRole('heading', { name: 'Supplier cost review details' }),
+  ).toBeVisible();
+  expect(pricingRequestsApi.costs).toHaveBeenCalledWith(1, 'cost-1');
+});
+
+it('explains when a linked supplier cost review is unavailable', async () => {
+  vi.mocked(pricingRequestsApi.costs).mockResolvedValue(page([]));
+  show(
+    <CostReviewsPage />,
+    ['inventory.costs.review'],
+    '/crm/price-agreements/cost-reviews?review=deleted-review',
+  );
+  expect(
+    await screen.findByText('This review is unavailable or you no longer have access.'),
+  ).toBeVisible();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
