@@ -30,12 +30,12 @@ class NotifyOnPurchaseRequestApproved implements ShouldQueue
                     && app(PurchaseRequestAccessPolicy::class)->canView($user, $pr))
                 ->values();
 
-            $this->notifications->send($audience, 'chain.pr_approved', [
-                'title'       => "PR {$pr->pr_number} Approved",
-                'message'     => "Ready to convert to PO.",
-                'link_to'     => "/purchasing/purchase-requests/{$pr->hash_id}",
+            $this->notifications->sendForSubject($pr, $audience, 'chain.pr_approved', [
+                'title' => "PR {$pr->pr_number} Approved",
+                'message' => 'Ready to convert to PO.',
+                'link_to' => "/purchasing/purchase-requests/{$pr->hash_id}",
                 'entity_type' => 'purchase_request',
-                'entity_id'   => $pr->hash_id,
+                'entity_id' => $pr->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnPurchaseRequestApproved failed', ['error' => $e->getMessage()]);

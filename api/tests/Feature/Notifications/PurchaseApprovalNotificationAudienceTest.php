@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Notifications;
 
 use App\Common\Models\ApprovalRecord;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -33,6 +34,7 @@ class PurchaseApprovalNotificationAudienceTest extends TestCase
 
     public function test_pr_approved_notice_excludes_user_without_route_view_permission(): void
     {
+        app(SettingsService::class)->set('modules.purchasing', true, 'modules');
         [$eligible, $revoked] = $this->purchasingOfficers();
         $this->revoke($revoked, 'purchasing.view', $eligible);
         $pr = PurchaseRequest::factory()->create();
@@ -41,6 +43,12 @@ class PurchaseApprovalNotificationAudienceTest extends TestCase
 
         $this->assertNotice('chain.pr_approved', $eligible, true);
         $this->assertNotice('chain.pr_approved', $revoked, false);
+        $data = json_decode((string) DB::table('notifications')
+            ->where('notifiable_id', $eligible->id)
+            ->where('type', 'chain.pr_approved')
+            ->value('data'), true);
+        $this->assertSame(PurchaseRequest::class, $data['subject_type']);
+        $this->assertSame((string) $pr->id, $data['subject_id']);
     }
 
     public function test_po_approved_notice_excludes_user_without_route_view_permission(): void
