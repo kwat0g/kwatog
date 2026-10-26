@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Controllers;
 
 use App\Common\Models\BackupOperation;
+use App\Common\Services\BackupManifestStore;
 use App\Common\Services\BackupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,18 +22,22 @@ class RecoveryAccessController
         $validated = $request->validate(['secret' => ['required', 'string', 'max:512']]);
         $expected = (string) config('backup.recovery_secret', '');
         if (strlen($expected) < 32) {
-            return response()->json(['message' => 'Recovery access is not configured.'], 503);
+            return response()->json(['message' => 'Recovery access is not configured.'], 503)
+                ->header('Cache-Control', 'no-store, private');
         }
         if (! hash_equals($expected, (string) $validated['secret'])) {
-            return response()->json(['message' => 'Recovery secret is incorrect.'], 401);
+            return response()->json(['message' => 'Recovery secret is incorrect.'], 401)
+                ->header('Cache-Control', 'no-store, private');
         }
 
         $token = Crypt::encryptString(json_encode([
             'scope' => 'backup-recovery',
             'expires_at' => time() + self::TOKEN_SECONDS,
+            'secret_hash' => hash('sha256', $expected),
         ], JSON_THROW_ON_ERROR));
 
-        return response()->json(['access_token' => $token, 'expires_in' => self::TOKEN_SECONDS]);
+        return response()->json(['access_token' => $token, 'expires_in' => self::TOKEN_SECONDS])
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function index(BackupService $backups): JsonResponse
@@ -71,19 +76,37 @@ class RecoveryAccessController
         );
 
         return response()->json([
-            'message' => 'Restore queued. A rollback snapshot is created before replacement.',
-            'data' => ['id' => $operation->id, 'type' => $operation->type, 'status' => $operation->status],
+            'message' => 'Restore queued. A rollback copy is made if the target database exists and a backup succeeds.',
+            'data' => [
+                'id' => $operation->id,
+                'type' => $operation->type,
+                'status' => $operation->status,
+                'rollback_available' => false,
+            ],
         ], 202);
     }
 
     public function operation(string $id): JsonResponse
     {
+        $recoveryOperation = app(BackupManifestStore::class)->recoveryOperation($id);
+        if ($recoveryOperation !== null) {
+            $metadata = is_array($recoveryOperation['metadata'] ?? null) ? $recoveryOperation['metadata'] : [];
+
+            return response()->json(['data' => [
+                'id' => $recoveryOperation['id'],
+                'status' => $recoveryOperation['status'],
+                'phase' => $metadata['restore_phase'] ?? $metadata['heartbeat_phase'] ?? null,
+                'error_message' => $recoveryOperation['error_message'] ?? null,
+                'rollback_available' => (bool) ($metadata['rollback_available'] ?? false),
+            ]]);
+        }
+
         try {
             $operation = BackupOperation::query()->find($id);
         } catch (Throwable) {
             return response()->json([
-                'data' => ['id' => $id, 'status' => 'running', 'phase' => 'database_replacing'],
-            ], 202);
+                'message' => 'Restore operation was not found.',
+            ], 404);
         }
 
         if ($operation === null || $operation->type !== BackupService::TYPE_RESTORE) {
@@ -97,6 +120,7 @@ class RecoveryAccessController
             'status' => $operation->status,
             'phase' => $metadata['restore_phase'] ?? $metadata['heartbeat_phase'] ?? null,
             'error_message' => $operation->error_message,
+            'rollback_available' => is_array($metadata['pre_restore_artifacts']['database'] ?? null),
         ]]);
     }
 

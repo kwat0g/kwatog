@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Common\Jobs\RestoreBackupJob;
-use App\Common\Models\BackupOperation;
 use App\Common\Services\BackupManifestStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
-use Illuminate\Routing\Router;
-use Illuminate\Http\Request;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Tests\TestCase;
 
@@ -40,6 +39,7 @@ class RecoveryAccessTest extends TestCase
         foreach (glob($this->backupDirectory.'/*') ?: [] as $file) {
             @unlink($file);
         }
+        @unlink($this->backupDirectory.'/.recovery-operation.lock');
         @rmdir($this->backupDirectory);
         parent::tearDown();
     }
@@ -55,6 +55,7 @@ class RecoveryAccessTest extends TestCase
         $this->withHeader('Origin', 'http://localhost:5173')
             ->postJson('/api/v1/recovery/session', ['secret' => self::RECOVERY_SECRET])
             ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
             ->assertJsonStructure(['access_token', 'expires_in']);
     }
 
@@ -72,7 +73,7 @@ class RecoveryAccessTest extends TestCase
             ->assertJsonPath('data.backups.0.id', $manifest['id'])
             ->assertJsonPath('data.backups.0.restorable', true);
 
-        $this->withToken($token)
+        $queued = $this->withToken($token)
             ->postJson('/api/v1/recovery/restore', [
                 'manifest_id' => $manifest['id'],
                 'database_filename' => $databaseFilename,
@@ -81,9 +82,13 @@ class RecoveryAccessTest extends TestCase
             ->assertStatus(202)
             ->assertJsonPath('data.type', 'restore');
 
-        $operation = BackupOperation::query()->where('type', 'restore')->firstOrFail();
-        $this->assertNull($operation->requested_by);
-        $this->assertTrue($operation->metadata['requested_via_recovery']);
+        $operationId = (string) $queued->json('data.id');
+        $operation = app(BackupManifestStore::class)->recoveryOperation($operationId);
+        $this->assertNotNull($operation);
+        $this->assertIsArray($operation);
+        $this->assertSame('queued', $operation['status']);
+        $this->assertTrue($operation['metadata']['requested_via_recovery']);
+        $this->assertDatabaseMissing('backup_operations', ['id' => $operationId]);
         Queue::assertPushed(RestoreBackupJob::class);
     }
 
