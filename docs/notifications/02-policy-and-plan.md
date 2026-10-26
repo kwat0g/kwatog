@@ -93,7 +93,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `'leave.pending_hr'` | Employee, current approver, assignee, or scoped HR; sensitive HR/payroll rules apply | send | `api/app/Modules/Leave/Listeners/NotifyOnLeavePendingHR.php:32` |
 | `'leave.rejected'` | Employee, current approver, assignee, or scoped HR; sensitive HR/payroll rules apply | send | `api/app/Modules/Leave/Listeners/NotifyOnLeaveRejected.php:26` |
 | `'leave.submitted'` | Employee, current approver, assignee, or scoped HR; sensitive HR/payroll rules apply | send | `api/app/Modules/Leave/Listeners/NotifyOnLeaveSubmitted.php:40` |
-| `'loans.submitted'` | Employee, current approver, assignee, or scoped HR; sensitive HR/payroll rules apply | send | `api/app/Modules/Loans/Listeners/NotifyOnLoanSubmitted.php:48` |
+| `'loans.submitted'` | Employee, current approver, assignee, or scoped HR; sensitive HR/payroll rules apply | sendForSubject | `api/app/Modules/Loans/Listeners/NotifyOnLoanSubmitted.php:48` |
 | `'maintenance.assigned'` | Assigned technician/site dispatcher/current supervisor; escalation by approved SLA | send | `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:348` |
 | `'maintenance.assignment_escalated'` | Assigned technician/site dispatcher/current supervisor; escalation by approved SLA | send | `api/app/Console/Commands/CheckMaintenanceAssignment.php:48` |
 | `'maintenance.assignment_needed'` | Assigned technician/site dispatcher/current supervisor; escalation by approved SLA | send | `api/app/Modules/Maintenance/Listeners/NotifyMaintenanceWorkOrder.php:30` |

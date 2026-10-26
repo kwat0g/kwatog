@@ -36,7 +36,7 @@ class NotifyOnLoanDecided implements ShouldQueue
             $type  = $event->approved ? 'loans.approved' : 'loans.rejected';
 
             $currency = $this->currency ?? app(CurrencyDisplayService::class);
-            $this->notifications->send($user, $type, [
+            $this->notifications->sendForSubject($loan, $user, $type, [
                 'title'       => "{$typeLabel} Request {$label}",
                 'message'     => "Your {$currency->format($loan->principal)} {$typeLabel} request was {$label}.",
                 'link_to'     => "/self-service/loans/{$loan->hash_id}",
