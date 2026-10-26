@@ -44,7 +44,7 @@ class SupplierInvoiceStatusMail extends QueuedMailable
             markdown: 'emails/supplier/invoice-status',
             with: [
                 'brand' => $brand,
-                'preheader' => 'A supplier invoice was received for review.',
+                'preheader' => 'We received supplier invoice '.$invoiceNumber.' for review.',
                 'invoiceNumber' => $invoiceNumber,
                 'invoiceDate' => $this->snapshot['invoice_date'],
                 'matchCount' => $this->snapshot['match_count'],
