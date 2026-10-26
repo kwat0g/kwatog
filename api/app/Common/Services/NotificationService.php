@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Str;
 
 /**
- * Single entry point for in-app + email notifications.
+ * Central entry point for structured in-app notices and preference-controlled email copies.
+ * Mail-only authentication, report, and critical-alert flows use Laravel notifications.
  *
  * Three properties this class guarantees, in order of importance:
  *
@@ -339,30 +340,6 @@ class NotificationService
                 $this->queueEmail($email['address'], $recipientUserIds, $name, $type, $data, $deliveryKey);
             }
         });
-    }
-
-    /**
-     * Legacy wrapper — delegates to Laravel's notification system.
-     * Kept for backward compat with NcrService and MaintenanceWorkOrderService
-     * that pass Notification objects. Will be removed once all callers migrate to send().
-     */
-    public function notify(User|Collection|array $recipients, $notification, string $type): void
-    {
-        $users = $this->normaliseRecipients($recipients);
-
-        if ($users === []) {
-            return;
-        }
-
-        $prefs = $this->channelPreferences(array_keys($users), $type);
-
-        foreach ($users as $userId => $user) {
-            if (($prefs["{$userId}:in_app"] ?? true) === false) {
-                continue;
-            }
-
-            $user->notify($notification);
-        }
     }
 
     /**
