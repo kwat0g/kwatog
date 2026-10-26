@@ -25,8 +25,11 @@ class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
     public readonly array $emailSnapshot;
 
     /** @param array<string, mixed>|null $emailSnapshot */
-    public function __construct(public SalesOrder $salesOrder, ?array $emailSnapshot = null)
-    {
+    public function __construct(
+        public SalesOrder $salesOrder,
+        ?array $emailSnapshot = null,
+        public ?int $actorUserId = null,
+    ) {
         $this->emailSnapshot = $emailSnapshot ?? self::snapshotForEmail($salesOrder);
     }
 
@@ -72,12 +75,13 @@ class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
     public function broadcastWith(): array
     {
         $this->salesOrder->loadMissing('customer:id,name');
+
         return [
-            'so_id'        => $this->salesOrder->hash_id,
-            'so_number'    => $this->salesOrder->so_number,
+            'so_id' => $this->salesOrder->hash_id,
+            'so_number' => $this->salesOrder->so_number,
             'total_amount' => (string) $this->salesOrder->total_amount,
-            'customer'     => $this->salesOrder->customer ? [
-                'id'   => $this->salesOrder->customer->hash_id,
+            'customer' => $this->salesOrder->customer ? [
+                'id' => $this->salesOrder->customer->hash_id,
                 'name' => $this->salesOrder->customer->name,
             ] : null,
         ];

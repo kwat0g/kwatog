@@ -773,7 +773,7 @@ class SalesOrderService
             // same transaction as the confirmation and is enqueued only after
             // commit; the scheduler recovers a queue outage.
             app(OutboxService::class)->recordForChain(
-                new SalesOrderConfirmed($fresh),
+                new SalesOrderConfirmed($fresh, actorUserId: auth()->id() === null ? null : (int) auth()->id()),
                 $fresh,
                 'o2c',
                 'sales_order',

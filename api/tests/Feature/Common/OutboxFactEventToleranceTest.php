@@ -12,6 +12,7 @@ use App\Common\Services\OutboxService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
+use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
@@ -90,9 +91,15 @@ class OutboxFactEventToleranceTest extends TestCase
         $notification = DB::table('notifications')->where('notifiable_id', $this->ppc->id)
             ->where('type', 'chain.so_confirmed')->first();
         $data = json_decode($notification->data, true);
-        $this->assertSame('/production/schedule', $data['link_to']);
-        $this->assertStringNotContainsString($so->so_number, $notification->data);
-        $this->assertArrayNotHasKey('entity_id', $data);
+        $this->assertSame('/crm/sales-orders/'.$so->hash_id, $data['link_to']);
+        $this->assertSame('sales_order', $data['entity_type']);
+        $this->assertSame($so->hash_id, $data['entity_id']);
+        $this->assertStringContainsString($so->so_number, $data['title']);
+
+        app(NotifyOnSalesOrderConfirmed::class)
+            ->handle(new SalesOrderConfirmed($so));
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $this->ppc->id)
+            ->where('type', 'chain.so_confirmed')->count());
     }
 
     public function test_sales_order_notice_excludes_configured_users_without_schedule_access(): void
@@ -122,6 +129,74 @@ class OutboxFactEventToleranceTest extends TestCase
             'notifiable_id' => $revoked->id,
             'type' => 'chain.so_confirmed',
         ]);
+    }
+
+    public function test_sales_order_notice_excludes_configured_planners_without_order_access(): void
+    {
+        $revoked = User::factory()->create([
+            'is_active' => true,
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+        ]);
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'crm.sales_orders.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $actor->id,
+            'reason' => 'Sales-order notification record-access regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $so = $this->confirmedOrder();
+        $message = app(OutboxService::class)->record(new SalesOrderConfirmed($so));
+
+        $this->assertSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
+        $this->assertTrue($this->soNoticeSent());
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revoked->id,
+            'type' => 'chain.so_confirmed',
+        ]);
+    }
+
+    public function test_sales_order_confirmation_notice_includes_creator_and_excludes_confirming_planner(): void
+    {
+        $creator = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+        ]);
+        $so = SalesOrder::factory()->create(['created_by' => $creator->id]);
+        $so->forceFill(['status' => 'confirmed'])->save();
+
+        app(NotifyOnSalesOrderConfirmed::class)->handle(new SalesOrderConfirmed(
+            $so->fresh(),
+            actorUserId: $this->ppc->id,
+        ));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $creator->id,
+            'type' => 'chain.so_confirmed',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $this->ppc->id,
+            'type' => 'chain.so_confirmed',
+        ]);
+    }
+
+    public function test_sales_order_outbox_payload_without_actor_remains_compatible(): void
+    {
+        $so = $this->confirmedOrder();
+        $codec = app(OutboxEventCodec::class);
+        $encoded = $codec->encode(new SalesOrderConfirmed($so, actorUserId: $this->ppc->id));
+
+        $event = $codec->decode($encoded['event_type'], $encoded['payload']);
+        $this->assertSame($this->ppc->id, $event->actorUserId);
+
+        unset($encoded['payload']['actorUserId']);
+
+        $event = $codec->decode($encoded['event_type'], $encoded['payload']);
+
+        $this->assertNull($event->actorUserId);
     }
 
     public function test_an_order_cancelled_before_delivery_is_not_announced_as_confirmed(): void
