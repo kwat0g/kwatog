@@ -14,7 +14,7 @@ import type { AxiosError } from 'axios';
 import { complaintsApi, type EightDPatch } from '@/api/crm/complaints';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
@@ -434,9 +434,11 @@ export default function ComplaintDetailPage() {
                       >
                         {data.ncr.ncr_number}
                       </Link>
-                      <span className="ml-3 text-xs text-muted">
-                        {data.ncr.severity_label ?? data.ncr.severity} ·{' '}
-                        {data.ncr.status_label ?? data.ncr.status}
+                      <span className="ml-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+                        {data.ncr.severity_label ?? data.ncr.severity}
+                        <Chip variant={chipVariantForStatus(data.ncr.status)}>
+                          {data.ncr.status_label ?? data.ncr.status}
+                        </Chip>
                       </span>
                     </div>
                   </div>

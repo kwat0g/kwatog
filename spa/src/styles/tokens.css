@@ -6,6 +6,34 @@
  */
 
 :root {
+  color-scheme: light;
+  /* ─── Layout scale ─── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --page-gutter: 16px;
+  --topbar-height: 48px;
+
+  /* ─── Type scale ─── */
+  --font-size-page-title: 28px;
+  --font-size-section-title: 20px;
+  --font-size-subsection: 16px;
+  --font-size-body: 14px;
+  --font-size-body-small: 14px;
+  --font-size-caption: 13px;
+  --font-size-label: 14px;
+  --font-size-table-header: 14px;
+  --font-size-table-cell: 14px;
+  --font-size-code: 14px;
+  --font-weight-body: 400;
+
   /* ─── Canvas ─── */
   --bg-canvas: #fdfcfa;
   --bg-surface: #f7f4ef;
@@ -111,9 +139,11 @@
   --radius-full: 9999px;
 
   /* ─── Density — office. [data-theme='floor'] overrides all three. ─── */
-  --row-height: 32px;
+  --row-height: 48px;
+  --row-height-compact: 36px;
+  --row-height-spacious: 56px;
   --hit-min: 28px;
-  --font-size-body: 13px;
+  --font-size-body: 14px;
 
   /* ─── Motion ─── */
   --duration-fast: 150ms;
@@ -154,6 +184,14 @@
   --plant-map-accent: #b4542a;
 }
 
+@media (min-width: 640px) {
+  :root { --page-gutter: 24px; }
+}
+
+@media (min-width: 1440px) {
+  :root { --page-gutter: 32px; }
+}
+
 /*
  * Dark — espresso, not black. Semantic -bg values are OPAQUE, pre-composited
  * at ~18% of the hue over canvas. Alpha would defeat the contrast gate in
@@ -161,6 +199,8 @@
  * against an unknown backdrop.
  */
 [data-theme='dark'] {
+  color-scheme: dark;
+  --font-weight-body: 450;
   --bg-canvas: #17140f;
   --bg-surface: #1f1b16;
   --bg-elevated: #2a251e;
@@ -234,6 +274,7 @@
  * floor route, and inheriting the light values is correct if it somehow did.
  */
 [data-theme='floor'] {
+  color-scheme: dark;
   --bg-canvas: #0d0b08;
   --bg-surface: #17140f;
   --bg-elevated: #241f19;

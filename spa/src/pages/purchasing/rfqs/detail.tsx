@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { LuX } from '@/lib/icons';
 import { rfqsApi } from '@/api/purchasing/rfqs';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { invitationStatus, rfqStatus } from '@/lib/rfqStatus';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -422,7 +422,7 @@ export default function RfqDetailPage() {
                     <span className="font-mono">{po.po_number}</span>
                     <span className="flex gap-3 text-default">
                       <span className="font-mono tabular-nums">{formatPeso(po.total_amount)}</span>
-                      <span>{po.status_label || po.status}</span>
+                      <Chip variant={chipVariantForStatus(po.status)}>{po.status_label || po.status}</Chip>
                     </span>
                   </Link>
                 ))}

@@ -32,19 +32,19 @@ export function DataTablePagination({
  perPage,
 }: PaginationProps) {
  return (
- <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+ <div data-layout="pagination" className="mt-4 flex flex-wrap items-center justify-between gap-2">
  <div className="flex items-center gap-3">
- <div className="text-xs text-muted font-mono tabular-nums">
+ <div className="text-caption text-muted font-sans tabular-nums">
  {meta.from ?? 0}–{meta.to ?? 0} of {meta.total}
  </div>
  {onPageSizeChange && (
- <label className="flex items-center gap-1.5 text-xs text-muted">
+ <label className="flex items-center gap-2 text-label text-muted">
  Rows
  <select
  value={perPage ?? meta.per_page}
  onChange={(e) => onPageSizeChange(Number(e.target.value))}
  className={cn(
- 'h-6 rounded-md border border-default bg-canvas px-1.5 text-xs font-mono tabular-nums text-primary',
+ 'h-9 rounded-md border border-default bg-canvas px-2 text-label font-sans tabular-nums text-primary',
  'outline-none transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent cursor-pointer',
  )}
  >
@@ -76,7 +76,7 @@ export function DataTablePagination({
  onClick={() => onPageChange(meta.current_page - 1)}
  className="text-muted hover:text-primary"
  />
- <span className="text-xs font-mono tabular-nums px-2 text-muted">
+ <span className="text-caption font-sans tabular-nums px-2 text-muted">
  Page {meta.current_page} of {meta.last_page}
  </span>
  <Button
