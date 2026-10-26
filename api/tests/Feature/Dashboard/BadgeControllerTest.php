@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Common\Enums\PermissionOverrideType;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Accounting\Models\Account;
@@ -30,7 +31,9 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -561,6 +564,159 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(101, $board['summary']['my_action']);
         $this->assertTrue($board['meta']['pending_truncated']);
         $this->assertSame(101, $badges['approvals']['count']);
+    }
+
+    public function test_purchase_request_badge_matches_filtered_list_and_scope(): void
+    {
+        $department = Department::factory()->create();
+        $otherDepartment = Department::factory()->create();
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+        $grantor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.pr.approve')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $grantor->id,
+            'reason' => 'Exercise department-scoped purchase-request approvals.',
+        ]);
+        $approver->flushPermissionsCache();
+        $requester = User::factory()->create();
+
+        $visible = $this->addPendingPurchaseRequest($requester, $department->id, 'department_head');
+        $this->addPendingPurchaseRequest($requester, $otherDepartment->id, 'department_head');
+        $this->addPendingPurchaseRequest($requester, $department->id, 'finance_officer');
+        $this->addPendingPurchaseRequest($approver, $department->id, 'department_head');
+
+        $list = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests?signal=awaiting_my_approval')
+            ->assertOk();
+        $badge = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.purchase_requests.count');
+        $pendingCount = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertOk()
+            ->json('data.count');
+
+        $this->assertSame(1, $list->json('meta.total'));
+        $this->assertSame([$visible->hash_id], $list->json('data.*.id'));
+        $this->assertSame(1, $badge);
+        $this->assertSame($badge, $pendingCount);
+    }
+
+    public function test_purchase_request_badge_and_filter_include_active_delegates(): void
+    {
+        $delegator = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]);
+        $delegate = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        foreach (['purchasing.view', 'purchasing.pr.approve'] as $permissionSlug) {
+            UserPermissionOverride::create([
+                'user_id' => $delegate->id,
+                'permission_id' => Permission::query()->where('slug', $permissionSlug)->value('id'),
+                'type' => PermissionOverrideType::Grant,
+                'granted_by' => $admin->id,
+                'reason' => 'Allow verification of delegated purchase-request access.',
+            ]);
+        }
+        $delegate->flushPermissionsCache();
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'finance_officer',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $requester = User::factory()->create();
+        $visible = $this->addPendingPurchaseRequest($requester, null, 'finance_officer');
+        $list = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests?signal=awaiting_my_approval')
+            ->assertOk();
+        $badge = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.purchase_requests.count');
+
+        $this->assertSame(1, $list->json('meta.total'));
+        $this->assertSame([$visible->hash_id], $list->json('data.*.id'));
+        $this->assertSame(1, $badge);
+    }
+
+    public function test_purchase_request_badge_is_zero_without_list_access(): void
+    {
+        $department = Department::factory()->create();
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.view')->value('id'),
+            'type' => PermissionOverrideType::Deny,
+            'granted_by' => $admin->id,
+            'reason' => 'Verify approval counts do not expose a queue without list access.',
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.pr.approve')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $admin->id,
+            'reason' => 'Keep approval authority while testing revoked list access.',
+        ]);
+        $approver->flushPermissionsCache();
+        $this->assertTrue($approver->hasPermission('purchasing.pr.approve'));
+        $this->assertFalse($approver->hasPermission('purchasing.view'));
+
+        $this->addPendingPurchaseRequest(User::factory()->create(), $department->id, 'department_head');
+
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests?signal=awaiting_my_approval')
+            ->assertForbidden();
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertOk()
+            ->assertJsonPath('data.count', 0);
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('purchase_requests', $badges);
+    }
+
+    private function addPendingPurchaseRequest(User $requester, ?int $departmentId, string $roleSlug): PurchaseRequest
+    {
+        $request = PurchaseRequest::factory()->create([
+            'requested_by' => $requester->id,
+            'department_id' => $departmentId,
+        ]);
+        $request->forceFill(['status' => PurchaseRequestStatus::Pending])->save();
+        ApprovalRecord::create([
+            'approvable_type' => PurchaseRequest::class,
+            'approvable_id' => $request->id,
+            'step_order' => 1,
+            'role_slug' => $roleSlug,
+            'action' => 'pending',
+            'is_current' => true,
+            'created_at' => now(),
+        ]);
+
+        return $request;
     }
 
     private function addPendingLeaveApproval(Employee $employee, string $roleSlug): void

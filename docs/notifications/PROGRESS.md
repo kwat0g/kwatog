@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-16–F-18, F-01–F-06, F-08, F-12, F-15, and F-24 fixes are represented by PRs #332–#347. Full-project migration and role-wide verification remain incomplete.
+**Current gate:** Phase 2 approved; Phase 3 units 1–3 and finding fixes through #347 are merged. F-03 badge/list filter and list-permission guard are in PR #348. Full-project migration and role-wide verification remain incomplete.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 and F-16–F-18, F-01–F-06, F-08, F-12, F-15, and F-24 fixes are in PRs #332–#347. Global authorization coverage, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3 and F-16–F-18, F-01–F-06, F-08, F-12, F-15, and F-24 fixes are merged (#332–#347). F-03 filtered list and permission parity are in PR #348. Global authorization coverage, signal registry, and remaining event families remain open. |
 | 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted unit 1–3 and F-16, F-01–F-06, F-08, F-12, and F-18 tests passed on earlier feature heads. PR #346's original queue test passed before the permission gate was added; its new revoked-permission case is unverified. PR #347's pre-rebase targeted runs passed: `ApprovalBoardTest.php` 5 tests / 27 assertions and `BadgeControllerTest.php` 11 tests / 118 assertions, including the 101-row parity case. No post-rebase rerun; PHP unavailable locally. Post-merge tests for #334 and #336–#347 were not rerun. Visual baseline was cancelled; browser QA, all-role/channel coverage, broad badge parity, and full-suite verification remain open. The latest no-list-access endpoint assertion remains unrun. |
+| 7. Verification | Partial | Targeted unit 1–3 and F-16, F-01–F-06, F-08, F-12, and F-18 tests passed on earlier feature heads. PR #346's original queue test passed before the permission gate was added; its new revoked-permission case is unverified. PR #347's pre-rebase targeted runs passed: `ApprovalBoardTest.php` 5 tests / 27 assertions and `BadgeControllerTest.php` 11 tests / 118 assertions, including the 101-row parity case. No post-rebase rerun; PHP unavailable locally. PR #348's original feature-head runs passed `BadgeControllerTest.php` 12 tests / 124 assertions, `PurchaseRequestHardeningTest.php` 15 / 36, and `Sidebar.behavior.test.tsx` 24 tests. The new approval-only/no-list-access regression and all tests after current-main integration remain unverified; PHP is unavailable locally. Post-merge tests for #334 and #336–#347 were not rerun. Visual baseline was cancelled; browser QA, all-role/channel coverage, broad badge parity, and full-suite verification remain open. The latest no-list-access endpoint assertion remains unrun. |
 
 ## Phase 3 PR stack
 
@@ -35,7 +35,8 @@
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-12. Subject channel authorization | `notifications/fix-subject-channel-authorization` | [#345](https://github.com/kwat0g/kwatog/pull/345) | merged as `f7e3e67f` |
 | F-15. Queue long-wait destination and audience | `notifications/fix-queue-long-wait-link` | [#346](https://github.com/kwat0g/kwatog/pull/346) | merged as `337e0018` |
-| F-24. Full approval-board count beyond page limit | `notifications/fix-approval-board-count` | [#347](https://github.com/kwat0g/kwatog/pull/347) | `40c11ba4` plus current-main merge |
+| F-24. Full approval-board count beyond page limit | `notifications/fix-approval-board-count` | [#347](https://github.com/kwat0g/kwatog/pull/347) | merged as `8ef2d47e` |
+| F-03. Purchase-request badge and filtered list parity | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `1320d6f0` plus permission guard and current-main merge |
 
 ## Coverage ledger
 
@@ -54,7 +55,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include Notification Center behavior, configured-role audiences without record scope, and all-role badge parity (F-09), with board-count cap fixed in PR #347. PR #345 adds subject existence and known row-scope checks to private channels; all-role coverage and every chain type remain unverified. PR #346 adds `/dashboard/admin` for active system administrators who retain `dashboard.admin.view`; three permission-override notices remain no-link. PR #344 uses anchors for notification destinations. PR #341 respects pricing role lists while product/customer assignment scope remains open. Purchase Requests still link to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include Notification Center behavior, configured-role audiences without record scope, and all-role badge parity (F-09), with board-count cap fixed in PR #347. PR #345 adds subject existence and known row-scope checks to private channels; all-role coverage and every chain type remain unverified. PR #346 adds `/dashboard/admin` for active system administrators who retain `dashboard.admin.view`; three permission-override notices remain no-link. PR #344 uses anchors for notification destinations. PR #341 respects pricing role lists while product/customer assignment scope remains open. Purchase Requests now use an `awaiting_my_approval` filtered link in PR #348. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -87,14 +88,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 ## Separate finding fix: F-02
 
 - `BadgeService.approvals` now reads the approval board's `summary.my_action`, inheriting supported-type, permission, delegation, and source-row filtering. The feature test compares badge and board counts and excludes an out-of-department leave row plus an unsupported approval type.
-- Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions** on the pre-merge feature head. Post-merge tests were not rerun. The board summary still caps at 100 rows; F-24 tracks this separate limitation.
+- Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions** on the pre-merge feature head. Post-merge tests were not rerun. F-24's 100-row summary cap is fixed in PR #347; full role parity remains open.
 - Full `BadgeControllerTest` and all-role badge/list parity were not run. No frontend changes.
 
 ## Separate finding fix: F-03
 
-- `PurchaseRequestAccessPolicy::pendingApprovalsFor()` supplies both the sidebar badge and existing pending-count endpoint. It applies current pending steps, active direct/delegated roles, submitter exclusion, PR row visibility, and requires both `purchasing.view` and `purchasing.pr.approve` before returning rows.
-- Earlier targeted API coverage on the pre-merge feature head: `PurchaseRequestHardeningTest::test_pending_count_excludes_self_submissions_and_other_roles_steps` **1 passed / 18 assertions**; `BadgeControllerTest::test_department_head_sees_pending_approvals_with_severity` **1 passed / 6 assertions**. A new negative assertion for an approval-only user without list access was added after these runs and remains unverified.
-- Sidebar still opens broad PR list; destination-filter parity remains under F-09. No frontend changes.
+- `PurchaseRequestAccessPolicy::pendingApprovalsFor()` supplies the sidebar badge, pending-count endpoint, and filtered list. It applies current pending steps, active direct/delegated roles, submitter exclusion, PR row visibility, and requires both `purchasing.view` and `purchasing.pr.approve`. The sidebar opens `?signal=awaiting_my_approval`.
+- On the original feature head: `BadgeControllerTest.php` **12 passed / 124 assertions**, `PurchaseRequestHardeningTest.php` **15 passed / 36 assertions**, and `Sidebar.behavior.test.tsx` **24 passed**. New approval-only/no-list-access regression was added after these runs and remains unverified; no tests were rerun after integrating current main.
+- All-role badge/list parity remains open under F-09.
 
 ## Separate finding fix: F-04
 

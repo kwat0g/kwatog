@@ -49,12 +49,14 @@ interface PurchaseRequestListParams extends ListParams {
   is_urgent?: boolean | string;
   from?: string;
   to?: string;
+  signal?: string;
 }
 
 const DEFAULT_FILTERS: PurchaseRequestListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  signal: '',
 };
 
 export default function PurchaseRequestsListPage() {
@@ -223,6 +225,19 @@ export default function PurchaseRequestsListPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
+    ...(can('purchasing.pr.approve')
+      ? [
+          {
+            key: 'signal',
+            label: 'Work queue',
+            type: 'select' as const,
+            options: [
+              { value: '', label: 'All requests' },
+              { value: 'awaiting_my_approval', label: 'Awaiting my approval' },
+            ],
+          },
+        ]
+      : []),
     {
       key: 'status',
       label: 'Status',

@@ -1126,10 +1126,14 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     const hoverExpanded = !mobile && collapsed && peek && hovered;
     const renderNavItem = (item: NavItem) => {
       const entry = getBadge(item.badgeKey);
+      const target =
+        item.badgeKey === 'purchase_requests' && (entry?.count ?? 0) > 0
+          ? `${item.to}?signal=awaiting_my_approval`
+          : item.to;
       return (
         <li key={item.to}>
           <NavLink
-            item={item}
+            item={target === item.to ? item : { ...item, to: target }}
             active={isActive(item.to)}
             collapsed={compact}
             badgeOverride={entry?.count}
