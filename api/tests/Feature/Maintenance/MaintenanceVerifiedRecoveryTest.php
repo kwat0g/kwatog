@@ -182,6 +182,9 @@ class MaintenanceVerifiedRecoveryTest extends TestCase
             '/self-service/maintenance-work-orders/'.$order->hash_id,
             json_decode($notice->data, true)['link_to'],
         );
+        $rejectedData = json_decode($notice->data, true);
+        $this->assertSame(MaintenanceWorkOrder::class, $rejectedData['subject_type']);
+        $this->assertSame((string) $order->id, $rejectedData['subject_id']);
     }
 
     public function test_repair_submission_only_notifies_verifiers_who_can_open_the_order(): void
@@ -215,6 +218,10 @@ class MaintenanceVerifiedRecoveryTest extends TestCase
             'notifiable_id' => $revokedManager->id,
             'type' => 'maintenance.repair_submitted',
         ]);
+        $submittedData = json_decode((string) DB::table('notifications')->where('notifiable_id', $manager->id)
+            ->where('type', 'maintenance.repair_submitted')->value('data'), true);
+        $this->assertSame(MaintenanceWorkOrder::class, $submittedData['subject_type']);
+        $this->assertSame((string) $order->id, $submittedData['subject_id']);
         $this->actingAs($manager)->getJson("/api/v1/maintenance/work-orders/{$order->hash_id}")->assertOk();
         $this->actingAs($revokedManager)->getJson("/api/v1/maintenance/work-orders/{$order->hash_id}")->assertForbidden();
     }

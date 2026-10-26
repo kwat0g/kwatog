@@ -20,6 +20,9 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCostReview;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Maintenance\Models\MaintenancePartRequest;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -35,7 +38,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Item::class, ItemCostReview::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -57,6 +60,11 @@ final class NotificationSubjectAccessRegistry
             ItemCostReview::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && $user->hasPermission('inventory.costs.review')
                 && $subject instanceof ItemCostReview,
+            MaintenancePartRequest::class => app(SettingsService::class)->get('modules.inventory', false) === true
+                && $user->is_active
+                && $user->hasPermission('inventory.picking.view')
+                && $subject instanceof MaintenancePartRequest,
+            MaintenanceWorkOrder::class => self::userCanViewMaintenanceWorkOrder($user, $subject),
             SupplierItemListing::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && $user->hasPermission('purchasing.supplier_listings.view'),
             WorkOrder::class => self::userCanViewWorkOrder($user, $subject),
@@ -102,6 +110,14 @@ final class NotificationSubjectAccessRegistry
         } catch (HttpException) {
             return false;
         }
+    }
+
+    private static function userCanViewMaintenanceWorkOrder(User $user, Model $subject): bool
+    {
+        return app(SettingsService::class)->get('modules.maintenance', false) === true
+            && $user->is_active
+            && $subject instanceof MaintenanceWorkOrder
+            && ($user->hasPermission('maintenance.view') || MaintenanceWorkAccess::canRead($subject, $user));
     }
 
     private static function userCanViewLoan(User $user, Model $subject): bool
