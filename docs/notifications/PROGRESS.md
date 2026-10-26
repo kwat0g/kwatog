@@ -861,8 +861,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Internal price negotiation notices now pass through the `PriceRequest` subject gate, which checks the CRM module, active recipient, route permission, and exact SPA list target. The internal and portal pricing pages filter to the referenced request; the internal page opens its details modal.
 - Internal and portal actors no longer receive their own lifecycle update. Portal notices remain scoped to active contacts for the record's customer, and the customer-scoped list query returns no row for another account.
 - The two new lifecycle tests pass: **2 tests / 23 assertions**. They cover actor exclusion, unrelated internal role suppression, exact links, invalid hash behavior, and cross-customer denial. PHP syntax, Pint, targeted ESLint, and `git diff --check` pass.
-- Full `PriceNegotiationLifecycleTest.php` run: **6 passed, 1 failed**. Existing `test_accepted_agreement_cannot_be_silently_edited_or_archived` expects HTTP 422 but gets 403 because its `customer_service_officer` lacks the agreement-management permission. This route/test mismatch is separate from this change; record as F-56 and fix in a separate PR. Full SPA typecheck was interrupted due local resource use; no browser QA run.
+- The first full `PriceNegotiationLifecycleTest.php` run exposed F-56: its agreement immutability check expected HTTP 422 but used a customer-service account without the required manage permission, so it got 403. The separate finding PR below repairs that fixture; no production behavior change. Full SPA typecheck was interrupted due local resource use; no browser QA run.
+
+## Separate finding fix: F-56 agreement immutability test authorization (draft PR [#462](https://github.com/kwat0g/kwatog/pull/462))
+
+- The test now uses seeded `system_admin`, which holds `crm.price_agreements.manage`, so the request reaches the immutable-agreement business rule instead of stopping at route authorization.
+- `PriceNegotiationLifecycleTest.php`: **7 passed / 57 assertions**. This changes only the test actor; route permission remains unchanged.
 
 ## Resume instruction
 
-Next: record and fix F-56 separately, then continue the remaining dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Keep units on separate branches/PRs; full suite, badge parity, role matrix, and visual QA remain incomplete.
+Next: continue the remaining dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Keep units on separate branches/PRs; full suite, badge parity, role matrix, and visual QA remain incomplete.
