@@ -145,6 +145,30 @@ class Complaint8dSlaTest extends TestCase
         $this->assertGreaterThan(0, DB::table('notifications')->where('type', '8d.sla')->count());
     }
 
+    public function test_disabled_crm_keeps_complaint_sla_tier_retryable(): void
+    {
+        $complaint = $this->makeComplaint();
+        DB::table('customer_complaints')->where('id', $complaint->id)->update([
+            'created_at' => now()->subHours(49),
+            'd3_due_at' => now()->subHour(),
+            'd4_due_at' => now()->addDays(5),
+            'finalize_due_at' => now()->addDays(28),
+        ]);
+        app(SettingsService::class)->set('modules.crm', false, 'modules');
+
+        $counts = app(Complaint8dEscalationService::class)->run();
+
+        $this->assertSame(0, $counts['d3']);
+        $this->assertSame([], $complaint->fresh()->sla_alert_levels ?? []);
+        $this->assertDatabaseHas('complaint_8d_escalation_deliveries', [
+            'complaint_id' => $complaint->id,
+            'tier' => 'd3',
+            'status' => 'pending',
+            'attempts' => 1,
+        ]);
+        $this->assertSame(0, DB::table('notifications')->where('type', '8d.sla')->count());
+    }
+
     public function test_d3_idempotent_re_run_does_not_double_fire(): void
     {
         $c = $this->makeComplaint();

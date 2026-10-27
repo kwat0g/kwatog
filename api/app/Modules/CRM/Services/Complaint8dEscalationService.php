@@ -246,7 +246,7 @@ class Complaint8dEscalationService
                 $audience = $this->deliverableAudience($configuredRecipients, $complaint->assignee);
                 if ($audience->isEmpty()) {
                     foreach ($deliveries as $delivery) {
-                        $this->markPending($delivery, 'No active notification recipient is configured.');
+                        $this->markPending($delivery, 'No eligible notification recipient has an enabled delivery channel.');
                     }
 
                     // A tier nobody received is not a silent skip: it stays
@@ -356,6 +356,10 @@ class Complaint8dEscalationService
      */
     private function deliverableAudience(Collection $configuredRecipients, ?User $assignee): Collection
     {
+        if ($this->settings->get('modules.crm', false) !== true) {
+            return collect();
+        }
+
         $audience = collect($configuredRecipients->all());
         if ($assignee?->is_active) {
             $audience->push($assignee);
