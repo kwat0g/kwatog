@@ -144,6 +144,28 @@ it('opens the awaiting-approval filter when purchase requests has a positive bad
   );
 });
 
+it('opens only receipt-overdue purchase orders from the PO badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'overdue_purchase_orders'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Receipt overdue',
+          description: 'Open purchase orders past the expected receipt date with quantity remaining',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/purchasing/purchase-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Purchase Orders/ })).toHaveAttribute(
+    'href',
+    '/purchasing/purchase-orders?signal=receipt_overdue',
+  );
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'

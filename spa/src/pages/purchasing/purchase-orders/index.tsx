@@ -41,6 +41,7 @@ interface PurchaseOrderListParams extends ListParams {
   vendor_id?: string;
   requires_vp_approval?: boolean | string;
   overdue?: boolean | string;
+  signal?: string;
   from?: string;
   to?: string;
 }
@@ -49,6 +50,7 @@ const DEFAULT_FILTERS: PurchaseOrderListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  signal: '',
 };
 
 export default function PurchaseOrdersListPage() {
@@ -180,6 +182,15 @@ export default function PurchaseOrdersListPage() {
         { value: '', label: 'All' },
         { value: 'true', label: 'Yes' },
         { value: 'false', label: 'No' },
+      ],
+    },
+    {
+      key: 'signal',
+      label: 'Signal',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: 'receipt_overdue', label: 'Receipt overdue' },
       ],
     },
     {

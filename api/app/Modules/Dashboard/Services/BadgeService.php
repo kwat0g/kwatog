@@ -36,6 +36,8 @@ use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -77,6 +79,7 @@ class BadgeService
     /** Badge counts disappear with the module that owns their screen. */
     private const FEATURE_BY_BADGE = [
         'purchase_requests' => 'purchasing',
+        'overdue_purchase_orders' => 'purchasing',
         'leaves' => 'leave',
         'overtime' => 'attendance',
         'maintenance_wo' => 'maintenance',
@@ -256,6 +259,15 @@ class BadgeService
                 'counter'     => fn (): int => $user->hasPermission('purchasing.pr.approve')
                     ? app(PurchaseRequestAccessPolicy::class)->pendingApprovalsFor($user)->count()
                     : 0,
+            ],
+
+            'overdue_purchase_orders' => [
+                'permissions' => ['purchasing.view'],
+                'label' => 'Receipt overdue',
+                'description' => 'Open purchase orders past the expected receipt date with quantity remaining',
+                'counter' => fn (): int => app(PurchaseOrderAccessPolicy::class)
+                    ->visibleTo(PurchaseOrder::query()->receiptOverdue(), $user)
+                    ->count(),
             ],
 
             // HR > Leave management — pending requests visible to this approver tier.
