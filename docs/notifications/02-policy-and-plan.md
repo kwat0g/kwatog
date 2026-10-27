@@ -241,7 +241,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `quality.calibration.overdue` | Calibration overdue / critical | Stored status `overdue`, derived from `next_calibration_date` before the current business date; exclude `retired`. `calibration:check-due` recomputes daily at 06:50. | S: `quality.calibration.view`; company-wide, matching the list route | `/quality/calibration?status=overdue` |
 | `quality.ncr.open` | Open NCR / action-required | NCR outside closed/cancelled, with assigned owner or actionable next step. | A/S: NCR view + site scope | `/quality/ncrs?signal=open` |
 | `quality.ncr.overdue` | Overdue / warning | Open NCR/CAPA/effectiveness record due date < Manila today; confirm authoritative due field. | A/S: assigned owner + scoped reviewer | `/quality/ncrs?signal=overdue` |
-| `quality.effectiveness.due` | Effectiveness check / warning | Approved corrective action with scheduled effectiveness check due within 3 days or overdue. | A/S: assigned quality reviewer | `/quality/ncrs?signal=effectiveness_due` |
+| `quality.effectiveness.due` | Effectiveness check / warning | Corrective/preventive action on a closed NCR, assigned to the current user, with pending/ineffective verdict and next check due within `quality.effectiveness.due_soon_days` (3 by default) or overdue. | A: current action owner with `quality.ncr.view`; no plant scope exists in the list API. | `/quality/ncrs/effectiveness?signal=awaiting_my_action` |
 | `maintenance.breakdown.open` | Breakdown / critical | Machine breakdown open and not restored/closed. | A/S: same-site assigned maintenance/production users | `/maintenance/work-orders?signal=breakdown` |
 | `maintenance.work_order.unassigned` | Unassigned / action-required | Open maintenance work order (`open`, `assigned`, or `in_progress`) with no assignee. | S: `maintenance.view` + `maintenance.wo.assign`; company-wide, matching the current list. Site scope is unsupported by the current list. | `/maintenance/work-orders?queue=unassigned` |
 | `maintenance.work_order.assigned` | Assigned work order / action-required | Nonterminal maintenance work orders assigned to the current technician; use the same assignment/site filter as the technician mobile list. | A: assigned technician and site | `/maintenance/mobile?signal=assigned` |
@@ -337,7 +337,8 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/quality/inspection-specs` | — | `quality.specs.view` | — |
 | `/quality/inspections` | `pending_inspections` | `quality.inspections.view` | quality.inspection.awaiting_my_action |
 | `/quality/calibration` | `calibration_overdue`, `calibration_due` | `quality.calibration.view` | quality.calibration.overdue; quality.calibration.due |
-| `/quality/ncrs` | `ncrs` | `quality.ncr.view` | quality.ncr.open; quality.ncr.overdue; quality.effectiveness.due |
+| `/quality/ncrs` | `ncrs` | `quality.ncr.view` | quality.ncr.open; quality.ncr.overdue |
+| `/quality/ncrs/effectiveness` | — | `quality.ncr.view` | quality.effectiveness.due |
 | `/quality/traceability` | — | `quality.inspections.view` | quality.lot.rejected (covers held lots only if traceability filter exposes held disposition) |
 | `/budgeting` | `pending_budgets` | `budgeting.view` | finance.budget.awaiting_my_approval |
 | `/budgeting/transfers` | `pending_transfers` | any: `budgeting.view`, `budgeting.approve` | finance.budget_transfer.awaiting_my_approval |

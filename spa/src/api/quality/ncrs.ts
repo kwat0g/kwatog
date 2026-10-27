@@ -67,7 +67,7 @@ export const ncrsApi = {
     client
       .post<ApiSuccess<NcrAction>>(`/quality/ncrs/${id}/actions`, data)
       .then((r) => r.data.data),
-  due: (params?: { page?: number; per_page?: number }) =>
+  due: (params?: { page?: number; per_page?: number; signal?: 'awaiting_my_action' }) =>
     client
       .get<PaginatedResponse<NcrAction>>('/quality/ncrs/effectiveness/due', { params })
       .then((r) => r.data),
