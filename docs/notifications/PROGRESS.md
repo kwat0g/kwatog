@@ -809,6 +809,7 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 ## Phase 3 Purchasing RFQ and supplier performance subject access (PR #457)
 
 - Internal RFQ lifecycle notices now use `sendForSubject()` and the same `RequestForQuoteAccessPolicy::canSee()` rule as the detail route. Supplier deterioration alerts use the exact supplier-performance SPA route and permission-gated Vendor access. RFQ mail-failure fallback also passes its RFQ subject through `EmailDeliveryFailureNotifier`, so queue-time fallback IDs are rechecked when the failure arrives.
+- Vendor records and the performance route have no site/plant scope. Current audience remains configured roles with the global performance-view permission; F-69 asks whether this company-wide audience is approved.
 - Original-head RFQ lifecycle test passed **1 / 5 assertions**, supplier deterioration tests passed **5 / 13**, and subject access tests passed **25 / 185**. A new RFQ mail-failure subject-forwarding test was added during rebase and not run. No post-rebase tests or database operations ran here; `git diff --check` only.
 - The full RFQ feature file has one pre-existing test error at `RfqBiddingTest.php:513` (`void` helper chained with `getJson()`); log and fix separately. Full suites, role matrix, mail-failure delivery, and browser QA remain open.
 
