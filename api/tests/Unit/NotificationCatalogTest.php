@@ -4,8 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Common\Models\Alert;
+use App\Common\Notifications\CriticalAlertEmail;
 use App\Common\Services\NotificationCatalog;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
+use App\Modules\Auth\Notifications\PasswordResetNotification;
+use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
+use App\Modules\Production\Notifications\DailyProductionSummary;
+use App\Modules\Production\Notifications\WeeklyProductionSummary;
+use Illuminate\Notifications\Notification;
 use Tests\TestCase;
 
 /**
@@ -263,6 +272,83 @@ class NotificationCatalogTest extends TestCase
             "Laravel Notification dispatches must use NotificationService.\n  %s",
             implode("\n  ", $offences),
         ));
+    }
+
+    public function test_native_laravel_notification_dispatch_is_limited_to_mail_only_flows(): void
+    {
+        $appPath = dirname(__DIR__, 2).'/app';
+        $nativeCalls = [];
+        $objectNotifyCalls = [];
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($appPath, \FilesystemIterator::SKIP_DOTS),
+        );
+
+        foreach ($files as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $source = (string) file_get_contents($file->getPathname());
+            $relative = str_replace(
+                str_replace('\\', '/', $appPath).'/',
+                '',
+                str_replace('\\', '/', $file->getPathname()),
+            );
+            if (preg_match_all('/->notify\s*\(/', $source, $matches) > 0) {
+                $objectNotifyCalls[$relative] = count($matches[0]);
+            }
+            $calls = [];
+            if (preg_match('/->notify\(\s*new\s+/', $source)) {
+                $calls[] = 'user.notify';
+            }
+            if (preg_match('/->notify\(\s*\$notification\b/', $source)) {
+                $calls[] = 'user.notify.variable';
+            }
+            if (preg_match('/\bNotification::(?:send|sendNow)\s*\(/', $source)) {
+                $calls[] = 'Notification.send';
+            }
+            if (preg_match('/\bNotification::route\s*\(/', $source)) {
+                $calls[] = 'Notification.route';
+            }
+            if ($calls !== []) {
+                sort($calls);
+                $nativeCalls[$relative] = $calls;
+            }
+        }
+
+        ksort($nativeCalls);
+        ksort($objectNotifyCalls);
+        $notificationService = (string) file_get_contents($appPath.'/Common/Services/NotificationService.php');
+        $this->assertDoesNotMatchRegularExpression('/public function notify\s*\(/', $notificationService);
+        $this->assertSame([
+            'Common/Services/AlertEngineService.php' => 1,
+            'Common/Services/EmailDeliveryFailureNotifier.php' => 2,
+            'Console/Commands/RunDueScheduledExports.php' => 1,
+            'Console/Commands/SendDailyProductionSummary.php' => 2,
+            'Console/Commands/SendWeeklyProductionSummary.php' => 2,
+            'Modules/CRM/Services/PricingReviewService.php' => 7,
+            'Modules/HR/Services/RecruitmentService.php' => 4,
+            'Modules/HR/Services/TrainingExpiryService.php' => 1,
+            'Modules/Production/Observers/ProductionStaffingObserver.php' => 2,
+            'Modules/Purchasing/Services/SupplierResponseService.php' => 1,
+            'Modules/Quality/Jobs/ProcessNcrRecurrenceScan.php' => 1,
+            'Modules/ReturnManagement/Services/ReturnCaseService.php' => 6,
+        ], $objectNotifyCalls, 'Any new object-level notify call must be reviewed and inventoried; use NotificationService::send() for in-app notices.');
+        $this->assertSame([], $nativeCalls, 'Laravel notification dispatch outside NotificationService must be reviewed.');
+
+        $mailOnlyNotifications = [
+            new WelcomeNotification('https://example.test/setup', 60),
+            new EmployeeWelcomeNotification('https://example.test/setup', 60),
+            new PasswordResetNotification('https://example.test/reset', 60),
+            new PasswordResetLinkNotification('https://example.test/reset', 60),
+            new DailyProductionSummary([]),
+            new WeeklyProductionSummary([]),
+            new CriticalAlertEmail(new Alert),
+        ];
+        foreach ($mailOnlyNotifications as $notification) {
+            $this->assertInstanceOf(Notification::class, $notification);
+            $this->assertSame(['mail'], $notification->via(new \stdClass), $notification::class.' must remain mail-only.');
+        }
     }
 
     public function test_catalog_has_no_duplicate_keys(): void
