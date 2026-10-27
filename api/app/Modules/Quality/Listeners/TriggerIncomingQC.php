@@ -171,7 +171,7 @@ class TriggerIncomingQC implements ShouldQueue
                 ->get()
                 ->filter(fn (User $user): bool => $user->hasPermission('inventory.view'));
 
-            app(NotificationService::class)->send($recipients, 'chain.incoming_qc_required', [
+            app(NotificationService::class)->sendForSubject($grn, $recipients, 'chain.incoming_qc_required', [
                 'title'       => 'Incoming QC required',
                 'message'     => "Incoming QC required for GRN {$grn->grn_number}.",
                 'link_to'     => "/inventory/grns/{$grn->hash_id}",

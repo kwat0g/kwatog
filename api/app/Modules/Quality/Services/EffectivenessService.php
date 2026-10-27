@@ -280,7 +280,7 @@ class EffectivenessService
                 return;
             }
 
-            $this->notifications->send($recipient, $type, [
+            $this->notifications->sendForSubject($ncr, $recipient, $type, [
                 'title'       => $title,
                 'message'     => $message,
                 'link_to'     => "/quality/ncrs/{$ncr->hash_id}",

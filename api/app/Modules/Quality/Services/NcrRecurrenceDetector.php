@@ -198,7 +198,7 @@ class NcrRecurrenceDetector
         }
 
         $windowDays = $this->windowDays();
-        $this->notifications->send($recipients, 'ncr.recurrence', [
+        $this->notifications->sendForSubject($ncr, $recipients, 'ncr.recurrence', [
             'title'       => 'Recurring NCR detected',
             'message'     => "NCR {$ncr->ncr_number} appears to recur a prior NCR within the last {$windowDays} days. Review for systemic corrective action.",
             'link_to'     => "/quality/ncrs/{$ncr->hash_id}",

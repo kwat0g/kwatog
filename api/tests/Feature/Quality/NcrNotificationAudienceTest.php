@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -23,6 +24,7 @@ final class NcrNotificationAudienceTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.quality', true, 'modules');
     }
 
     public function test_recurrence_notice_excludes_users_who_lost_ncr_view_permission(): void
@@ -42,6 +44,8 @@ final class NcrNotificationAudienceTest extends TestCase
         $this->assertSame(0, $qcInspector->notifications()->where('type', 'ncr.recurrence')->count());
         $notice = $productionManager->notifications()->where('type', 'ncr.recurrence')->firstOrFail();
         $this->assertSame("/quality/ncrs/{$recurrence->hash_id}", $notice->data['link_to']);
+        $this->assertSame(NonConformanceReport::class, $notice->data['subject_type']);
+        $this->assertSame((string) $recurrence->id, $notice->data['subject_id']);
 
         $this->actingAs($productionManager)->getJson('/api/v1/quality/ncrs/'.$recurrence->hash_id)->assertOk();
         $this->actingAs($qcInspector)->getJson('/api/v1/quality/ncrs/'.$recurrence->hash_id)->assertForbidden();

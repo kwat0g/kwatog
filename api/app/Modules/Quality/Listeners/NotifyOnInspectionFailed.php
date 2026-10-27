@@ -52,13 +52,13 @@ class NotifyOnInspectionFailed implements ShouldQueue
 
             $ref = "Inspection {$inspection->inspection_number}";
 
-            $this->notifications->sendInApp($audience, 'quality.inspection_failed', [
+            $this->notifications->sendForSubject($inspection, $audience, 'quality.inspection_failed', [
                 'title' => "QC Failure — {$ref}",
                 'message' => "{$ref} failed. Review the linked defect and affected stock before continuing.",
                 'link_to' => "/quality/inspections/{$inspection->hash_id}",
                 'entity_type' => 'inspection',
                 'entity_id' => $inspection->hash_id,
-            ]);
+            ], emailEnabled: false);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnInspectionFailed failed', ['error' => $e->getMessage()]);
             throw $e;

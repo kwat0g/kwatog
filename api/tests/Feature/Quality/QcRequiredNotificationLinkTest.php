@@ -66,9 +66,14 @@ class QcRequiredNotificationLinkTest extends TestCase
 
     private function link(string $type): ?string
     {
+        return $this->notificationData($type)['link_to'] ?? null;
+    }
+
+    private function notificationData(string $type): ?array
+    {
         $data = DB::table('notifications')->where('notifiable_id', $this->inspector->id)->where('type', $type)->value('data');
 
-        return $data ? json_decode((string) $data, true)['link_to'] : null;
+        return $data ? json_decode((string) $data, true) : null;
     }
 
     private function recordBatch(WorkOrder $wo, int $good): void
@@ -92,6 +97,8 @@ class QcRequiredNotificationLinkTest extends TestCase
 
         $inspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'in_process')->firstOrFail();
         $this->assertSame("/quality/inspections/{$inspection->hash_id}", $this->link('chain.in_process_qc_required'));
+        $this->assertSame(Inspection::class, $this->notificationData('chain.in_process_qc_required')['subject_type']);
+        $this->assertSame((string) $inspection->id, $this->notificationData('chain.in_process_qc_required')['subject_id']);
         $this->assertSame(0, $revokedInspector->notifications()->where('type', 'chain.in_process_qc_required')->count());
     }
 
@@ -104,6 +111,8 @@ class QcRequiredNotificationLinkTest extends TestCase
 
         $inspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'outgoing')->firstOrFail();
         $this->assertSame("/quality/inspections/{$inspection->hash_id}", $this->link('chain.outgoing_qc_required'));
+        $this->assertSame(Inspection::class, $this->notificationData('chain.outgoing_qc_required')['subject_type']);
+        $this->assertSame((string) $inspection->id, $this->notificationData('chain.outgoing_qc_required')['subject_id']);
     }
 
     public function test_outgoing_notice_for_several_batches_opens_the_inspection_list(): void
@@ -124,6 +133,9 @@ class QcRequiredNotificationLinkTest extends TestCase
             "/quality/inspections?entity_type=work_order&entity_id={$wo->hash_id}&stage=outgoing",
             $this->link('chain.outgoing_qc_required'),
         );
+        $firstInspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'outgoing')->orderBy('id')->firstOrFail();
+        $this->assertSame(Inspection::class, $this->notificationData('chain.outgoing_qc_required')['subject_type']);
+        $this->assertSame((string) $firstInspection->id, $this->notificationData('chain.outgoing_qc_required')['subject_id']);
         $this->assertSame(0, $revokedInspector->notifications()->where('type', 'chain.outgoing_qc_required')->count());
         $this->actingAs($this->inspector)->getJson(
             '/api/v1/quality/inspections?entity_type=work_order&entity_id='.$wo->hash_id.'&stage=outgoing',

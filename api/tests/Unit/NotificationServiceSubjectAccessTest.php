@@ -18,6 +18,7 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
@@ -36,6 +37,9 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -481,6 +485,116 @@ class NotificationServiceSubjectAccessTest extends TestCase
             'notifiable_id' => $reviewer->id,
             'type' => 'test.disabled_item_cost_review_subject',
         ]);
+    }
+
+    public function test_quality_subjects_require_their_detail_permission_and_enabled_module(): void
+    {
+        app(SettingsService::class)->set('modules.quality', true, 'modules');
+        $inspectionPermission = Permission::firstOrCreate(
+            ['slug' => 'quality.inspections.view'],
+            ['name' => 'View inspections', 'module' => 'quality'],
+        );
+        $ncrPermission = Permission::firstOrCreate(
+            ['slug' => 'quality.ncr.view'],
+            ['name' => 'View NCRs', 'module' => 'quality'],
+        );
+        $inspectionRole = Role::firstOrCreate(['slug' => 'notification_inspection_viewer'], ['name' => 'Notification Inspection Viewer']);
+        $inspectionRole->permissions()->syncWithoutDetaching([$inspectionPermission->id]);
+        $ncrRole = Role::firstOrCreate(['slug' => 'notification_ncr_viewer'], ['name' => 'Notification NCR Viewer']);
+        $ncrRole->permissions()->syncWithoutDetaching([$ncrPermission->id]);
+        $inspectionViewer = User::factory()->withRole($inspectionRole->slug)->create();
+        $ncrViewer = User::factory()->withRole($ncrRole->slug)->create();
+        $withoutPermission = User::factory()->create();
+        $product = Product::factory()->create();
+        $inspection = Inspection::query()->create([
+            'inspection_number' => 'QC-202610-0001',
+            'stage' => 'incoming',
+            'status' => 'failed',
+            'product_id' => $product->id,
+            'batch_quantity' => 10,
+            'sample_size' => 3,
+        ]);
+        $ncr = NonConformanceReport::factory()->create();
+        Event::fake([UserNotificationCreated::class]);
+
+        app(NotificationService::class)->sendForSubject(
+            $inspection,
+            [$inspectionViewer, $ncrViewer, $withoutPermission],
+            'test.inspection_subject_access',
+            ['title' => 'Inspection update'],
+            emailEnabled: false,
+        );
+        app(NotificationService::class)->sendForSubject(
+            $ncr,
+            [$ncrViewer, $inspectionViewer, $withoutPermission],
+            'test.ncr_subject_access',
+            ['title' => 'NCR update'],
+            emailEnabled: false,
+        );
+
+        foreach ([[$inspectionViewer, 'test.inspection_subject_access'], [$ncrViewer, 'test.ncr_subject_access']] as [$viewer, $type]) {
+            $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => $type]);
+        }
+        foreach ([[$ncrViewer, 'test.inspection_subject_access'], [$inspectionViewer, 'test.ncr_subject_access'], [$withoutPermission, 'test.inspection_subject_access'], [$withoutPermission, 'test.ncr_subject_access']] as [$denied, $type]) {
+            $this->assertDatabaseMissing('notifications', ['notifiable_id' => $denied->id, 'type' => $type]);
+        }
+        $inspectionData = json_decode((string) DB::table('notifications')->where('notifiable_id', $inspectionViewer->id)->where('type', 'test.inspection_subject_access')->value('data'), true, flags: JSON_THROW_ON_ERROR);
+        $ncrData = json_decode((string) DB::table('notifications')->where('notifiable_id', $ncrViewer->id)->where('type', 'test.ncr_subject_access')->value('data'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(Inspection::class, $inspectionData['subject_type']);
+        $this->assertSame((string) $inspection->id, $inspectionData['subject_id']);
+        $this->assertSame(NonConformanceReport::class, $ncrData['subject_type']);
+        $this->assertSame((string) $ncr->id, $ncrData['subject_id']);
+
+        app(SettingsService::class)->set('modules.quality', false, 'modules');
+        app(NotificationService::class)->sendForSubject(
+            $inspection,
+            $inspectionViewer,
+            'test.disabled_quality_subject',
+            ['title' => 'Inspection update'],
+            emailEnabled: false,
+        );
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $inspectionViewer->id, 'type' => 'test.disabled_quality_subject']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_quality_subject');
+    }
+
+    public function test_supplier_return_subject_respects_hidden_supplier_return_route_scope(): void
+    {
+        app(SettingsService::class)->set('modules.return_management', true, 'modules');
+        $viewPermission = Permission::firstOrCreate(
+            ['slug' => 'return_management.view'],
+            ['name' => 'View return management', 'module' => 'return_management'],
+        );
+        $poCreatePermission = Permission::firstOrCreate(
+            ['slug' => 'purchasing.po.create'],
+            ['name' => 'Create purchase orders', 'module' => 'purchasing'],
+        );
+        $viewerRole = Role::firstOrCreate(['slug' => 'notification_return_viewer'], ['name' => 'Notification Return Viewer']);
+        $viewerRole->permissions()->syncWithoutDetaching([$viewPermission->id, $poCreatePermission->id]);
+        $customerServiceRole = Role::firstOrCreate(['slug' => 'customer_service_officer'], ['name' => 'Customer Service Officer']);
+        $customerServiceRole->permissions()->syncWithoutDetaching([$viewPermission->id]);
+        $viewer = User::factory()->withRole($viewerRole->slug)->create();
+        $customerServiceOfficer = User::factory()->withRole($customerServiceRole->slug)->create();
+        $return = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-NOTICE-'.uniqid(),
+            'type' => 'supplier_return',
+            'status' => 'draft',
+        ]);
+        Event::fake([UserNotificationCreated::class]);
+
+        app(NotificationService::class)->sendForSubject(
+            $return,
+            [$viewer, $customerServiceOfficer],
+            'test.supplier_return_subject_access',
+            ['title' => 'Supplier return update'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.supplier_return_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $customerServiceOfficer->id, 'type' => 'test.supplier_return_subject_access']);
+        $data = json_decode((string) DB::table('notifications')->where('notifiable_id', $viewer->id)->where('type', 'test.supplier_return_subject_access')->value('data'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(ReturnRequest::class, $data['subject_type']);
+        $this->assertSame((string) $return->id, $data['subject_id']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $customerServiceOfficer->id);
     }
 
     public function test_unregistered_subject_type_fails_closed(): void

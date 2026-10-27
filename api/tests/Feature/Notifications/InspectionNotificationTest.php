@@ -10,6 +10,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Listeners\NotifyOnInspectionFailed;
 use App\Modules\Quality\Models\Inspection;
+use App\Common\Services\SettingsService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -22,6 +23,7 @@ class InspectionNotificationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.quality', true, 'modules');
     }
 
     public function test_listener_sends_to_production_manager_and_qc_inspector(): void
@@ -50,6 +52,9 @@ class InspectionNotificationTest extends TestCase
             'notifiable_id' => $qc->id,
             'type'          => 'quality.inspection_failed',
         ]);
+        $notice = $qc->notifications()->where('type', 'quality.inspection_failed')->firstOrFail();
+        $this->assertSame(Inspection::class, $notice->data['subject_type']);
+        $this->assertSame((string) $inspection->id, $notice->data['subject_id']);
     }
 
     public function test_listener_class_exists(): void

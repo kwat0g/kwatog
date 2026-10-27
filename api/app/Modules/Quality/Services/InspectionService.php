@@ -2389,7 +2389,7 @@ class InspectionService
         $proposed = $inspection->proposed_result instanceof \BackedEnum
             ? $inspection->proposed_result->value
             : (string) $inspection->proposed_result;
-        app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [
+        app(NotificationService::class)->sendForSubject($inspection, $reviewers, 'quality.inspection_awaiting_review', [
             'title' => "Inspection {$inspection->inspection_number} awaits your review",
             'message' => ucfirst(str_replace('_', '-', $stage))." inspection proposes {$proposed}."
                 .' A second person must check it before the result is final.',

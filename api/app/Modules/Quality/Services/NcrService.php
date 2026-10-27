@@ -242,11 +242,11 @@ class NcrService
         if ($ncr->is_late_incoming) {
             $audience = User::query()->where('is_active', true)->whereHas('role', fn ($role) => $role->whereIn('slug', ['qc_inspector', 'warehouse_staff', 'purchasing_officer']))->get()
                 ->filter(fn (User $user) => $user->hasPermission('quality.ncr.view'));
-            app(NotificationService::class)->sendInApp($audience, 'quality.late_incoming', [
+            app(NotificationService::class)->sendForSubject($ncr, $audience, 'quality.late_incoming', [
                 'title' => 'Accepted material held: '.$ncr->ncr_number,
                 'message' => 'Review remaining stock and downstream material usage. Resolve all linked quarantine holds before closing the defect.',
                 'link_to' => '/quality/ncrs/'.$ncr->hash_id, 'entity_type' => 'ncr', 'entity_id' => $ncr->hash_id,
-            ], 'late-incoming-'.$ncr->id);
+            ], 'late-incoming-'.$ncr->id, emailEnabled: false);
         }
 
         return $ncr;
@@ -404,11 +404,13 @@ class NcrService
                 ->where('is_active', true)
                 ->get()
                 ->filter(fn (User $user): bool => $user->hasPermission('quality.ncr.view'));
-            app(NotificationService::class)->send($qcHeads, 'auto_ncr_created', [
+            $inspectionStage = $inspection->stage->label();
+            $severityLabel = ucfirst($severity);
+            app(NotificationService::class)->sendForSubject($ncr, $qcHeads, 'auto_ncr_created', [
                 'title' => 'NCR auto-created',
                 'message' => $inspection->problem_description
-                    ? "NCR auto-created from {$inspection->stage->value} inspection. Reported problem: {$inspection->problem_description}. Review disposition."
-                    : "NCR auto-created from {$inspection->stage->value} inspection. {$inspection->defect_count} pcs rejected. {$severity} severity. Review disposition.",
+                    ? "NCR auto-created from {$inspectionStage} inspection. Reported problem: {$inspection->problem_description}. Review disposition."
+                    : "NCR auto-created from {$inspectionStage} inspection. {$inspection->defect_count} pcs rejected. {$severityLabel} severity. Review disposition.",
                 'link_to' => "/quality/ncrs/{$ncr->hash_id}",
                 'entity_type' => 'ncr',
                 'entity_id' => $ncr->hash_id,
@@ -1277,7 +1279,7 @@ class NcrService
         $severity = $ncr->severity instanceof \BackedEnum
             ? $ncr->severity->value
             : (string) $ncr->severity;
-        $this->notifications->send($recipients, 'ncr.return_to_supplier', [
+        $this->notifications->sendForSubject($rma, $recipients, 'ncr.return_to_supplier', [
             'title' => "Return-to-supplier required: NCR {$ncr->ncr_number}",
             'message' => "NCR {$ncr->ncr_number} closed with a supplier return. Review RMA {$rma->rma_number}.",
             'link_to' => "/return-management/{$rma->hash_id}",
