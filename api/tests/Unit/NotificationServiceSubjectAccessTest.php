@@ -127,6 +127,7 @@ class NotificationServiceSubjectAccessTest extends TestCase
 
     public function test_only_recipients_with_permission_and_record_scope_get_notice(): void
     {
+        app(SettingsService::class)->set('modules.purchasing', true, 'modules');
         $permission = Permission::firstOrCreate(
             ['slug' => 'purchasing.view'],
             ['name' => 'View purchasing', 'module' => 'purchasing'],
@@ -136,8 +137,18 @@ class NotificationServiceSubjectAccessTest extends TestCase
             ['name' => 'Notification Subject Viewer'],
         );
         $role->permissions()->attach($permission->id);
+        $approvalPermission = Permission::firstOrCreate(
+            ['slug' => 'purchasing.pr.approve'],
+            ['name' => 'Approve purchase requests', 'module' => 'purchasing'],
+        );
+        $approvalRole = Role::firstOrCreate(
+            ['slug' => 'notification_subject_pr_approver'],
+            ['name' => 'Notification Subject PR Approver'],
+        );
+        $approvalRole->permissions()->syncWithoutDetaching([$approvalPermission->id]);
         $owner = User::factory()->withRole($role->slug)->create();
         $unrelated = User::factory()->withRole($role->slug)->create();
+        $approvalOnly = User::factory()->withRole($approvalRole->slug)->create();
         $withoutPermission = User::factory()->create();
         $request = PurchaseRequest::factory()->create(['requested_by' => $owner->id]);
 
@@ -148,11 +159,11 @@ class NotificationServiceSubjectAccessTest extends TestCase
                 'type' => 'test.subject_access',
                 'subject_type' => PurchaseRequest::class,
                 'subject_id' => $request->id,
-                'user_ids' => [$unrelated->id, $withoutPermission->id],
+                'user_ids' => [$unrelated->id, $approvalOnly->id, $withoutPermission->id],
             ],
         );
 
-        app(NotificationService::class)->sendForSubject($request, [$owner, $unrelated, $withoutPermission], 'test.subject_access', [
+        app(NotificationService::class)->sendForSubject($request, [$owner, $unrelated, $approvalOnly, $withoutPermission], 'test.subject_access', [
             'title' => 'Purchase request update',
             'message' => 'The request changed.',
         ]);
@@ -163,6 +174,10 @@ class NotificationServiceSubjectAccessTest extends TestCase
         ]);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $unrelated->id,
+            'type' => 'test.subject_access',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $approvalOnly->id,
             'type' => 'test.subject_access',
         ]);
         $this->assertDatabaseMissing('notifications', [
@@ -177,7 +192,49 @@ class NotificationServiceSubjectAccessTest extends TestCase
         $this->assertSame((string) $request->id, $data['subject_id']);
         Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $owner->id);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $unrelated->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $approvalOnly->id);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
+    }
+
+    public function test_purchase_request_subject_requires_purchasing_module_to_be_enabled(): void
+    {
+        app(SettingsService::class)->set('modules.purchasing', false, 'modules');
+        $view = Permission::firstOrCreate(
+            ['slug' => 'purchasing.view'],
+            ['name' => 'View purchasing', 'module' => 'purchasing'],
+        );
+        $role = Role::firstOrCreate(
+            ['slug' => 'notification_subject_pr_module_viewer'],
+            ['name' => 'Notification Subject PR Module Viewer'],
+        );
+        $role->permissions()->syncWithoutDetaching([$view->id]);
+        $owner = User::factory()->withRole($role->slug)->create();
+        $request = PurchaseRequest::factory()->create(['requested_by' => $owner->id]);
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification delivery skipped: no eligible recipients.',
+            ['type' => 'test.disabled_purchase_request_subject'],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.disabled_purchase_request_subject',
+                'subject_type' => PurchaseRequest::class,
+                'subject_id' => $request->id,
+                'user_ids' => [$owner->id],
+            ],
+        );
+
+        app(NotificationService::class)->sendForSubject($request, $owner, 'test.disabled_purchase_request_subject', [
+            'title' => 'Purchase request update',
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $owner->id,
+            'type' => 'test.disabled_purchase_request_subject',
+        ]);
+        Event::assertNotDispatched(UserNotificationCreated::class);
     }
 
     public function test_unregistered_subject_type_fails_closed(): void
