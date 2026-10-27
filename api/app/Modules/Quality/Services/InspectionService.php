@@ -2379,7 +2379,11 @@ class InspectionService
      */
     private function notifyReviewers(Inspection $inspection, User $by): void
     {
-        $makers = array_values(array_unique(array_filter([(int) $by->id, (int) $inspection->inspector_id])));
+        $makers = array_values(array_unique(array_filter([
+            (int) $by->id,
+            (int) $inspection->inspector_id,
+            ...$inspection->resultAuthors()->pluck('user_id')->map(fn ($id): int => (int) $id)->all(),
+        ])));
         $reviewers = app(NotificationService::class)->usersWithPermission('quality.inspections.review')
             ->filter(fn (User $user): bool => $user->hasPermission('quality.inspections.view'))
             ->whereNotIn('id', $makers)

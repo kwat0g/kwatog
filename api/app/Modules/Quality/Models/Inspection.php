@@ -389,6 +389,14 @@ class Inspection extends Model
         return $query->whereIn('status', [InspectionStatus::Draft->value, InspectionStatus::InProgress->value]);
     }
 
+    public function scopeAwaitingReviewBy(Builder $query, int $userId): Builder
+    {
+        return $query->where('status', InspectionStatus::AwaitingReview->value)
+            ->whereNotNull('inspector_id')
+            ->where('inspector_id', '!=', $userId)
+            ->whereDoesntHave('resultAuthors', fn (Builder $authors) => $authors->where('user_id', $userId));
+    }
+
     public function scopeStatus(Builder $q, InspectionStatus|string $status): Builder
     {
         return $q->where('status', $status instanceof InspectionStatus ? $status->value : $status);
