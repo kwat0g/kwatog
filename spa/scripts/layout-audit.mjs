@@ -591,6 +591,59 @@ function sampleReceivablePurchaseOrder(count) {
   };
 }
 
+const materialIssueStatuses = ['issued', 'draft', 'cancelled'];
+
+function sampleMaterialIssueLine(index) {
+  const quantity = index === 2 ? '123456789.125' : `${(index + 1) * 12.5}`;
+  return {
+    id: index + 1,
+    stock_movement_id: `layout-movement-${String(index + 1).padStart(6, '0')}`,
+    item: {
+      id: `layout-item-${index + 1}`,
+      code: index === 1 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`,
+      name: index === 1 ? 'Long injection-grade resin description for material issue detail width review' : `Issued material ${index + 1}`,
+      unit_of_measure: 'kg',
+    },
+    location: { id: 'layout-location-good', code: 'MW-RM-A-01-01' },
+    quantity_issued: quantity,
+    quantity_issued_in_uom: '12500.000',
+    issued_uom_conversion_factor: '0.500000',
+    unit_cost: index === 2 ? '123456789.1234' : '1234.5000',
+    total_cost: index === 2 ? '999999999999.99' : (Number(quantity) * 1234.5).toFixed(2),
+    issued_uom_code: index === 1 ? 'BAG' : null,
+    lot_number: `LOT-${String(index + 1).padStart(6, '0')}`,
+    remarks: index === 1 ? 'Long material issue note used to review wrapping and table width.' : null,
+  };
+}
+
+function sampleMaterialIssues(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const status = materialIssueStatuses[index % materialIssueStatuses.length];
+    return {
+      id: `layout-mis-${String(index + 1).padStart(5, '0')}`,
+      slip_number: `MIS-202610-${String(index + 1).padStart(5, '0')}`,
+      work_order_id: index % 4 === 1 ? null : sampleWorkOrder.id,
+      work_order: index % 4 === 1 ? null : { id: sampleWorkOrder.id, wo_number: sampleWorkOrder.wo_number },
+      issued_date: `2026-10-${String((index % 27) + 1).padStart(2, '0')}`,
+      status,
+      status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      total_value: index === 2 ? '999999999999.99' : (1234.5 * (index + 1)).toFixed(2),
+      reference_text: index % 4 === 1 ? 'A very long external reference for unplanned maintenance material issue' : null,
+      remarks: null,
+      issuer: { id: 'layout-user-issuer', name: index === 2 ? 'Alexandria-Maria Santos-Dela-Cruz' : 'Warehouse Operator' },
+      created_at: '2026-10-27T09:14:00+08:00',
+    };
+  });
+}
+
+function sampleMaterialIssueDetail(count) {
+  return {
+    ...sampleMaterialIssues(1)[0],
+    items: Array.from({ length: count }, (_, index) => sampleMaterialIssueLine(index)),
+    remarks: 'Synthetic material issue used for layout review; includes large quantities, long identifiers, and extended notes.',
+  };
+}
+
 const sampleMrbLocation = (id, code, zone, zoneType) => ({
   id, code, full_code: `MW-${zone}-${code}`, warehouse_id: 'layout-warehouse-1',
   warehouse_code: 'MW', warehouse_name: 'Main Warehouse', is_active: true, zone, zone_type: zoneType,
@@ -655,6 +708,8 @@ for (const count of [0, 1, 10, 50, 500]) {
   assert.equal(sampleGrns(count).length, count);
   assert.equal(sampleGrnDetail(count).items.length, Math.max(1, count));
   assert.equal(sampleReceivablePurchaseOrder(count).items.length, count);
+  assert.equal(sampleMaterialIssues(count).length, count);
+  assert.equal(sampleMaterialIssueDetail(count).items.length, count);
   assert.equal(sampleMrbs(count).length, count);
 }
 
@@ -809,6 +864,18 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
     else if (/\/inventory\/mrb\/[^/]+$/.test(pathname)) json = { data: sampleMrbRecord() };
     else if (pathname.endsWith('/inventory/mrb')) json = {
       data: sampleMrbs(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
+    else if (pathname.endsWith('/inventory/material-issues/options')) json = {
+      data: {
+        work_orders: [{ id: sampleWorkOrder.id, wo_number: sampleWorkOrder.wo_number, status: 'in_progress', product_part_number: 'PART-LAYOUT-001' }],
+        sources: [{ location_id: 'layout-location-good', label: 'MW-RM-A-01-01', available: '123222221.875', reserved_for_work_order: '25000.000', is_blocked: false }],
+        reservations: [{ id: 'layout-reservation-1', location_id: 'layout-location-good', quantity: '25000.000', reserved_at: '2026-10-26T09:14:00+08:00' }],
+      },
+    };
+    else if (/\/inventory\/material-issues\/[^/]+$/.test(pathname)) json = { data: sampleMaterialIssueDetail(rowCount) };
+    else if (pathname.endsWith('/inventory/material-issues')) json = {
+      data: sampleMaterialIssues(rowCount),
       meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
     };
     else if (pathname.endsWith(`/inventory/items/${sampleItem.id}`)) json = { data: sampleItem };

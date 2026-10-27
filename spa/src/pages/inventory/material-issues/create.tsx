@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { numberInputProps } from '@/lib/numberInput';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 
@@ -289,15 +290,16 @@ export default function CreateMaterialIssuePage() {
   const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
   return (
-    <div>
+    <PageShell className="flex flex-col gap-4 pb-4">
       <PageHeader
+        inset={false}
         title="New material issue"
         backTo="/inventory/material-issues"
         backLabel="Material issues"
       />
       <FormDraftBanner safety={safety} />
       {lookupFailed && (
-        <div role="alert" className="min-w-0 w-full px-5 text-sm text-danger-fg">
+        <div role="alert" className="min-w-0 text-sm text-danger-fg">
           Inventory options could not be loaded. Retry before recording an issue.
           <Button
             type="button"
@@ -317,7 +319,7 @@ export default function CreateMaterialIssuePage() {
         </div>
       )}
       {workOrderIsIneligible && (
-        <p role="alert" className="min-w-0 w-full px-5 text-sm text-danger-fg">
+        <p role="alert" className="min-w-0 text-sm text-danger-fg">
           This work order is no longer available for material issue. Choose a confirmed,
           in-progress, or paused work order, or clear it.
         </p>
@@ -333,7 +335,7 @@ export default function CreateMaterialIssuePage() {
           }
           mutation.mutate(d);
         }, onFormInvalid<FormValues>())}
-        className="min-w-0 w-full px-5 py-4 space-y-4"
+        className="min-w-0 w-full space-y-4"
       >
         <Panel title="Reference">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -399,7 +401,7 @@ export default function CreateMaterialIssuePage() {
             </div>
           )}
           <div className="border border-default rounded-md overflow-hidden">
-            <div className="hidden md:grid md:grid-cols-12 h-row px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default items-center">
+            <div className="hidden lg:grid lg:grid-cols-12 gap-2 h-row px-3 bg-subtle text-table-header text-muted font-semibold border-b border-default items-center">
               <div className="col-span-4">Item</div>
               <div className="col-span-3">Location</div>
               <div className="col-span-2 text-right">Qty issued</div>
@@ -425,9 +427,9 @@ export default function CreateMaterialIssuePage() {
               return (
                 <div
                   key={field.id}
-                  className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start"
+                  className="grid grid-cols-1 lg:grid-cols-12 gap-2 px-3 py-2 border-b border-subtle items-start"
                 >
-                  <div className="col-span-4">
+                  <div className="lg:col-span-4">
                     <SearchableSelect
                       aria-label={`Item for line ${idx + 1}`}
                       required
@@ -463,7 +465,7 @@ export default function CreateMaterialIssuePage() {
                       error={errors.items?.[idx]?.lot_number?.message}
                     />
                   </div>
-                  <div className="col-span-3">
+                  <div className="lg:col-span-3">
                     <SearchableSelect
                       aria-label={`Location for line ${idx + 1}`}
                       fieldSize="md"
@@ -561,7 +563,7 @@ export default function CreateMaterialIssuePage() {
                       </p>
                     )}
                   </div>
-                  <div className="col-span-2">
+                  <div className="lg:col-span-2">
                     <Input
                       aria-label={`Quantity issued for line ${idx + 1}`}
                       max={line?.issued_uom_code ? undefined : quantityLimit}
@@ -583,7 +585,7 @@ export default function CreateMaterialIssuePage() {
                       error={errors.items?.[idx]?.issued_uom_code?.message}
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="lg:col-span-2">
                     <Input
                       aria-label={`Remarks for line ${idx + 1}`}
                       placeholder="Optional"
@@ -592,7 +594,7 @@ export default function CreateMaterialIssuePage() {
                       error={errors.items?.[idx]?.remarks?.message}
                     />
                   </div>
-                  <div className="col-span-1 flex justify-end pt-1">
+                  <div className="lg:col-span-1 flex justify-end pt-1">
                     {fields.length > 1 && (
                       <Button
                         type="button"
@@ -649,6 +651,6 @@ export default function CreateMaterialIssuePage() {
           </Button>
         </FormActions>
       </form>
-    </div>
+    </PageShell>
   );
 }
