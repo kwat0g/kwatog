@@ -32,7 +32,9 @@ class ContactInquiryInboxService
     public function listQuery(array $filters): Builder
     {
         $q = ContactInquiry::query();
-        if (! empty($filters['status'])) {
+        if (($filters['status'] ?? null) === ContactInquiryStatus::New->value) {
+            $q->awaitingTriage();
+        } elseif (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
 
