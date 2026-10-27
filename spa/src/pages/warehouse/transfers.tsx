@@ -23,9 +23,11 @@ import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
+import { formatQuantity } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
 import { focusRingInset } from '@/lib/focus';
@@ -228,8 +230,9 @@ export default function TransferOrdersPage() {
   });
 
   return (
-    <div>
+    <PageShell viewport className="gap-3">
       <PageHeader
+        inset={false}
         title="Transfer Orders"
         subtitle={transfers ? `${transfers.length} transfers` : undefined}
         actions={
@@ -246,177 +249,225 @@ export default function TransferOrdersPage() {
         }
       />
 
-      <div className="px-5 py-4">
-        {isLoading && !transfers && <SkeletonTable rows={4} columns={4} />}
-        {transferResponse?.meta && (
-          <DataTablePagination meta={transferResponse.meta} onPageChange={setTransferPage} />
+      <div className="min-h-0 flex-1">
+        {isLoading && !transfers && (
+          <div className="h-full min-h-0 overflow-auto">
+            <SkeletonTable rows={4} columns={4} />
+          </div>
         )}
         {isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load transfer orders"
-            action={<Button onClick={() => refetch()}>Retry</Button>}
-          />
+          <div className="flex h-full min-h-0 items-center justify-center">
+            <EmptyState
+              icon="alert-circle"
+              title="Failed to load transfer orders"
+              action={<Button onClick={() => refetch()}>Retry</Button>}
+            />
+          </div>
         )}
         {transfers && transfers.length === 0 && (
-          <EmptyState
-            icon="inbox"
-            title="No transfer orders"
-            description="Create a stock transfer between locations."
-          />
+          <div className="flex h-full min-h-0 items-center justify-center">
+            <EmptyState
+              icon="inbox"
+              title="No transfer orders"
+              description="Create a stock transfer between locations."
+            />
+          </div>
         )}
         {transfers && transfers.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* List */}
-            <div className="md:col-span-3 space-y-1">
-              <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">
-                Transfers ({transfers.length})
-              </div>
-              {transfers.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setActiveId(t.id)}
-                  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
-                    activeId === t.id
-                      ? 'bg-accent/10 text-accent border border-accent/30 shadow-sm'
-                      : 'bg-surface border border-default text-secondary hover:border-subtle hover:text-primary hover:bg-elevated'
-                  }`}
-                >
-                  <div className="font-mono">{t.transfer_number}</div>
-                  <div className="truncate text-2xs text-muted">
-                    {t.from_location?.full_code ?? '?'} → {t.to_location?.full_code ?? '?'}
-                  </div>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Chip variant={statusVariant[t.status] || 'neutral'}>
-                      {t.status_label ?? t.status}
-                    </Chip>
-                    <span className="text-2xs text-muted">{formatDate(t.created_at)}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Detail */}
-            <div className="md:col-span-9">
-              {detailQuery.isError && (
-                <div role="alert" className="mb-3 text-sm text-danger-fg">
-                  Transfer details could not be loaded.{' '}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void refetchDetail()}
-                  >
-                    Retry transfer
-                  </Button>
+          <div className="grid h-full min-h-0 grid-cols-1 gap-3 xl:grid-cols-12">
+            <Panel
+              title="Transfers"
+              meta={`${transfers.length} shown`}
+              noPadding
+              className="hidden min-h-0 xl:col-span-3 xl:flex xl:flex-col"
+              bodyClassName="min-h-0 flex-1"
+            >
+              <div
+                role="region"
+                aria-label="Transfer orders"
+                tabIndex={0}
+                className="table-scroll-container h-full min-h-0 overflow-y-auto p-2"
+              >
+                <div className="space-y-1.5">
+                  {transfers.map((transfer) => (
+                    <button
+                      key={transfer.id}
+                      type="button"
+                      onClick={() => setActiveId(transfer.id)}
+                      aria-pressed={activeId === transfer.id}
+                      className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors cursor-pointer ${focusRingInset} ${
+                        activeId === transfer.id
+                          ? 'bg-accent/10 text-accent border-accent/30 shadow-sm'
+                          : 'bg-surface border-default text-secondary hover:border-subtle hover:text-primary hover:bg-elevated'
+                      }`}
+                    >
+                      <div className="truncate font-mono text-label font-medium text-link" title={transfer.transfer_number}>
+                        {transfer.transfer_number}
+                      </div>
+                      <div
+                        className="truncate text-caption text-muted"
+                        title={`${transfer.from_location?.full_code ?? '?'} to ${transfer.to_location?.full_code ?? '?'}`}
+                      >
+                        {transfer.from_location?.full_code ?? '?'} to {transfer.to_location?.full_code ?? '?'}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <Chip variant={statusVariant[transfer.status] || 'neutral'}>
+                          {transfer.status_label ?? transfer.status}
+                        </Chip>
+                        <span className="text-caption text-muted tabular-nums">{formatDate(transfer.created_at)}</span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              )}
-              {detailQuery.isFetching && !activeTransfer && <SkeletonTable rows={4} columns={4} />}
-              {activeTransfer ? (
-                <Panel
-                  title={`${activeTransfer.transfer_number} — ${activeTransfer.item?.code ?? '—'}`}
-                  meta={`${activeTransfer.item?.name ?? ''}`}
-                  actions={
-                    activeTransfer.status === 'pending' && canManage ? (
-                      <div className="flex gap-1">
-                        {activeTransfer.created_by?.id === currentUserId ? (
-                          <p role="status" className="text-xs text-muted self-center">
-                            Another warehouse user must execute a transfer you created.
-                          </p>
-                        ) : (
+              </div>
+            </Panel>
+
+            <div className="min-h-0 flex flex-col xl:col-span-9">
+              <div className="mb-3 xl:hidden">
+                <Select
+                  searchable
+                  label="Transfer order"
+                  value={activeId ?? ''}
+                  onChange={(event) => setActiveId(event.target.value || null)}
+                >
+                  <option value="">Select transfer…</option>
+                  {transfers.map((transfer) => (
+                    <option key={transfer.id} value={transfer.id}>
+                      {transfer.transfer_number} — {transfer.from_location?.full_code ?? '?'} to{' '}
+                      {transfer.to_location?.full_code ?? '?'} — {transfer.status_label ?? transfer.status}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div
+                role="region"
+                aria-label="Transfer details"
+                tabIndex={0}
+                className="table-scroll-container min-h-0 flex-1 overflow-y-auto"
+              >
+                {detailQuery.isError && (
+                  <div role="alert" className="mb-3 text-sm text-danger-fg">
+                    Transfer details could not be loaded.{' '}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void refetchDetail()}
+                    >
+                      Retry transfer
+                    </Button>
+                  </div>
+                )}
+                {detailQuery.isFetching && !activeTransfer && <SkeletonTable rows={4} columns={4} />}
+                {activeTransfer ? (
+                  <Panel
+                    title={(
+                      <span
+                        className="block truncate"
+                        title={`${activeTransfer.transfer_number} — ${activeTransfer.item?.code ?? '—'}`}
+                      >
+                        {activeTransfer.transfer_number} — {activeTransfer.item?.code ?? '—'}
+                      </span>
+                    )}
+                    meta={<span className="block truncate" title={activeTransfer.item?.name ?? ''}>{activeTransfer.item?.name ?? ''}</span>}
+                  >
+                    <div className="space-y-4">
+                      {activeTransfer.status === 'pending' && canManage && (
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {activeTransfer.created_by?.id === currentUserId ? (
+                            <p role="status" className="text-caption text-muted self-center">
+                              Another warehouse user must execute a transfer you created.
+                            </p>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              disabled={
+                                detailQuery.isFetching ||
+                                detailQuery.isError ||
+                                executeTransfer.isPending ||
+                                cancelTransfer.isPending
+                              }
+                              icon={<LuCircleCheck size={14} />}
+                              onClick={() => setExecuteTarget(activeTransfer)}
+                            >
+                              Execute
+                            </Button>
+                          )}
                           <Button
                             size="sm"
-                            variant="primary"
+                            variant="danger"
                             disabled={
                               detailQuery.isFetching ||
                               detailQuery.isError ||
                               executeTransfer.isPending ||
                               cancelTransfer.isPending
                             }
-                            icon={<LuCircleCheck size={14} />}
-                            onClick={() => setExecuteTarget(activeTransfer)}
+                            icon={<LuCircleX size={14} />}
+                            onClick={() => setCancelTarget(activeTransfer)}
                           >
-                            Execute
+                            Cancel
                           </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          disabled={
-                            detailQuery.isFetching ||
-                            detailQuery.isError ||
-                            executeTransfer.isPending ||
-                            cancelTransfer.isPending
-                          }
-                          icon={<LuCircleX size={14} />}
-                          onClick={() => setCancelTarget(activeTransfer)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : null
-                  }
-                >
-                  <div className="text-xs space-y-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1">
-                          From
                         </div>
-                        <div className="font-mono">
-                          {activeTransfer.from_location?.full_code ?? '—'}
+                      )}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="min-w-0">
+                          <div className="mb-1 text-label font-medium text-muted">From</div>
+                          <div className="truncate font-mono text-sm" title={activeTransfer.from_location?.full_code ?? '—'}>
+                            {activeTransfer.from_location?.full_code ?? '—'}
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="mb-1 text-label font-medium text-muted">To</div>
+                          <div className="truncate font-mono text-sm" title={activeTransfer.to_location?.full_code ?? '—'}>
+                            {activeTransfer.to_location?.full_code ?? '—'}
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1">
-                          To
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div className="min-w-0">
+                          <div className="mb-1 text-label font-medium text-muted">Item</div>
+                          <div className="break-words text-sm font-medium text-primary sm:truncate" title={`${activeTransfer.item?.code ?? '—'} — ${activeTransfer.item?.name ?? '—'}`}>
+                            {activeTransfer.item?.code ?? '—'} — {activeTransfer.item?.name ?? '—'}
+                          </div>
                         </div>
-                        <div className="font-mono">
-                          {activeTransfer.to_location?.full_code ?? '—'}
+                        <div>
+                          <div className="mb-1 text-label font-medium text-muted">Quantity</div>
+                          <div className="tabular-nums text-sm font-medium">
+                            {formatQuantity(activeTransfer.quantity)} {activeTransfer.item?.unit_of_measure ?? ''}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="mb-1 text-label font-medium text-muted">Status</div>
+                          <Chip variant={statusVariant[activeTransfer.status] || 'neutral'}>
+                            {activeTransfer.status_label ?? activeTransfer.status}
+                          </Chip>
                         </div>
                       </div>
+                      {activeTransfer.reason && (
+                        <div className="break-words text-sm text-muted">Reason: {activeTransfer.reason}</div>
+                      )}
+                      {activeTransfer.transferred_at && (
+                        <div className="text-caption text-muted">
+                          Transferred by {activeTransfer.transferred_by?.name ?? '?'} on{' '}
+                          {formatDate(activeTransfer.transferred_at)}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex gap-4">
-                      <span className="text-muted">
-                        Item:{' '}
-                        <span className="font-medium text-primary">
-                          {activeTransfer.item?.code} — {activeTransfer.item?.name}
-                        </span>
-                      </span>
-                      <span className="text-muted">
-                        Quantity:{' '}
-                        <span className="font-mono font-medium">
-                          {Number(activeTransfer.quantity).toFixed(3)}
-                        </span>
-                      </span>
-                      <span className="text-muted">
-                        Status:{' '}
-                        <Chip variant={statusVariant[activeTransfer.status] || 'neutral'}>
-                          {activeTransfer.status_label ?? activeTransfer.status}
-                        </Chip>
-                      </span>
-                    </div>
-                    {activeTransfer.reason && (
-                      <div className="text-muted">Reason: {activeTransfer.reason}</div>
-                    )}
-                    {activeTransfer.transferred_at && (
-                      <div className="text-muted">
-                        Transferred by {activeTransfer.transferred_by?.name ?? '?'} on{' '}
-                        {formatDate(activeTransfer.transferred_at)}
-                      </div>
-                    )}
+                  </Panel>
+                ) : (
+                  <div className="flex min-h-full items-center justify-center text-center text-sm text-muted">
+                    Select a transfer to view details.
                   </div>
-                </Panel>
-              ) : (
-                <div className="text-sm text-muted text-center py-5">
-                  Select a transfer to view details.
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         )}
       </div>
+      {transferResponse?.meta && (
+        <DataTablePagination meta={transferResponse.meta} onPageChange={setTransferPage} />
+      )}
 
       {/* Create modal */}
       <Modal
@@ -490,7 +541,7 @@ export default function TransferOrdersPage() {
             }}
           />
           {itemOptionsError && (
-            <p role="alert" className="text-xs text-danger-fg">
+            <p role="alert" className="text-sm text-danger-fg">
               Items could not be loaded.{' '}
               <Button type="button" variant="secondary" size="sm" onClick={() => void retryItems()}>
                 Retry
@@ -511,7 +562,7 @@ export default function TransferOrdersPage() {
             <option value="">Select source…</option>
             {sourceOptions.map(({ location, available }) => (
               <option key={location.id} value={location.id}>
-                {location.full_code || location.code} — {available} {selectedItemUnit || 'units'}{' '}
+                {location.full_code || location.code} — {formatQuantity(available)} {selectedItemUnit || 'units'}{' '}
                 available{location.is_blocked ? ' (blocked; outbound only)' : ''}
               </option>
             ))}
@@ -530,7 +581,7 @@ export default function TransferOrdersPage() {
             </p>
           )}
           {sourceStockQuery.data && sourceOptions.length === 0 && (
-            <p className="text-xs text-muted">
+            <p className="text-sm text-muted">
               No active locations have available stock for this item.
             </p>
           )}
@@ -560,11 +611,11 @@ export default function TransferOrdersPage() {
             {...numberInputProps()}
             step="0.001"
             error={createForm.formState.errors.quantity?.message}
-            className="font-mono tabular-nums"
+            className="tabular-nums"
           />
           {selectedSource && (
-            <p className="text-xs text-muted">
-              Available at source: {selectedSource.available} {selectedItemUnit || 'units'}.
+            <p className="text-sm text-muted">
+              Available at source: {formatQuantity(selectedSource.available)} {selectedItemUnit || 'units'}.
               {sourceQuantityError ? ' Reduce quantity or choose another source.' : ''}
             </p>
           )}
@@ -615,7 +666,7 @@ export default function TransferOrdersPage() {
             <>
               Move{' '}
               <span className="font-mono font-medium">
-                {Number(executeTarget.quantity).toFixed(3)}
+                {formatQuantity(executeTarget.quantity)} {executeTarget.item?.unit_of_measure ?? ''}
               </span>{' '}
               from <span className="font-mono">{executeTarget.from_location?.full_code}</span> to{' '}
               <span className="font-mono">{executeTarget.to_location?.full_code}</span>. A stock
@@ -653,6 +704,6 @@ export default function TransferOrdersPage() {
         }
         pending={cancelTransfer.isPending}
       />
-    </div>
+    </PageShell>
   );
 }
