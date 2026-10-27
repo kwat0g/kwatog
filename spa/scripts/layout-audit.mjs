@@ -245,6 +245,42 @@ function sampleHandoverDetail(count, index = 0) {
 assert.equal(sampleHandoverTasks(3).length, 3);
 assert.equal(sampleHandoverDetail(10).sources.length, 10);
 
+function sampleScannerRecords(count) {
+  return Array.from({ length: Math.min(count, 25) }, (_, index) => ({
+    value: `layout-record-${index + 1}`,
+    label: index === 0
+      ? 'WO-REFERENCE-202610-000000000001 · Long product and production batch label for width checks'
+      : `WO-202610-${String(index + 1).padStart(6, '0')}`,
+  }));
+}
+
+function sampleScanResult(barcode) {
+  if (barcode.toLocaleUpperCase().includes('UNKNOWN')) {
+    return { type: 'unknown', entity: null, suggested_actions: [] };
+  }
+  return {
+    type: 'item',
+    type_label: 'Inventory item',
+    entity: {
+      id: 'layout-item-001',
+      code: 'RAW-MATERIAL-REFERENCE-000000000000001',
+      name: 'Long material description used to check scanner result wrapping on tablets and wide displays',
+      item_type: 'raw_material',
+      unit_of_measure: 'kg',
+      available_quantity: '123456789.125',
+      location: 'WH-RAW-MATERIAL-REFERENCE-000000000001',
+      remarks: 'Synthetic scan result with long text and ₱ glyph coverage for layout audit.',
+    },
+    suggested_actions: [
+      { action: 'open_item', label: 'Open inventory item', params: {}, href: '/inventory/items/layout-item-001' },
+      { action: 'review_stock', label: 'Review stock levels', params: {}, href: '/inventory/stock-levels' },
+    ],
+  };
+}
+
+assert.equal(sampleScannerRecords(500).length, 25);
+assert.equal(sampleScanResult('LAYOUT-UNKNOWN-001').type, 'unknown');
+
 const sampleItem = {
   id: 'layout-item-001',
   code: 'RAW-MATERIAL-REFERENCE-000001',
@@ -894,11 +930,36 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
   await page.route('**/api/v1/**', async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     let json = { data: [], meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 } };
+    let status = 200;
     if (pathname.endsWith('/auth/user')) json = { data: user };
     else if (pathname.endsWith('/dashboard/dispatch')) json = { data: { target: { path: '/dashboard/default' }, candidates: [] } };
     else if (pathname.endsWith('/business-policies')) json = { data: { functional_currency_code: 'PHP', reporting_currency_code: 'PHP' } };
     else if (pathname.endsWith('/landing/contact')) json = { legal_name: 'OGAMI ERP' };
     else if (pathname.endsWith('/dashboards/badges')) json = { data: {} };
+    else if (pathname.endsWith('/inventory/scan/options')) json = {
+      data: { contexts: [
+        { value: 'lookup', label: 'General lookup' },
+        { value: 'wo_id', label: 'Work order' },
+        { value: 'po_id', label: 'Purchase order' },
+        { value: 'grn_id', label: 'Goods receipt' },
+        { value: 'bin_id', label: 'Warehouse bin' },
+        { value: 'item_id', label: 'Inventory item' },
+      ] },
+    };
+    else if (pathname.endsWith('/inventory/scan/records')) {
+      const query = new URL(route.request().url()).searchParams;
+      const search = (query.get('search') ?? '').toLocaleLowerCase();
+      json = { data: sampleScannerRecords(rowCount).filter((record) => !search || record.label.toLocaleLowerCase().includes(search)) };
+    }
+    else if (pathname.endsWith('/inventory/scan/resolve')) {
+      const { barcode } = route.request().postDataJSON();
+      if (String(barcode).toLocaleUpperCase().includes('ERROR')) {
+        status = 422;
+        json = { message: 'Synthetic scanner service error for layout audit.' };
+      } else {
+        json = { data: sampleScanResult(String(barcode)) };
+      }
+    }
     else if (pathname.endsWith('/mrp/scheduler/options')) json = { data: { default_horizon_days: 14 } };
     else if (pathname.endsWith('/mrp/scheduler/snapshot')) {
       const query = new URL(route.request().url()).searchParams;
@@ -1115,7 +1176,7 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
           from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
       };
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(json) });
+    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) });
   });
 }
 
@@ -1218,6 +1279,17 @@ async function measure(page) {
         verticalOverflow: element.scrollHeight > element.clientHeight + 1,
       };
     });
+    const pageSectionAlignment = pageRoot?.getAttribute('data-layout') === 'page-shell'
+      && pageHeader?.parentElement === pageRoot
+      ? Object.fromEntries(flowElements.map((element, index) => {
+        const box = element.getBoundingClientRect();
+        const reference = pageHeader.getBoundingClientRect();
+        return [`section-${index}`, box && reference ? {
+          leftDelta: Math.round((box.left - reference.left) * 100) / 100,
+          rightDelta: Math.round((box.right - reference.right) * 100) / 100,
+          aligned: Math.abs(box.left - reference.left) <= 1 && Math.abs(box.right - reference.right) <= 1,
+        } : null];
+      })) : null;
     const sections = [...(main?.querySelectorAll('[data-layout="section"]') ?? [])].map((section) => {
       const style = getComputedStyle(section);
       const parent = section.parentElement;
@@ -1578,6 +1650,7 @@ async function measure(page) {
       flowBlocks,
       sections,
       edgeAlignment: alignment,
+      pageSectionAlignment,
       transferFlowAlignment,
       verticalGaps: {
         headerToFilters: yGap(pageBlocks.header, pageBlocks.filters),
@@ -1876,6 +1949,23 @@ async function main() {
             }
           }
         }
+        if (route === '/inventory/scanner' && arg('scanner-workflow')) {
+          await page.getByLabel('Workflow', { exact: true }).selectOption(arg('scanner-workflow'));
+          await page.getByRole('combobox', { name: 'Context record' }).waitFor({ state: 'visible', timeout: 10_000 });
+          await page.waitForTimeout(250);
+        }
+        if (route === '/inventory/scanner' && arg('scanner-result')) {
+          const resultState = arg('scanner-result');
+          if (!['item', 'unknown', 'error'].includes(resultState)) throw new Error('--scanner-result must be item, unknown, or error');
+          await page.getByLabel('Barcode', { exact: true }).fill(`LAYOUT-${resultState.toLocaleUpperCase()}-001`);
+          await page.getByRole('button', { name: 'Resolve', exact: true }).click();
+          const resultText = resultState === 'item'
+            ? 'Scan result'
+            : resultState === 'unknown'
+              ? 'Unrecognized barcode'
+              : 'Synthetic scanner service error for layout audit.';
+          await page.getByText(resultText, { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+        }
         if (process.argv.includes('--expand-first-row') && new URL(route, BASE).searchParams.get('view') === 'reservations') {
           const expand = page.getByRole('button', { name: 'Expand row' }).first();
           if (await expand.count()) {
@@ -1922,6 +2012,9 @@ async function main() {
           const combo = page.locator('input[role="combobox"]').first();
           if (await combo.isVisible().catch(() => false)) {
             await combo.click();
+            if (route === '/inventory/scanner' && arg('scanner-workflow')) {
+              await page.locator('[role="listbox"] [role="option"]').first().waitFor({ state: 'visible', timeout: 5_000 });
+            }
             await page.waitForTimeout(100);
             const dropdownScreenshot = path.join(out, `${slug(route)}-${width}-dropdown.png`);
             await page.screenshot({ path: dropdownScreenshot });
@@ -2079,6 +2172,7 @@ async function main() {
   const rankedIssues = rows.map((row) => {
     const issues = [];
     if (Object.values(row.edgeAlignment).some((item) => item && !item.aligned)) issues.push('block edges differ by >1px');
+    if (Object.values(row.pageSectionAlignment ?? {}).some((item) => item && !item.aligned)) issues.push('page section edges differ by >1px');
     if (Object.values(row.transferFlowAlignment ?? {}).some((item) => item && !item.aligned)) issues.push('transfer page blocks differ from the shared gutter by >1px');
     if (Object.values(row.sidebarClearanceByBlock).some((value) => value !== null && value < 16)) issues.push('block clearance under provisional 16px minimum');
     if (row.horizontalPageOverflow) issues.push('horizontal page overflow');
@@ -2133,6 +2227,7 @@ async function main() {
     const failures = rows.flatMap((row) => {
       const checks = [
         [Object.values(row.edgeAlignment).some((item) => item && !item.aligned), 'page block edges differ by >1px'],
+        [Object.values(row.pageSectionAlignment ?? {}).some((item) => item && !item.aligned), 'page section edges differ by >1px'],
         [Object.values(row.transferFlowAlignment ?? {}).some((item) => item && !item.aligned), 'transfer page blocks differ from the shared gutter by >1px'],
         [!row.mainContent?.textLength, 'page content did not render inside the main landmark'],
         [Object.values(row.sidebarClearanceByBlock).some((value) => value !== null && value < 16), 'sidebar clearance below 16px'],
