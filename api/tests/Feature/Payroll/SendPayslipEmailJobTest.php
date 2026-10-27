@@ -148,6 +148,30 @@ class SendPayslipEmailJobTest extends TestCase
         $data = json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame('/self-service/payslips/'.$payroll->hash_id, $data['link_to']);
         $this->assertSame($payroll->hash_id, $data['entity_id']);
+        $this->assertSame(Payroll::class, $data['subject_type']);
+        $this->assertSame((string) $payroll->id, $data['subject_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $restrictedUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
+
+        $employee->update(['email' => 'invalid-email']);
+        $missingEmailPeriod = PayrollPeriod::factory()->create();
+        $missingEmailPeriod->forceFill(['status' => 'finalized'])->saveQuietly();
+        $missingEmailPayroll = Payroll::factory()->create([
+            'payroll_period_id' => $missingEmailPeriod->id,
+            'employee_id' => $employee->id,
+            'payslip_email_status' => Payroll::EMAIL_QUEUED,
+            'payslip_email_queued_at' => now(),
+        ]);
+
+        (new SendPayslipEmailJob($missingEmailPayroll->id))->handle();
+
+        $missingEmailNotice = DB::table('notifications')->where('notifiable_id', $user->id)
+            ->where('type', 'email.delivery_failed')
+            ->whereRaw("data->>'subject_id' = ?", [(string) $missingEmailPayroll->id])
+            ->first();
+        $this->assertNotNull($missingEmailNotice);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $restrictedUser->id,
             'type' => 'email.delivery_failed',

@@ -880,10 +880,16 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 
 - Closed as superseded. Its base branch lacked constructor property assignments that are already present on current `main`; applying it would duplicate existing behavior. Its proposed F-59 also collided with the existing Quality scope finding. F-74 keeps the queue rehydration question; no new claim of a reproduced queue bug.
 
-## Phase 3 Credit Note email-failure subject access (PR #468, in progress)
+## Phase 3 Credit Note email-failure subject access (PR #468, merged as `8f9055ad`)
 
 - Customer and supplier credit-note email failure notices now pass the current `CreditNote` subject to the common notifier. Delivery requires Accounting enabled, an active user with `accounting.credit_notes.view`, and the exact `/accounting/credit-notes/{hash}` SPA target. This matches the API detail route permission. Existing role-to-permission selector and event timing remain; the access gate narrows it.
 - The original-head focused `FeatureEmailIntegrationTest.php --filter test_credit_note_email_failure_fallbacks_require_credit_note_access` passed **1 / 13 assertions**. Rebase tests have not run against shared `ogami_test`; `git diff --check` remains the only rebase check. No database was touched.
+
+## Phase 3 Payslip email-failure subject access (PR #469, in progress)
+
+- Both `SendPayslipEmailJob` failure paths now pass the current Payroll row through the subject access gate. The gate is owner-only: Payroll enabled, active employee account with `payroll.view`, matching employee ID. Existing notice message, link, timing, and recipient selection remain.
+- Original-head `SendPayslipEmailJobTest.php --filter test_delivery_failure_notifies_only_active_users_with_own_payslip_access` passed **1 / 8 assertions**; it covers provider failure, missing email, exact subject metadata, owner delivery, and a second employee's exclusion. No rebase tests ran against shared `ogami_test`; `git diff --check` only. No database was touched.
+- The broader original payroll access tests passed **7 / 38 assertions**. API CI inherits F-22 and stops before PHPUnit; CI is waived by user instruction. Existing payroll-adjustment checker configuration remains a separate business-policy gap.
 
 ## Resume instruction
 
