@@ -885,11 +885,19 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Customer and supplier credit-note email failure notices now pass the current `CreditNote` subject to the common notifier. Delivery requires Accounting enabled, an active user with `accounting.credit_notes.view`, and the exact `/accounting/credit-notes/{hash}` SPA target. This matches the API detail route permission. Existing role-to-permission selector and event timing remain; the access gate narrows it.
 - The original-head focused `FeatureEmailIntegrationTest.php --filter test_credit_note_email_failure_fallbacks_require_credit_note_access` passed **1 / 13 assertions**. Rebase tests have not run against shared `ogami_test`; `git diff --check` remains the only rebase check. No database was touched.
 
-## Phase 3 Payslip email-failure subject access (PR #469, in progress)
+## Phase 3 Payslip email-failure subject access (PR #469, merged as `09e2d22d`)
 
 - Both `SendPayslipEmailJob` failure paths now pass the current Payroll row through the subject access gate. The gate is owner-only: Payroll enabled, active employee account with `payroll.view`, matching employee ID. Existing notice message, link, timing, and recipient selection remain.
 - Original-head `SendPayslipEmailJobTest.php --filter test_delivery_failure_notifies_only_active_users_with_own_payslip_access` passed **1 / 8 assertions**; it covers provider failure, missing email, exact subject metadata, owner delivery, and a second employee's exclusion. No rebase tests ran against shared `ogami_test`; `git diff --check` only. No database was touched.
 - The broader original payroll access tests passed **7 / 38 assertions**. API CI inherits F-22 and stops before PHPUnit; CI is waived by user instruction. Existing payroll-adjustment checker configuration remains a separate business-policy gap.
+
+## Phase 3 B2B portal email-failure subject access (PR #496, in progress; replaces closed PR #470)
+
+- PR #470 was closed when its base branch was deleted after PR #469 merged; the same change was rebased onto `main` and opened as PR #496.
+- Customer and Vendor subjects now use active-user Accounting detail permissions and exact SPA detail links. Vendor performance alerts retain their existing Purchasing route gate in the same registry arm. Customer/supplier invitation and password-reset failure fallbacks pass the related master record through the subject gate; queued callbacks reload it and suppress notices if it no longer exists.
+- Existing recipient selection, portal credentials, and email content remain unchanged. Portal access is checked again when the delivery-failure notice is sent, so revoked permissions exclude former operators.
+- Original-head focused B2B failure tests passed **2 / 24 assertions**; `QueueLaneAssignmentTest.php --filter test_every_queued_mailable_lands_on_the_mail_lane` passed **1 / 29 assertions**. No rebase tests ran against shared `ogami_test`; `git diff --check` only. No database was touched.
+- The original-head `PortalPasswordResetTest.php` run had **13 passes and 2 failures**: an untrusted display-name Markdown link issue is separate PR #471; an invitation MailFake assertion also failed on parent #469 and remains unverified after rebase. API CI inherits F-22 and stops before PHPUnit. User waived CI.
 
 ## Resume instruction
 

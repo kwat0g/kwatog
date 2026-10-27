@@ -7,6 +7,8 @@ namespace App\Modules\B2B\Mail;
 use App\Common\Mail\QueuedMailable;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Support\HtmlString;
@@ -21,8 +23,11 @@ class PortalAccessInvitationMail extends QueuedMailable
         public readonly string $portalType,
         public readonly string $recipientName,
         public readonly string $token,
+        public readonly int $subjectId,
+        public readonly string $subjectLink,
         public readonly array $fallbackUserIds = [],
     ) {
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 
@@ -55,15 +60,26 @@ class PortalAccessInvitationMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $subject = match ($this->portalType) {
+            'customer' => Customer::query()->find($this->subjectId),
+            'supplier' => Vendor::query()->find($this->subjectId),
+            default => null,
+        };
+
+        if ($subject === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Portal access invitation',
             "A {$this->portalType} portal invitation could not be delivered. Resend the invitation after verifying the contact's email address.",
             [
-                'link_to' => '/'.($this->portalType === 'supplier' ? 'purchasing/vendors' : 'accounting/customers'),
+                'link_to' => $this->subjectLink,
                 'entity_type' => $this->portalType.'_portal_user',
                 'reason' => 'The email provider rejected or could not deliver the portal invitation.',
             ],
+            $subject,
         );
     }
 
