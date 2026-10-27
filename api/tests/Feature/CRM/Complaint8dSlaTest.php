@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\CRM;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -27,6 +28,7 @@ class Complaint8dSlaTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
 
         // Seed recipient pool used by the service (production_manager + qc_inspector).
         foreach (['qc_inspector', 'production_manager'] as $slug) {
@@ -86,6 +88,27 @@ class Complaint8dSlaTest extends TestCase
             'status' => 'sent',
             'attempts' => 1,
         ]);
+        $notice = DB::table('notifications')->where('type', '8d.sla')->first();
+        $data = json_decode($notice->data, true);
+        $this->assertSame(CustomerComplaint::class, $data['subject_type']);
+        $this->assertSame((string) $c->id, $data['subject_id']);
+        $this->assertSame('/crm/complaints/'.$c->hash_id, $data['link_to']);
+        $recipient = User::query()->findOrFail($notice->notifiable_id);
+        $this->actingAs($recipient)
+            ->getJson('/api/v1/crm/complaints/'.$c->hash_id)
+            ->assertOk();
+
+        $outsider = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        app(NotificationService::class)->sendForSubject($c, $outsider, 'test.complaint_subject_access', [
+            'title' => 'Review complaint',
+            'link_to' => '/crm/complaints/'.$c->hash_id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $outsider->id,
+            'type' => 'test.complaint_subject_access',
+        ]);
     }
 
     public function test_sla_notice_excludes_assignees_without_complaint_read_access(): void
@@ -120,6 +143,30 @@ class Complaint8dSlaTest extends TestCase
             'type' => '8d.sla',
         ]);
         $this->assertGreaterThan(0, DB::table('notifications')->where('type', '8d.sla')->count());
+    }
+
+    public function test_disabled_crm_keeps_complaint_sla_tier_retryable(): void
+    {
+        $complaint = $this->makeComplaint();
+        DB::table('customer_complaints')->where('id', $complaint->id)->update([
+            'created_at' => now()->subHours(49),
+            'd3_due_at' => now()->subHour(),
+            'd4_due_at' => now()->addDays(5),
+            'finalize_due_at' => now()->addDays(28),
+        ]);
+        app(SettingsService::class)->set('modules.crm', false, 'modules');
+
+        $counts = app(Complaint8dEscalationService::class)->run();
+
+        $this->assertSame(0, $counts['d3']);
+        $this->assertSame([], $complaint->fresh()->sla_alert_levels ?? []);
+        $this->assertDatabaseHas('complaint_8d_escalation_deliveries', [
+            'complaint_id' => $complaint->id,
+            'tier' => 'd3',
+            'status' => 'pending',
+            'attempts' => 1,
+        ]);
+        $this->assertSame(0, DB::table('notifications')->where('type', '8d.sla')->count());
     }
 
     public function test_d3_idempotent_re_run_does_not_double_fire(): void
@@ -194,9 +241,9 @@ class Complaint8dSlaTest extends TestCase
         $inboxRowsBefore = DB::table('notifications')->count();
         $realNotifications = app(NotificationService::class);
         $notifications = \Mockery::mock(NotificationService::class)->makePartial();
-        $notifications->shouldReceive('send')->once()->andReturnUsing(
-            function (array $recipients, string $type, array $data) use ($realNotifications): void {
-                $realNotifications->send($recipients, $type, $data);
+        $notifications->shouldReceive('sendForSubject')->once()->andReturnUsing(
+            function (CustomerComplaint $subject, array $recipients, string $type, array $data) use ($realNotifications): void {
+                $realNotifications->sendForSubject($subject, $recipients, $type, $data);
                 throw new RuntimeException('simulated notification failure');
             },
         );

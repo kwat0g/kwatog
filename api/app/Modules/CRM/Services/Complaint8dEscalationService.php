@@ -246,7 +246,7 @@ class Complaint8dEscalationService
                 $audience = $this->deliverableAudience($configuredRecipients, $complaint->assignee);
                 if ($audience->isEmpty()) {
                     foreach ($deliveries as $delivery) {
-                        $this->markPending($delivery, 'No active notification recipient is configured.');
+                        $this->markPending($delivery, 'No eligible notification recipient has an enabled delivery channel.');
                     }
 
                     // A tier nobody received is not a silent skip: it stays
@@ -268,7 +268,7 @@ class Complaint8dEscalationService
                     // NotificationService inserts all in-app rows in this
                     // transaction and defers realtime/email side effects until
                     // commit. A thrown send rolls back both rows and claims.
-                    $this->notifications->send($audience->all(), '8d.sla', [
+                    $this->notifications->sendForSubject($complaint, $audience->all(), '8d.sla', [
                         'title'       => $subject,
                         'message'     => "Complaint {$complaint->complaint_number} has missed the {$key} SLA window. Review the 8D and act now.",
                         'link_to'     => "/crm/complaints/{$complaint->hash_id}",
@@ -356,6 +356,10 @@ class Complaint8dEscalationService
      */
     private function deliverableAudience(Collection $configuredRecipients, ?User $assignee): Collection
     {
+        if ($this->settings->get('modules.crm', false) !== true) {
+            return collect();
+        }
+
         $audience = collect($configuredRecipients->all());
         if ($assignee?->is_active) {
             $audience->push($assignee);
