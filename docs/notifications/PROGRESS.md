@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, #363, #364, #366, #367, #485, and #487 merged to `main`. PR #487 promotes the training links from stacked PR #365. PR #369 aligns the AP overdue badge with its list and date semantics. PR #370 centralizes seven existing mail-only Laravel notification sends; this unit does not add recipient policy or authorization. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
+**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, #363, #364, #366, #367, #485, and #487 merged to `main`. PR #487 promotes the training links from stacked PR #365. PR #369 aligns the AP overdue badge with its list and date semantics. PR #370 centralizes seven existing mail-only Laravel notification sends and merged as `d21770f7`; PR #371 also contains the F-31 PHP callback-signature fix. The centralization unit does not add recipient policy or authorization. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
 
 ## Phase status
 
@@ -10,7 +10,7 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; partial targeted recipient and badge/list comparisons are recorded below. Full role/scope proof remains open. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 and documented fixes through #364, #485, and #487 are merged to `main`. PRs #353, #354, and #357 add badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients; #363 scopes AR dunning; #364 addresses payroll recipients and links; #487 promotes training links from stacked PR #365; #485 handles generic approval recipient collections; #370 adds a single service entry for existing Laravel mail notifications. Global authorization coverage, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #485, and #487 are merged to `main`. PRs #353, #354, and #357 add badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients; #363 scopes AR dunning; #364 addresses payroll recipients and links; #487 promotes training links from stacked PR #365; #485 handles generic approval recipient collections; #370 adds a single service entry for existing Laravel mail notifications; #371 also resolves F-31. Global authorization coverage, signal registry, and remaining event families remain open. |
 | 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. PR #367 adds the Budget Transfers item; PR #369 confirms the AP overdue badge links to its existing filtered list. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. PR #370 routes seven existing Laravel mail notifications through `NotificationService`; their current audiences and timing remain unchanged. Budget-transfer and AP overdue badge/list parity are addressed in PRs #367 and #369; remaining dispatch sites and sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
@@ -23,7 +23,7 @@
 | 1. Versioned payload contract | `notifications/phase3-central-contract` | [#332](https://github.com/kwat0g/kwatog/pull/332) | `a8a479e0` |
 | 2. Core approval recipients | `notifications/phase3-recipient-resolver` | [#333](https://github.com/kwat0g/kwatog/pull/333) | merged as `1b4ba8aa` |
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | merged as `00eef8df` |
-| 4. Laravel notification dispatch entry | `notifications/centralize-laravel-notifications` | [#370](https://github.com/kwat0g/kwatog/pull/370) | rebased commit `10169870`; review in progress |
+| 4. Laravel notification dispatch entry | `notifications/centralize-laravel-notifications` | [#370](https://github.com/kwat0g/kwatog/pull/370) | merged as `d21770f7` |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | merged as `89b9b1df` |
 | F-16. Submitter outcome access | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | merged as `a9e3f394` |
 | F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | merged as `7fbab781` |
@@ -103,7 +103,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - `NotificationService::sendLaravelNotification()` normalizes/deduplicates explicit internal-user recipients, then calls Laravel's notification facade. Seven existing mail-only dispatch sites now use it: password reset, employee welcome, employee password reset, admin welcome, daily and weekly production summaries, and critical alert email. Recipient selection, notification class, channel, and timing are unchanged.
 - Added a source guard against direct `Notification::send[Now]()` and inline `$user->notify(new ...)` outside the dispatcher, plus a test that duplicate explicit recipients receive one notice and an unrelated user receives none. This does not yet provide subject authorization, policy resolution, preferences, lifecycle, or fallback recipients for these Laravel notification classes.
 - Before rebase, targeted API results: `NotificationServiceTest` **9 passed / 28 assertions**; dispatch catalog guard **1 / 1**; `ValidEmailRecipientFilterTest` **6 / 16**; `PasswordResetTest` **13 / 40**; focused admin welcome and employee provisioning welcome **1 / 4** and **1 / 8**. These results predate rebase and were not rerun.
-- Local post-rebase `git diff --check` passes. PHP is unavailable in this shell. The full provisioning/admin tests hit an existing `EmployeePasswordResetNotification::failed()` signature mismatch, tracked separately; PR #370's API workflow failed before PHPUnit on an inherited duplicate `PdfRenderService::ensureDompdfDirs()` declaration. No database, browser, or full-suite check ran.
+- Local post-rebase `git diff --check` passes. PHP is unavailable in this shell. The full provisioning/admin tests hit an `EmployeePasswordResetNotification::failed()` signature mismatch that was fixed in #371. PR #370's post-merge API workflow had passed lint and was running PHPStan at this update; PHPUnit was still pending. No database, browser, or full-suite check ran locally.
 
 ## Separate finding fix: F-17
 
@@ -265,6 +265,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - `CustomerComplaint::openAssignedTo()` defines active complaints (`open`, `investigating`) assigned to one user. Both the `open_complaints` badge and `signal=open` list use it; the sidebar opens that list, the page exposes an All/Assigned queue filter, and its header names the assigned scope.
 - The badge and filtered list require both complaint visibility and manage permission. On the original feature head, `BadgeControllerTest::test_widened_scope_badge_counts_track_recent_rows` passed **1 test / 33 assertions**, including assigned admin/CSO users, an unassigned CSO, and a view-only VP. PHP is unavailable for a post-integration rerun. After integrating current main, `Sidebar.behavior.test.tsx` passed **30 tests**.
 - Targeted ESLint and `git diff --check` passed. SPA typecheck still fails on existing errors in exports, Action Center, invites, stock transfers, purchase-order creation, and profile; none names a changed file. No complaint team relation exists. Unassigned complaints do not appear in this personal signal; a triage signal remains unapproved.
+
+## Separate finding fix: F-31 password-reset failure callback signature (PR [#371](https://github.com/kwat0g/kwatog/pull/371))
+
+- `PasswordResetNotification::failed()` fully qualifies `\Throwable`, matching the HR subclass callback and preventing the PHP 8.3 class-loading failure. The redundant draft PR #372 carries the same one-line code change and will be closed during final unused-PR cleanup.
+- The targeted `EmployeePasswordResetNotificationTest.php` passed **1 test / 2 assertions**, `UserProvisioningTest.php` passed **8 / 25**, and `UserAdministrationHardeningTest.php` passed **8 / 27** on PR #372's original feature head before the duplicate source fix merged in #371. These were not rerun after merge; PHP is unavailable locally.
+- PR #371's API workflow passed PHP lint and PHPStan, then failed in PHPUnit on unrelated suite errors.
 
 ## Outstanding proof / risks
 
