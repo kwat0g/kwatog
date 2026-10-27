@@ -22,6 +22,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Markdown;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -326,6 +327,37 @@ class RecruitmentApplicationTest extends TestCase
                 && ! str_contains($html, 'Changed Interviewer')
                 && ! str_contains($html, 'Changed Position');
         });
+    }
+
+    public function test_interview_email_failures_use_the_application_snapshot_for_fallback(): void
+    {
+        $interview = ApplicationInterview::create([
+            'job_application_id' => $this->application->id,
+            'scheduled_at' => '2026-11-02 09:30:00',
+            'location' => 'Cavite interview room',
+            'interviewer_name' => 'Original Interviewer',
+            'created_by' => $this->hrUser->id,
+        ]);
+        $scheduled = new InterviewScheduledMail($this->application, $interview, [$this->hrUser->id]);
+        $updated = new InterviewDetailsUpdatedMail($this->application, $interview, [$this->hrUser->id]);
+        $scheduled->snapshot['applicant_name'] = 'Snapshot Candidate';
+        $scheduled->snapshot['application_hash_id'] = 'snapshot-application-id';
+        $updated->snapshot['applicant_name'] = 'Snapshot Candidate';
+        $updated->snapshot['application_hash_id'] = 'snapshot-application-id';
+
+        $scheduled->failed(new \RuntimeException('Mail provider rejected message.'));
+        $updated->failed(new \RuntimeException('Mail provider rejected message.'));
+
+        $notices = DB::table('notifications')
+            ->where('notifiable_id', $this->hrUser->id)
+            ->where('type', 'email.delivery_failed')
+            ->get();
+        $this->assertCount(2, $notices);
+        foreach ($notices as $notice) {
+            $data = json_decode($notice->data, true);
+            $this->assertSame('/hr/recruitment/applications/snapshot-application-id', $data['link_to']);
+            $this->assertStringContainsString('Snapshot Candidate', $data['message']);
+        }
     }
 
     public function test_candidate_mail_templates_escape_untrusted_text_and_render_plain_text(): void
