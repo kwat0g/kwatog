@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LuScanBarcode, LuSearch } from '@/lib/icons';
 import { scannerApi } from '@/api/inventory/scanner';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -52,12 +53,13 @@ export default function WarehouseScannerPage() {
   };
 
   return (
-    <div>
+    <PageShell className="flex flex-col gap-4">
       <PageHeader
         title="Warehouse Scanner"
         subtitle="Scan item, PO, GRN, work-order, or bin barcodes for receiving, picking, issuance, and cycle counts."
+        inset={false}
       />
-      <div className="min-w-0 w-full p-5 space-y-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <Panel title="Scan context">
           {optionsQuery.isError && (
             <div role="alert" className="mb-3 text-sm text-danger-fg">
@@ -125,7 +127,7 @@ export default function WarehouseScannerPage() {
             </div>
           )}
         </Panel>
-        <form onSubmit={submit} className="rounded-md border border-default bg-canvas p-4">
+        <form onSubmit={submit} className="min-w-0 rounded-md border border-default bg-canvas p-4">
           <label className="block text-sm font-medium mb-2" htmlFor="warehouse-barcode">
             Barcode
           </label>
@@ -138,7 +140,7 @@ export default function WarehouseScannerPage() {
               value={barcode}
               onChange={(event) => setBarcode(event.target.value)}
               prefix={<LuScanBarcode size={16} />}
-              containerClassName="flex-1"
+              containerClassName="min-w-0 flex-1"
               placeholder="Scan now…"
             />
             <Button
@@ -150,67 +152,67 @@ export default function WarehouseScannerPage() {
             </Button>
           </div>
         </form>
-        {scan.isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Barcode lookup failed"
-            description={
-              (scan.error as { response?: { data?: { message?: string } } })?.response?.data
-                ?.message ?? 'Check the barcode and context, then try Resolve again.'
-            }
-          />
-        )}
-        {scan.data && (
-          <Panel title="Scan result">
-            {scan.data.type === 'unknown' ? (
-              <EmptyState
-                icon="search"
-                title="Unrecognized barcode"
-                description="Check the printed code and scan again."
-              />
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Chip variant="info">
-                    {scan.data.type_label ?? scan.data.type.replaceAll('_', ' ')}
-                  </Chip>
-                  <span className="text-sm font-mono">
-                    {String(
-                      scan.data.entity?.code ??
-                        scan.data.entity?.grn_number ??
-                        scan.data.entity?.po_number ??
-                        scan.data.entity?.wo_number ??
-                        '',
-                    )}
-                  </span>
-                </div>
-                <dl className="grid grid-cols-2 gap-2 text-xs">
-                  {Object.entries(scan.data.entity ?? {})
-                    .filter(([key]) => key !== 'id')
-                    .map(([key, value]) => (
-                      <div key={key}>
-                        <dt className="text-muted">{key.replaceAll('_', ' ')}</dt>
-                        <dd>{String(value ?? '—')}</dd>
-                      </div>
-                    ))}
-                </dl>
-                <div className="flex flex-wrap gap-2">
-                  {scan.data.suggested_actions.map((action) => (
-                    <Button
-                      key={action.action}
-                      variant="secondary"
-                      disabled={!action.href}
-                      onClick={() => action.href && navigate(action.href)}
-                    >
-                      {action.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Panel>
-        )}
       </div>
-    </div>
+      {scan.isError && (
+        <EmptyState
+          icon="alert-circle"
+          title="Barcode lookup failed"
+          description={
+            (scan.error as { response?: { data?: { message?: string } } })?.response?.data
+              ?.message ?? 'Check the barcode and context, then try Resolve again.'
+          }
+        />
+      )}
+      {scan.data && (
+        <Panel title="Scan result">
+          {scan.data.type === 'unknown' ? (
+            <EmptyState
+              icon="search"
+              title="Unrecognized barcode"
+              description="Check the printed code and scan again."
+            />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <Chip variant="info">
+                  {scan.data.type_label ?? scan.data.type.replaceAll('_', ' ')}
+                </Chip>
+                <span className="min-w-0 break-words text-sm font-mono">
+                  {String(
+                    scan.data.entity?.code ??
+                      scan.data.entity?.grn_number ??
+                      scan.data.entity?.po_number ??
+                      scan.data.entity?.wo_number ??
+                      '',
+                  )}
+                </span>
+              </div>
+              <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+                {Object.entries(scan.data.entity ?? {})
+                  .filter(([key]) => key !== 'id')
+                  .map(([key, value]) => (
+                    <div key={key} className="min-w-0">
+                      <dt className="text-caption text-muted">{key.replaceAll('_', ' ')}</dt>
+                      <dd className="break-words">{String(value ?? '—')}</dd>
+                    </div>
+                  ))}
+              </dl>
+              <div className="flex flex-wrap gap-2">
+                {scan.data.suggested_actions.map((action) => (
+                  <Button
+                    key={action.action}
+                    variant="secondary"
+                    disabled={!action.href}
+                    onClick={() => action.href && navigate(action.href)}
+                  >
+                    {action.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </Panel>
+      )}
+    </PageShell>
   );
 }

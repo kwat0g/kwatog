@@ -1,0 +1,1674 @@
+{
+  "generatedAt": "2026-10-27T16:59:31.860Z",
+  "baseUrl": "http://127.0.0.1:5175",
+  "role": "warehouse",
+  "theme": "dark",
+  "fixtureRowsRequested": 0,
+  "widths": [
+    375,
+    1440
+  ],
+  "routes": [
+    "/inventory/scanner"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/inventory/scanner",
+      "role": "warehouse",
+      "width": 375,
+      "score": 5,
+      "issues": [
+        "horizontal page overflow"
+      ]
+    },
+    {
+      "route": "/inventory/scanner",
+      "role": "warehouse",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/inventory/scanner",
+      "role": "warehouse",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/before/inventory-scanner/dark-unknown/inventory-scanner-375.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "longTransferListScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": null,
+      "inventoryDialogSamples": [],
+      "scheduleBottomSample": null,
+      "url": "/inventory/scanner",
+      "title": "Warehouse Scanner · Warehouse · ERP",
+      "h1": "Warehouse Scanner",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 0,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": -7,
+        "right": 368,
+        "top": 48,
+        "bottom": 812,
+        "width": 375,
+        "height": 764
+      },
+      "mainContent": {
+        "textLength": 312,
+        "textSample": "Warehouse Scanner Scan item, PO, GRN, work-order, or bin barcodes for receiving, picking, issuance, and cycle counts. Scan context Workflow General lookup Work ",
+        "documentTables": 0,
+        "mainTables": 0
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 0,
+        "width": 0
+      },
+      "sidebarClearance": null,
+      "sidebarClearanceByBlock": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 13,
+          "right": 348,
+          "top": 48,
+          "bottom": 155,
+          "width": 375,
+          "height": 107
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "Warehouse Scanner",
+          "bounds": {
+            "left": 13,
+            "right": 348,
+            "top": 48,
+            "bottom": 155,
+            "width": 375,
+            "height": 107
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "min-w-0 w-full p-5 space-y-4",
+          "heading": "Scan context",
+          "bounds": {
+            "left": 13,
+            "right": 348,
+            "top": 155,
+            "bottom": 712.96875,
+            "width": 375,
+            "height": 557.96875
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "20px",
+            "right": "20px",
+            "bottom": "20px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": true,
+          "verticalOverflow": false
+        }
+      ],
+      "sections": [
+        {
+          "title": "Scan context",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 13,
+            "right": 348,
+            "top": 175,
+            "bottom": 312,
+            "width": 335,
+            "height": 137
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "min-w-0 w-full p-5 space-y-4",
+            "bounds": {
+              "left": 13,
+              "right": 348,
+              "top": 155,
+              "bottom": 712.96875,
+              "width": 375,
+              "height": 557.96875
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 30,
+              "right": 331,
+              "top": 225,
+              "bottom": 311,
+              "width": 333,
+              "height": 86
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 86,
+            "clientHeight": 86
+          }
+        },
+        {
+          "title": "Scan result",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 13,
+            "right": 348,
+            "top": 436.1875,
+            "bottom": 692.96875,
+            "width": 335,
+            "height": 256.78125
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "min-w-0 w-full p-5 space-y-4",
+            "bounds": {
+              "left": 13,
+              "right": 348,
+              "top": 155,
+              "bottom": 712.96875,
+              "width": 375,
+              "height": 557.96875
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 30,
+              "right": 331,
+              "top": 486.1875,
+              "bottom": 691.96875,
+              "width": 333,
+              "height": 205.78125
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 206,
+            "clientHeight": 206
+          }
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "transferFlowAlignment": null,
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": true,
+      "horizontalPageMaxScroll": 8,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": -7,
+          "right": 368,
+          "width": 375,
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollLeft": 7,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": -7,
+          "right": 368,
+          "width": 375,
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": -7,
+          "right": 368,
+          "width": 375,
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": -7,
+          "right": 368,
+          "width": 375,
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": -7,
+          "right": 368,
+          "width": 375,
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-14",
+          "left": 0,
+          "right": 0,
+          "width": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": -7,
+          "right": 368,
+          "width": 375,
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": -7,
+          "right": 368,
+          "width": 375,
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "html",
+          "className": "",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 812,
+          "clientHeight": 812,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 812,
+          "maxClientHeight": 812
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 812,
+          "clientHeight": 812,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 812,
+          "maxClientHeight": 812
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 812,
+          "clientHeight": 812,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 812,
+          "maxClientHeight": 812
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 812,
+          "clientHeight": 812,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 812,
+          "maxClientHeight": 812
+        },
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 101,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 764,
+          "clientHeight": 764,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 764,
+          "maxClientHeight": 764
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 764,
+          "clientHeight": 764,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 764,
+          "maxClientHeight": 764
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 665,
+          "clientHeight": 665,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 665,
+          "maxClientHeight": 665
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 665,
+          "clientHeight": 665,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 665,
+          "maxClientHeight": 665
+        },
+        {
+          "tag": "div",
+          "className": "min-w-0 w-full p-5 space-y-4",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 383,
+          "clientWidth": 375,
+          "scrollHeight": 558,
+          "clientHeight": 558,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 383,
+          "maxClientWidth": 375,
+          "maxScrollHeight": 558,
+          "maxClientHeight": 558
+        },
+        {
+          "tag": "form",
+          "className": "rounded-md border border-default bg-canvas p-4",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 362,
+          "clientWidth": 333,
+          "scrollHeight": 90,
+          "clientHeight": 90,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 362,
+          "maxClientWidth": 333,
+          "maxScrollHeight": 90,
+          "maxClientHeight": 90
+        },
+        {
+          "tag": "div",
+          "className": "flex gap-2",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 346,
+          "clientWidth": 301,
+          "scrollHeight": 32,
+          "clientHeight": 32,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 346,
+          "maxClientWidth": 301,
+          "maxScrollHeight": 32,
+          "maxClientHeight": 32
+        },
+        {
+          "tag": "div",
+          "className": "relative flex items-center justify-center mb-3",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 56,
+          "clientWidth": 40,
+          "scrollHeight": 56,
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": false,
+      "doubleVerticalScroll": false,
+      "scheduleScrollRegion": null,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Warehouse Scanner",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Warehouse Scanner"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Scan item, PO, GRN, work-order, or bin barcodes for receiving, picking, issuance",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Scan item, PO, GRN, work-order, or bin barcodes for receiving, picking, issuance"
+            ]
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Scan context",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 2,
+            "examples": [
+              "Scan context",
+              "Scan result"
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Workflow",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Workflow"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "label",
+            "className": "block text-sm font-medium mb-2",
+            "text": "Barcode",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Barcode"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-r border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.164706 0.145098 0.117647)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Resolve",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+            "background": "color(srgb 0.909804 0.572549 0.415686)",
+            "contrast": 7.65,
+            "count": 1,
+            "examples": [
+              "Resolve"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "relative rounded-full bg-elevated flex items-center justify-center text-muted w-10 h-10",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.164706 0.145098 0.117647)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "h3",
+            "className": "font-medium text-primary mb-1 text-md",
+            "text": "Unrecognized barcode",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Unrecognized barcode"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-muted max-w-md text-sm mb-4",
+            "text": "Check the printed code and scan again.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Check the printed code and scan again."
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18.2px|normal|none"
+        ],
+        "below13px": [],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Resolve",
+          "width": 108,
+          "height": 32,
+          "background": "color(srgb 0.909804 0.572549 0.415686)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 108,
+          "minHeight": 32,
+          "maxHeight": 32
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Resolve",
+          "width": 108,
+          "height": 32,
+          "background": "color(srgb 0.909804 0.572549 0.415686)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 108,
+          "minHeight": 32,
+          "maxHeight": 32
+        }
+      ],
+      "controls": [
+        {
+          "label": "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+          "width": 299,
+          "height": 30,
+          "count": 3,
+          "examples": [
+            "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+            "input",
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 299,
+          "minHeight": 30,
+          "maxHeight": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+          "width": 299,
+          "height": 30,
+          "count": 3,
+          "examples": [
+            "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+            "input",
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 299,
+          "minHeight": 30,
+          "maxHeight": 32
+        }
+      ],
+      "scrollContextCount": 0
+    },
+    {
+      "route": "/inventory/scanner",
+      "role": "warehouse",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/before/inventory-scanner/dark-unknown/inventory-scanner-1440.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "longTransferListScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": null,
+      "inventoryDialogSamples": [],
+      "scheduleBottomSample": null,
+      "url": "/inventory/scanner",
+      "title": "Warehouse Scanner · Warehouse · ERP",
+      "h1": "Warehouse Scanner",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 0,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 900,
+        "width": 1200,
+        "height": 852
+      },
+      "mainContent": {
+        "textLength": 312,
+        "textSample": "Warehouse Scanner Scan item, PO, GRN, work-order, or bin barcodes for receiving, picking, issuance, and cycle counts. Scan context Workflow General lookup Work ",
+        "documentTables": 0,
+        "mainTables": 0
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1420,
+          "top": 48,
+          "bottom": 137,
+          "width": 1200,
+          "height": 89
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "Warehouse Scanner",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 48,
+            "bottom": 137,
+            "width": 1200,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "min-w-0 w-full p-5 space-y-4",
+          "heading": "Scan context",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 137,
+            "bottom": 726.96875,
+            "width": 1200,
+            "height": 589.96875
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "20px",
+            "right": "20px",
+            "bottom": "20px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "sections": [
+        {
+          "title": "Scan context",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 157,
+            "bottom": 310,
+            "width": 1160,
+            "height": 153
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "min-w-0 w-full p-5 space-y-4",
+            "bounds": {
+              "left": 260,
+              "right": 1420,
+              "top": 137,
+              "bottom": 726.96875,
+              "width": 1200,
+              "height": 589.96875
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 281,
+              "right": 1399,
+              "top": 215,
+              "bottom": 309,
+              "width": 1158,
+              "height": 94
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 94,
+            "clientHeight": 94
+          }
+        },
+        {
+          "title": "Scan result",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 434.1875,
+            "bottom": 706.96875,
+            "width": 1160,
+            "height": 272.78125
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "min-w-0 w-full p-5 space-y-4",
+            "bounds": {
+              "left": 260,
+              "right": 1420,
+              "top": 137,
+              "bottom": 726.96875,
+              "width": 1200,
+              "height": 589.96875
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 281,
+              "right": 1399,
+              "top": 492.1875,
+              "bottom": 705.96875,
+              "width": 1158,
+              "height": 213.78125
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 214,
+            "clientHeight": 214
+          }
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "transferFlowAlignment": null,
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-60",
+          "left": 0,
+          "right": 240,
+          "width": 240,
+          "scrollWidth": 239,
+          "clientWidth": 239,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 101,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "relative flex items-center justify-center mb-3",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 56,
+          "clientWidth": 40,
+          "scrollHeight": 56,
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": false,
+      "doubleVerticalScroll": false,
+      "scheduleScrollRegion": null,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Warehouse Scanner",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Warehouse Scanner"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Scan item, PO, GRN, work-order, or bin barcodes for receiving, picking, issuance",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Scan item, PO, GRN, work-order, or bin barcodes for receiving, picking, issuance"
+            ]
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Scan context",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 2,
+            "examples": [
+              "Scan context",
+              "Scan result"
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Workflow",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Workflow"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "label",
+            "className": "block text-sm font-medium mb-2",
+            "text": "Barcode",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Barcode"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-r border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.164706 0.145098 0.117647)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Resolve",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+            "background": "color(srgb 0.909804 0.572549 0.415686)",
+            "contrast": 7.65,
+            "count": 1,
+            "examples": [
+              "Resolve"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "relative rounded-full bg-elevated flex items-center justify-center text-muted w-10 h-10",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.164706 0.145098 0.117647)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "h3",
+            "className": "font-medium text-primary mb-1 text-md",
+            "text": "Unrecognized barcode",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Unrecognized barcode"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-muted max-w-md text-sm mb-4",
+            "text": "Check the printed code and scan again.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Check the printed code and scan again."
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18.2px|normal|none"
+        ],
+        "below13px": [],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Resolve",
+          "width": 108,
+          "height": 32,
+          "background": "color(srgb 0.909804 0.572549 0.415686)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 108,
+          "minHeight": 32,
+          "maxHeight": 32
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Resolve",
+          "width": 108,
+          "height": 32,
+          "background": "color(srgb 0.909804 0.572549 0.415686)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 108,
+          "minHeight": 32,
+          "maxHeight": 32
+        }
+      ],
+      "controls": [
+        {
+          "label": "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+          "width": 551,
+          "height": 30,
+          "count": 3,
+          "examples": [
+            "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+            "input",
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 975,
+          "minHeight": 30,
+          "maxHeight": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+          "width": 551,
+          "height": 30,
+          "count": 3,
+          "examples": [
+            "General lookupWork orderPurchase orderGoods receiptWarehouse binInventory item",
+            "input",
+            "Resolve"
+          ],
+          "minWidth": 108,
+          "maxWidth": 975,
+          "minHeight": 30,
+          "maxHeight": 32
+        }
+      ],
+      "scrollContextCount": 0
+    }
+  ]
+}
