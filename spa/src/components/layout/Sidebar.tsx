@@ -541,7 +541,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Budgeting',
         icon: LuWallet,
         feature: 'budgeting',
-        permission: 'budgeting.view',
+        anyPermissions: ['budgeting.view', 'budgeting.approve'],
         badgeKey: 'pending_budgets',
       },
       {
