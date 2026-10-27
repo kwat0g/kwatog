@@ -26,6 +26,7 @@ import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { notificationMeta, timeAgo } from '@/lib/notificationMeta';
 import { focusRingInset } from '@/lib/focus';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
+import { notificationLinkTo } from '@/lib/notificationLink';
 
 const POLL_MS = 60_000;
 const PEEK_COUNT = 8;
@@ -186,8 +187,7 @@ export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QU
  const title = (n.data?.title as string | undefined) ?? meta.label;
  const message = (n.data?.message as string | undefined) ?? '';
  const isUnread = !n.read_at;
- const target = (n.data?.link_to as string | undefined) ?? null;
- const link = target && (!linkPrefix || target.startsWith(linkPrefix + '/')) ? target : null;
+ const link = notificationLinkTo(n.data?.link_to, linkPrefix);
  const rowClassName = cn(
  'w-full text-left px-3 py-2.5 no-underline text-primary flex items-start gap-2.5 hover:bg-elevated hover:no-underline transition-colors duration-fast cursor-pointer',
  focusRingInset,
@@ -223,12 +223,13 @@ export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QU
    onAuxClick={(event) => {
     if (event.button === 1) handleClick(n);
    }}
+   aria-label={message ? `${title}: ${message}` : title}
    className={rowClassName}
   >
    {content}
   </Link>
  ) : (
-  <button type="button" onClick={() => handleClick(n)} className={rowClassName}>
+  <button type="button" onClick={() => handleClick(n)} aria-label={message ? `${title}: ${message}` : title} className={rowClassName}>
    {content}
   </button>
  )}

@@ -24,6 +24,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { focusRingInset } from '@/lib/focus';
+import { notificationLinkTo } from '@/lib/notificationLink';
 import {
  bucketLabel,
  dateBucket,
@@ -246,10 +247,8 @@ export default function NotificationsListPage({ api = notificationsApi, queryKey
  const message = (n.data?.message as string | undefined) ?? '';
  const isUnread = !n.read_at;
  const scheduleLink = n.type === 'maintenance.repeat_breakdown' && !linkPrefix
-   && typeof n.data?.schedule_link === 'string' && n.data.schedule_link.startsWith('/maintenance/schedules')
-   ? n.data.schedule_link : null;
- const target = (n.data?.link_to as string | undefined) ?? null;
- const link = target && (!linkPrefix || target.startsWith(linkPrefix + '/')) ? target : null;
+   ? notificationLinkTo(n.data?.schedule_link, '/maintenance/schedules') : null;
+ const link = notificationLinkTo(n.data?.link_to, linkPrefix) ?? scheduleLink;
  const rowClassName = cn(
  'min-w-0 flex-1 text-left px-3 py-2.5 flex items-start gap-3 no-underline text-primary hover:bg-elevated hover:no-underline transition-colors duration-fast cursor-pointer',
  focusRingInset,
