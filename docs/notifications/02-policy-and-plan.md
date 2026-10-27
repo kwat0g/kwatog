@@ -229,7 +229,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `inventory.low_stock` | Low stock / warning | Active item with reorder point > 0 and usable quantity <= reorder point, using the same stock-location summary as the Items list. Includes out-of-stock rows when reorder point is positive. | S: `inventory.view`; current Item list has no warehouse/site row scope, so signal covers visible company inventory. | `/inventory/items?signal=low_stock` |
 | `inventory.out_of_stock` | Out of stock / critical | Active stocked item with usable quantity <= 0, using the same stock-location summary as the Items list. | S: `inventory.view`; current Item list has no warehouse/site row scope, so signal covers visible company inventory. | `/inventory/items?signal=out_of_stock` |
 | `inventory.grn.pending_inspection` | Pending inspection / action-required | GRN in `pending_qc`, matching existing badge, accessible to assigned QC/receiving user. | A/S: inventory/quality permission + site | `/inventory/grn?status=pending_qc` |
-| `inventory.grn.pending_putaway` | Pending putaway / action-required | Received/cleared GRN with received quantity remaining unput away; verify field/state parity. | A/S: warehouse scope | `/inventory/grn?signal=pending_putaway` |
+| `inventory.grn.pending_putaway` | Deferred / no reliable source data | No GRN putaway status, staging location, or remaining-putaway quantity exists. Receiving records the target location, and QC acceptance immediately moves accepted quantities into inventory at that location. `pending_qc` is an inspection gate, not putaway work. | — | —; do not expose a badge until a putaway workflow and list filter exist |
 | `inventory.mrb.held` | Quarantined material / warning | `MrbStatus::Held` only; released, scrapped, and returned records are excluded. The list has no site/department filter, so this is company-wide, matching the current API scope. | S: `inventory.mrb.view`, same as the list route | `/inventory/mrb?status=held` |
 | `inventory.material_issue.awaiting_handover` | Handover / action-required | Material issue awaiting current picker/warehouse handoff; exact state map from enum required. | A: assigned picker/warehouse user | `/inventory/material-issues?signal=handover` |
 | `inventory.adjustment.awaiting_my_approval` | Approval / action-required | Adjustment at current approval step for user/delegate; same approval source access. | A | `/inventory/stock-adjustments?signal=awaiting_my_approval` |
@@ -324,7 +324,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/purchasing/supplier-listings` | — | `purchasing.supplier_listings.review` | purchasing.supplier_listing.review |
 | `/inventory/items` | `low_stock` | `inventory.view` | inventory.out_of_stock; inventory.low_stock |
 | `/inventory/uoms` | — | `inventory.items.manage` | — |
-| `/inventory/grn` | `pending_grn` | `inventory.view` | inventory.grn.pending_inspection; inventory.grn.pending_putaway |
+| `/inventory/grn` | `pending_grn` | `inventory.view` | inventory.grn.pending_inspection; pending putaway deferred because no source state or destination filter exists |
 | `/inventory/mrb` | `mrb_holds` | `inventory.mrb.view` | inventory.mrb.held |
 | `/inventory/material-issues` | — | `inventory.issue.create` | inventory.material_issue.awaiting_handover |
 | `/inventory/stock-levels` | — | `inventory.view` | — (avoid duplicate low-stock count; link to Items signal) |
