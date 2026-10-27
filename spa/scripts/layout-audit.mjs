@@ -143,7 +143,7 @@ function localUser(role, themeMode) {
     name: `Layout Audit ${role}`,
     email: ROLE_EMAILS[role],
     role: { id: `layout-audit-${role}`, slug: slugs[role], name: slugs[role] },
-    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'inventory.warehouse.manage', 'inventory.issue.create', 'accounting.journal.post', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
+    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'inventory.warehouse.manage', 'inventory.issue.create', 'inventory.grn.create', 'inventory.mrb.view', 'inventory.mrb.manage', 'quality.inspections.view', 'quality.inspections.manage', 'quality.ncr.view', 'accounting.journal.view', 'accounting.journal.post', 'accounting.bills.create', 'return_management.manage', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
     delegated_approvals: [],
     features: ['inventory', 'production', 'notifications', 'search', 'b2b_portals'],
     employee: { id: 'layout-audit-employee', employee_no: 'LAYOUT-AUDIT' },
@@ -479,6 +479,172 @@ function sampleReservations(count) {
   }));
 }
 
+const grnStatuses = ['draft', 'pending_qc', 'accepted', 'partial_accepted', 'rejected'];
+const mrbStatuses = ['held', 'released', 'scrapped', 'returned'];
+
+function sampleGrnLine(index, status) {
+  const quantity = index === 2 ? '123456789.125' : `${(index + 1) * 25}.000`;
+  return {
+    id: `layout-grn-line-${index + 1}`,
+    purchase_order_item_id: `layout-po-line-${index + 1}`,
+    item: {
+      id: `layout-grn-item-${index + 1}`,
+      code: index === 1 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`,
+      name: index === 1 ? 'Long resin description for receipt table sizing and line wrapping checks' : `Receipt material ${index + 1}`,
+      unit_of_measure: 'kg', quality_plan_ready: index % 5 !== 0,
+      stored_bins: [{ id: 'layout-location-good', full_code: 'MW-RM-A-01-01', quantity: '12500.000' }],
+    },
+    location: { id: 'layout-location-good', code: 'A-01-01', full_code: 'MW-RM-A-01-01' },
+    quantity_received: quantity,
+    quantity_received_in_uom: '12500.000',
+    received_uom_conversion_factor: '0.500000',
+    quantity_accepted: status === 'accepted' ? quantity : status === 'partial_accepted' ? '12.500' : '0.000',
+    quantity_outstanding: '987654321.125',
+    unit_cost: index === 2 ? '123456789.1234' : '1234.5000',
+    received_uom_code: 'BAG',
+    lot_number: `LOT-${String(index + 1).padStart(6, '0')}`,
+    supplier_lot_reference: `SUPPLIER-LOT-${String(index + 1).padStart(6, '0')}`,
+    expiry_date: '2027-10-27',
+    moisture_percentage: '0.125',
+    coa_document_path: `certificates/cofa-${String(index + 1).padStart(4, '0')}.pdf`,
+    coa_verified: index % 2 === 0,
+    remarks: index === 1 ? 'Long inspection note used to verify receipt cell wrapping at narrow widths.' : null,
+    inspection: { id: `layout-incoming-qc-${index + 1}`, inspection_number: `IQC-202610-${String(index + 1).padStart(4, '0')}`, status: 'passed', status_label: 'Passed' },
+    active_quality_holds: index === 1 ? [{ id: 'layout-ncr-1', ncr_number: 'NCR-202610-0001', quantity: '12.500' }] : [],
+  };
+}
+
+function sampleGrns(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const status = grnStatuses[index % grnStatuses.length];
+    return {
+      id: `layout-grn-${String(index + 1).padStart(5, '0')}`,
+      grn_number: `GRN-202610-${String(index + 1).padStart(5, '0')}`,
+      received_date: `2026-10-${String((index % 27) + 1).padStart(2, '0')}`,
+      status,
+      status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      rejected_reason: null,
+      remarks: null,
+      accepted_at: status === 'accepted' ? '2026-10-27T09:14:00+08:00' : null,
+      incoming_qc_handoff: {
+        status: status === 'pending_qc' ? 'manual_required' : 'generated',
+        status_label: status === 'pending_qc' ? 'Needs retry' : 'Created',
+        message: status === 'pending_qc' ? 'Incoming inspection handoff needs review.' : null,
+        at: '2026-10-27T09:14:00+08:00',
+      },
+      vendor: { id: 'layout-vendor-1', name: index === 1 ? 'International Industrial Materials and Packaging Corporation' : `Supplier ${index + 1}` },
+      purchase_order: { id: `layout-po-${index + 1}`, po_number: `PO-202610-${String(index + 1).padStart(5, '0')}` },
+      receiver: { id: 'layout-user-receiver', name: index === 2 ? 'Alexandria-Maria Santos-Dela-Cruz' : 'Ana Santos' },
+    };
+  });
+}
+
+function sampleGrnDetail(count, status = 'pending_qc') {
+  const draft = status === 'draft';
+  const accepted = status === 'accepted' || status === 'partial_accepted';
+  const lines = Array.from({ length: Math.max(1, count) }, (_, index) => sampleGrnLine(index, status));
+  return {
+    ...sampleGrns(1)[0],
+    id: 'layout-grn-detail-001',
+    status,
+    status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    grn_number: 'GRN-202610-00001',
+    received_date: draft ? null : '2026-10-27',
+    rejected_reason: status === 'rejected' ? 'Packaging was damaged on arrival; see attached supplier evidence.' : null,
+    remarks: 'Synthetic receipt used for layout review; values cover long text, large quantities, and four-decimal unit costs.',
+    accepted_at: accepted ? '2026-10-27T10:30:00+08:00' : null,
+    remainder_rejected_at: null,
+    remainder_rejected_reason: null,
+    remainder_rejected_by: null,
+    can_reject_remainder: status === 'pending_qc' || status === 'partial_accepted',
+    incoming_qc_handoff: {
+      status: status === 'pending_qc' ? 'generated' : draft ? 'not_started' : 'not_required',
+      status_label: status === 'pending_qc' ? 'Created' : draft ? 'Not started' : 'Not required',
+      message: null,
+      at: status === 'pending_qc' ? '2026-10-27T09:14:00+08:00' : null,
+    },
+    qc_inspection: status === 'pending_qc' ? { id: 'layout-incoming-qc-1', inspection_number: 'IQC-202610-0001', stage: 'incoming', stage_label: 'Incoming', status: 'passed', status_label: 'Passed' } : null,
+    journal_entry: accepted ? { id: 'layout-journal-1', entry_number: 'JE-202610-0001', status: 'draft', status_label: 'Draft' } : null,
+    vendor: { id: 'layout-vendor-1', name: 'International Industrial Materials and Packaging Corporation' },
+    purchase_order: { id: 'layout-po-1', po_number: 'PO-202610-00001', purchase_request: { id: 'layout-pr-1', pr_number: 'PR-202610-00001' } },
+    receiver: draft ? null : { id: 'layout-user-receiver', name: 'Alexandria-Maria Santos-Dela-Cruz' },
+    acceptor: accepted ? { id: 'layout-user-approver', name: 'Warehouse Quality Approver' } : null,
+    supplier_shipment: {
+      id: 'layout-supplier-shipment-1', tracking_number: 'TRACKING-REFERENCE-000000000001',
+      items: lines.slice(0, 10).map((line) => ({ purchase_order_item_id: line.purchase_order_item_id, quantity_shipped: line.quantity_received, quantity_received: line.quantity_received, difference: '0.000', unit: 'kg' })),
+    },
+    bill: accepted ? { id: 'layout-bill-1', bill_number: 'BILL-202610-00001', status: 'draft', status_label: 'Draft', total_amount: '999999999999.99' } : null,
+    items: lines,
+  };
+}
+
+function sampleReceivablePurchaseOrder(count) {
+  return {
+    id: 'layout-po-1', po_number: 'PO-202610-00001', status: 'partially_received',
+    vendor: { id: 'layout-vendor-1', name: 'International Industrial Materials and Packaging Corporation' },
+    items: Array.from({ length: count }, (_, index) => ({
+      id: `layout-po-line-${index + 1}`, purchase_request_item_id: null,
+      item: { id: `layout-grn-item-${index + 1}`, code: `SKU-${String(index + 1).padStart(5, '0')}`, name: index === 1 ? 'Long resin description for receiving form layout and wrap behavior' : `Receipt material ${index + 1}`, unit_of_measure: 'kg' },
+      description: `Receipt material ${index + 1}`, quantity: '25000.000', unit: 'kg', unit_price: '1234.5000', total: '30862500.00',
+      quantity_received: '0.000', quantity_accepted: '0.000', quantity_remaining: '25000.000', base_quantity_ordered: '25000.000', base_quantity_remaining: '25000.000', delivered_unit_cost: '1234.5000',
+    })),
+  };
+}
+
+const sampleMrbLocation = (id, code, zone, zoneType) => ({
+  id, code, full_code: `MW-${zone}-${code}`, warehouse_id: 'layout-warehouse-1',
+  warehouse_code: 'MW', warehouse_name: 'Main Warehouse', is_active: true, zone, zone_type: zoneType,
+});
+
+function sampleMrbRecord(index = 0) {
+  const status = mrbStatuses[index % mrbStatuses.length];
+  return {
+    id: `layout-mrb-${String(index + 1).padStart(5, '0')}`,
+    mrb_number: `MRB-202610-${String(index + 1).padStart(5, '0')}`,
+    status,
+    status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    disposition: status === 'held' ? null : status === 'scrapped' ? 'scrap' : 'rework',
+    disposition_label: status === 'scrapped' ? 'Scrap' : status === 'held' ? undefined : 'Rework',
+    quantity: index === 2 ? '123456789.125' : `${(index + 1) * 25}.500`,
+    concession_approval_reference: null,
+    requires_concession_approval: false,
+    item: { id: `layout-item-${index + 1}`, code: index === 1 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`, name: index === 1 ? 'Long material description for MRB table width and truncation review' : `Quarantined material ${index + 1}`, unit_of_measure: 'kg' },
+    ncr: { id: `layout-ncr-${index + 1}`, ncr_number: `NCR-202610-${String(index + 1).padStart(5, '0')}`, status: 'open', status_label: 'Open', affected_quantity: 25, disposition: 'rework', disposition_label: 'Rework', inspection: { id: `layout-inspection-${index + 1}`, inspection_number: `INSP-202610-${String(index + 1).padStart(5, '0')}`, stage: 'incoming', status: 'failed' } },
+    inspection: { id: `layout-inspection-${index + 1}`, inspection_number: `INSP-202610-${String(index + 1).padStart(5, '0')}`, stage: 'incoming', stage_label: 'Incoming', status: 'failed', status_label: 'Failed', batch_quantity: 25 },
+    return_request: null,
+    actions: { can_release: status === 'held', can_release_good_stock: true },
+    source_location: sampleMrbLocation('layout-location-good', 'A-01-01', 'RM', 'raw_materials'),
+    quarantine_location: sampleMrbLocation('layout-location-quarantine', 'Q-01-01', 'QUAR', 'quarantine'),
+    release_location: status === 'held' ? null : sampleMrbLocation('layout-location-good', 'A-01-01', 'RM', 'raw_materials'),
+    hold_movement_id: `layout-hold-movement-${index + 1}`,
+    release_movement_id: status === 'held' ? null : `layout-release-movement-${index + 1}`,
+    held_by_id: 'layout-audit-originator', held_by: 'Alexandria-Maria Santos-Dela-Cruz',
+    held_at: '2026-10-27T09:14:00+08:00', released_by: status === 'held' ? null : 'Warehouse Quality Approver',
+    released_at: status === 'held' ? null : '2026-10-27T11:30:00+08:00',
+    notes: 'Long quarantine note describing the supplier lot discrepancy and the inspection evidence that triggered the hold.',
+    created_at: '2026-10-27T09:14:00+08:00',
+  };
+}
+
+function sampleMrbs(count) {
+  return Array.from({ length: count }, (_, index) => sampleMrbRecord(index));
+}
+
+function sampleQuarantineWarehouseTree() {
+  const location = (id, code, blocked = false) => ({
+    id, zone_id: 'layout-zone-placeholder', code, rack: code.slice(0, 4), bin: code.slice(-2),
+    is_active: true, is_blocked: blocked, full_code: `MW-${code}`,
+  });
+  return [{
+    id: 'layout-warehouse-1', name: 'Main Warehouse', code: 'MW', address: null, is_active: true,
+    zones: [
+      { id: 'layout-zone-raw', name: 'Raw materials', code: 'RM', zone_type: 'raw_materials', zone_type_label: 'Raw materials', locations: [location('layout-location-good', 'A-01-01')] },
+      { id: 'layout-zone-quarantine', name: 'Quarantine', code: 'QUAR', zone_type: 'quarantine', zone_type_label: 'Quarantine', locations: [location('layout-location-quarantine', 'Q-01-01')] },
+      { id: 'layout-zone-scrap', name: 'Scrap', code: 'SCRAP', zone_type: 'scrap', zone_type_label: 'Scrap', locations: [location('layout-location-scrap', 'S-01-01')] },
+    ],
+  }];
+}
+
 for (const count of [0, 1, 10, 50, 500]) {
   assert.equal(sampleItems(count).length, count);
   assert.equal(sampleUoms(count).length, count);
@@ -486,6 +652,10 @@ for (const count of [0, 1, 10, 50, 500]) {
   assert.equal(sampleStockLevels(count).length, count);
   assert.equal(sampleStockMovements(count).length, count);
   assert.equal(sampleReservations(count).length, count);
+  assert.equal(sampleGrns(count).length, count);
+  assert.equal(sampleGrnDetail(count).items.length, Math.max(1, count));
+  assert.equal(sampleReceivablePurchaseOrder(count).items.length, count);
+  assert.equal(sampleMrbs(count).length, count);
 }
 
 function addDays(date, days) {
@@ -586,6 +756,61 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
         stock_statuses: [{ value: 'ok', label: 'OK' }, { value: 'low', label: 'Low' }, { value: 'critical', label: 'Critical' }],
       },
     };
+    else if (pathname.endsWith('/inventory/grn/options')) json = {
+      data: {
+        statuses: grnStatuses.map((value) => ({ value, label: value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) })),
+        default_qc_result: 'pending',
+      },
+    };
+    else if (pathname.endsWith('/inventory/grn/receivable-purchase-orders')) json = {
+      data: [{ id: 'layout-po-1', po_number: 'PO-202610-00001', status: 'partially_received', vendor: { id: 'layout-vendor-1', name: 'International Industrial Materials and Packaging Corporation' } }],
+      meta: { current_page: 1, last_page: 1, per_page: 50, total: 1, from: 1, to: 1 },
+    };
+    else if (/\/inventory\/grn\/receivable-purchase-orders\/[^/]+$/.test(pathname)) json = {
+      data: sampleReceivablePurchaseOrder(rowCount),
+    };
+    else if (/\/inventory\/grn\/[^/]+$/.test(pathname) || /\/inventory\/grns\/[^/]+$/.test(pathname)) {
+      json = { data: sampleGrnDetail(rowCount, arg('grn-state', 'pending_qc')) };
+    }
+    else if (pathname.endsWith('/inventory/grn')) json = {
+      data: sampleGrns(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
+    else if (/\/b2b\/goods-receipt-notes\/[^/]+\/supplier-documents$/.test(pathname)) json = {
+      data: {
+        shipment: null,
+        shipments: [
+          { id: 'layout-shipment-1', can_edit: true, shipped_date: '2026-10-26', carrier: 'OGAMI Freight', tracking_number: 'TRACKING-REFERENCE-000000000001', estimated_arrival: '2026-10-27', notes: 'Synthetic shipment for layout audit.', updated_at: '2026-10-26T12:00:00+08:00', items: [{ purchase_order_item_id: 'layout-po-line-1', quantity_shipped: '25000.000' }] },
+          { id: 'layout-shipment-2', can_edit: true, shipped_date: '2026-10-26', carrier: null, tracking_number: 'TRACKING-REFERENCE-000000000002', estimated_arrival: '2026-10-28', notes: null, updated_at: '2026-10-26T13:00:00+08:00', items: [{ purchase_order_item_id: 'layout-po-line-1', quantity_shipped: '12500.000' }] },
+        ],
+        documents: [],
+      },
+    };
+    else if (pathname.endsWith('/inventory/mrb/options')) json = {
+      data: {
+        statuses: mrbStatuses.map((value) => ({ value, label: value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) })),
+        dispositions: [
+          { value: 'scrap', label: 'Scrap' },
+          { value: 'rework', label: 'Rework' },
+          { value: 'use_as_is', label: 'Use as is' },
+          { value: 'return_to_supplier', label: 'Return to supplier' },
+        ],
+      },
+    };
+    else if (pathname.endsWith('/inventory/mrb/quality-options')) json = {
+      data: {
+        inspections: [{ id: 'layout-inspection-1', inspection_number: 'INSP-202610-00001', stage: 'incoming', stage_label: 'Incoming', status: 'failed', status_label: 'Failed', batch_quantity: 25 }],
+        ncrs: [{ id: 'layout-ncr-1', ncr_number: 'NCR-202610-00001', status: 'open', status_label: 'Open', affected_quantity: 25, inspection: { id: 'layout-inspection-1', inspection_number: 'INSP-202610-00001', stage: 'incoming', status: 'failed' } }],
+      },
+    };
+    else if (pathname.endsWith('/inventory/mrb/source-lots')) json = {
+      data: [{ lot_number: 'LOT-202610-00001', net: '12500.000', expiry_date: '2027-10-27' }, { lot_number: 'LOT-REFERENCE-000000000000002', net: '500.000', expiry_date: null }],
+    };
+    else if (/\/inventory\/mrb\/[^/]+$/.test(pathname)) json = { data: sampleMrbRecord() };
+    else if (pathname.endsWith('/inventory/mrb')) json = {
+      data: sampleMrbs(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
     else if (pathname.endsWith(`/inventory/items/${sampleItem.id}`)) json = { data: sampleItem };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}/operations`)) json = { data: sampleWorkOrderOperations(rowCount) };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}`)) json = { data: sampleWorkOrder };
@@ -634,7 +859,14 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
       data: sampleItems(rowCount), meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 100)), per_page: 100, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 100) },
       links: { first: '', last: '', prev: null, next: null },
     };
-    else if (pathname.endsWith('/inventory/warehouse')) json = { data: sampleWarehouseTree(rowCount) };
+    else if (pathname.endsWith('/inventory/warehouse')) {
+      const pagePath = new URL(page.url()).pathname;
+      json = {
+        data: pagePath.startsWith('/inventory/grn') || pagePath.startsWith('/inventory/mrb')
+          ? sampleQuarantineWarehouseTree()
+          : sampleWarehouseTree(rowCount),
+      };
+    }
     else if (pathname.endsWith('/inventory/stock-levels')) json = {
       data: sampleStockLevels(rowCount), meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 100)), per_page: 100, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 100) },
       links: { first: '', last: '', prev: null, next: null },
@@ -1111,6 +1343,12 @@ async function measure(page) {
         tabs: main?.querySelectorAll('[role="tab"]').length ?? 0,
       },
       main: rect(main),
+      mainContent: main ? {
+        textLength: main.innerText.trim().length,
+        textSample: main.innerText.trim().replace(/\s+/g, ' ').slice(0, 160),
+        documentTables: document.querySelectorAll('table').length,
+        mainTables: main.querySelectorAll('table').length,
+      } : null,
       sidebar: sidebarBox ? { left: sidebarBox.left, right: sidebarBox.right, width: sidebarBox.width } : null,
       sidebarClearance: countSidebarRail ? Math.round(firstContentLeft - sidebarBox.right) : null,
       sidebarClearanceByBlock,
@@ -1380,6 +1618,10 @@ async function main() {
         }
         await page.waitForFunction((theme) => document.documentElement.getAttribute('data-theme') === theme, themeMode, { timeout: 10_000 });
         await page.waitForFunction(() => !document.querySelector('main .animate-shimmer'), null, { timeout: 15_000 });
+        await page.waitForFunction(() => {
+          const content = document.querySelector('main#main-content, main');
+          return Boolean(content?.querySelector('h1,[role="alert"],[data-layout="page-shell"]'));
+        }, null, { timeout: 15_000 });
         if (local && route === '/production/routings/create') {
           await page.waitForFunction(
             () => document.querySelector('select[name="product_id"] option[value="layout-product-1"]'),
@@ -1504,6 +1746,53 @@ async function main() {
             }
           }
         }
+        if (process.argv.includes('--receiving-dialog-samples') && [375, 1440].includes(width)) {
+          const capture = async (label, buttonName) => {
+            const sample = await captureInventoryDialog(page, out, route, width, themeMode, label, buttonName);
+            if (sample) inventoryDialogSamples.push(sample);
+          };
+          const grnState = arg('grn-state', 'pending_qc');
+          if (route === '/inventory/mrb') await capture('mrb-hold', 'Raise hold');
+          if (route === '/inventory/mrb/layout-mrb-00001') await capture('mrb-release', 'Release');
+          if (route === '/inventory/grn/create?po_id=layout-po-1') {
+            const locations = page.getByRole('combobox', { name: 'Location' });
+            for (let index = 0; index < await locations.count(); index += 1) {
+              await locations.nth(index).click();
+              await page.getByRole('option', { name: 'MW-RM-A-01-01', exact: true }).click();
+            }
+            await page.getByRole('button', { name: 'Create GRN', exact: true }).click();
+            await capture('grn-create-confirmation', null);
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'pending_qc') {
+            await capture('grn-accept', 'Accept');
+            await capture('grn-reject', 'Reject');
+            await capture('grn-reject-remainder', 'Reject remainder');
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'partial_accepted') {
+            const input = page.locator('input[type="number"]').first();
+            if (await input.count()) await input.fill('13.500');
+            await capture('grn-accept-additional', 'Accept additional');
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'accepted') {
+            await capture('grn-post-bill', 'Post bill');
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'draft') {
+            const shipment = page.getByLabel('Supplier shipment');
+            assert.equal(await shipment.count(), 1, 'draft GRN fixture must expose the shipment selector');
+            await shipment.selectOption('layout-shipment-1');
+            const quantity = page.getByLabel('Entered quantity SKU-00001');
+            assert.equal(await quantity.count(), 1, 'draft GRN fixture must expose a labeled receipt quantity');
+            await quantity.fill('25000.000');
+            const finalize = page.getByRole('button', { name: 'Finalize receiving', exact: true });
+            await page.waitForFunction(() => {
+              const button = [...document.querySelectorAll('button')].find((element) => element.textContent?.trim() === 'Finalize receiving');
+              return button && !button.disabled;
+            }, null, { timeout: 5_000 }).catch(async () => {
+              throw new Error(`draft GRN fixture did not satisfy finalize prerequisites: ${await page.getByRole('status').allTextContents()}`);
+            });
+            await capture('grn-finalize', 'Finalize receiving');
+          }
+        }
         rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, dialogSample, scheduleDialogSample, inventoryDialogSamples, scheduleBottomSample, ...metrics });
         console.log(`${route} @ ${width}: ${metrics.counts.tables} table(s), ${metrics.counts.rows} row(s), overflow=${metrics.horizontalPageOverflow}`);
       }
@@ -1569,6 +1858,7 @@ async function main() {
     const failures = rows.flatMap((row) => {
       const checks = [
         [Object.values(row.edgeAlignment).some((item) => item && !item.aligned), 'page block edges differ by >1px'],
+        [!row.mainContent?.textLength, 'page content did not render inside the main landmark'],
         [Object.values(row.sidebarClearanceByBlock).some((value) => value !== null && value < 16), 'sidebar clearance below 16px'],
         [row.horizontalPageOverflow, 'horizontal page overflow'],
         [row.doubleVerticalScroll, 'double vertical scroll'],

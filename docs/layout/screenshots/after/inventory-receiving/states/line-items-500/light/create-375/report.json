@@ -1,0 +1,5162 @@
+{
+  "generatedAt": "2026-10-27T15:23:25.590Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "admin",
+  "theme": "light",
+  "fixtureRowsRequested": 500,
+  "widths": [
+    375
+  ],
+  "routes": [
+    "/inventory/grn/create?po_id=layout-po-1"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/inventory/grn/create?po_id=layout-po-1",
+      "role": "admin",
+      "width": 375,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/inventory/grn/create?po_id=layout-po-1",
+      "role": "admin",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/after/inventory-receiving/states/line-items-500/light/create-375/inventory-grn-create-po-id-layout-po-1-375.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": null,
+      "inventoryDialogSamples": [],
+      "scheduleBottomSample": null,
+      "url": "/inventory/grn/create",
+      "title": "New GRN · Warehouse · ERP",
+      "h1": "New GRN",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "counts": {
+        "buttons": 1003,
+        "links": 1,
+        "inputs": 4504,
+        "tables": 1,
+        "rows": 500,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 0,
+        "right": 375,
+        "top": 48,
+        "bottom": 262089.9375,
+        "width": 375,
+        "height": 262041.9375
+      },
+      "mainContent": {
+        "textLength": 111695,
+        "textSample": "GRNs New GRN Reference Select PO… PO-202610-00001 — International Industrial Materials and Packaging Corporation Purchase order* Received date* Remarks Line ite",
+        "documentTables": 1,
+        "mainTables": 1
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 0,
+        "width": 0
+      },
+      "sidebarClearance": null,
+      "sidebarClearanceByBlock": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 16,
+          "right": 359,
+          "top": 48,
+          "bottom": 165,
+          "width": 343,
+          "height": 117
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "left": 33,
+          "right": 342,
+          "top": 576,
+          "bottom": 262012.9375,
+          "width": 309,
+          "height": 261436.9375
+        },
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas",
+          "heading": "New GRN",
+          "bounds": {
+            "left": 16,
+            "right": 359,
+            "top": 48,
+            "bottom": 165,
+            "width": 343,
+            "height": 117
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "0px",
+            "bottom": "16px",
+            "left": "0px"
+          },
+          "gapAfter": 24,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "min-w-0 space-y-4",
+          "heading": "Reference",
+          "bounds": {
+            "left": 16,
+            "right": 359,
+            "top": 189,
+            "bottom": 262089.9375,
+            "width": 343,
+            "height": 261900.9375
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "sections": [
+        {
+          "title": "Reference",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 16,
+            "right": 359,
+            "top": 189,
+            "bottom": 494,
+            "width": 343,
+            "height": 305
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "min-w-0 space-y-4",
+            "bounds": {
+              "left": 16,
+              "right": 359,
+              "top": 189,
+              "bottom": 262089.9375,
+              "width": 343,
+              "height": 261900.9375
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 33,
+              "right": 342,
+              "top": 239,
+              "bottom": 493,
+              "width": 341,
+              "height": 254
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 254,
+            "clientHeight": 254
+          }
+        },
+        {
+          "title": "Line items — PO PO-202610-00001",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 16,
+            "right": 359,
+            "top": 510,
+            "bottom": 262029.9375,
+            "width": 343,
+            "height": 261519.9375
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "min-w-0 space-y-4",
+            "bounds": {
+              "left": 16,
+              "right": 359,
+              "top": 189,
+              "bottom": 262089.9375,
+              "width": 343,
+              "height": 261900.9375
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 33,
+              "right": 342,
+              "top": 560,
+              "bottom": 262028.9375,
+              "width": 341,
+              "height": 261468.9375
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 261469,
+            "clientHeight": 261469
+          }
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "reference": "section-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-14",
+          "left": 0,
+          "right": 0,
+          "width": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "page-shell page-shell--grid",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [
+        {
+          "tag": "table",
+          "className": "w-full border-collapse text-sm min-w-max",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "thead",
+          "className": "",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "border-b border-default",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "th",
+          "className": "h-row-compact px-3 text-table-header text-secondary font-semibold select-none text-left",
+          "left": 1032,
+          "right": 1100,
+          "width": 68,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tbody",
+          "className": "",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "h-row-compact border-b border-subtle hover:bg-subtle transition-colors duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-accent aria-selected:-outline-offset-2 aria-selected:z-10 align-top",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "td",
+          "className": "px-3 py-1 align-middle text-sm text-right font-mono tabular-nums",
+          "left": 1032,
+          "right": 1100,
+          "width": 68,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "border-b border-subtle bg-subtle/40",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "td",
+          "className": "px-3 py-1 align-middle text-sm text-left",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "h-row-compact border-b border-subtle hover:bg-subtle transition-colors duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-accent aria-selected:-outline-offset-2 aria-selected:z-10 align-top",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "td",
+          "className": "px-3 py-1 align-middle text-sm text-right font-mono tabular-nums",
+          "left": 1032,
+          "right": 1100,
+          "width": 68,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "border-b border-subtle bg-subtle/40",
+          "left": 34,
+          "right": 1100,
+          "width": 1066,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        }
+      ],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 97,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "input",
+          "className": "flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none px-3 text-md",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "clip",
+          "overflowY": "clip",
+          "scrollWidth": 547,
+          "clientWidth": 246,
+          "scrollHeight": 44,
+          "clientHeight": 44,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 547,
+          "maxClientWidth": 246,
+          "maxScrollHeight": 44,
+          "maxClientHeight": 44
+        },
+        {
+          "tag": "div",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 827,
+          "clientWidth": 341,
+          "scrollHeight": 261518,
+          "clientHeight": 261518,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 827,
+          "maxClientWidth": 341,
+          "maxScrollHeight": 261518,
+          "maxClientHeight": 261518
+        },
+        {
+          "tag": "div",
+          "className": "p-4 sm:p-5",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 827,
+          "clientWidth": 341,
+          "scrollHeight": 261469,
+          "clientHeight": 261469,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 827,
+          "maxClientWidth": 341,
+          "maxScrollHeight": 261469,
+          "maxClientHeight": 261469
+        },
+        {
+          "tag": "div",
+          "className": "scroll-edge-frame min-w-0",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 811,
+          "clientWidth": 309,
+          "scrollHeight": 261437,
+          "clientHeight": 261437,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 811,
+          "maxClientWidth": 309,
+          "maxScrollHeight": 261437,
+          "maxClientHeight": 261437
+        },
+        {
+          "tag": "div",
+          "className": "overflow-x-auto rounded-md border border-default",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "scrollWidth": 1066,
+          "clientWidth": 307,
+          "scrollHeight": 261435,
+          "clientHeight": 261435,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 1066,
+          "maxClientWidth": 307,
+          "maxScrollHeight": 261435,
+          "maxClientHeight": 261435
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "scheduleScrollRegion": null,
+      "table": {
+        "density": "manual",
+        "scrollAffordance": {
+          "needed": true,
+          "left": false,
+          "right": true,
+          "keyboardFocusable": true,
+          "labelled": true
+        },
+        "textBelowMinimum": [],
+        "headerHeight": 36,
+        "rowHeight": {
+          "min": 53,
+          "max": 469.8,
+          "distinct": [
+            53,
+            469.8
+          ]
+        },
+        "cellPadding": {
+          "top": "4px",
+          "right": "12px",
+          "bottom": "4px",
+          "left": "12px"
+        },
+        "columns": [
+          {
+            "header": "Item",
+            "width": 401,
+            "share": 0.376,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Ordered",
+            "width": 78,
+            "share": 0.073,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Remaining",
+            "width": 95,
+            "share": 0.089,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Receive qty",
+            "width": 120,
+            "share": 0.113,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Unit cost",
+            "width": 104,
+            "share": 0.098,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Location",
+            "width": 200,
+            "share": 0.188,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "",
+            "width": 68,
+            "share": 0.064,
+            "headerAlign": "left",
+            "cellAlign": "right",
+            "sticky": false
+          }
+        ],
+        "stickyHeader": false,
+        "stickyProbe": {
+          "cssSticky": false,
+          "tested": false,
+          "sticksToScroller": null,
+          "topAfterScroll": null,
+          "scrollerTopAfterScroll": null
+        },
+        "semantics": {
+          "columnHeaders": 7,
+          "scopedColumnHeaders": 7,
+          "sortableHeaders": 0,
+          "keyboardFocusableRows": 0
+        },
+        "truncation": []
+      },
+      "typography": {
+        "samples": [
+          {
+            "tag": "a",
+            "className": "inline-flex min-h-11 items-center gap-1 text-caption text-muted hover:text-primary mb-1 xl:min-h-0",
+            "text": "GRNs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "GRNs"
+            ]
+          },
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "New GRN",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "New GRN"
+            ]
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Reference",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 2,
+            "examples": [
+              "Reference",
+              "Line items — PO PO-202610-00001"
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Purchase order*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 3003,
+            "examples": [
+              "Purchase order*",
+              "Received date*",
+              "Remarks"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-l border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.94902 0.929412 0.894118)",
+            "contrast": 5.12,
+            "count": 501,
+            "examples": []
+          },
+          {
+            "tag": "button",
+            "className": "flex h-full items-center",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 501,
+            "examples": []
+          },
+          {
+            "tag": "th",
+            "className": "h-row-compact px-3 text-table-header text-secondary font-semibold select-none text-left",
+            "text": "Item",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.62,
+            "count": 3,
+            "examples": [
+              "Item",
+              "Location"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "h-row-compact px-3 text-table-header text-secondary font-semibold select-none text-right",
+            "text": "Ordered",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.62,
+            "count": 4,
+            "examples": [
+              "Ordered",
+              "Remaining",
+              "Receive qty"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-1 align-middle text-sm text-left",
+            "text": "SKU-00001Receipt material 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1500,
+            "examples": [
+              "SKU-00001Receipt material 1",
+              "Select location…MW-RM-A-01-01",
+              "Received UOM (base)Lot numberSupplier lotExpiryMoisture %COA pathCOA verificatio"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted",
+            "text": "Receipt material 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 500,
+            "examples": [
+              "Receipt material 1",
+              "Long resin description for receiving form layout and wrap behavior",
+              "Receipt material 3"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-1 align-middle text-sm text-right font-mono tabular-nums",
+            "text": "25,000",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 2500,
+            "examples": [
+              "25,000",
+              "1,234.5000"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-danger-fg",
+            "text": "",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 500,
+            "examples": []
+          },
+          {
+            "tag": "input",
+            "className": "flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none text-muted cursor-not-allowed px-2 text-xs",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 500,
+            "examples": []
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted self-center",
+            "text": "COA verification is completed by Quality after receipt.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 500,
+            "examples": [
+              "COA verification is completed by Quality after receipt."
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Cancel",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Cancel"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Create GRN",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "contrast": 4.83,
+            "count": 1,
+            "examples": [
+              "Create GRN"
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|600|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|13|400|18.2px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|13|400|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Receipt material 1",
+            "count": 1000,
+            "examples": [
+              "Receipt material 1",
+              "COA verification is completed by Quality after receipt.",
+              "Long resin description for receiving form layout and wrap behavior"
+            ]
+          },
+          {
+            "tag": "input",
+            "size": 12,
+            "text": "",
+            "count": 500,
+            "examples": []
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Show Purchase order",
+          "width": 44,
+          "height": 44,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)",
+          "count": 501,
+          "examples": [
+            "Show Purchase order",
+            "Show Location"
+          ],
+          "minWidth": 44,
+          "maxWidth": 44,
+          "minHeight": 44,
+          "maxHeight": 44
+        },
+        {
+          "label": "Remove line",
+          "width": 44,
+          "height": 44,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 501,
+          "examples": [
+            "Remove line",
+            "Cancel"
+          ],
+          "minWidth": 44,
+          "maxWidth": 80,
+          "minHeight": 44,
+          "maxHeight": 44
+        },
+        {
+          "label": "Create GRN",
+          "width": 114,
+          "height": 44,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Create GRN"
+          ],
+          "minWidth": 114,
+          "maxWidth": 114,
+          "minHeight": 44,
+          "maxHeight": 44
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        }
+      ],
+      "buttonTargetsBelow44": [],
+      "controls": [
+        {
+          "label": "GRNs",
+          "width": 51,
+          "height": 44,
+          "count": 4506,
+          "examples": [
+            "GRNs",
+            "input",
+            "Receive quantity"
+          ],
+          "minWidth": 44,
+          "maxWidth": 1040,
+          "minHeight": 44,
+          "maxHeight": 44
+        }
+      ],
+      "controlsBelow44": [],
+      "scrollContextCount": 1
+    }
+  ]
+}

@@ -1,0 +1,1548 @@
+{
+  "generatedAt": "2026-10-27T12:15:54.882Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "admin",
+  "theme": "light",
+  "fixtureRowsRequested": 10,
+  "widths": [
+    375
+  ],
+  "routes": [
+    "/inventory/grn/layout-grn-detail"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/inventory/grn/layout-grn-detail",
+      "role": "admin",
+      "width": 375,
+      "score": 2,
+      "issues": [
+        "horizontally scrolling table lacks a visible keyboard-accessible affordance"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "route": "/inventory/grn/layout-grn-detail",
+      "role": "admin",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/before/inventory-receiving/dialogs/draft/light/inventory-grn-layout-grn-detail-375.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": null,
+      "inventoryDialogSamples": [
+        {
+          "label": "grn-finalize",
+          "screenshot": "docs/layout/screenshots/before/inventory-receiving/dialogs/draft/light/inventory-grn-layout-grn-detail-375-grn-finalize-dialog.png",
+          "visible": true,
+          "theme": "light",
+          "contrastFailures": 0
+        }
+      ],
+      "scheduleBottomSample": null,
+      "url": "/inventory/grn/layout-grn-detail",
+      "title": "GRN-202610-00001 · Warehouse · ERP",
+      "h1": "GRN-202610-00001",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 6,
+        "inputs": 41,
+        "tables": 1,
+        "rows": 10,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 0,
+        "right": 375,
+        "top": 48,
+        "bottom": 2894.984375,
+        "width": 375,
+        "height": 2846.984375
+      },
+      "mainContent": {
+        "textLength": 4519,
+        "textSample": "GRNs GRN-202610-00001 PO-202610-00001 · International Industrial Materials and Packaging Corporation Draft Procure-to-pay chain PR PO GRN Bill Paid Receipt deta",
+        "documentTables": 1,
+        "mainTables": 1
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 0,
+        "width": 0
+      },
+      "sidebarClearance": null,
+      "sidebarClearanceByBlock": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 20,
+          "right": 355,
+          "top": 48,
+          "bottom": 236.25,
+          "width": 375,
+          "height": 188.25
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "left": 37,
+          "right": 338,
+          "top": 1041.90625,
+          "bottom": 2091.390625,
+          "width": 301,
+          "height": 1049.484375
+        },
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "GRN-202610-00001",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 48,
+            "bottom": 236.25,
+            "width": 375,
+            "height": 188.25
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "px-5 py-4 space-y-4",
+          "heading": "Procure-to-pay chain",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 236.25,
+            "bottom": 2894.984375,
+            "width": 375,
+            "height": 2658.734375
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "sections": [
+        {
+          "title": "Procure-to-pay chain",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 252.25,
+            "bottom": 365.046875,
+            "width": 335,
+            "height": 112.796875
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "px-5 py-4 space-y-4",
+            "bounds": {
+              "left": 20,
+              "right": 355,
+              "top": 236.25,
+              "bottom": 2894.984375,
+              "width": 375,
+              "height": 2658.734375
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5 px-4 py-3",
+            "bounds": {
+              "left": 37,
+              "right": 338,
+              "top": 302.25,
+              "bottom": 364.046875,
+              "width": 333,
+              "height": 61.796875
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 62,
+            "clientHeight": 62
+          }
+        },
+        {
+          "title": "Receipt details",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 381.046875,
+            "bottom": 658.171875,
+            "width": 335,
+            "height": 277.125
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "px-5 py-4 space-y-4",
+            "bounds": {
+              "left": 20,
+              "right": 355,
+              "top": 236.25,
+              "bottom": 2894.984375,
+              "width": 375,
+              "height": 2658.734375
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 37,
+              "right": 338,
+              "top": 431.046875,
+              "bottom": 657.171875,
+              "width": 333,
+              "height": 226.125
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 226,
+            "clientHeight": 226
+          }
+        },
+        {
+          "title": "Record received goods",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 788.921875,
+            "bottom": 2217.765625,
+            "width": 335,
+            "height": 1428.84375
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]",
+            "bounds": {
+              "left": 20,
+              "right": 355,
+              "top": 788.921875,
+              "bottom": 2743.609375,
+              "width": 335,
+              "height": 1954.6875
+            },
+            "display": "grid",
+            "gridTemplateRows": "1428.84px 509.844px"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 37,
+              "right": 338,
+              "top": 838.921875,
+              "bottom": 2216.765625,
+              "width": 333,
+              "height": 1377.84375
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 1378,
+            "clientHeight": 1378
+          }
+        },
+        {
+          "title": "Dispatch versus receipt",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 2233.765625,
+            "bottom": 2642.421875,
+            "width": 335,
+            "height": 408.65625
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "space-y-4",
+            "bounds": {
+              "left": 20,
+              "right": 355,
+              "top": 2233.765625,
+              "bottom": 2743.609375,
+              "width": 335,
+              "height": 509.84375
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 37,
+              "right": 338,
+              "top": 2283.765625,
+              "bottom": 2641.421875,
+              "width": 333,
+              "height": 357.65625
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 358,
+            "clientHeight": 358
+          }
+        },
+        {
+          "title": "Supplier documents",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 2658.421875,
+            "bottom": 2743.609375,
+            "width": 335,
+            "height": 85.1875
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "space-y-4",
+            "bounds": {
+              "left": 20,
+              "right": 355,
+              "top": 2233.765625,
+              "bottom": 2743.609375,
+              "width": 335,
+              "height": 509.84375
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "",
+            "bounds": {
+              "left": 21,
+              "right": 354,
+              "top": 2708.421875,
+              "bottom": 2742.609375,
+              "width": 333,
+              "height": 34.1875
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 34,
+            "clientHeight": 34
+          }
+        },
+        {
+          "title": "Quality follow-up",
+          "className": "bg-canvas border border-default rounded-md overflow-hidden",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 2759.609375,
+            "bottom": 2878.984375,
+            "width": 335,
+            "height": 119.375
+          },
+          "display": "block",
+          "overflowY": "hidden",
+          "gridParent": {
+            "className": "px-5 py-4 space-y-4",
+            "bounds": {
+              "left": 20,
+              "right": 355,
+              "top": 236.25,
+              "bottom": 2894.984375,
+              "width": 375,
+              "height": 2658.734375
+            },
+            "display": "block",
+            "gridTemplateRows": "none"
+          },
+          "body": {
+            "className": "p-4 sm:p-5",
+            "bounds": {
+              "left": 37,
+              "right": 338,
+              "top": 2809.609375,
+              "bottom": 2877.984375,
+              "width": 333,
+              "height": 68.375
+            },
+            "display": "block",
+            "overflowY": "visible",
+            "scrollHeight": 68,
+            "clientHeight": 68
+          }
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "reference": "section-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-14",
+          "left": 0,
+          "right": 0,
+          "width": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [
+        {
+          "tag": "table",
+          "className": "w-full border-collapse text-sm min-w-[640px]",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "thead",
+          "className": "",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "border-b border-default",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "th",
+          "className": "h-row-compact px-2.5 text-caption uppercase tracking-wide text-muted font-medium select-none text-right",
+          "left": 527,
+          "right": 677,
+          "width": 150,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tbody",
+          "className": "",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "h-row-compact border-b border-subtle hover:bg-subtle transition-colors duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-accent aria-selected:-outline-offset-2 aria-selected:z-10",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "td",
+          "className": "px-2.5 py-1 align-middle text-sm text-right",
+          "left": 527,
+          "right": 677,
+          "width": 150,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "border-b border-subtle bg-subtle/40",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "td",
+          "className": "px-2.5 py-1 align-middle text-sm text-left",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "h-row-compact border-b border-subtle hover:bg-subtle transition-colors duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-accent aria-selected:-outline-offset-2 aria-selected:z-10",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "td",
+          "className": "px-2.5 py-1 align-middle text-sm text-right",
+          "left": 527,
+          "right": 677,
+          "width": 150,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        },
+        {
+          "tag": "tr",
+          "className": "border-b border-subtle bg-subtle/40",
+          "left": 37,
+          "right": 677,
+          "width": 640,
+          "overflowX": "visible",
+          "insideHorizontalScroll": true
+        }
+      ],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 97,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "overflow-x-auto",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "scrollWidth": 640,
+          "clientWidth": 301,
+          "scrollHeight": 1049,
+          "clientHeight": 1049,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 640,
+          "maxClientWidth": 301,
+          "maxScrollHeight": 1049,
+          "maxClientHeight": 1049
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "scheduleScrollRegion": null,
+      "table": {
+        "density": "manual",
+        "scrollAffordance": {
+          "needed": true,
+          "left": false,
+          "right": false,
+          "keyboardFocusable": true,
+          "labelled": true
+        },
+        "textBelowMinimum": [],
+        "headerHeight": 36,
+        "rowHeight": {
+          "min": 27.19,
+          "max": 154,
+          "distinct": [
+            65.23,
+            27.19,
+            154
+          ]
+        },
+        "cellPadding": {
+          "top": "4px",
+          "right": "10px",
+          "bottom": "4px",
+          "left": "10px"
+        },
+        "columns": [
+          {
+            "header": "Item",
+            "width": 153,
+            "share": 0.239,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Still due",
+            "width": 141,
+            "share": 0.22,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Storage bin",
+            "width": 196,
+            "share": 0.306,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Received now",
+            "width": 150,
+            "share": 0.234,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          }
+        ],
+        "stickyHeader": false,
+        "stickyProbe": {
+          "cssSticky": false,
+          "tested": false,
+          "sticksToScroller": null,
+          "topAfterScroll": null,
+          "scrollerTopAfterScroll": null
+        },
+        "semantics": {
+          "columnHeaders": 4,
+          "scopedColumnHeaders": 4,
+          "sortableHeaders": 0,
+          "keyboardFocusableRows": 0
+        },
+        "truncation": []
+      },
+      "typography": {
+        "samples": [
+          {
+            "tag": "a",
+            "className": "inline-flex min-h-11 items-center gap-1 text-caption text-muted hover:text-primary mb-1 xl:min-h-0",
+            "text": "GRNs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "GRNs"
+            ]
+          },
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "GRN-202610-00001",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "GRN-202610-00001"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "PO-202610-00001 · International Industrial Materials and Packaging Corporation",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "PO-202610-00001 · International Industrial Materials and Packaging Corporation"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium leading-tight whitespace-nowrap transition-colors duration-fast bg-subtle text-muted",
+            "text": "Draft",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.960784 0.945098 0.913725)",
+            "contrast": 5.3,
+            "count": 1,
+            "examples": [
+              "Draft"
+            ]
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Procure-to-pay chain",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 6,
+            "examples": [
+              "Procure-to-pay chain",
+              "Receipt details",
+              "Record received goods"
+            ]
+          },
+          {
+            "tag": "dt",
+            "className": "text-2xs uppercase tracking-wider text-muted",
+            "text": "PO",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 4,
+            "examples": [
+              "PO",
+              "Vendor",
+              "Received"
+            ]
+          },
+          {
+            "tag": "dd",
+            "className": "text-muted",
+            "text": "Awaiting goods",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Awaiting goods"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-muted",
+            "text": "When goods arrive, match their shipment, enter actual received quantities and bi",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "When goods arrive, match their shipment, enter actual received quantities and bi"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "mb-2 text-xs font-medium text-secondary",
+            "text": "Supplier shipment",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.62,
+            "count": 1,
+            "examples": [
+              "Supplier shipment"
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Supplier shipment*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 21,
+            "examples": [
+              "Supplier shipment*",
+              "Supplier lot / batch",
+              "Expiry date"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "p",
+            "className": "mt-2 text-xs text-muted",
+            "text": "Record only what physically arrived. If this is less than the supplier reported,",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 11,
+            "examples": [
+              "Record only what physically arrived. If this is less than the supplier reported,",
+              "Copy these from the item label when present. OGAMI creates its own lot number au"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "h-row-compact px-2.5 text-caption uppercase tracking-wide text-muted font-medium select-none text-left",
+            "text": "Item",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "0.325px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "Item",
+              "Storage bin"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "h-row-compact px-2.5 text-caption uppercase tracking-wide text-muted font-medium select-none text-right",
+            "text": "Still due",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "0.325px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "Still due",
+              "Received now"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-sm text-left",
+            "text": "SKU-00001Receipt material 1fallback QC",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 30,
+            "examples": [
+              "SKU-00001Receipt material 1fallback QC",
+              "Select bin…MW-RM-A-01-02 · 12,500 in stockMW-RM-A-01-03MW-RM-A-01-04MW-RM-A-01-0",
+              "Add supplier lot or expiry (optional)Copy these from the item label when present"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted",
+            "text": "Receipt material 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 10,
+            "examples": [
+              "Receipt material 1",
+              "Long resin description for receipt table sizing and line wrapping checks",
+              "Receipt material 3"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-sm text-right font-mono tabular-nums",
+            "text": "987,654,321.125 kg",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "987,654,321.125 kg"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 10,
+            "examples": []
+          },
+          {
+            "tag": "div",
+            "className": "mt-1 text-2xs text-muted",
+            "text": "Suggested from current stock",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 10,
+            "examples": [
+              "Suggested from current stock"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-sm text-right",
+            "text": "kg",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "kg"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "mt-0.5 text-2xs text-muted",
+            "text": "kg",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 10,
+            "examples": [
+              "kg"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-sm text-secondary",
+            "text": "Wait for a supplier shipment, or select the shipment that arrived.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.62,
+            "count": 1,
+            "examples": [
+              "Wait for a supplier shipment, or select the shipment that arrived."
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Finalize receiving",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "contrast": 4.83,
+            "count": 1,
+            "examples": [
+              "Finalize receiving"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "mb-2 text-xs text-muted",
+            "text": "Supplier quantities are declarations. Warehouse receipt records the actual arriv",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Supplier quantities are declarations. Warehouse receipt records the actual arriv"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "px-3 py-2 text-sm text-muted",
+            "text": "No documents uploaded by the supplier.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "No documents uploaded by the supplier."
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-sm text-warning-fg",
+            "text": "RAW-MATERIAL-REFERENCE-000000000000001: 12.5 held · NCR-202610-0001",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.478431 0.32549 0.0784314)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.66,
+            "count": 1,
+            "examples": [
+              "RAW-MATERIAL-REFERENCE-000000000000001: 12.5 held · NCR-202610-0001"
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|16.25px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|0.6px|uppercase",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|500|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|0.325px|uppercase",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|13|400|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "dt",
+            "size": 12,
+            "text": "PO",
+            "count": 4,
+            "examples": [
+              "PO",
+              "Vendor",
+              "Received"
+            ]
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Supplier shipment",
+            "count": 13,
+            "examples": [
+              "Supplier shipment",
+              "Record only what physically arrived. If this is less than the supplier reported,",
+              "Copy these from the item label when present. OGAMI creates its own lot number au"
+            ]
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Receipt material 1",
+            "count": 30,
+            "examples": [
+              "Receipt material 1",
+              "Suggested from current stock",
+              "kg"
+            ]
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Finalize receiving",
+          "width": 301,
+          "height": 28,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Finalize receiving"
+          ],
+          "minWidth": 301,
+          "maxWidth": 301,
+          "minHeight": 28,
+          "maxHeight": 28
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Finalize receiving",
+          "width": 301,
+          "height": 28,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Finalize receiving"
+          ],
+          "minWidth": 301,
+          "maxWidth": 301,
+          "minHeight": 28,
+          "maxHeight": 28
+        }
+      ],
+      "controls": [
+        {
+          "label": "GRNs",
+          "width": 51,
+          "height": 44,
+          "count": 1,
+          "examples": [
+            "GRNs"
+          ],
+          "minWidth": 51,
+          "maxWidth": 51,
+          "minHeight": 44,
+          "maxHeight": 44
+        },
+        {
+          "label": "PR-202610-00001",
+          "width": 20,
+          "height": 38,
+          "count": 3,
+          "examples": [
+            "PR-202610-00001",
+            "PO-202610-00001",
+            "GRN"
+          ],
+          "minWidth": 20,
+          "maxWidth": 30,
+          "minHeight": 38,
+          "maxHeight": 38
+        },
+        {
+          "label": "PO-202610-00001",
+          "width": 120,
+          "height": 16,
+          "count": 54,
+          "examples": [
+            "PO-202610-00001",
+            "Select the shipment that arrived…TRACKING-REFERENCE-000000000001 · Oct 26, 2026 · SKU-00001: 25,000 kg dispatchedTRACKING-REFERENCE-000000000002 · Oct 26, 2026 · SKU-00001: 12,500 kg dispatched",
+            "Bin SKU-00001"
+          ],
+          "minWidth": 111,
+          "maxWidth": 620,
+          "minHeight": 15,
+          "maxHeight": 30
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "PR-202610-00001",
+          "width": 20,
+          "height": 38,
+          "count": 3,
+          "examples": [
+            "PR-202610-00001",
+            "PO-202610-00001",
+            "GRN"
+          ],
+          "minWidth": 20,
+          "maxWidth": 30,
+          "minHeight": 38,
+          "maxHeight": 38
+        },
+        {
+          "label": "PO-202610-00001",
+          "width": 120,
+          "height": 16,
+          "count": 54,
+          "examples": [
+            "PO-202610-00001",
+            "Select the shipment that arrived…TRACKING-REFERENCE-000000000001 · Oct 26, 2026 · SKU-00001: 25,000 kg dispatchedTRACKING-REFERENCE-000000000002 · Oct 26, 2026 · SKU-00001: 12,500 kg dispatched",
+            "Bin SKU-00001"
+          ],
+          "minWidth": 111,
+          "maxWidth": 620,
+          "minHeight": 15,
+          "maxHeight": 30
+        }
+      ],
+      "scrollContextCount": 1
+    }
+  ]
+}
