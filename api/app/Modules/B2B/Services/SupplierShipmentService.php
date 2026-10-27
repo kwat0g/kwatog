@@ -17,6 +17,7 @@ use App\Modules\B2B\Policies\SupplierPoCapabilities;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -267,16 +268,22 @@ class SupplierShipmentService
         $deadline = SupplierPoCapabilities::shipmentDeadline($shipment);
         $eta = $shipment->estimated_arrival?->toDateString();
         if ($deadline && $eta && $eta > $deadline->toDateString()) {
-            $audience = User::query()->where('is_active', true)
-                ->whereHas('role.permissions', static fn ($query) => $query->where('slug', 'purchasing.delivery_schedules.review'))
-                ->get();
+            $poAccess = app(PurchaseOrderAccessPolicy::class);
+            $audience = $this->notifications->usersWithPermission('purchasing.delivery_schedules.review')
+                ->reject(static fn (User $user): bool => $user->role?->slug === 'system_admin')
+                ->filter(fn (User $user): bool => ($user->hasPermission('purchasing.view') || $user->hasPermission('purchasing.po.approve'))
+                    && $poAccess->canView($user, $purchaseOrder))
+                ->values();
+            $recipientReasons = $audience->mapWithKeys(static fn (User $user): array => [
+                $user->id => 'purchasing_delivery_schedule_reviewer',
+            ])->all();
             $this->notifications->sendInApp($audience, 'supplier.shipment_late', [
                 'title' => "PO {$purchaseOrder->po_number}: supplier ETA is late",
                 'message' => "Supplier ETA {$eta} is after the required delivery date {$deadline->toDateString()}.",
                 'link_to' => "/purchasing/purchase-orders/{$purchaseOrder->hash_id}",
                 'entity_type' => 'purchase_order',
                 'entity_id' => $purchaseOrder->hash_id,
-            ], "supplier:shipment:late:{$shipment->id}:{$eta}");
+            ], "supplier:shipment:late:{$shipment->id}:{$eta}", $recipientReasons);
         }
 
         return $shipment;
