@@ -345,7 +345,7 @@ The supplied route table includes destinations with no existing badge. Candidate
 
 | Module | Notification types/triggers found | Sidebar item / current badge keys | Coverage note |
 | --- | --- | --- | --- |
-| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Budget Transfers `pending_transfers`; Statements/vendors no count | Candidate AR/AP states exceed current signals. Phase 2's combined budget approval signal remains incomplete. |
+| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Budget Transfers `pending_transfers`; Statements/vendors no count | PR #374 replaces the raw submitted-budget count with the same maker-checker scope and filtered queue as the budget list; PR #367 covers transfers separately. Candidate AR/AP states exceed current signals. |
 | Admin | Permission override, account provisioning, mail failure, backup/queue/system paths | Users, roles, audit, settings, sessions, backups, gov tables; no sidebar counts | System-health notices need admin-only destinations and permissions. |
 | Assets | No `NotificationService` call identified | Fixed Assets; no badge | Asset transfer/disposal state exists; candidate only if actionable list is reliable. |
 | Attendance | Missing timeout, overtime submitted/decided | Attendance no count; Overtime `overtime` | Own exception vs approver action must be separated. |

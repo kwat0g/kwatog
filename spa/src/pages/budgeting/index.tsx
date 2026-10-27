@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { usePermission } from '@/hooks/usePermission';
@@ -22,6 +22,8 @@ export default function BudgetOverviewPage() {
   const { can } = usePermission();
   const canManage = can('budgeting.manage');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const awaitingMyApproval = searchParams.get('signal') === 'awaiting_my_approval';
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedFiscalYearId, setSelectedFiscalYearId] = useState('');
   const [page, setPage] = useState(1);
@@ -48,10 +50,11 @@ export default function BudgetOverviewPage() {
   const { data: overview, isLoading: overviewLoading, error } = overviewQuery;
 
   const budgetListQuery = useQuery({
-    queryKey: ['budgets', selectedFiscalYearId, selectedStatus, page, perPage],
+    queryKey: ['budgets', selectedFiscalYearId, selectedStatus, awaitingMyApproval, page, perPage],
     queryFn: () => budgetingApi.list({
-      fiscal_year_id: selectedFiscalYearId,
-      status: selectedStatus || undefined,
+      ...(awaitingMyApproval
+        ? { signal: 'awaiting_my_approval' }
+        : { fiscal_year_id: selectedFiscalYearId, status: selectedStatus || undefined }),
       page,
       per_page: perPage,
     }),
@@ -63,7 +66,7 @@ export default function BudgetOverviewPage() {
     queryFn: () => budgetingApi.options(),
   });
 
-  useEffect(() => setPage(1), [selectedFiscalYearId, selectedStatus, perPage]);
+  useEffect(() => setPage(1), [selectedFiscalYearId, selectedStatus, awaitingMyApproval, perPage]);
 
   if (fiscalYearsQuery.isLoading || overviewLoading) {
     return (
@@ -191,16 +194,22 @@ export default function BudgetOverviewPage() {
         </Panel>
       )}
 
-      <Panel title="Budgets" meta={<SegmentedControl size="sm" label="Budget status" value={selectedStatus} onChange={setSelectedStatus} options={[{ value: '', label: 'All' }, ...(budgetOptions?.statuses ?? [])]} />}>
+      <Panel
+        title={awaitingMyApproval ? 'Budgets awaiting your approval' : 'Budgets'}
+        meta={awaitingMyApproval
+          ? <Button variant="secondary" size="sm" onClick={() => setSearchParams({})}>Show all budgets</Button>
+          : <SegmentedControl size="sm" label="Budget status" value={selectedStatus} onChange={setSelectedStatus} options={[{ value: '', label: 'All' }, ...(budgetOptions?.statuses ?? [])]} />}
+      >
         {budgetListQuery.data && budgetListQuery.data.data.length > 0 ? (
           <>
             <div className="overflow-x-auto">
               <table className={tableCls}>
-                <thead><tr className={theadTrCls}><Th>Name</Th><Th>Type</Th><Th align="right">Allocated</Th><Th align="right">Spent</Th><Th align="right">Available</Th><Th align="center">%</Th><Th align="center">Status</Th></tr></thead>
+                <thead><tr className={theadTrCls}><Th>Name</Th>{awaitingMyApproval && <Th>Fiscal year</Th>}<Th>Type</Th><Th align="right">Allocated</Th><Th align="right">Spent</Th><Th align="right">Available</Th><Th align="center">%</Th><Th align="center">Status</Th></tr></thead>
                 <tbody>
                   {budgetListQuery.data.data.map((budget) => (
                     <tr key={budget.id} className={cn(trCls, 'cursor-pointer')} onClick={() => navigate(`/budgeting/${budget.id}`)}>
                       <Td><Link to={`/budgeting/${budget.id}`} onClick={(event) => event.stopPropagation()} className="font-medium hover:text-accent transition-colors">{budget.name}</Link>{budget.department && <span className="ml-2 text-xs text-muted">{budget.department.name}</span>}</Td>
+                      {awaitingMyApproval && <Td>{budget.fiscal_year?.year ?? '—'}</Td>}
                       <Td><Chip variant="neutral">{budget.budget_type}</Chip></Td>
                       <Td align="right" mono>{formatCompactCurrency(budget.total_allocated, 1_000, 'K')}</Td>
                       <Td align="right" mono>{formatCompactCurrency(budget.total_spent, 1_000, 'K')}</Td>

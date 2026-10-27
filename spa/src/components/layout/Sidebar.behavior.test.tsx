@@ -104,6 +104,8 @@ it('opens overdue bills when the AP badge is positive', () => {
       <Sidebar roleSlug="finance_officer" />
     </MemoryRouter>,
   );
+  const financeSection = screen.getByRole('button', { name: /^Finance/ });
+  if (financeSection.getAttribute('aria-expanded') === 'false') fireEvent.click(financeSection);
   expect(screen.getByRole('link', { name: /Accounts Payable Bills/ })).toHaveAttribute(
     'href',
     '/accounting/bills?overdue=1',
@@ -181,6 +183,28 @@ it('opens the actionable pending-transfer list when transfers have a positive ba
   expect(screen.getByRole('link', { name: /Budget Transfers/ })).toHaveAttribute(
     'href',
     '/budgeting/transfers?status=pending&actionable=1',
+  );
+});
+
+it('opens budgets filtered to approvals waiting on the current user', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_budgets'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Budgets',
+          description: 'Budgets awaiting your approval',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/budgeting']}>
+      <Sidebar roleSlug="vice_president" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Budgeting/ })).toHaveAttribute(
+    'href',
+    '/budgeting?signal=awaiting_my_approval',
   );
 });
 
