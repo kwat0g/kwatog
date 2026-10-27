@@ -15,8 +15,10 @@ use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
+use App\Modules\HR\Services\SeparationService;
 use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
@@ -49,7 +51,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -82,6 +84,11 @@ final class NotificationSubjectAccessRegistry
                 && $subject instanceof ReturnRequest
                 && ! (ReturnManagementAccess::customerReturnsOnly($user) && $subject->type === ReturnRequestType::SupplierReturn),
             EmployeeTraining::class => self::userCanViewEmployeeTraining($user, $subject),
+            Clearance::class => app(SettingsService::class)->get('modules.hr', false) === true
+                && $user->is_active
+                && $user->hasPermission('hr.separation.view')
+                && $subject instanceof Clearance
+                && app(SeparationService::class)->canView($subject, $user),
             PayrollPeriod::class => app(SettingsService::class)->get('modules.payroll', false) === true
                 && $user->is_active
                 && $user->hasPermission('payroll.periods.view')

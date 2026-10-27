@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -49,6 +50,8 @@ class SeparationNotificationAudienceTest extends TestCase
 
         $notice = $allowed->notifications()->where('type', 'chain.separation_initiated')->firstOrFail();
         $this->assertSame("/hr/separations/{$clearance->hash_id}", $notice->data['link_to']);
+        $this->assertSame(Clearance::class, $notice->data['subject_type']);
+        $this->assertSame((string) $clearance->id, $notice->data['subject_id']);
         $this->assertSame(0, $revoked->notifications()->where('type', 'chain.separation_initiated')->count());
         $this->actingAs($allowed)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertOk();
         $this->actingAs($revoked)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertForbidden();
@@ -74,6 +77,10 @@ class SeparationNotificationAudienceTest extends TestCase
         $this->assertSame(0, $outOfScope->notifications()->where('type', 'chain.separation_initiated')->count());
         $this->actingAs($allowed)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertOk();
         $this->actingAs($outOfScope)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertNotFound();
+
+        app(NotificationService::class)->sendForSubject($clearance, [$allowed, $outOfScope], 'test.clearance_subject_access', ['title' => 'Review separation'], emailEnabled: false);
+        $this->assertSame(1, $allowed->notifications()->where('type', 'test.clearance_subject_access')->count());
+        $this->assertSame(0, $outOfScope->notifications()->where('type', 'test.clearance_subject_access')->count());
     }
 
     private function departmentHead(Department $department): User

@@ -35,7 +35,7 @@ class NotifyOnSeparationInitiated implements ShouldQueue
                     && $this->separations->canView($clearance, $user))
                 ->values();
 
-            $this->notifications->send($audience, 'chain.separation_initiated', [
+            $this->notifications->sendForSubject($clearance, $audience, 'chain.separation_initiated', [
                 'title'       => 'Separation Initiated',
                 'message'     => "Separation initiated for {$clearance->employee?->full_name}.",
                 'link_to'     => "/hr/separations/{$clearance->hash_id}",
