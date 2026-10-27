@@ -306,7 +306,7 @@ Local aggregate rows include `chain.payslip_ready` (526 rows, many users with em
 
 ## Sidebar audit and badge parity status
 
-The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus current implementation deltas. All 49 current backend definitions are enumerated there. The Phase 0 baseline had 22 attached keys and seven unattached definitions; PR #342 attached `inquiries`, PR #367 attached `pending_transfers`, replacement PR #490 attached `mrb_holds`, PR #386 added `shipments`, PR #388 adds three Work Order signals, PR #409 adds the two employee-training signals, PR #511 adds the Supplier Listings pending-review badge, PR #513 adds the Fleet maintenance signal, and this unit adds missing-time-out. Only informational `open_postings` remains unattached.
+The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus current implementation deltas. All 49 current backend definitions are enumerated there. The Phase 0 baseline had 22 attached keys and seven unattached definitions; PR #342 attached `inquiries`, PR #367 attached `pending_transfers`, replacement PR #490 attached `mrb_holds`, PR #386 added `shipments`, PR #388 adds three Work Order signals, PR #409 adds the two employee-training signals, PR #511 adds the Supplier Listings pending-review badge, PR #513 adds the Fleet maintenance signal, and PR #517 adds missing-time-out. Only informational `open_postings` remains unattached.
 
 | Current implementation delta | Gate and count | Destination and parity | Coverage |
 | --- | --- | --- | --- |
