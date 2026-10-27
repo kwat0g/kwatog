@@ -19,8 +19,12 @@ class MrpRunService
         if (! empty($filters['triggered_by'])) {
             $q->where('triggered_by', $filters['triggered_by']);
         }
+        if (isset($filters['run']) && is_string($filters['run'])) {
+            $q->whereHash($filters['run']);
+        }
 
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
+
         return $q->orderByDesc('run_at')->paginate($perPage);
     }
 
