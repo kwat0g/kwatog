@@ -19,6 +19,7 @@ use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobApplication;
+use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Services\SeparationService;
 use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -52,7 +53,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -96,6 +97,11 @@ final class NotificationSubjectAccessRegistry
                 && $user->is_active
                 && $user->hasPermission('hr.recruitment.view')
                 && $subject instanceof JobApplication,
+            JobPosting::class => app(SettingsService::class)->get('modules.hr', false) === true
+                && app(SettingsService::class)->get('modules.recruitment', false) === true
+                && $user->is_active
+                && $user->hasPermission('hr.recruitment.view')
+                && $subject instanceof JobPosting,
             PayrollPeriod::class => app(SettingsService::class)->get('modules.payroll', false) === true
                 && $user->is_active
                 && $user->hasPermission('payroll.periods.view')
