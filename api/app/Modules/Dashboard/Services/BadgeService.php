@@ -37,6 +37,7 @@ use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Enums\CalibrationStatus;
@@ -84,6 +85,7 @@ class BadgeService
         'purchase_requests' => 'purchasing',
         'overdue_purchase_orders' => 'purchasing',
         'purchase_order_actions' => 'purchasing',
+        'supplier_listings_pending' => 'purchasing',
         'leaves' => 'leave',
         'overtime' => 'attendance',
         'maintenance_wo' => 'maintenance',
@@ -272,6 +274,15 @@ class BadgeService
                 'counter'     => fn (): int => $user->hasPermission('purchasing.pr.approve')
                     ? app(PurchaseRequestAccessPolicy::class)->pendingApprovalsFor($user)->count()
                     : 0,
+            ],
+
+            'supplier_listings_pending' => [
+                'permissions' => [],
+                'approval_permissions' => ['purchasing.supplier_listings.review'],
+                'required_permissions' => ['purchasing.supplier_listings.view'],
+                'label' => 'Pending review',
+                'description' => 'Supplier listings awaiting review',
+                'counter' => fn (): int => SupplierItemListing::query()->pending()->count(),
             ],
 
             'overdue_purchase_orders' => [
@@ -548,7 +559,8 @@ class BadgeService
 
             // Warehouse > Receiving — goods receipts waiting on QC acceptance.
             'pending_grn' => [
-                'permissions' => ['inventory.view'],
+                'permissions' => ['inventory.grn.create'],
+                'required_permissions' => ['inventory.view'],
                 'label'       => 'Receiving (GRN)',
                 'description' => 'Goods receipts awaiting QC',
                 'counter'     => fn (): int => GoodsReceiptNote::query()->pendingQc()->count(),

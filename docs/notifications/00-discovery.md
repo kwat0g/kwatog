@@ -310,7 +310,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/purchasing/purchase-requests` | `Purchase Requests` | `purchasing.view` | `purchasing` | `purchase_requests` |
 | `/purchasing/rfqs` | `Supplier RFQs` | `purchasing.rfq.view` | `purchasing` | — |
 | `/purchasing/approved-suppliers` | `Approved Suppliers` | `purchasing.po.create` | `purchasing` | — |
-| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.review` | `purchasing` | — |
+| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.view` | `purchasing` | `supplier_listings_pending` |
 | `/inventory/items` | `Inventory Items` | `inventory.view` | `inventory` | `low_stock` |
 | `/inventory/uoms` | `Units of Measure` | `inventory.items.manage` | `inventory` | — |
 | `/inventory/grn` | `Goods Receipts (GRN)` | `inventory.view` | `inventory` | `pending_grn` |
@@ -393,11 +393,11 @@ The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirm
 
 **Other navigation shells:** employee self-service bottom bar: `/self-service` (always), `/self-service/work-orders` (production feature), `/self-service/dtr` (attendance feature), `/self-service/leave` (leave feature), `/self-service/payslips` (payroll feature plus `payroll.view`), `/self-service/me` (always). Factory floor: `/factory`, `/factory/qc`. Maintenance mobile: `/maintenance/mobile`. These use no numeric badges.
 
-### Existing badge definitions
+### Badge definitions at the discovery baseline
 
-The 32 backend keys and their current meanings are defined in `api/app/Modules/Dashboard/Services/BadgeService.php`:
+The discovery snapshot contained 32 backend keys. Current `BadgeService` defines 47 keys; the 15 later keys are listed after this baseline table.
 
-| Key | Current count definition |
+| Key | Count definition captured at discovery |
 | --- | --- |
 | `approvals` | `ApprovalRecord` current/pending rows for the user's role or active delegated roles; no source-record scope filter here. |
 | `action_center` | `ActionCenterService::for($user)['summary']['total']`. |
@@ -432,11 +432,31 @@ The 32 backend keys and their current meanings are defined in `api/app/Modules/D
 | `pending_budgets` | Budgets with status `submitted`. |
 | `pending_transfers` | Phase 0 baseline counted all transfers with status `pending`; current scope counts pending transfers the user can approve under the direct/delegated maker-checker rule. |
 
+### Current definitions added after the discovery snapshot
+
+| Key | Current count definition |
+| --- | --- |
+| `overdue_purchase_orders` | Visible receivable purchase orders with expected delivery date before Manila today and at least one line with quantity remaining. `PurchaseOrderAccessPolicy` applies route visibility. |
+| `purchase_order_actions` | Purchase orders visible to the user and currently actionable by them: current approval step, an approved order they can send, or a pending supplier response they can resolve. |
+| `supplier_listings_pending` | `SupplierItemListing::pending()` shared reviewer queue; requires list-view access and direct or active delegated review permission. No per-reviewer assignment exists. |
+| `maintenance_wo_unassigned` | Open/assigned/in-progress Maintenance work orders with no assignee; requires Maintenance view and assignment permission. |
+| `out_of_stock` | Active Items with usable quantity at or below zero, from `InventoryDashboardService`; positive counts use critical severity. |
+| `overdue_ncrs` | Open/in-progress NCRs at or beyond the shared severity SLA from `NcrSlaService::overdueQuery()`. |
+| `calibration_overdue` | Calibration records with stored status `overdue`; positive counts use critical severity. |
+| `calibration_due` | Calibration records with stored status `due`, recomputed by the daily due-status command. |
+| `effectiveness_due` | Current user's corrective/preventive actions on closed NCRs, pending verification or ineffective, with a next check due by today plus the configured warning window. |
+| `inspection_reviews` | Inspections returned by `Inspection::awaitingReviewBy(current user)`; requires list and review permissions and excludes the inspector/result authors. |
+| `unpaid_invoices` | Open invoices with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
+| `overdue_invoices` | Unpaid invoices with due date before today in `Asia/Manila`; date-only boundary. |
+| `payment_review_invoices` | Open positive-balance invoices with a pending customer payment submission; requires invoice view and collection permission, and excludes `system_admin`. |
+| `unpaid_bills` | Open bills with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
+| `due_soon_bills` | Unpaid/partial bills with positive balance due today through three calendar days ahead, inclusive. |
+
 ## Candidate signal data discovery
 
-Status enums and due/state columns exist across the modules below. The candidate definitions are not approved policy; they are the proposed data-backed review set. Exact excluded/terminal status classification must be locked against each enum and destination list during Phase 2/implementation.
+Status enums and due/state columns exist across the modules below. Phase 2 approved the proposed defaults; implementation records candidates that remain deferred where status, audience, or destination filters are unverified.
 
-| Module | Relevant data found | Candidate signals to evaluate | Current sidebar badge |
+| Module | Relevant data found | Candidate signals to evaluate | Sidebar badge at discovery snapshot |
 | --- | --- | --- | --- |
 | Accounting | Invoice, bill, payment, journal, credit-note, and accounting-period status enums; due dates and payment submission rows | AR unpaid/partial/overdue/due soon; AP unpaid/partial/overdue; submitted payment review; draft/unposted invoice; unreconciled or failed posting; period close/reopen | Draft invoice, overdue bills |
 | Admin | Active/locked users, permission overrides, audit, backup operations, queue/failed-job health | Locked accounts; pending/expired invites; failed jobs, queue wait, backup failure; expiring system credential/certificate if stored | None |
@@ -449,16 +469,16 @@ Status enums and due/state columns exist across the modules below. The candidate
 | DSS | Recommendation status/severity, snooze and outcome fields | Open critical/high-confidence recommendation assigned to the user's eligible audience; no publisher currently wired | Decision Center has no count |
 | Forecasting | Forecasting module exists; no sidebar badge or status enum was found in the status-enum scan | Stale forecast run or decision awaiting owner, only if a reliable freshness/status field and destination filter exist | None |
 | HR | Employee, training, job, profile update, salary adjustment, clearance, training matrix and review statuses | Training/cert expiry; recruitment queue/bottleneck; profile/salary change approval; separation clearance tasks; contract/regularization if a reliable end date exists | Payroll-side profile requests only (currently attached to Employees item); no training/recruitment badge |
-| Inventory | Stock level, item reorder, GRN, MRB, reservations, stock adjustment/count, transfer, material issue, cost review statuses | Low/out of stock; material shortage/reservation block; GRN incoming QC; MRB disposition; stock-count/adjustment approval; receipt awaiting inspection. Putaway is deferred: no putaway status, stage, or remaining quantity exists. | Low stock, pending GRN |
+| Inventory | Stock level, item reorder, GRN, MRB, reservations, stock adjustment/count, transfer, material issue, cost review statuses | Low/out of stock; material shortage/reservation block; GRN incoming QC; MRB disposition; stock-count/adjustment approval; receipt awaiting inspection. Putaway is deferred: no putaway status, stage, or remaining quantity exists. The pending-GRN badge is limited to `inventory.view` + `inventory.grn.create`; QC action is represented by the separate Quality inspection queue. | Low stock, pending GRN |
 | Landing | Contact inquiry and newsletter statuses | New/untriaged contact inquiry; newsletter failures only if actionable internal owner exists | None |
 | Leave | `LeaveRequestStatus`: `pending_dept`, `pending_hr`, `approved`, `rejected`, `cancelled`; no `returned` state found | Pending current department or HR approval; rejected outcome only for requester if policy wants a history signal; no deadline field confirmed | Leaves |
 | Loans | Loan and write-off statuses; employee-linked request ownership | Pending current loan/write-off approval; requester outcome; repayment exception only with actionable data | None |
-| Maintenance | Maintenance work-order statuses, preventive maintenance generation and machine breakdown events; PM schedules use calendar days, machine running hours, or mold shots | Unassigned work orders; open breakdown; PM due/overdue; part request handoff; maintenance SLA. PM generation uses distinct day, runtime, and shot queries; the schedule list has no due-signal filter. | Open maintenance WOs |
+| Maintenance | Maintenance work-order statuses, preventive maintenance generation and machine breakdown events; PM schedules use calendar days, machine running hours, or mold shots | Unassigned work orders; open breakdown; PM due/overdue; part request handoff; maintenance SLA. Generation checks day, runtime, and shot intervals separately. The `overdue_preventive` queue and DSS detector use only linked schedule `next_due_at`, while the dashboard due-schedules widget counts active dates through its horizon without excluding generated work orders. The work-order schema has no general due date or waiting-parts state. | Open maintenance WOs |
 | MRP | Run/plan, machine and mold statuses; shortage count and shot limits | Active shortage; failed/stale run; machine down/shot limit; plan needs review | Active shortage plans |
 | Payroll | Period, adjustment, bank file, GL handoff statuses and restricted payroll scopes; payslip email status also persists `failed` | Pending my approval/review; `manual_required` bank/GL handoff; failed payslip email for the affected employee; no `failed` value exists in bank/GL enums; never a broad HR/finance payroll count | Draft/processing periods |
 | Production | Work-order, schedule, operation, late-report and receipt handoff statuses; planned start/end | Planned confirmation; overdue/starting soon; paused; missing output confirmation; material block; staffing assignment change | Four Work Order signals: awaiting confirmation, overdue, due soon, and paused. No site/line/assignee filter exists. PR #389 aligns SPA/sidebar gates and overdue/due-soon badge gates with the API parent permission. Seeded-role and override cases have focused tests. |
 | Purchasing | PR/PO, RFQ, supplier response/listing/dispatch statuses; approval records | Pending current approval; supplier response/quote due; unfulfilled/late PO; auto-PO review; supplier listing review; inbound receipt and failed conversion | PR approvals only |
-| Quality | Inspection, NCR, effectiveness, calibration, PPAP statuses and due dates | Inspection awaiting completion/review; rejected lot; open/overdue NCR/CAPA/effectiveness; calibration due/expired; customer complaint response SLA | Pending inspections, open NCRs |
+| Quality | Inspection, NCR, effectiveness, calibration, PPAP statuses and due dates | Inspection awaiting completion/review; held MRB material; open/overdue NCR/CAPA/effectiveness; calibration due/expired; customer complaint response SLA. No aggregate rejected-lot state or list filter exists; traceability is a point search. | Pending inspections, open NCRs |
 | ReturnManagement | Return request/case, inspection handoff, restock and supplier-return state | Open customer/supplier return needing current owner; overdue inspection/credit; rejected/returned outcome for requester; only fields supported by current return implementation | Pending returns |
 | SupplyChain | Delivery, shipment, vehicle and delivery handoff statuses; delivery date/attempts | Delivery planned/late/in transit/awaiting customer acknowledgement; failed delivery/depot count; shipment clearance/receipt; vehicle issue | Loading/in-transit deliveries |
 
