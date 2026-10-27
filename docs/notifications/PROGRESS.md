@@ -428,6 +428,13 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Original-head API `LeaveApprovalBadgeParityTest`, `LeaveRequestVisibilityTest`, and `LeaveRequestHardeningTest`: **34 passed / 160 assertions**. Original-head SPA leave list/detail and approval-history tests: **7 passed**. After rebase, the same SPA tests passed **7**, targeted ESLint and PHP 8.3 syntax checks passed, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`.
 - F-44 remains an unconfirmed business-policy question about delegates approving their delegator's own leave submission.
 
+## Central dispatch boundary (draft PR #397)
+
+- `NotificationService::notify()` had no repository callers; Ncr and Maintenance already use `send()`. The unused wrapper is removed without changing event timing or direct `Mail::to(...)` paths.
+- `NotificationCatalogTest` guards native Laravel dispatch outside the central service, ensures the wrapper does not return, checks mail-only channels, and inventories object-level `->notify()` calls for review.
+- The earlier HR password-reset signature report was stale against current `main`: PR #371 already fully qualifies `\Throwable`. No HR finding is opened by this PR.
+- The original-head test passed **9 tests / 74 assertions**. Post-rebase PHP 8.3 syntax and `git diff --check` pass. The API test was not rerun against shared `ogami_test`; no database was accessed.
+
 ## Outstanding proof / risks
 
 1. HR/Finance must configure the payroll-adjustment checker. Review remaining HR/discipline, finance escalation, system-admin fanout, and portal contacts before broadening recipients.
@@ -440,11 +447,3 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 ## Resume instruction
 
 Continue Phase 3 from `02-policy-and-plan.md`, starting with remaining central-service work. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
-
-
-## Central dispatch boundary (draft PR #397)
-
-- `NotificationService::notify()` had no repository callers; Ncr and Maintenance already use `send()`. The unused wrapper is removed without changing event timing or direct `Mail::to(...)` paths.
-- `NotificationCatalogTest` guards native Laravel dispatch outside the central service, ensures the wrapper does not return, checks mail-only channels, and inventories object-level `->notify()` calls for review.
-- The earlier HR password-reset signature report was stale against current `main`: PR #371 already fully qualifies `\Throwable`. No HR finding is opened by this PR.
-- The original-head test passed **9 tests / 74 assertions**. Post-rebase PHP 8.3 syntax and `git diff --check` pass. The API test was not rerun against shared `ogami_test`; no database was accessed.

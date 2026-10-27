@@ -405,7 +405,6 @@ The legacy `pending_so` badge counted every `draft`, including orders never sent
 - `LeaveApprovalBadgeParityTest` covers department and HR scope, own/cross-department rows, terminal and stale rows, wrong-role permission holders, active same-department delegates, and badge/list total parity. See `PROGRESS.md` for test evidence.
 - Static review found that the ordinary page exposed approve/reject buttons by permission while the API also enforced workflow role, current step, and separation of duties. F-45 is fixed separately in PR #396 (merged as `a4d6e31c`): API list/detail resources expose shared-policy `can_approve`, rejection checks the active stage permission, and SPA row/detail/bulk actions use that result. Event timing is unchanged.
 
-
 ## Follow-up verification: native Laravel dispatch boundary
 
 - Repository search found no callers of `NotificationService::notify()`; the Ncr and Maintenance paths already use `send()`. PR #397 removes this unused legacy wrapper.
