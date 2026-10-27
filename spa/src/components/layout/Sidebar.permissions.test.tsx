@@ -117,9 +117,26 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(item('/payroll/statutory'), context)).toBe(false);
   });
 
+  it('requires Attendance list access plus a back-office permission', () => {
+    const attendance = item('/hr/attendance');
+    expect(isNavItemVisible(attendance, {
+      permissions: new Set(['attendance.edit']),
+      features: allFeatures,
+    })).toBe(false);
+    expect(isNavItemVisible(attendance, {
+      permissions: new Set(['attendance.view']),
+      features: allFeatures,
+    })).toBe(false);
+    expect(isNavItemVisible(attendance, {
+      permissions: new Set(['attendance.view', 'attendance.edit']),
+      features: allFeatures,
+    })).toBe(true);
+  });
+
   it('shows operational HR links only to users with the matching responsibility', () => {
     const hr = {
       permissions: new Set([
+        'attendance.view',
         'attendance.edit',
         'leave.view',
         'leave.approve_hr',
@@ -245,7 +262,7 @@ describe('role-aligned sidebar permissions', () => {
 
   it('shows department approval pages without granting HR or payroll administration', () => {
     const departmentHead = {
-      permissions: new Set(['attendance.ot.approve', 'leave.view', 'leave.approve_dept', 'payroll.view']),
+      permissions: new Set(['attendance.view', 'attendance.ot.approve', 'leave.view', 'leave.approve_dept', 'payroll.view']),
       features: allFeatures,
       roleSlug: 'department_head',
     };

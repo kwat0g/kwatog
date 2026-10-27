@@ -340,7 +340,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/hr/profile-update-requests` | `Bank Account Changes` | any: hr.employees.view, hr.profile_updates.finance_review | `hr` | — |
 | `/hr/employees` | `Employees` | any: hr.employees.view, hr.salary_adjustments.view | `hr` | `profile_requests` |
 | `/hr/departments` | `Departments` | `hr.departments.view` | `hr` | — |
-| `/hr/attendance` | `Attendance & DTR` | any: attendance.edit, attendance.import, attendance.ot.approve | `attendance` | — |
+| `/hr/attendance` | `Attendance & DTR` | `attendance.view` AND any: `attendance.edit`, `attendance.import`, `attendance.ot.approve` | `attendance` | — |
 | `/hr/attendance/overtime` | `Overtime` | `attendance.ot.approve` | `attendance` | `overtime` |
 | `/hr/leaves` | `Leave Management` | any: leave.approve_dept, leave.approve_hr, leave.types.manage | `leave` | `leaves` |
 | `/payroll/periods` | `Payroll Processing` | `payroll.periods.view` | `payroll` | `payroll` |

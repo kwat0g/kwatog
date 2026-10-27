@@ -764,6 +764,7 @@ export const SECTIONS: NavSection[] = [
         description: 'Attendance and daily time records',
         icon: LuClock4,
         feature: 'attendance',
+        permission: 'attendance.view',
         anyPermissions: ['attendance.edit', 'attendance.import', 'attendance.ot.approve'],
       },
       {
