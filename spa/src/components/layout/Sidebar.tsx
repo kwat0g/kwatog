@@ -457,7 +457,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Supplier Listings',
         icon: LuClipboardList,
         feature: 'purchasing',
-        permission: 'purchasing.supplier_listings.review',
+        permission: 'purchasing.supplier_listings.view',
       },
     ],
   },

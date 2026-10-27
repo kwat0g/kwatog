@@ -310,7 +310,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/purchasing/purchase-requests` | `Purchase Requests` | `purchasing.view` | `purchasing` | `purchase_requests` |
 | `/purchasing/rfqs` | `Supplier RFQs` | `purchasing.rfq.view` | `purchasing` | — |
 | `/purchasing/approved-suppliers` | `Approved Suppliers` | `purchasing.po.create` | `purchasing` | — |
-| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.review` | `purchasing` | — |
+| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.view` | `purchasing` | — |
 | `/inventory/items` | `Inventory Items` | `inventory.view` | `inventory` | `low_stock` |
 | `/inventory/uoms` | `Units of Measure` | `inventory.items.manage` | `inventory` | — |
 | `/inventory/grn` | `Goods Receipts (GRN)` | `inventory.view` | `inventory` | `pending_grn` |

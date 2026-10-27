@@ -361,6 +361,7 @@ describe('role-aligned sidebar permissions', () => {
         'purchasing.pr.create',
         'purchasing.po.create',
         'purchasing.rfq.view',
+        'purchasing.supplier_listings.view',
         'purchasing.supplier_listings.review',
       ],
       warehouse_staff: [],
@@ -389,6 +390,20 @@ describe('role-aligned sidebar permissions', () => {
       const visible = procurementPaths.filter((path) => isNavItemVisible(item(path), context));
       expect(visible, `${roleSlug} Procurement navigation`).toEqual(expected[roleSlug] ?? []);
     }
+  });
+
+  it('gates Supplier Listings navigation by list-view permission', () => {
+    const supplierListings = item('/purchasing/supplier-listings');
+
+    expect(
+      isNavItemVisible(supplierListings, { permissions: new Set(['purchasing.supplier_listings.review']) }),
+    ).toBe(false);
+    expect(
+      isNavItemVisible(supplierListings, { permissions: new Set(['purchasing.supplier_listings.view']) }),
+    ).toBe(true);
+    expect(isNavItemVisible(supplierListings, {
+      permissions: new Set(['purchasing.supplier_listings.view', 'purchasing.supplier_listings.review']),
+    })).toBe(true);
   });
 
   it('uses shared Dashboard and permission-gates Finance pricing reviews', () => {
