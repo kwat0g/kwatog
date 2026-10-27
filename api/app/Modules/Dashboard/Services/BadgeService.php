@@ -44,7 +44,7 @@ use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\EffectivenessService;
-use App\Modules\Quality\Services\NcrService;
+use App\Modules\Quality\Services\NcrSlaService;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
@@ -358,7 +358,7 @@ class BadgeService
                 'permissions' => ['quality.ncr.view'],
                 'label'       => 'Overdue NCRs',
                 'description' => 'Open NCRs at or past their severity response SLA',
-                'counter'     => fn (): int => app(NcrService::class)->slaOverdueQuery()->count(),
+                'counter'     => fn (): int => app(NcrSlaService::class)->overdueQuery()->count(),
             ],
 
             'calibration_overdue' => [

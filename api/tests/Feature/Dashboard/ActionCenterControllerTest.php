@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Common\Models\Alert;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -58,6 +59,41 @@ class ActionCenterControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.summary.total', 0)
             ->assertJsonPath('data.items', []);
+    }
+
+    public function test_ncr_overdue_uses_the_shared_escalation_clock_and_inclusive_boundary(): void
+    {
+        $this->travelTo(now()->setTime(12, 0));
+        app(SettingsService::class)->set('quality.ncr.sla_critical_hours', 8, 'quality');
+        $user = $this->userWithPermissions(['dashboard.action_center.view', 'quality.ncr.view']);
+        $boundary = NonConformanceReport::factory()->create([
+            'severity' => 'critical',
+            'status' => 'open',
+            'created_at' => now()->subHours(8),
+        ]);
+        $recentlyEscalated = NonConformanceReport::factory()->create([
+            'severity' => 'critical',
+            'status' => 'in_progress',
+            'created_at' => now()->subHours(20),
+            'last_escalated_at' => now()->subHour(),
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboards/action-center')
+            ->assertOk()
+            ->assertJsonPath('data.summary.overdue', 1);
+        $items = collect($response->json('data.items'))->keyBy('id');
+
+        $this->assertTrue($items['quality:ncr:'.$boundary->hash_id]['is_overdue']);
+        $this->assertFalse($items['quality:ncr:'.$recentlyEscalated->hash_id]['is_overdue']);
+        $this->assertSame(
+            now()->toIso8601String(),
+            $items['quality:ncr:'.$boundary->hash_id]['due_at'],
+        );
+        $this->assertSame(
+            now()->addHours(7)->toIso8601String(),
+            $items['quality:ncr:'.$recentlyEscalated->hash_id]['due_at'],
+        );
     }
 
     public function test_only_permitted_sources_are_returned_with_summary_metadata(): void
