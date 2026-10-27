@@ -34,9 +34,10 @@ class MaintenanceRoutingNotificationTest extends TestCase
         Event::fake();
     }
 
-    public function test_creation_routes_both_types_once_to_active_supervisors(): void
+    public function test_creation_routes_both_types_once_to_other_active_supervisors(): void
     {
         $supervisor = $this->actor('maintenance_supervisor');
+        $otherSupervisor = $this->actor('maintenance_supervisor');
         $inactive = $this->actor('maintenance_supervisor');
         $revoked = $this->actor('maintenance_supervisor');
         $inactive->update(['is_active' => false]);
@@ -48,6 +49,14 @@ class MaintenanceRoutingNotificationTest extends TestCase
             $listener->handle(new MaintenanceWorkOrderCreated($order));
         }
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.assignment_needed')->count());
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $supervisor->id,
+            'type' => 'maintenance.assignment_needed',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $otherSupervisor->id,
+            'type' => 'maintenance.assignment_needed',
+        ]);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $inactive->id]);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revoked->id]);
         $data = json_decode((string) DB::table('notifications')->where('type', 'maintenance.assignment_needed')->value('data'), true);
