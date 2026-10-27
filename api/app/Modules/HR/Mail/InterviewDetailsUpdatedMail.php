@@ -90,6 +90,11 @@ class InterviewDetailsUpdatedMail extends QueuedMailable
     public function failed(\Throwable $e): void
     {
         $snapshot = $this->snapshotData();
+        $application = JobApplication::query()->whereHash($snapshot['application_hash_id'])->first();
+        if ($application === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment interview update',
@@ -100,6 +105,7 @@ class InterviewDetailsUpdatedMail extends QueuedMailable
                 'entity_id' => $snapshot['application_hash_id'],
                 'reason' => 'The candidate interview update email job failed in the queue.',
             ],
+            $application,
         );
     }
 

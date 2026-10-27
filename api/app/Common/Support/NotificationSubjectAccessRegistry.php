@@ -143,7 +143,8 @@ final class NotificationSubjectAccessRegistry
                 && app(SettingsService::class)->get('modules.recruitment', false) === true
                 && $user->is_active
                 && $user->hasPermission('hr.recruitment.view')
-                && $subject instanceof JobApplication,
+                && $subject instanceof JobApplication
+                && in_array($linkTo, ['/hr/recruitment/applications/'.$subject->hash_id], true),
             JobPosting::class => app(SettingsService::class)->get('modules.hr', false) === true
                 && app(SettingsService::class)->get('modules.recruitment', false) === true
                 && $user->is_active

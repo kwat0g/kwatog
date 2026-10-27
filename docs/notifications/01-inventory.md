@@ -249,16 +249,16 @@ Each call below invokes `EmailDeliveryFailureNotifier` or its assigned fallback 
 | `api/app/Modules/CRM/Services/SalesOrderResponseService.php:107` | `...->notifyPermission(..., $row)` |
 | `api/app/Modules/CRM/Services/SalesOrderResponseService.php:134` | `...->notifyPermission(..., $row)` |
 | `api/app/Modules/CRM/Services/SalesOrderResponseService.php:552` | `...->notifyPermission(..., $so)` |
-| `api/app/Modules/HR/Mail/ApplicationReceivedMail.php:67` | `app(EmailDeliveryFailureNotifier::class)->notifyUserIds(` |
-| `api/app/Modules/HR/Mail/ApplicationStatusUpdatedMail.php:65` | `app(EmailDeliveryFailureNotifier::class)->notifyUserIds(` |
-| `api/app/Modules/HR/Mail/InterviewDetailsUpdatedMail.php:93` | `snapshotData()` name/link → `EmailDeliveryFailureNotifier::notifyUserIds($this->fallbackUserIds, …)`; no subject gate yet (PR #466) |
-| `api/app/Modules/HR/Mail/InterviewScheduledMail.php:90` | `snapshotData()` name/link → `EmailDeliveryFailureNotifier::notifyUserIds($this->fallbackUserIds, …)`; no subject gate yet (PR #466) |
+| `api/app/Modules/HR/Mail/ApplicationReceivedMail.php:67` | Re-resolve the application by key, then `EmailDeliveryFailureNotifier::notifyUserIds(..., $application)`; active fallback IDs must pass the `JobApplication` gate and exact application route (PR #466) |
+| `api/app/Modules/HR/Mail/ApplicationStatusUpdatedMail.php:71` | Resolve application by saved hash, then `notifyUserIds(..., $application)`; active fallback IDs must pass the `JobApplication` gate and exact application route (PR #466) |
+| `api/app/Modules/HR/Mail/InterviewDetailsUpdatedMail.php:98` | Resolve application from `snapshotData()` hash, then `notifyUserIds(..., $application)`; active fallback IDs must pass the `JobApplication` gate and exact application route (PR #466) |
+| `api/app/Modules/HR/Mail/InterviewScheduledMail.php:95` | Resolve application from `snapshotData()` hash, then `notifyUserIds(..., $application)`; active fallback IDs must pass the `JobApplication` gate and exact application route (PR #466) |
 | `api/app/Modules/HR/Notifications/EmployeePasswordResetNotification.php:22` | `app(EmailDeliveryFailureNotifier::class)->notifyPermission(` |
 | `api/app/Modules/HR/Notifications/EmployeeWelcomeNotification.php:27` | `app(EmailDeliveryFailureNotifier::class)->notifyPermission(` |
-| `api/app/Modules/HR/Services/RecruitmentService.php:200` | `app(EmailDeliveryFailureNotifier::class)->notify(` |
-| `api/app/Modules/HR/Services/RecruitmentService.php:608` | `app(EmailDeliveryFailureNotifier::class)->notify(` |
-| `api/app/Modules/HR/Services/RecruitmentService.php:641` | `app(EmailDeliveryFailureNotifier::class)->notify(` |
-| `api/app/Modules/HR/Services/RecruitmentService.php:765` | `app(EmailDeliveryFailureNotifier::class)->notify(` |
+| `api/app/Modules/HR/Services/RecruitmentService.php:200` | Synchronous queue failure uses `notify(..., $application)`; `JobApplication` subject gate and exact application route apply (PR #466) |
+| `api/app/Modules/HR/Services/RecruitmentService.php:609` | Synchronous queue failure uses `notify(..., $application)`; `JobApplication` subject gate and exact application route apply (PR #466) |
+| `api/app/Modules/HR/Services/RecruitmentService.php:643` | Synchronous queue failure uses `notify(..., $application)`; `JobApplication` subject gate and exact application route apply (PR #466) |
+| `api/app/Modules/HR/Services/RecruitmentService.php:768` | Synchronous queue failure uses `notify(..., $application)`; `JobApplication` subject gate and exact application route apply (PR #466) |
 | `api/app/Modules/Landing/Mail/ContactInquiryReceivedMail.php:57` | `app(EmailDeliveryFailureNotifier::class)->notifyPermission(` |
 | `api/app/Modules/Landing/Services/ContactInquiryService.php:66` | `app(EmailDeliveryFailureNotifier::class)->notifyPermission(` |
 | `api/app/Modules/Payroll/Jobs/SendPayslipEmailJob.php:107` | `app(EmailDeliveryFailureNotifier::class)->notifyUserId(` |

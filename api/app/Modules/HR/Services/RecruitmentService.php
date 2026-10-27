@@ -207,6 +207,7 @@ class RecruitmentService
                     'entity_id' => $application->hash_id,
                     'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
                 ],
+                $application,
             );
         }
 
@@ -615,6 +616,7 @@ class RecruitmentService
                     'entity_id' => $application->hash_id,
                     'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
                 ],
+                $application,
             );
         }
     }
@@ -648,6 +650,7 @@ class RecruitmentService
                     'entity_id' => $application->hash_id,
                     'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
                 ],
+                $application,
             );
         }
     }
@@ -772,6 +775,7 @@ class RecruitmentService
                     'entity_id' => $application->hash_id,
                     'reason' => 'The candidate email address was unreachable or the email provider rejected the message.',
                 ],
+                $application,
             );
         }
     }

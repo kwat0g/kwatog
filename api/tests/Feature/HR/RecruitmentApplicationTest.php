@@ -18,6 +18,7 @@ use App\Modules\HR\Mail\ApplicationReceivedMail;
 use App\Modules\HR\Mail\ApplicationStatusUpdatedMail;
 use App\Modules\HR\Mail\InterviewDetailsUpdatedMail;
 use App\Modules\HR\Mail\InterviewScheduledMail;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -358,6 +359,62 @@ class RecruitmentApplicationTest extends TestCase
             $this->assertSame('/hr/recruitment/applications/snapshot-application-id', $data['link_to']);
             $this->assertStringContainsString('Snapshot Candidate', $data['message']);
         }
+    }
+
+    public function test_recruitment_email_failure_fallbacks_require_application_access(): void
+    {
+        $outsiderRole = Role::create([
+            'name' => 'Recruitment Email Outsider',
+            'slug' => 'recruitment_email_outsider',
+            'is_system' => false,
+        ]);
+        $outsider = User::factory()->create(['role_id' => $outsiderRole->id, 'is_active' => true]);
+        $inactiveHr = User::factory()->create(['role_id' => $this->hrUser->role_id, 'is_active' => false]);
+        $fallbackIds = [$this->hrUser->id, $outsider->id, $inactiveHr->id];
+        $this->assertTrue(NotificationSubjectAccessRegistry::userCanViewRecord(
+            $this->hrUser,
+            $this->application,
+            '/hr/recruitment/applications/'.$this->application->hash_id,
+        ));
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord(
+            $this->hrUser,
+            $this->application,
+            '/hr/recruitment/applications',
+        ));
+        $interview = ApplicationInterview::create([
+            'job_application_id' => $this->application->id,
+            'scheduled_at' => '2026-11-02 09:30:00',
+            'location' => 'Cavite interview room',
+            'interviewer_name' => 'Ana Reyes',
+            'created_by' => $this->hrUser->id,
+        ]);
+
+        (new ApplicationReceivedMail($this->application, $this->posting, $fallbackIds))
+            ->failed(new \RuntimeException('Mail provider rejected message.'));
+        (new ApplicationStatusUpdatedMail(
+            'Juan Test', 'Test Position', 'new', 'screening', 'RCT-TEST01', $this->application->hash_id, $fallbackIds,
+        ))->failed(new \RuntimeException('Mail provider rejected message.'));
+        (new InterviewScheduledMail($this->application, $interview, $fallbackIds))
+            ->failed(new \RuntimeException('Mail provider rejected message.'));
+        (new InterviewDetailsUpdatedMail($this->application, $interview, $fallbackIds))
+            ->failed(new \RuntimeException('Mail provider rejected message.'));
+
+        $this->assertSame(4, DB::table('notifications')->where('type', 'email.delivery_failed')->count());
+        $this->assertSame(4, DB::table('notifications')->where('notifiable_id', $this->hrUser->id)->count());
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $outsider->id]);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $inactiveHr->id]);
+
+        foreach (DB::table('notifications')->where('type', 'email.delivery_failed')->get() as $notice) {
+            $data = json_decode($notice->data, true);
+            $this->assertSame(JobApplication::class, $data['subject_type']);
+            $this->assertSame((string) $this->application->id, $data['subject_id']);
+            $this->assertSame('/hr/recruitment/applications/'.$this->application->hash_id, $data['link_to']);
+        }
+
+        $this->application->delete();
+        (new ApplicationReceivedMail($this->application, $this->posting, $fallbackIds))
+            ->failed(new \RuntimeException('Mail provider rejected message.'));
+        $this->assertSame(4, DB::table('notifications')->where('type', 'email.delivery_failed')->count());
     }
 
     public function test_candidate_mail_templates_escape_untrusted_text_and_render_plain_text(): void
