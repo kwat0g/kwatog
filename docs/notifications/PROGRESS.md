@@ -891,13 +891,19 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Original-head `SendPayslipEmailJobTest.php --filter test_delivery_failure_notifies_only_active_users_with_own_payslip_access` passed **1 / 8 assertions**; it covers provider failure, missing email, exact subject metadata, owner delivery, and a second employee's exclusion. No rebase tests ran against shared `ogami_test`; `git diff --check` only. No database was touched.
 - The broader original payroll access tests passed **7 / 38 assertions**. API CI inherits F-22 and stops before PHPUnit; CI is waived by user instruction. Existing payroll-adjustment checker configuration remains a separate business-policy gap.
 
-## Phase 3 B2B portal email-failure subject access (PR #496, in progress; replaces closed PR #470)
+## Phase 3 B2B portal email-failure subject access (PR #496, merged as `db4a51c2`; replaces closed PR #470)
 
 - PR #470 was closed when its base branch was deleted after PR #469 merged; the same change was rebased onto `main` and opened as PR #496.
 - Customer and Vendor subjects now use active-user Accounting detail permissions and exact SPA detail links. Vendor performance alerts retain their existing Purchasing route gate in the same registry arm. Customer/supplier invitation and password-reset failure fallbacks pass the related master record through the subject gate; queued callbacks reload it and suppress notices if it no longer exists.
 - Existing recipient selection, portal credentials, and email content remain unchanged. Portal access is checked again when the delivery-failure notice is sent, so revoked permissions exclude former operators.
 - Original-head focused B2B failure tests passed **2 / 24 assertions**; `QueueLaneAssignmentTest.php --filter test_every_queued_mailable_lands_on_the_mail_lane` passed **1 / 29 assertions**. No rebase tests ran against shared `ogami_test`; `git diff --check` only. No database was touched.
 - The original-head `PortalPasswordResetTest.php` run had **13 passes and 2 failures**: an untrusted display-name Markdown link issue is separate PR #471; an invitation MailFake assertion also failed on parent #469 and remains unverified after rebase. API CI inherits F-22 and stops before PHPUnit. User waived CI.
+
+## Separate finding fix: F-75 portal email Markdown link injection (PR #471, draft)
+
+- Customer and supplier reset/invitation display names are sanitized into the public `HtmlString` property before Laravel exposes mailable properties to Markdown. Link destinations are removed; visible labels remain. Templates continue reading `safeRecipientName`.
+- Original feature-head `PortalPasswordResetTest.php` filters passed **4 / 33 assertions** with a temporary local workaround for an inherited duplicate PDF helper declaration. Rebased adaptation has not been tested. No tests were run in this continuation; no database was touched. `git diff --check` remains the only requested verification.
+- The separate PR keeps the mail rendering fix isolated from the merged recipient-access gate. Queue serialization and rendered HTML after this rebase remain unverified.
 
 ## Resume instruction
 
