@@ -161,4 +161,23 @@ describe('ProductionSchedulePage', () => {
     expect(schedulerApi.confirm).not.toHaveBeenCalled();
     client.clear();
   });
+
+  it('formats schedule quantities and exposes saved table density controls', async () => {
+    vi.mocked(schedulerApi.snapshot).mockResolvedValue({
+      ...snapshot,
+      rows: snapshot.rows.map((row) => ({
+        ...row,
+        bars: row.bars.map((bar, index) => ({
+          ...bar,
+          quantity_target: index === 0 ? 1234567.125 : bar.quantity_target,
+        })),
+      })),
+    });
+    const client = mount();
+    fireEvent.click(await screen.findByRole('tab', { name: /Schedule list/ }));
+    expect(await screen.findByText('1,234,567.125')).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Density' })).toHaveValue('compact');
+    expect(screen.getByRole('button', { name: 'Customize columns' })).toBeVisible();
+    client.clear();
+  });
 });

@@ -132,7 +132,7 @@ function localUser(role, themeMode) {
     name: `Layout Audit ${role}`,
     email: ROLE_EMAILS[role],
     role: { id: `layout-audit-${role}`, slug: slugs[role], name: slugs[role] },
-    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
+    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
     delegated_approvals: [],
     features: ['inventory', 'production', 'notifications', 'search', 'b2b_portals'],
     employee: { id: 'layout-audit-employee', employee_no: 'LAYOUT-AUDIT' },
@@ -293,6 +293,78 @@ const sampleStockLevel = {
   lock_version: 0, last_counted_at: '2026-10-01T09:14:00+08:00',
 };
 
+function addDays(date, days) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function sampleScheduleSnapshot(count, from, to) {
+  const days = Math.max(1, Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000));
+  const machineCount = Math.max(1, Math.min(10, count));
+  const rows = Array.from({ length: machineCount }, (_, index) => ({
+    machine_id: `layout-schedule-machine-${index + 1}`,
+    machine_code: `IMM-${String(index + 1).padStart(2, '0')}`,
+    name: index === 1 ? 'Large-capacity injection molding machine for long label checks' : `Injection machine ${index + 1}`,
+    tonnage: 120 + index * 10,
+    status: index % 2 ? 'running' : 'idle',
+    current_owner: index === 0 ? { id: 'layout-schedule-owner', wo_number: 'WO-202610-0001' } : null,
+    bars: [],
+  }));
+  for (let index = 0; index < count; index += 1) {
+    const machine = rows[index % machineCount];
+    const date = addDays(from, index % days);
+    const hour = 7 + (index % 9);
+    const start = `${date}T${String(hour).padStart(2, '0')}:00:00+08:00`;
+    const end = `${date}T${String(hour + 1).padStart(2, '0')}:00:00+08:00`;
+    const status = index % 5 === 0 ? 'executed' : index % 3 === 0 ? 'confirmed' : 'pending';
+    machine.bars.push({
+      id: `layout-schedule-${index + 1}`,
+      updated_at: '2026-10-27T02:00:00.000Z',
+      wo_id: `layout-schedule-wo-${index + 1}`,
+      wo_number: index === 0 ? 'WO-202610-000001' : `WO-202610-${String(index + 1).padStart(6, '0')}`,
+      product_name: index === 1
+        ? 'Very long injection-molded product name for table width and wrapping checks'
+        : `Product ${index + 1}`,
+      product_part_number: index === 1 ? 'PART-REFERENCE-000000000000000000000001' : `PART-${String(index + 1).padStart(5, '0')}`,
+      quantity_target: index === 2 ? 123456789.125 : 250 + index * 10,
+      sales_order: index % 3 === 0 ? { id: `layout-schedule-so-${index + 1}`, so_number: `SO-202610-${String(index + 1).padStart(6, '0')}` } : null,
+      mold_code: index % 4 === 0 ? null : `MOLD-${String((index % 10) + 1).padStart(3, '0')}`,
+      start,
+      end,
+      status,
+      wo_status: status === 'executed' ? 'completed' : status === 'confirmed' ? 'confirmed' : 'planned',
+      reserves_capacity: status !== 'executed',
+      staffing: {
+        worker_names: index === 1 ? ['A very long employee name for schedule width checks', 'Production Worker'] : ['Ana Santos', 'Juan Dela Cruz'],
+        worker_count: index === 1 ? 2 : 2,
+        minimum_workers: index === 1 ? 3 : 2,
+        recorder_name: 'Layout Auditor',
+        blockers: index === 1 ? ['Minimum worker count not met'] : [],
+        execution_blockers: [],
+        expected_crew_id: `layout-schedule-crew-${index + 1}`,
+        approval_blockers: [],
+      },
+    });
+  }
+  return {
+    from: `${from}T00:00:00+08:00`,
+    to: `${to}T00:00:00+08:00`,
+    timezone: 'Asia/Manila',
+    rows,
+    conflicts: count ? [{
+      work_order_id: 'layout-schedule-conflict',
+      wo_number: 'WO-202610-CONFLICT',
+      reasons: ['No covered shift', 'No covered shift', 'Machine readiness needs review'],
+      checked_at: '2026-10-27T02:00:00.000Z',
+    }] : [],
+  };
+}
+
+assert.equal(addDays('2026-12-31', 1), '2027-01-01');
+assert.equal(sampleScheduleSnapshot(0, '2026-10-27', '2026-11-10').rows.flatMap((row) => row.bars).length, 0);
+assert.equal(sampleScheduleSnapshot(10, '2026-10-27', '2026-11-10').rows.flatMap((row) => row.bars).length, 10);
+
 async function installLocalMocks(page, role, rowCount, themeMode) {
   const user = localUser(role, themeMode);
   await page.route('**/api/v1/**', async (route) => {
@@ -303,6 +375,13 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
     else if (pathname.endsWith('/business-policies')) json = { data: { functional_currency_code: 'PHP', reporting_currency_code: 'PHP' } };
     else if (pathname.endsWith('/landing/contact')) json = { legal_name: 'OGAMI ERP' };
     else if (pathname.endsWith('/dashboards/badges')) json = { data: {} };
+    else if (pathname.endsWith('/mrp/scheduler/options')) json = { data: { default_horizon_days: 14 } };
+    else if (pathname.endsWith('/mrp/scheduler/snapshot')) {
+      const query = new URL(route.request().url()).searchParams;
+      const from = query.get('from') ?? '2026-10-27';
+      const to = query.get('to') ?? addDays(from, 14);
+      json = { data: sampleScheduleSnapshot(rowCount, from, to) };
+    }
     else if (pathname.endsWith('/inventory/items/options')) json = {
       data: {
         replenishment_basis: { demand_history_days: 90, coverage_buffer_ratio: 1.2, default_lead_time_days: 14 },
@@ -458,6 +537,7 @@ async function measure(page) {
       return Number(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toFixed(2));
     };
     const main = document.querySelector('main#main-content, main');
+    const dialog = document.querySelector('[role="dialog"]');
     const pageHeader = main?.querySelector('[data-layout="page-header"]')
       ?? main?.querySelector('h1')?.closest('div.px-5.py-4')
       ?? main?.querySelector('h1')?.parentElement?.parentElement;
@@ -487,6 +567,8 @@ async function measure(page) {
     const filterBar = main?.querySelector('[data-layout="filter-bar"]')
       ?? main?.querySelector('[role="search"]')?.parentElement;
     const table = main?.querySelector('[data-layout="table"]') ?? main?.querySelector('table');
+    const scheduleScroller = main?.querySelector('[data-layout="schedule-scroll-region"]');
+    const scheduleFrame = scheduleScroller?.closest('.scroll-edge-frame');
     const tableCard = table?.closest('[data-layout="table-scroller"]') ?? table?.parentElement;
     const tableRoot = table?.closest('[data-layout="data-table"]') ?? tableCard?.parentElement;
     const toolbar = tableRoot?.querySelector('[data-layout="table-toolbar"]')
@@ -497,7 +579,7 @@ async function measure(page) {
       header: rect(pageHeader),
       filters: rect(filterBar),
       toolbar: rect(toolbar),
-      table: rect(tableCard),
+      table: rect(tableCard ?? scheduleScroller),
       pagination: rect(pagination),
     };
     const reference = pageBlocks.header;
@@ -522,6 +604,7 @@ async function measure(page) {
     const unique = (values) => [...new Set(values)];
     const typeNodes = [
       ...Array.from(main?.querySelectorAll('h1,h2,h3,p,label,button,th,tbody td,.text-muted') ?? []),
+      ...Array.from(dialog?.querySelectorAll('h1,h2,h3,p,label,button,th,tbody td,.text-muted') ?? []),
     ];
     const typography = typeNodes.map((element) => {
       const css = getComputedStyle(element);
@@ -552,6 +635,7 @@ async function measure(page) {
       const classText = typeof element.className === 'string' ? element.className : '';
       const intentionalHorizontal = horizontal && (
         element.matches('[data-layout="table-scroller"]')
+        || element.matches('[data-layout="schedule-scroll-region"]')
         ||
         /overflow-x-(auto|scroll)/.test(classText)
         || /truncate|sr-only/.test(classText)
@@ -575,7 +659,7 @@ async function measure(page) {
         clientHeight: element.clientHeight,
       }];
     });
-    const buttons = [...(main?.querySelectorAll('button') ?? [])].map((button) => {
+    const buttons = [...(main?.querySelectorAll('button') ?? []), ...(dialog?.querySelectorAll('button') ?? [])].map((button) => {
       const css = getComputedStyle(button);
       const box = button.getBoundingClientRect();
       return {
@@ -601,7 +685,10 @@ async function measure(page) {
           optionBackground: option ? getComputedStyle(option).backgroundColor : null,
         };
       });
-    const controls = [...(main?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"],[role="separator"]') ?? [])]
+    const controls = [
+      ...(main?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"],[role="separator"]') ?? []),
+      ...(dialog?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"],[role="separator"]') ?? []),
+    ]
       .filter((control) => control.getAttribute('aria-hidden') !== 'true' && control.tabIndex !== -1)
       .map((control) => {
         const target = control instanceof HTMLInputElement && control.type === 'checkbox'
@@ -653,8 +740,11 @@ async function measure(page) {
     doc.scrollLeft = doc.scrollWidth;
     const horizontalPageMaxScroll = doc.scrollLeft;
     doc.scrollLeft = originalHorizontalScroll;
-    const pageVerticalScroll = doc.scrollHeight > innerHeight + 1;
-    const internalVerticalScroll = overflow.filter((item) => item.vertical && item.insideMain);
+    const pageVerticalScroll = doc.scrollHeight > innerHeight + 1
+      || Boolean(pageRoot && pageRoot.scrollHeight > pageRoot.clientHeight + 1
+        && /auto|scroll/.test(getComputedStyle(pageRoot).overflowY));
+    const internalVerticalScroll = overflow.filter((item) => item.vertical && item.insideMain
+      && !item.className.includes('page-shell--viewport'));
     const sidebarVerticalScroll = overflow.some((item) => item.vertical && item.insideSidebar);
     const layoutContext = [...document.querySelectorAll('html, body, #root, .app-shell, .app-content, .app-main, .route-transition, main, [data-layout="page-shell"], aside[aria-label="Sidebar"]')]
       .map((element) => {
@@ -681,7 +771,7 @@ async function measure(page) {
         className: typeof element.className === 'string' ? element.className : '',
         left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width),
         overflowX: css.overflowX,
-        insideHorizontalScroll: Boolean(element.closest('[data-layout="table-scroller"]')
+        insideHorizontalScroll: Boolean(element.closest('[data-layout="table-scroller"], [data-layout="schedule-scroll-region"]')
           ?? element.closest('.overflow-x-auto, .overflow-x-scroll')),
       }));
     const rootPseudoElements = ['::before', '::after'].map((pseudo) => {
@@ -708,6 +798,39 @@ async function measure(page) {
       stickyProbe.scrollerTopAfterScroll = Math.round(scrollerBox.top * 100) / 100;
       stickyProbe.sticksToScroller = Math.abs(headerBox.top - scrollerBox.top - 1) <= 2;
       tableCard.scrollTop = originalScrollTop;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    const scheduleHeader = scheduleScroller?.querySelector('[data-layout="gantt-header"]');
+    const scheduleColumns = scheduleHeader ? [...scheduleHeader.children].map((column) => {
+      const box = column.getBoundingClientRect();
+      return {
+        label: (column.textContent ?? '').trim().replace(/\s+/g, ' '),
+        width: Math.round(box.width * 100) / 100,
+        share: scheduleScroller?.scrollWidth
+          ? Number((box.width / scheduleScroller.scrollWidth).toFixed(3)) : null,
+      };
+    }) : [];
+    const ganttRowHeights = [...(scheduleScroller?.querySelectorAll('[data-layout="gantt-bar-row"]') ?? [])]
+      .map((row) => Math.round(row.getBoundingClientRect().height * 100) / 100);
+    const scheduleStickyProbe = {
+      cssSticky: Boolean(scheduleHeader && getComputedStyle(scheduleHeader).position === 'sticky'),
+      tested: false,
+      sticksToScroller: null,
+      topAfterScroll: null,
+      scrollerTopAfterScroll: null,
+    };
+    if (scheduleScroller && scheduleHeader
+      && scheduleScroller.scrollHeight > scheduleScroller.clientHeight + 1) {
+      const originalScrollTop = scheduleScroller.scrollTop;
+      scheduleScroller.scrollTop = Math.min(scheduleScroller.scrollHeight, originalScrollTop + 120);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const headerBox = scheduleHeader.getBoundingClientRect();
+      const scrollerBox = scheduleScroller.getBoundingClientRect();
+      scheduleStickyProbe.tested = true;
+      scheduleStickyProbe.topAfterScroll = Math.round(headerBox.top * 100) / 100;
+      scheduleStickyProbe.scrollerTopAfterScroll = Math.round(scrollerBox.top * 100) / 100;
+      scheduleStickyProbe.sticksToScroller = Math.abs(headerBox.top - scrollerBox.top) <= 2;
+      scheduleScroller.scrollTop = originalScrollTop;
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
     return {
@@ -759,12 +882,27 @@ async function measure(page) {
       sidebarVerticalScroll,
       pageVerticalScroll,
       doubleVerticalScroll: pageVerticalScroll && internalVerticalScroll.length > 0,
+      scheduleScrollRegion: scheduleScroller ? {
+        horizontal: scheduleScroller.scrollWidth > scheduleScroller.clientWidth + 1,
+        vertical: scheduleScroller.scrollHeight > scheduleScroller.clientHeight + 1,
+        left: scheduleFrame?.getAttribute('data-more-left') === 'true',
+        right: scheduleFrame?.getAttribute('data-more-right') === 'true',
+        keyboardFocusable: scheduleScroller.tabIndex >= 0,
+        labelled: Boolean(scheduleScroller.getAttribute('aria-label')),
+        columns: scheduleColumns,
+        barRowHeight: {
+          min: ganttRowHeights.length ? Math.min(...ganttRowHeights) : null,
+          max: ganttRowHeights.length ? Math.max(...ganttRowHeights) : null,
+          distinct: [...new Set(ganttRowHeights)],
+        },
+        stickyHeader: scheduleStickyProbe,
+      } : null,
       table: table ? {
         density: tableDensity,
         scrollAffordance: tableCard ? {
           needed: tableCard.scrollWidth > tableCard.clientWidth + 1,
-          left: tableCard.closest('.table-scroll-frame')?.getAttribute('data-more-left') === 'true',
-          right: tableCard.closest('.table-scroll-frame')?.getAttribute('data-more-right') === 'true',
+          left: tableCard.closest('.scroll-edge-frame')?.getAttribute('data-more-left') === 'true',
+          right: tableCard.closest('.scroll-edge-frame')?.getAttribute('data-more-right') === 'true',
           keyboardFocusable: tableCard.tabIndex >= 0,
           labelled: Boolean(tableCard.getAttribute('aria-label')),
         } : null,
@@ -842,23 +980,35 @@ async function captureTableSamples(page, out, route, width, rowCount) {
 
 async function captureLongTableSamples(page, out, route, width) {
   const scroller = page.locator('[data-layout="table-scroller"]');
-  const metrics = await scroller.evaluate((element) => ({
-    maxY: element.scrollHeight - element.clientHeight,
-    maxX: element.scrollWidth - element.clientWidth,
-  }));
+  const hasScroller = await scroller.count() > 0;
+  const metrics = hasScroller
+    ? await scroller.evaluate((element) => ({
+      maxY: element.scrollHeight - element.clientHeight,
+      maxX: element.scrollWidth - element.clientWidth,
+    }))
+    : await page.evaluate(() => ({
+      maxY: document.documentElement.scrollHeight - window.innerHeight,
+      maxX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }));
   const screenshots = [];
   for (const [position, name] of [[0, 'top'], [0.5, 'middle'], [1, 'bottom']]) {
     if (metrics.maxY > 1) {
-      await scroller.evaluate((element, y) => { element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * y); }, position);
+      if (hasScroller) {
+        await scroller.evaluate((element, y) => { element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * y); }, position);
+      } else {
+        await page.evaluate((y) => window.scrollTo(0, Math.round((document.documentElement.scrollHeight - window.innerHeight) * y)), position);
+      }
       await page.waitForTimeout(80);
       const file = path.join(out, `${slug(route)}-${width}-long-${name}.png`);
-      await scroller.screenshot({ path: file });
+      if (hasScroller) await scroller.screenshot({ path: file });
+      else await page.screenshot({ path: file });
       screenshots.push(path.relative(ROOT, file));
     } else {
-      await page.evaluate((y) => window.scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * y)), position);
+      if (!hasScroller) await page.evaluate((y) => window.scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * y)), position);
       await page.waitForTimeout(80);
       const file = path.join(out, `${slug(route)}-${width}-long-${name}.png`);
-      await page.screenshot({ path: file });
+      if (hasScroller) await scroller.screenshot({ path: file });
+      else await page.screenshot({ path: file });
       screenshots.push(path.relative(ROOT, file));
     }
   }
@@ -948,6 +1098,10 @@ async function main() {
             { timeout: 5_000 },
           );
         }
+        if (route === '/production/schedule' && process.argv.includes('--schedule-list')) {
+          await page.getByRole('tab', { name: /Schedule list/ }).click();
+          await page.waitForTimeout(100);
+        }
         await page.waitForTimeout(350);
         const screenshot = path.join(out, `${slug(route)}-${width}.png`);
         const resizeSample = process.argv.includes('--resize-sample')
@@ -955,6 +1109,22 @@ async function main() {
           : null;
         const metrics = compactMetricSamples(await measure(page));
         await page.screenshot({ path: screenshot, fullPage: rowCount < 300 });
+        let scheduleBottomSample = null;
+        if (route === '/production/schedule' && width <= 480) {
+          const shell = page.locator('[data-layout="page-shell"]');
+          const scroll = await shell.evaluate((element) => ({
+            max: element.scrollHeight - element.clientHeight,
+            top: element.scrollTop,
+          }));
+          if (scroll.max > 1) {
+            await shell.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+            await page.waitForTimeout(80);
+            const bottomScreenshot = path.join(out, `${slug(route)}-${width}-bottom.png`);
+            await page.screenshot({ path: bottomScreenshot });
+            scheduleBottomSample = { screenshot: path.relative(ROOT, bottomScreenshot), maxScrollTop: scroll.max };
+            await shell.evaluate((element) => { element.scrollTop = 0; });
+          }
+        }
         if (process.argv.includes('--dropdown-sample')) {
           const combo = page.locator('input[role="combobox"]').first();
           if (await combo.count()) {
@@ -990,7 +1160,28 @@ async function main() {
           };
           assert.equal(dialogSample.visible, true, 'confirm dialog must render before screenshot');
         }
-        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, dialogSample, ...metrics });
+        let scheduleDialogSample = null;
+        if (process.argv.includes('--schedule-dialog-sample') && [375, 1440].includes(width) && route === '/production/schedule') {
+          await page.getByRole('button', { name: 'Run scheduler', exact: true }).first().click();
+          const dialog = page.getByRole('dialog');
+          await dialog.waitFor({ state: 'visible' });
+          await page.waitForTimeout(350);
+          const dialogScreenshot = path.join(out, `${slug(route)}-${width}-confirm-dialog.png`);
+          await page.screenshot({ path: dialogScreenshot });
+          const dialogMetrics = compactMetricSamples(await measure(page));
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({ state: 'detached' });
+          scheduleDialogSample = {
+            screenshot: path.relative(ROOT, dialogScreenshot),
+            visible: dialogMetrics.counts.dialogs === 1,
+            dismissedWithEscape: true,
+            contrastFailures: dialogMetrics.typography.contrastBelowAA.reduce((sum, sample) => sum + sample.count, 0),
+            buttons: dialogMetrics.buttons,
+          };
+          assert.equal(scheduleDialogSample.visible, true, 'schedule confirmation must render before screenshot');
+          assert.equal(scheduleDialogSample.contrastFailures, 0, 'schedule confirmation text must meet AA contrast');
+        }
+        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, dialogSample, scheduleDialogSample, scheduleBottomSample, ...metrics });
         console.log(`${route} @ ${width}: ${metrics.counts.tables} table(s), ${metrics.counts.rows} row(s), overflow=${metrics.horizontalPageOverflow}`);
       }
     }
@@ -1007,6 +1198,8 @@ async function main() {
     if (row.doubleVerticalScroll) issues.push('nested vertical scroll');
     if (row.table?.stickyProbe.tested && !row.table.stickyProbe.sticksToScroller) issues.push('sticky header scrolls out of table scroller');
     if (row.table?.scrollAffordance?.needed && (!row.table.scrollAffordance.right || !row.table.scrollAffordance.keyboardFocusable || !row.table.scrollAffordance.labelled)) issues.push('horizontally scrolling table lacks a visible keyboard-accessible affordance');
+    if (row.scheduleScrollRegion?.horizontal && (!row.scheduleScrollRegion.right || !row.scheduleScrollRegion.keyboardFocusable || !row.scheduleScrollRegion.labelled)) issues.push('horizontally scrolling timeline lacks a visible keyboard-accessible affordance');
+    if (row.scheduleScrollRegion?.stickyHeader.tested && !row.scheduleScrollRegion.stickyHeader.sticksToScroller) issues.push('timeline date header scrolls out of its region');
     const contrastFailures = row.typography.contrastBelowAA.reduce((sum, sample) => sum + sample.count, 0);
     if (contrastFailures) issues.push(`${contrastFailures} sampled text items below 4.5:1`);
     if (row.recordLinks.some((link) => !link.distinctFromBodyText || (link.contrast !== null && link.contrast < 4.5))) issues.push('clickable record identifier lacks distinct AA text color');
@@ -1058,6 +1251,8 @@ async function main() {
         [row.doubleVerticalScroll, 'double vertical scroll'],
         [row.table?.stickyProbe.tested && !row.table.stickyProbe.sticksToScroller, 'sticky header misses table scroller'],
         [row.table?.scrollAffordance?.needed && (!row.table.scrollAffordance.right || !row.table.scrollAffordance.keyboardFocusable || !row.table.scrollAffordance.labelled), 'horizontally scrolling table lacks a visible keyboard-accessible affordance'],
+        [row.scheduleScrollRegion?.horizontal && (!row.scheduleScrollRegion.right || !row.scheduleScrollRegion.keyboardFocusable || !row.scheduleScrollRegion.labelled), 'horizontally scrolling timeline lacks a visible keyboard-accessible affordance'],
+        [row.scheduleScrollRegion?.stickyHeader.tested && !row.scheduleScrollRegion.stickyHeader.sticksToScroller, 'timeline header misses its scroll region'],
         [row.table && row.table.rowHeight.min !== null && row.table.rowHeight.min < ({ default: 48, compact: 36, manual: 36, spacious: 56 }[row.table.density] ?? 48), 'table row below selected density minimum'],
         [row.table?.textBelowMinimum.length > 0, 'table text below selected density minimum'],
         [row.table?.columns.some((column) => column.cellAlign && column.headerAlign !== column.cellAlign), 'table header/cell alignment differs'],

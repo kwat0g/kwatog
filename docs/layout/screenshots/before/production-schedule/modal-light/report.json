@@ -1,0 +1,2623 @@
+{
+  "generatedAt": "2026-10-27T09:15:30.445Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "production",
+  "theme": "light",
+  "fixtureRowsRequested": 50,
+  "widths": [
+    1440
+  ],
+  "routes": [
+    "/production/schedule"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/production/schedule",
+      "role": "production",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/production/schedule",
+      "role": "production",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/before/production-schedule/modal-light/production-schedule-1440.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": {
+        "screenshot": "docs/layout/screenshots/before/production-schedule/modal-light/production-schedule-1440-confirm-dialog.png",
+        "visible": true,
+        "dismissedWithEscape": true,
+        "buttons": [
+          {
+            "label": "Refresh",
+            "width": 107,
+            "height": 32,
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "count": 1,
+            "examples": [
+              "Refresh"
+            ]
+          },
+          {
+            "label": "Run scheduler",
+            "width": 150,
+            "height": 32,
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "count": 1,
+            "examples": [
+              "Run scheduler"
+            ]
+          },
+          {
+            "label": "Show Machine",
+            "width": 16,
+            "height": 30,
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "count": 1,
+            "examples": [
+              "Show Machine"
+            ]
+          },
+          {
+            "label": "Timeline",
+            "width": 83,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "count": 1,
+            "examples": [
+              "Timeline"
+            ]
+          },
+          {
+            "label": "Schedule list50",
+            "width": 132,
+            "height": 40,
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "count": 1,
+            "examples": [
+              "Schedule list50"
+            ]
+          },
+          {
+            "label": "Cancel",
+            "width": 80,
+            "height": 32,
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "count": 1,
+            "examples": [
+              "Cancel"
+            ]
+          },
+          {
+            "label": "Run scheduler",
+            "width": 128,
+            "height": 32,
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "count": 1,
+            "examples": [
+              "Run scheduler"
+            ]
+          }
+        ]
+      },
+      "url": "/production/schedule",
+      "title": "Production schedule · Production · ERP",
+      "h1": "Production scheduleUpdated just now",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 5,
+        "links": 51,
+        "inputs": 6,
+        "tables": 1,
+        "rows": 50,
+        "dialogs": 0,
+        "tabs": 2
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 3995.015625,
+        "width": 1200,
+        "height": 3947.015625
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": null,
+        "toolbar": null,
+        "table": 21,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1420,
+          "top": 48,
+          "bottom": 137,
+          "width": 1200,
+          "height": 89
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "left": 261,
+          "right": 1419,
+          "top": 501.15625,
+          "bottom": 3978.015625,
+          "width": 1158,
+          "height": 3476.859375
+        },
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "Production scheduleUpdated just now",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 48,
+            "bottom": 137,
+            "width": 1200,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "space-y-4 px-5 py-4",
+          "heading": "Work orders needing scheduling review",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 137,
+            "bottom": 3995.015625,
+            "width": 1200,
+            "height": 3858.015625
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "leftDelta": 1,
+          "rightDelta": -1,
+          "aligned": true
+        },
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-60",
+          "left": 0,
+          "right": 240,
+          "width": 240,
+          "scrollWidth": 239,
+          "clientWidth": 239,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 97,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "span",
+          "className": "min-w-0 flex-1 truncate",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": true,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 185,
+          "clientWidth": 171,
+          "scrollHeight": 21,
+          "clientHeight": 21,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 185,
+          "maxClientWidth": 171,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 21
+        },
+        {
+          "tag": "caption",
+          "className": "sr-only",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 416,
+          "clientWidth": 1,
+          "scrollHeight": 18,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 416,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 18,
+          "maxClientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "table": {
+        "density": "manual",
+        "scrollAffordance": {
+          "needed": false,
+          "left": false,
+          "right": false,
+          "keyboardFocusable": false,
+          "labelled": false
+        },
+        "textBelowMinimum": [],
+        "headerHeight": 36.5,
+        "rowHeight": {
+          "min": 63.56,
+          "max": 130.58,
+          "distinct": [
+            96.66,
+            76.19,
+            78.97,
+            130.58,
+            63.56,
+            97.16
+          ]
+        },
+        "cellPadding": {
+          "top": "4px",
+          "right": "10px",
+          "bottom": "4px",
+          "left": "10px"
+        },
+        "columns": [
+          {
+            "header": "Work order / product",
+            "width": 240,
+            "share": 0.207,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Sales order",
+            "width": 110,
+            "share": 0.095,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Quantity",
+            "width": 124,
+            "share": 0.107,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Machine / mold",
+            "width": 140,
+            "share": 0.121,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Scheduled time",
+            "width": 127,
+            "share": 0.11,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Schedule",
+            "width": 140,
+            "share": 0.121,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Work order",
+            "width": 96,
+            "share": 0.083,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Crew / readiness",
+            "width": 181,
+            "share": 0.156,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          }
+        ],
+        "stickyHeader": false,
+        "stickyProbe": {
+          "cssSticky": false,
+          "tested": false,
+          "sticksToScroller": null,
+          "topAfterScroll": null,
+          "scrollerTopAfterScroll": null
+        },
+        "semantics": {
+          "columnHeaders": 8,
+          "scopedColumnHeaders": 8,
+          "sortableHeaders": 0,
+          "keyboardFocusableRows": 0
+        },
+        "truncation": []
+      },
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Production scheduleUpdated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Production scheduleUpdated just now"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center text-2xs text-muted ml-2 align-middle",
+            "text": "Updated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Updated just now"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Review machine capacity, production timing, and worker readiness.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Review machine capacity, production timing, and worker readiness."
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Refresh",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Refresh"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Run scheduler",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "contrast": 4.83,
+            "count": 1,
+            "examples": [
+              "Run scheduler"
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Find schedule",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 5,
+            "examples": [
+              "Find schedule",
+              "Machine",
+              "Schedule status"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-r border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.94902 0.929412 0.894118)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-l border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.94902 0.929412 0.894118)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "button",
+            "className": "flex h-full items-center",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "p",
+            "className": "text-sm text-secondary",
+            "text": "Review assigned workers and confirm each proposal from its work-order record.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.62,
+            "count": 1,
+            "examples": [
+              "Review assigned workers and confirm each proposal from its work-order record."
+            ]
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Work orders needing scheduling review",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Work orders needing scheduling review"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "1 conflicts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "1 conflicts"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-muted",
+            "text": "No covered shift; Machine readiness needs reviewLast checked: Oct 27, 2026 · 10:",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "No covered shift; Machine readiness needs reviewLast checked: Oct 27, 2026 · 10:"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "flex flex-wrap items-center justify-between gap-2 text-xs text-muted",
+            "text": "50 schedules · 10 machines · 27 awaiting approval · Times: Asia/Manila",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "50 schedules · 10 machines · 27 awaiting approval · Times: Asia/Manila"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "relative inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm whitespace-nowrap transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset disabled:opacity-50 disabled:cursor-not-allowed text-secondary hover:text-primary hover:bg-subtle",
+            "text": "Timeline",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.62,
+            "count": 1,
+            "examples": [
+              "Timeline"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "relative inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm whitespace-nowrap transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset disabled:opacity-50 disabled:cursor-not-allowed text-primary font-medium",
+            "text": "Schedule list50",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Schedule list50"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "font-mono tabular-nums text-xs text-muted",
+            "text": "50",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "50"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "h-row-compact px-2.5 text-caption uppercase tracking-wide text-muted font-medium select-none text-left",
+            "text": "Work order / product",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "0.325px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 7,
+            "examples": [
+              "Work order / product",
+              "Sales order",
+              "Machine / mold"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "h-row-compact px-2.5 text-caption uppercase tracking-wide text-muted font-medium select-none text-right",
+            "text": "Quantity",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "0.325px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Quantity"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-sm text-left",
+            "text": "WO-202610-000001PART-00001 · Product 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 350,
+            "examples": [
+              "WO-202610-000001PART-00001 · Product 1",
+              "SO-202610-000001",
+              "IMM-01Current owner: WO-202610-0001No mold assigned"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "max-w-64 text-muted",
+            "text": "PART-00001 · Product 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 50,
+            "examples": [
+              "PART-00001 · Product 1",
+              "PART-00046 · Product 46",
+              "PART-00031 · Product 31"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-sm text-right font-mono tabular-nums",
+            "text": "250",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 50,
+            "examples": [
+              "250",
+              "700",
+              "550"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted",
+            "text": "Current owner: WO-202610-0001",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 5,
+            "examples": [
+              "Current owner: WO-202610-0001"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "font-mono text-muted",
+            "text": "No mold assigned",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 100,
+            "examples": [
+              "No mold assigned",
+              "7:00 AM–8:00 AM",
+              "MOLD-006"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "",
+            "text": "2 workers · minimum 2",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 100,
+            "examples": [
+              "2 workers · minimum 2",
+              "Recorder: Layout Auditor",
+              "2 workers · minimum 3"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-muted",
+            "text": "Ana Santos, Juan Dela Cruz",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 60,
+            "examples": [
+              "Ana Santos, Juan Dela Cruz",
+              "Capacity released · history",
+              "A very long employee name for schedule width checks, Production Worker"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "mt-1 text-warning-fg",
+            "text": "Minimum worker count not met",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.478431 0.32549 0.0784314)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.66,
+            "count": 1,
+            "examples": [
+              "Minimum worker count not met"
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|12|400|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18.2px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|500|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|0.325px|uppercase",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|13|400|18.2px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Updated just now",
+            "count": 2,
+            "examples": [
+              "Updated just now",
+              "50"
+            ]
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "50 schedules · 10 machines · 27 awaiting approval · Times: Asia/Manila",
+            "count": 6,
+            "examples": [
+              "50 schedules · 10 machines · 27 awaiting approval · Times: Asia/Manila",
+              "Current owner: WO-202610-0001"
+            ]
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "2 workers · minimum 2",
+            "count": 161,
+            "examples": [
+              "2 workers · minimum 2",
+              "Ana Santos, Juan Dela Cruz",
+              "Recorder: Layout Auditor"
+            ]
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Refresh",
+          "width": 107,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Refresh"
+          ]
+        },
+        {
+          "label": "Run scheduler",
+          "width": 150,
+          "height": 32,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Run scheduler"
+          ]
+        },
+        {
+          "label": "Show Machine",
+          "width": 16,
+          "height": 30,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)",
+          "count": 1,
+          "examples": [
+            "Show Machine"
+          ]
+        },
+        {
+          "label": "Timeline",
+          "width": 83,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.290196 0.258824 0.223529)",
+          "count": 1,
+          "examples": [
+            "Timeline"
+          ]
+        },
+        {
+          "label": "Schedule list50",
+          "width": 132,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Schedule list50"
+          ]
+        }
+      ],
+      "recordLinks": [
+        {
+          "text": "WO-202610-CONFLICT",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000001",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000046",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000031",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000016",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000002",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000047",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000032",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000017",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000003",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000048",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000033",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000018",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000019",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000004",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000049",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000034",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000020",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000005",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000050",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000035",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000021",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000006",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000036",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000037",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000022",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000007",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000038",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000023",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000008",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000039",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000024",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000009",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000010",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000040",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000025",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000011",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000041",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000026",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000012",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000042",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000027",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000028",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000013",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000043",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000029",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000014",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000044",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000030",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000015",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-202610-000045",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        }
+      ],
+      "dropdowns": [
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Refresh",
+          "width": 107,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Refresh"
+          ]
+        },
+        {
+          "label": "Run scheduler",
+          "width": 150,
+          "height": 32,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Run scheduler"
+          ]
+        },
+        {
+          "label": "Show Machine",
+          "width": 16,
+          "height": 30,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)",
+          "count": 1,
+          "examples": [
+            "Show Machine"
+          ]
+        },
+        {
+          "label": "Timeline",
+          "width": 83,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.290196 0.258824 0.223529)",
+          "count": 1,
+          "examples": [
+            "Timeline"
+          ]
+        },
+        {
+          "label": "Schedule list50",
+          "width": 132,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Schedule list50"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "label": "Refresh",
+          "width": 107,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Refresh"
+          ]
+        },
+        {
+          "label": "Run scheduler",
+          "width": 150,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Run scheduler"
+          ]
+        },
+        {
+          "label": "input",
+          "width": 373,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "input"
+          ]
+        },
+        {
+          "label": "input",
+          "width": 168,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "input"
+          ]
+        },
+        {
+          "label": "All statusesAwaiting approvalConfirmedExecuted",
+          "width": 201,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "All statusesAwaiting approvalConfirmedExecuted"
+          ]
+        },
+        {
+          "label": "input",
+          "width": 148,
+          "height": 30,
+          "count": 2,
+          "examples": [
+            "input"
+          ]
+        },
+        {
+          "label": "WO-202610-CONFLICT",
+          "width": 144,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-CONFLICT"
+          ]
+        },
+        {
+          "label": "Schedule list50",
+          "width": 132,
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Schedule list50"
+          ]
+        },
+        {
+          "label": "WO-202610-000001",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000001"
+          ]
+        },
+        {
+          "label": "WO-202610-000046",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000046"
+          ]
+        },
+        {
+          "label": "WO-202610-000031",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000031"
+          ]
+        },
+        {
+          "label": "WO-202610-000016",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000016"
+          ]
+        },
+        {
+          "label": "WO-202610-000002",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000002"
+          ]
+        },
+        {
+          "label": "WO-202610-000047",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000047"
+          ]
+        },
+        {
+          "label": "WO-202610-000032",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000032"
+          ]
+        },
+        {
+          "label": "WO-202610-000017",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000017"
+          ]
+        },
+        {
+          "label": "WO-202610-000003",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000003"
+          ]
+        },
+        {
+          "label": "WO-202610-000048",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000048"
+          ]
+        },
+        {
+          "label": "WO-202610-000033",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000033"
+          ]
+        },
+        {
+          "label": "WO-202610-000018",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000018"
+          ]
+        },
+        {
+          "label": "WO-202610-000019",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000019"
+          ]
+        },
+        {
+          "label": "WO-202610-000004",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000004"
+          ]
+        },
+        {
+          "label": "WO-202610-000049",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000049"
+          ]
+        },
+        {
+          "label": "WO-202610-000034",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000034"
+          ]
+        },
+        {
+          "label": "WO-202610-000020",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000020"
+          ]
+        },
+        {
+          "label": "WO-202610-000005",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000005"
+          ]
+        },
+        {
+          "label": "WO-202610-000050",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000050"
+          ]
+        },
+        {
+          "label": "WO-202610-000035",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000035"
+          ]
+        },
+        {
+          "label": "WO-202610-000021",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000021"
+          ]
+        },
+        {
+          "label": "WO-202610-000006",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000006"
+          ]
+        },
+        {
+          "label": "WO-202610-000036",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000036"
+          ]
+        },
+        {
+          "label": "WO-202610-000037",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000037"
+          ]
+        },
+        {
+          "label": "WO-202610-000022",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000022"
+          ]
+        },
+        {
+          "label": "WO-202610-000007",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000007"
+          ]
+        },
+        {
+          "label": "WO-202610-000038",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000038"
+          ]
+        },
+        {
+          "label": "WO-202610-000023",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000023"
+          ]
+        },
+        {
+          "label": "WO-202610-000008",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000008"
+          ]
+        },
+        {
+          "label": "WO-202610-000039",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000039"
+          ]
+        },
+        {
+          "label": "WO-202610-000024",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000024"
+          ]
+        },
+        {
+          "label": "WO-202610-000009",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000009"
+          ]
+        },
+        {
+          "label": "WO-202610-000010",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000010"
+          ]
+        },
+        {
+          "label": "WO-202610-000040",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000040"
+          ]
+        },
+        {
+          "label": "WO-202610-000025",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000025"
+          ]
+        },
+        {
+          "label": "WO-202610-000011",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000011"
+          ]
+        },
+        {
+          "label": "WO-202610-000041",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000041"
+          ]
+        },
+        {
+          "label": "WO-202610-000026",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000026"
+          ]
+        },
+        {
+          "label": "WO-202610-000012",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000012"
+          ]
+        },
+        {
+          "label": "WO-202610-000042",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000042"
+          ]
+        },
+        {
+          "label": "WO-202610-000027",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000027"
+          ]
+        },
+        {
+          "label": "WO-202610-000028",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000028"
+          ]
+        },
+        {
+          "label": "WO-202610-000013",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000013"
+          ]
+        },
+        {
+          "label": "WO-202610-000043",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000043"
+          ]
+        },
+        {
+          "label": "WO-202610-000029",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000029"
+          ]
+        },
+        {
+          "label": "WO-202610-000014",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000014"
+          ]
+        },
+        {
+          "label": "WO-202610-000044",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000044"
+          ]
+        },
+        {
+          "label": "WO-202610-000030",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000030"
+          ]
+        },
+        {
+          "label": "WO-202610-000015",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000015"
+          ]
+        },
+        {
+          "label": "WO-202610-000045",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000045"
+          ]
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Refresh",
+          "width": 107,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Refresh"
+          ]
+        },
+        {
+          "label": "Run scheduler",
+          "width": 150,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Run scheduler"
+          ]
+        },
+        {
+          "label": "input",
+          "width": 373,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "input"
+          ]
+        },
+        {
+          "label": "input",
+          "width": 168,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "input"
+          ]
+        },
+        {
+          "label": "All statusesAwaiting approvalConfirmedExecuted",
+          "width": 201,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "All statusesAwaiting approvalConfirmedExecuted"
+          ]
+        },
+        {
+          "label": "input",
+          "width": 148,
+          "height": 30,
+          "count": 2,
+          "examples": [
+            "input"
+          ]
+        },
+        {
+          "label": "WO-202610-CONFLICT",
+          "width": 144,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-CONFLICT"
+          ]
+        },
+        {
+          "label": "Schedule list50",
+          "width": 132,
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Schedule list50"
+          ]
+        },
+        {
+          "label": "WO-202610-000001",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000001"
+          ]
+        },
+        {
+          "label": "WO-202610-000046",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000046"
+          ]
+        },
+        {
+          "label": "WO-202610-000031",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000031"
+          ]
+        },
+        {
+          "label": "WO-202610-000016",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000016"
+          ]
+        },
+        {
+          "label": "WO-202610-000002",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000002"
+          ]
+        },
+        {
+          "label": "WO-202610-000047",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000047"
+          ]
+        },
+        {
+          "label": "WO-202610-000032",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000032"
+          ]
+        },
+        {
+          "label": "WO-202610-000017",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000017"
+          ]
+        },
+        {
+          "label": "WO-202610-000003",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000003"
+          ]
+        },
+        {
+          "label": "WO-202610-000048",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000048"
+          ]
+        },
+        {
+          "label": "WO-202610-000033",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000033"
+          ]
+        },
+        {
+          "label": "WO-202610-000018",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000018"
+          ]
+        },
+        {
+          "label": "WO-202610-000019",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000019"
+          ]
+        },
+        {
+          "label": "WO-202610-000004",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000004"
+          ]
+        },
+        {
+          "label": "WO-202610-000049",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000049"
+          ]
+        },
+        {
+          "label": "WO-202610-000034",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000034"
+          ]
+        },
+        {
+          "label": "WO-202610-000020",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000020"
+          ]
+        },
+        {
+          "label": "WO-202610-000005",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000005"
+          ]
+        },
+        {
+          "label": "WO-202610-000050",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000050"
+          ]
+        },
+        {
+          "label": "WO-202610-000035",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000035"
+          ]
+        },
+        {
+          "label": "WO-202610-000021",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000021"
+          ]
+        },
+        {
+          "label": "WO-202610-000006",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000006"
+          ]
+        },
+        {
+          "label": "WO-202610-000036",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000036"
+          ]
+        },
+        {
+          "label": "WO-202610-000037",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000037"
+          ]
+        },
+        {
+          "label": "WO-202610-000022",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000022"
+          ]
+        },
+        {
+          "label": "WO-202610-000007",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000007"
+          ]
+        },
+        {
+          "label": "WO-202610-000038",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000038"
+          ]
+        },
+        {
+          "label": "WO-202610-000023",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000023"
+          ]
+        },
+        {
+          "label": "WO-202610-000008",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000008"
+          ]
+        },
+        {
+          "label": "WO-202610-000039",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000039"
+          ]
+        },
+        {
+          "label": "WO-202610-000024",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000024"
+          ]
+        },
+        {
+          "label": "WO-202610-000009",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000009"
+          ]
+        },
+        {
+          "label": "WO-202610-000010",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000010"
+          ]
+        },
+        {
+          "label": "WO-202610-000040",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000040"
+          ]
+        },
+        {
+          "label": "WO-202610-000025",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000025"
+          ]
+        },
+        {
+          "label": "WO-202610-000011",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000011"
+          ]
+        },
+        {
+          "label": "WO-202610-000041",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000041"
+          ]
+        },
+        {
+          "label": "WO-202610-000026",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000026"
+          ]
+        },
+        {
+          "label": "WO-202610-000012",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000012"
+          ]
+        },
+        {
+          "label": "WO-202610-000042",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000042"
+          ]
+        },
+        {
+          "label": "WO-202610-000027",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000027"
+          ]
+        },
+        {
+          "label": "WO-202610-000028",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000028"
+          ]
+        },
+        {
+          "label": "WO-202610-000013",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000013"
+          ]
+        },
+        {
+          "label": "WO-202610-000043",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000043"
+          ]
+        },
+        {
+          "label": "WO-202610-000029",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000029"
+          ]
+        },
+        {
+          "label": "WO-202610-000014",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000014"
+          ]
+        },
+        {
+          "label": "WO-202610-000044",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000044"
+          ]
+        },
+        {
+          "label": "WO-202610-000030",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000030"
+          ]
+        },
+        {
+          "label": "WO-202610-000015",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000015"
+          ]
+        },
+        {
+          "label": "WO-202610-000045",
+          "width": 128,
+          "height": 16,
+          "count": 1,
+          "examples": [
+            "WO-202610-000045"
+          ]
+        }
+      ],
+      "scrollContextCount": 1
+    }
+  ]
+}
