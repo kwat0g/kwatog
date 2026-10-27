@@ -14,6 +14,9 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockAdjustment;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -245,6 +248,65 @@ class NotificationServiceSubjectAccessTest extends TestCase
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => 'test.bill_subject_access']);
         Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $viewer->id);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
+    }
+
+    public function test_stock_adjustment_subject_requires_enabled_module_and_list_permission(): void
+    {
+        app(SettingsService::class)->set('modules.inventory', true, 'modules');
+        $makerPermission = Permission::firstOrCreate(
+            ['slug' => 'inventory.adjust'],
+            ['name' => 'Adjust stock', 'module' => 'inventory'],
+        );
+        $approverPermission = Permission::firstOrCreate(
+            ['slug' => 'inventory.adjust.approve'],
+            ['name' => 'Approve stock adjustments', 'module' => 'inventory'],
+        );
+        $makerRole = Role::firstOrCreate(['slug' => 'notification_stock_maker'], ['name' => 'Notification Stock Maker']);
+        $makerRole->permissions()->syncWithoutDetaching([$makerPermission->id]);
+        $approverRole = Role::firstOrCreate(['slug' => 'notification_stock_approver'], ['name' => 'Notification Stock Approver']);
+        $approverRole->permissions()->syncWithoutDetaching([$approverPermission->id]);
+        $maker = User::factory()->withRole($makerRole->slug)->create();
+        $approver = User::factory()->withRole($approverRole->slug)->create();
+        $withoutPermission = User::factory()->create();
+        $item = Item::factory()->create();
+        $location = WarehouseLocation::factory()->create();
+        $adjustment = StockAdjustment::query()->create([
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'direction' => 'in',
+            'quantity' => '1.000',
+            'unit_cost' => '1.0000',
+            'value' => '1.00',
+            'requested_by' => $maker->id,
+        ]);
+        Event::fake([UserNotificationCreated::class]);
+
+        app(NotificationService::class)->sendForSubject(
+            $adjustment,
+            [$maker, $approver, $withoutPermission],
+            'test.stock_adjustment_subject_access',
+            ['title' => 'Stock adjustment', 'message' => 'The adjustment changed.'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $maker->id, 'type' => 'test.stock_adjustment_subject_access']);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $approver->id, 'type' => 'test.stock_adjustment_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => 'test.stock_adjustment_subject_access']);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $maker->id);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $approver->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
+
+        app(SettingsService::class)->set('modules.inventory', false, 'modules');
+        app(NotificationService::class)->sendForSubject(
+            $adjustment,
+            $maker,
+            'test.disabled_stock_adjustment_subject',
+            ['title' => 'Stock adjustment', 'message' => 'The inventory module is disabled.'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $maker->id, 'type' => 'test.disabled_stock_adjustment_subject']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_stock_adjustment_subject');
     }
 
     public function test_budget_subject_allows_only_viewers_and_distinct_approvers(): void

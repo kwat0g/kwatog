@@ -212,7 +212,7 @@ class StockAdjustmentService
 
                 $audience = ApprovalDelegation::approvalAudience('inventory.adjust.approve')
                     ->reject(fn (User $user): bool => (int) $user->id === (int) $by->id);
-                app(NotificationService::class)->send($audience, 'approval.action_required', [
+                app(NotificationService::class)->sendForSubject($adj, $audience, 'approval.action_required', [
                     'title' => 'Stock adjustment needs approval',
                     'message' => 'A high-value stock adjustment is waiting for review.',
                     'link_to' => '/inventory/stock-adjustments?id='.$adj->hash_id,
@@ -378,7 +378,7 @@ class StockAdjustmentService
             return;
         }
 
-        app(NotificationService::class)->send($requester, $type, [
+        app(NotificationService::class)->sendForSubject($adjustment, $requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your stock adjustment was rejected.' : 'Your stock adjustment was approved.',
             'link_to' => '/inventory/stock-adjustments?id='.$adjustment->hash_id,
