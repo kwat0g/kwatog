@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PR #380 scopes late-supplier notices to reviewers who can open the exact PO and merged as `7aa4820b`; PR #381 adds overdue, unpaid, and due-soon AP signals with badge/list parity and merged as `6c3124c0`. PR #382 excludes inactive and soft-deleted internal notification recipients and is rebased on current `main`, awaiting merge. Its targeted unit test passed on the original feature head; post-rebase tests were not run. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PR #380 scopes late-supplier notices to reviewers who can open the exact PO and merged as `7aa4820b`; PR #381 adds overdue, unpaid, and due-soon AP signals with badge/list parity and merged as `6c3124c0`. PR #382 excludes inactive and soft-deleted internal recipients and merged as `f53c4e7b`. PR #405 adds department-boundary proof for `training.expiry`; its targeted test passed on the original feature head, with post-rebase execution unavailable locally. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; partial targeted recipient and badge/list comparisons are recorded below. Full role/scope proof remains open. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #380, #485, and #487 are merged to `main`. PR #382 adds a central active-account gate for internal notification recipients. Global record authorization coverage, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #380, #382, #485, and #487 are merged to `main`. Global record authorization coverage, signal registry, and remaining event families remain open. |
 | 4. Frontend | In progress | PR #378 hardens same-app notification destinations. PR #381 adds labeled AP signals and a keyboard-operable signal popover. Notification Center filters, responsive/browser QA, and multi-signal coverage for other modules remain open. |
-| 5. Migration | Partial | PR #380 scopes late-supplier notices to users who can open the linked PO. PR #381 aligns overdue, unpaid, and due-soon AP signals with filtered list scopes. PR #382 applies inactive-user exclusion through the shared internal delivery normalizer. Remaining dispatch sites and sidebar signals remain open. |
+| 5. Migration | Partial | PR #380 scopes late-supplier notices to users who can open the linked PO. PR #381 aligns overdue, unpaid, and due-soon AP signals with filtered list scopes. PR #382 applies inactive-user exclusion through the shared internal delivery normalizer. PR #405 verifies a department-head recipient boundary for training-expiry notices. Remaining dispatch sites and sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | PR #381 targeted API parity tests passed **4 tests / 89 assertions** and `Sidebar.behavior.test.tsx` passed **30 tests** on the original feature head. PR #382 `NotificationServiceTest.php --filter=inactive_internal_users_are_excluded_from_notification_delivery` passed **1 test / 8 assertions** on its original feature head. Post-rebase tests were not run because PHP/PHPUnit are unavailable locally. CI is waived. Full role, channel, and badge parity, browser QA, and the full suite remain open. |
+| 7. Verification | Partial | PR #381 targeted API parity tests passed **4 tests / 89 assertions** and `Sidebar.behavior.test.tsx` passed **30 tests** on the original feature head. PR #382 `NotificationServiceTest.php --filter=inactive_internal_users_are_excluded_from_notification_delivery` passed **1 test / 8 assertions** on its original feature head. PR #405 `TrainingExpiryAlertTest.php --filter=test_training_expiry_notice_only_reaches_department_heads_with_employee_scope` passed **1 test / 4 assertions** on its original feature head. Post-rebase tests were not run because PHP/PHPUnit are unavailable locally. CI is waived. Full role, channel, and badge parity, browser QA, and the full suite remain open. |
 
 ## Phase 3 PR stack
 
@@ -62,7 +62,8 @@
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
 | F-34. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | merged as `7aa4820b` |
 | F-13. AP multi-signal sidebar | `notifications/multi-signal-ap-badges` | [#381](https://github.com/kwat0g/kwatog/pull/381) | merged as `6c3124c0` |
-| F-35. Inactive internal notification recipients | `notifications/filter-inactive-notice-recipients` | [#382](https://github.com/kwat0g/kwatog/pull/382) | rebased on current `main`; merge pending |
+| F-35. Inactive internal notification recipients | `notifications/filter-inactive-notice-recipients` | [#382](https://github.com/kwat0g/kwatog/pull/382) | merged as `f53c4e7b` |
+| F-14. Training-expiry department scope proof | `notifications/verify-training-expiry-audience-stack` | [#405](https://github.com/kwat0g/kwatog/pull/405) | rebased on current `main`; merge pending |
 | F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
 ## Coverage ledger
@@ -82,7 +83,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; PR #381 adds three shared-scope AP signals and the first multi-signal sidebar item. PR #382 centralizes exclusion of inactive and soft-deleted internal recipients. Configured-role audiences without record scope, remaining Notification Center behavior, full role coverage, and broad badge parity remain open.
+See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds three shared-scope AP signals and the first multi-signal sidebar item; #382 excludes inactive and soft-deleted internal recipients. PR #405 verifies one department-head training-expiry boundary. Configured-role audiences without record scope, remaining Notification Center behavior, full role coverage, and broad badge parity remain open.
 
 ## Phase 3 unit 1 verification
 
@@ -316,6 +317,12 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; PR #381 adds
 - The Bills sidebar item shows labeled severity chips, links the item to the highest-severity active signal, and offers all active filtered destinations in a keyboard-operable popover. Expanded, collapsed, hover, focus, tap, Escape, and link behavior have targeted coverage.
 - On the original feature head, `BadgeControllerTest.php` targeted cases passed **4 tests / 89 assertions**; `Sidebar.behavior.test.tsx` passed **30 tests**. Targeted ESLint and `git diff --check` passed. PHP/PHPUnit and Vitest are unavailable locally, so tests were not rerun after rebase. Browser visual QA and full-suite checks remain outstanding.
 - Pint `--test` reports style findings in touched PHP files; no broad formatting was applied. Earlier CI stopped before PHPUnit on the inherited duplicate PDF helper; CI is waived per the user's instruction.
+
+## Separate finding proof: F-14 training-expiry department scope (PR [#405](https://github.com/kwat0g/kwatog/pull/405))
+
+- A seeded department head whose linked employee shares the training employee's department receives the notice and opens the exact HR training detail. A different-department head receives no notice and gets 404. Existing owner, HR, cross-employee, and permission-revoked coverage remains in `TrainingExpiryAlertTest.php`.
+- On the original feature head, `TrainingExpiryAlertTest.php --filter=test_training_expiry_notice_only_reaches_department_heads_with_employee_scope` passed **1 test / 4 assertions**. No production code changed. Post-rebase tests were not rerun because PHP/PHPUnit are unavailable locally; API CI inherits F-22 and stops before PHPUnit, while `finding-lifecycle` passed.
+- Message-detail minimization and other configured-role/scope combinations remain open.
 
 ## Separate finding fix: F-35 inactive internal recipients (draft PR [#382](https://github.com/kwat0g/kwatog/pull/382))
 

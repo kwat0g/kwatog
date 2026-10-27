@@ -278,4 +278,41 @@ class TrainingExpiryAlertTest extends TestCase
         $this->getJson("/api/v1/hr/employee-trainings/{$record->hash_id}")
             ->assertForbidden();
     }
+
+    public function test_training_expiry_notice_only_reaches_department_heads_with_employee_scope(): void
+    {
+        [$employee, $training] = $this->setupEmpAndTraining();
+        $otherDepartment = Department::firstOrCreate(['code' => 'QA'], ['name' => 'Quality']);
+        $departmentHeadRoleId = Role::query()->where('slug', 'department_head')->value('id');
+        $inScopeEmployee = Employee::factory()->create(['department_id' => $employee->department_id]);
+        $outOfScopeEmployee = Employee::factory()->create(['department_id' => $otherDepartment->id]);
+        $inScopeHead = User::factory()->create([
+            'role_id' => $departmentHeadRoleId,
+            'employee_id' => $inScopeEmployee->id,
+        ]);
+        $outOfScopeHead = User::factory()->create([
+            'role_id' => $departmentHeadRoleId,
+            'employee_id' => $outOfScopeEmployee->id,
+        ]);
+        $record = $this->makeCompleted($employee, $training, now()->addDays(30)->toDateString());
+        app(SettingsService::class)->set('hr.training_expiry.notification_roles', ['department_head']);
+
+        app(TrainingExpiryService::class)->check();
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $inScopeHead->id,
+            'type' => 'training.expiry',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $outOfScopeHead->id,
+            'type' => 'training.expiry',
+        ]);
+
+        $this->actingAs($inScopeHead)
+            ->getJson("/api/v1/hr/employee-trainings/{$record->hash_id}")
+            ->assertOk();
+        $this->actingAs($outOfScopeHead)
+            ->getJson("/api/v1/hr/employee-trainings/{$record->hash_id}")
+            ->assertNotFound();
+    }
 }
