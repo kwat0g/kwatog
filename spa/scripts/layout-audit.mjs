@@ -644,6 +644,45 @@ function sampleMaterialIssueDetail(count) {
   };
 }
 
+const transferStatuses = ['pending', 'transferred', 'cancelled'];
+
+function sampleTransferOrder(index) {
+  const status = transferStatuses[index % transferStatuses.length];
+  const longValue = index === 0;
+  return {
+    id: `layout-transfer-${String(index + 1).padStart(5, '0')}`,
+    transfer_number: `TO-202610-${String(index + 1).padStart(5, '0')}`,
+    from_location: {
+      id: 'layout-location-1',
+      code: 'A-01-01',
+      full_code: longValue ? 'MW-RAW-MATERIALS-A-01-01-REFERENCE' : 'MW-RM-A-01-01',
+    },
+    to_location: {
+      id: 'layout-location-2',
+      code: 'B-02-03',
+      full_code: longValue ? 'MW-QUALITY-HOLD-B-02-03-REFERENCE' : 'MW-QC-B-02-03',
+    },
+    item: {
+      id: longValue ? 'layout-item-long' : sampleItem.id,
+      code: longValue ? 'RAW-MATERIAL-REFERENCE-000000000000001' : sampleItem.code,
+      name: longValue ? 'Long injection-grade resin material description for transfer layout' : sampleItem.name,
+      unit_of_measure: sampleItem.unit_of_measure,
+    },
+    quantity: longValue ? '123456789.125' : `${(index + 1) * 12.5}`,
+    reason: longValue ? 'Long transfer reason used to inspect wrapping, width, and detail readability.' : `Replenish location ${index + 1}`,
+    status,
+    status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    created_by: { id: 'layout-other-warehouse-user', name: 'Warehouse Lead' },
+    transferred_by: status === 'transferred' ? { id: 'layout-audit-admin', name: 'Layout Audit admin' } : null,
+    transferred_at: status === 'transferred' ? '2026-10-27T09:14:00+08:00' : null,
+    created_at: `2026-10-${String((index % 27) + 1).padStart(2, '0')}T09:14:00+08:00`,
+  };
+}
+
+function sampleTransferOrders(count) {
+  return Array.from({ length: count }, (_, index) => sampleTransferOrder(index));
+}
+
 const sampleMrbLocation = (id, code, zone, zoneType) => ({
   id, code, full_code: `MW-${zone}-${code}`, warehouse_id: 'layout-warehouse-1',
   warehouse_code: 'MW', warehouse_name: 'Main Warehouse', is_active: true, zone, zone_type: zoneType,
@@ -710,6 +749,7 @@ for (const count of [0, 1, 10, 50, 500]) {
   assert.equal(sampleReceivablePurchaseOrder(count).items.length, count);
   assert.equal(sampleMaterialIssues(count).length, count);
   assert.equal(sampleMaterialIssueDetail(count).items.length, count);
+  assert.equal(sampleTransferOrders(count).length, count);
   assert.equal(sampleMrbs(count).length, count);
 }
 
@@ -878,6 +918,11 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
       data: sampleMaterialIssues(rowCount),
       meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
     };
+    else if (/\/inventory\/transfer-orders\/[^/]+$/.test(pathname)) json = { data: sampleTransferOrder(0) };
+    else if (pathname.endsWith('/inventory/transfer-orders')) json = {
+      data: sampleTransferOrders(rowCount),
+      meta: { current_page: 1, last_page: 1, per_page: Math.max(50, rowCount), total: rowCount, from: rowCount ? 1 : 0, to: rowCount },
+    };
     else if (pathname.endsWith(`/inventory/items/${sampleItem.id}`)) json = { data: sampleItem };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}/operations`)) json = { data: sampleWorkOrderOperations(rowCount) };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}`)) json = { data: sampleWorkOrder };
@@ -982,7 +1027,8 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
 }
 
 async function startLocalServer() {
-  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5174', '--strictPort'], {
+  const port = new URL(BASE).port || '5174';
+  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', port, '--strictPort'], {
     cwd: SPA_ROOT,
     env: {
       ...process.env,
@@ -992,7 +1038,7 @@ async function startLocalServer() {
       VITE_REVERB_PORT: '8080',
       VITE_REVERB_SCHEME: 'http',
       VITE_HMR_HOST: '127.0.0.1',
-      VITE_HMR_PORT: '5174',
+      VITE_HMR_PORT: port,
     },
     stdio: 'ignore',
   });
@@ -1119,7 +1165,23 @@ async function measure(page) {
     const toolbar = tableRoot?.querySelector('[data-layout="table-toolbar"]')
       ?? (tableRoot && [...tableRoot.children].find((element) => element.classList.contains('justify-end')));
     const pagination = tableRoot?.querySelector('[data-layout="pagination"]')
-      ?? (tableRoot && [...tableRoot.children].find((element) => element.classList.contains('mt-3')));
+      ?? (tableRoot && [...tableRoot.children].find((element) => element.classList.contains('mt-3')))
+      ?? (location.pathname === '/inventory/transfer-orders'
+        ? pageRoot?.querySelector('[data-layout="pagination"]') : null);
+    const transferFlowAlignment = location.pathname === '/inventory/transfer-orders' && pageRoot
+      ? Object.fromEntries([
+        ['header', pageHeader],
+        ['content', flowElements[1]],
+        ['pagination', pageRoot.querySelector('[data-layout="pagination"]')],
+      ].map(([name, element]) => {
+        const box = rect(element);
+        const shellBox = rect(pageRoot);
+        return [name, box && shellBox ? {
+          leftDelta: Math.round((box.left - shellBox.left) * 100) / 100,
+          rightDelta: Math.round((box.right - shellBox.right) * 100) / 100,
+          aligned: Math.abs(box.left - shellBox.left) <= 1 && Math.abs(box.right - shellBox.right) <= 1,
+        } : null];
+      })) : null;
     const pageBlocks = {
       header: rect(pageHeader),
       filters: rect(filterBar),
@@ -1423,6 +1485,7 @@ async function measure(page) {
       flowBlocks,
       sections,
       edgeAlignment: alignment,
+      transferFlowAlignment,
       verticalGaps: {
         headerToFilters: yGap(pageBlocks.header, pageBlocks.filters),
         filtersToToolbar: yGap(pageBlocks.filters, pageBlocks.toolbar),
@@ -1704,6 +1767,22 @@ async function main() {
           await page.getByRole('tab', { name: 'Operations' }).click();
           await page.waitForTimeout(150);
         }
+        if (route === '/inventory/transfer-orders' && process.argv.includes('--transfer-selected') && rowCount > 0) {
+          const transfer = page.getByRole('button', { name: /TO-202610-00001/ }).first();
+          if (await transfer.isVisible().catch(() => false)) {
+            const detail = page.waitForResponse((response) => response.url().includes('/inventory/transfer-orders/layout-transfer-00001') && response.ok());
+            await transfer.click();
+            await detail;
+          } else {
+            const picker = page.getByRole('combobox', { name: 'Transfer order' });
+            if (await picker.isVisible().catch(() => false)) {
+              await picker.click();
+              const detail = page.waitForResponse((response) => response.url().includes('/inventory/transfer-orders/layout-transfer-00001') && response.ok());
+              await page.getByRole('option', { name: /TO-202610-00001/ }).click();
+              await detail;
+            }
+          }
+        }
         if (process.argv.includes('--expand-first-row') && new URL(route, BASE).searchParams.get('view') === 'reservations') {
           const expand = page.getByRole('button', { name: 'Expand row' }).first();
           if (await expand.count()) {
@@ -1736,7 +1815,7 @@ async function main() {
         }
         if (process.argv.includes('--dropdown-sample')) {
           const combo = page.locator('input[role="combobox"]').first();
-          if (await combo.count()) {
+          if (await combo.isVisible().catch(() => false)) {
             await combo.click();
             await page.waitForTimeout(100);
             const dropdownScreenshot = path.join(out, `${slug(route)}-${width}-dropdown.png`);
@@ -1750,6 +1829,24 @@ async function main() {
         const longTableScreenshots = rowCount >= 300 && !tableSamples && metrics.counts.tables > 0 && width === 1440
           ? await captureLongTableSamples(page, out, route, width)
           : [];
+        let longTransferListScreenshots = [];
+        if (rowCount >= 300 && route === '/inventory/transfer-orders' && width === 1440) {
+          const scroller = page.getByRole('region', { name: 'Transfer orders' });
+          if (await scroller.count()) {
+            const maxScroll = await scroller.evaluate((element) => element.scrollHeight - element.clientHeight);
+            for (const [position, name] of [[0, 'top'], [0.5, 'middle'], [1, 'bottom']]) {
+              await scroller.evaluate((element, ratio) => {
+                element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * ratio);
+              }, position);
+              await page.waitForTimeout(80);
+              const file = path.join(out, `${slug(route)}-${width}-long-list-${name}.png`);
+              await scroller.screenshot({ path: file });
+              longTransferListScreenshots.push(path.relative(ROOT, file));
+            }
+            assert.ok(maxScroll > 0, '500 transfer cards must scroll inside their list region');
+            await scroller.evaluate((element) => { element.scrollTop = 0; });
+          }
+        }
         let dialogSample = null;
         if (process.argv.includes('--dialog-sample') && width === 1440
           && route === '/production/routings/layout-routing-001') {
@@ -1802,6 +1899,11 @@ async function main() {
             await capture('new-warehouse', 'New warehouse');
             await capture('new-zone', 'Zone');
             await capture('new-location', 'Location');
+          }
+          if (route === '/inventory/transfer-orders' && rowCount > 0) {
+            await capture('transfer-create', 'New transfer');
+            await capture('transfer-execute-confirmation', 'Execute');
+            await capture('transfer-cancel-confirmation', 'Cancel');
           }
           if (new URL(route, BASE).searchParams.get('view') === 'movements') {
             const expand = page.getByRole('button', { name: 'Expand row' });
@@ -1860,7 +1962,7 @@ async function main() {
             await capture('grn-finalize', 'Finalize receiving');
           }
         }
-        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, dialogSample, scheduleDialogSample, inventoryDialogSamples, scheduleBottomSample, ...metrics });
+        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, longTransferListScreenshots, resizeSample, dialogSample, scheduleDialogSample, inventoryDialogSamples, scheduleBottomSample, ...metrics });
         console.log(`${route} @ ${width}: ${metrics.counts.tables} table(s), ${metrics.counts.rows} row(s), overflow=${metrics.horizontalPageOverflow}`);
       }
     }
@@ -1872,6 +1974,7 @@ async function main() {
   const rankedIssues = rows.map((row) => {
     const issues = [];
     if (Object.values(row.edgeAlignment).some((item) => item && !item.aligned)) issues.push('block edges differ by >1px');
+    if (Object.values(row.transferFlowAlignment ?? {}).some((item) => item && !item.aligned)) issues.push('transfer page blocks differ from the shared gutter by >1px');
     if (Object.values(row.sidebarClearanceByBlock).some((value) => value !== null && value < 16)) issues.push('block clearance under provisional 16px minimum');
     if (row.horizontalPageOverflow) issues.push('horizontal page overflow');
     if (row.doubleVerticalScroll) issues.push('nested vertical scroll');
@@ -1925,6 +2028,7 @@ async function main() {
     const failures = rows.flatMap((row) => {
       const checks = [
         [Object.values(row.edgeAlignment).some((item) => item && !item.aligned), 'page block edges differ by >1px'],
+        [Object.values(row.transferFlowAlignment ?? {}).some((item) => item && !item.aligned), 'transfer page blocks differ from the shared gutter by >1px'],
         [!row.mainContent?.textLength, 'page content did not render inside the main landmark'],
         [Object.values(row.sidebarClearanceByBlock).some((value) => value !== null && value < 16), 'sidebar clearance below 16px'],
         [row.horizontalPageOverflow, 'horizontal page overflow'],
