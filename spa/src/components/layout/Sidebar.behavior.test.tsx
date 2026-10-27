@@ -88,6 +88,28 @@ it('opens the pending-QC filter when GRN has a positive badge', () => {
   );
 });
 
+it('opens overdue bills when the AP badge is positive', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'overdue_bills'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Bills (AP)',
+          description: 'Overdue bills payable',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/accounting/bills']}>
+      <Sidebar roleSlug="finance_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Accounts Payable Bills/ })).toHaveAttribute(
+    'href',
+    '/accounting/bills?overdue=1',
+  );
+});
+
 it('opens the to-inspect queue when inspections has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'pending_inspections'
