@@ -863,11 +863,18 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - F-72 records reminder timing drift: current reminder selection is seven days, while the approved signal catalog says three. This PR preserves trigger timing; threshold alignment remains open.
 - F-73 records the company-wide internal Price Agreement route: current roles can open every customer's agreement. Confirm that audience or add account scope before claiming customer-level need-to-know.
 
-## Separate finding fix: F-74 interview mail failure fallback snapshot (PR #465, in progress)
+## Separate finding fix: F-74 interview mail failure fallback snapshot (PR #465, merged as `bcff0f02`)
 
 - Both interview email failure callbacks now read candidate name and application hash from the saved email snapshot, matching the email rendering path.
 - Original-head `RecruitmentApplicationTest.php` selected case passed **1 / 5 assertions**. The rebased test now mutates the snapshot and verifies both fallback notices use its values; that assertion change was not run. No database was touched.
-- The test calls `failed()` on constructed mailables; it does not reproduce a real queued-mail serialization/retry failure. Fallback recipients still need the separate subject-access PR #466.
+- The test calls `failed()` on constructed mailables; it does not reproduce a real queued-mail serialization/retry failure. That proof remains open.
+
+## Phase 3 Recruitment mail-failure subject access (PR #466, in progress)
+
+- The four synchronous recruitment email-failure fallbacks and four queued-mail failure callbacks now pass their `JobApplication` subject through `EmailDeliveryFailureNotifier`. The subject gate requires enabled HR and Recruitment modules, an active user with `hr.recruitment.view`, and the exact `/hr/recruitment/applications/{hash}` target. The application detail endpoint uses the same permission and route feature gates.
+- Existing recipient selection and event timing stay unchanged. Fallback user IDs are reloaded as active users, then rejected if the subject gate fails. Each queued-mail callback now resolves the current application before notifying; `JobApplication` has no soft-delete behavior, so physical deletion fails closed.
+- Original-head `RecruitmentApplicationTest.php --filter test_recruitment_email_failure_fallbacks_require_application_access` passed **1 / 18 assertions**. It covers eligible HR, an inactive HR user, an outsider, exact links, and all four queued-mail failure callbacks. The rebased test adds a deleted-application assertion; it and the code have not been rerun to avoid shared `ogami_test`; `git diff --check` only. No database was touched.
+- The full recruitment feature file had **2 errors and 2 failures** in unrelated cases on the original PR head. PR evidence attributes the API CI syntax stop to inherited F-22 (`PdfRenderService::ensureDompdfDirs()` duplicate declaration); user waived CI. No browser or real queue retry test ran.
 
 ## Resume instruction
 

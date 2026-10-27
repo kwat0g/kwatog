@@ -64,16 +64,22 @@ class ApplicationReceivedMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $application = JobApplication::query()->find($this->application->getKey());
+        if ($application === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment application confirmation',
-            "The application confirmation email for {$this->application->full_name} could not be delivered. Review the application and contact the candidate through an approved channel.",
+            "The application confirmation email for {$application->full_name} could not be delivered. Review the application and contact the candidate through an approved channel.",
             [
-                'link_to' => '/hr/recruitment/applications/'.$this->application->hash_id,
+                'link_to' => '/hr/recruitment/applications/'.$application->hash_id,
                 'entity_type' => 'job_application',
-                'entity_id' => $this->application->hash_id,
+                'entity_id' => $application->hash_id,
                 'reason' => 'The candidate email job failed in the queue.',
             ],
+            $application,
         );
     }
 
