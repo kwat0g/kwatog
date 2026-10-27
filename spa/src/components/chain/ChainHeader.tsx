@@ -37,7 +37,12 @@ export function ChainHeader({
 }: ChainHeaderProps) {
   if (steps.length === 0) return null;
   return (
-    <div className={cn('w-full overflow-x-auto', className)}>
+      <div
+        className={cn('w-full overflow-x-auto', className)}
+        role="region"
+        aria-label="Document progress"
+        tabIndex={0}
+      >
       <div className={cn('flex items-start gap-0', stretch ? 'w-full min-w-0' : 'min-w-max')}>
         {steps.map((step, i) => {
           const isInteractive = Boolean(step.href || step.onClick);
@@ -46,7 +51,7 @@ export function ChainHeader({
             <div
               className={cn(
                 'flex flex-col items-center py-0.5 rounded-md transition-colors duration-fast relative',
-                stretch ? 'min-w-0 px-0.5 sm:min-w-[88px] sm:px-1' : 'min-w-[88px] px-1',
+                'min-w-20 px-1',
                 isInteractive && 'hover:bg-subtle cursor-pointer',
               )}
             >
@@ -109,6 +114,7 @@ export function ChainHeader({
               <Link
                 to={step.href}
                 aria-label={step.label}
+                data-touch-target
                 className={cn('group rounded-md', focusRing)}
               >
                 {stepNode}

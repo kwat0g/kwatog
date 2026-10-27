@@ -24,13 +24,13 @@ const alignCls: Record<Align, string> = {
 /** Header cell classes. Use when you can't use `<Th>` (e.g. inside a map). */
 export const thCls = (align: Align = 'left'): string =>
   cn(
-    'h-row-compact px-2.5 text-caption uppercase tracking-wide text-muted font-medium select-none',
+    'h-row-compact px-3 text-table-header text-secondary font-semibold select-none',
     alignCls[align],
   );
 
 /** Body cell classes. `mono` for any numeric / ID / date content. */
 export const tdCls = (align: Align = 'left', mono = false): string =>
-  cn('px-2.5 py-1 align-middle text-sm', alignCls[align], mono && 'font-mono tabular-nums');
+  cn('px-3 py-1 align-middle text-sm', alignCls[align], mono && 'font-mono tabular-nums');
 
 /**
  * Row classes — hairline separator, hover highlight, selected outline.

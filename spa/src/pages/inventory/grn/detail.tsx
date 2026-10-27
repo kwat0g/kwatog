@@ -27,11 +27,13 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ChainHeader } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
+import { TableScrollRegion } from '@/components/ui/TableScrollRegion';
 import { usePermission } from '@/hooks/usePermission';
 import { GrnSupplierDocumentsPanel } from './components/GrnSupplierDocumentsPanel';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatDate } from '@/lib/formatDate';
-import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import { formatPeso, formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import type { GrnItem } from '@/types/inventory';
@@ -374,14 +376,15 @@ export default function GrnDetailPage() {
   )[data.status];
 
   return (
-    <div>
+    <PageShell className="flex flex-col gap-4">
       <PageHeader
+        inset={false}
         title={<span className="font-mono">{data.grn_number}</span>}
         subtitle={[data.purchase_order?.po_number, data.vendor?.name].filter(Boolean).join(' · ')}
         backTo="/inventory/grn"
         backLabel="GRNs"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Chip variant={variant}>
               {grnOptions?.statuses?.find((option) => option.value === data.status)?.label ??
                 data.status}
@@ -477,7 +480,7 @@ export default function GrnDetailPage() {
           </div>
         }
       />
-      <div className="px-5 py-4 space-y-4">
+      <div className="space-y-4 pb-4">
         <Panel title="Procure-to-pay chain" bodyClassName="px-4 py-3">
           <ChainHeader
             stretch
@@ -515,12 +518,13 @@ export default function GrnDetailPage() {
         <Panel title="Receipt details">
           <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-y-3 gap-x-6 text-sm">
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">PO</dt>
+              <dt className="text-label text-muted font-medium">PO</dt>
               <dd className="font-mono">
                 {data.purchase_order ? (
                   <Link
                     to={`/purchasing/purchase-orders/${data.purchase_order.id}`}
-                    className="text-accent hover:underline"
+                    data-touch-target
+                    className="text-link hover:text-link-hover hover:underline"
                   >
                     {data.purchase_order.po_number}
                   </Link>
@@ -530,45 +534,45 @@ export default function GrnDetailPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt>
+              <dt className="text-label text-muted font-medium">Vendor</dt>
               <dd>{data.vendor?.name ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Received</dt>
-              <dd className={isDraft ? 'text-muted' : 'font-mono'}>
+              <dt className="text-label text-muted font-medium">Received</dt>
+              <dd className={isDraft ? 'text-muted' : 'tabular-nums'}>
                 {isDraft ? 'Awaiting goods' : formatDate(data.received_date)}
               </dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt>
+              <dt className="text-label text-muted font-medium">Received by</dt>
               {/* A draft is only an expectation; its creator did not receive anything. */}
               <dd>{isDraft ? '—' : (data.receiver?.name ?? '—')}</dd>
             </div>
             {data.accepted_at && (
               <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt>
-                <dd className="font-mono">
+                <dt className="text-label text-muted font-medium">Accepted</dt>
+                <dd className="tabular-nums">
                   {formatDate(data.accepted_at)} · {data.acceptor?.name}
                 </dd>
               </div>
             )}
             {data.rejected_reason && (
               <div className="col-span-4">
-                <dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt>
+                <dt className="text-label text-muted font-medium">Rejection reason</dt>
                 <dd className="text-danger-fg">{data.rejected_reason}</dd>
               </div>
             )}
             {data.remainder_rejected_at && (
               <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Remainder rejected</dt>
-                <dd className="font-mono">
+                <dt className="text-label text-muted font-medium">Remainder rejected</dt>
+                <dd className="tabular-nums">
                   {formatDate(data.remainder_rejected_at)} · {data.remainder_rejected_by?.name}
                 </dd>
               </div>
             )}
             {data.remainder_rejected_reason && (
               <div className="col-span-4">
-                <dt className="text-2xs uppercase tracking-wider text-muted">
+                <dt className="text-label text-muted font-medium">
                   Remainder rejection reason
                 </dt>
                 <dd>{data.remainder_rejected_reason}</dd>
@@ -577,12 +581,13 @@ export default function GrnDetailPage() {
             {/* Incoming QC runs per line; each line shows its own inspection below. */}
             {data.qc_inspection && !(data.items ?? []).some((l) => l.inspection) && (
               <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Incoming QC</dt>
+                <dt className="text-label text-muted font-medium">Incoming QC</dt>
                 <dd>
                   {can('quality.inspections.view') ? (
                     <Link
                       to={`/quality/inspections/${data.qc_inspection.id}`}
-                      className="font-mono text-accent hover:underline"
+                      data-touch-target
+                      className="font-mono text-link hover:text-link-hover hover:underline"
                     >
                       {data.qc_inspection.inspection_number}
                     </Link>
@@ -597,11 +602,12 @@ export default function GrnDetailPage() {
             )}
             {data.journal_entry && can('accounting.journal.view') && (
               <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Inventory GL</dt>
+                <dt className="text-label text-muted font-medium">Inventory GL</dt>
                 <dd>
                   <Link
                     to={`/accounting/journal-entries/${data.journal_entry.id}`}
-                    className="font-mono text-accent hover:underline"
+                    data-touch-target
+                    className="font-mono text-link hover:text-link-hover hover:underline"
                   >
                     {data.journal_entry.entry_number}
                   </Link>{' '}
@@ -678,7 +684,8 @@ export default function GrnDetailPage() {
                 A draft AP bill was staged from this accepted receipt —{' '}
                 <Link
                   to={`/accounting/bills/${data.bill.id}`}
-                  className="text-accent hover:underline font-mono"
+                  data-touch-target
+                  className="font-mono text-link hover:text-link-hover hover:underline"
                 >
                   {data.bill.bill_number}
                 </Link>{' '}
@@ -775,7 +782,7 @@ export default function GrnDetailPage() {
                 </Button>
               </div>
             )}
-            <div className="overflow-x-auto" role="region" aria-label="GRN line items" tabIndex={0}>
+            <TableScrollRegion label="GRN line items">
               <table className={`${tableCls} ${isDraft ? 'min-w-[640px]' : 'min-w-[760px]'}`}>
                 <thead>
                   <tr className={theadTrCls}>
@@ -806,7 +813,7 @@ export default function GrnDetailPage() {
                       <tr key={l.id} className={trCls}>
                         <Td>
                           <span className="font-mono">{l.item?.code}</span>
-                          <div className="text-2xs text-muted">{l.item?.name}</div>
+                          <div className="text-caption text-muted leading-5">{l.item?.name}</div>
                           <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>
                             {l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}
                           </Chip>
@@ -854,7 +861,7 @@ export default function GrnDetailPage() {
                                   ))}
                               </optgroup>
                             </Select>
-                            <div className="mt-1 text-2xs text-muted">
+                            <div className="mt-1 text-caption text-muted">
                               {storedBinsFor(l).length === 1
                                 ? 'Suggested from current stock'
                                 : storedBinsFor(l).length > 1
@@ -887,7 +894,7 @@ export default function GrnDetailPage() {
                               }
                               className="w-32 h-7 text-right font-mono"
                             />
-                            <div className="mt-0.5 text-2xs text-muted">
+                            <div className="mt-0.5 text-caption text-muted">
                               {l.item?.unit_of_measure ?? 'Base units'}
                             </div>
                           </Td>
@@ -934,7 +941,7 @@ export default function GrnDetailPage() {
                               {formatQuantity(l.quantity_accepted)} {l.item?.unit_of_measure}
                             </Td>
                             <Td align="right" mono>
-                              {Number(l.unit_cost).toFixed(4)}
+                              {formatUnitCost(l.unit_cost)}
                             </Td>
                             <Td align="right" mono>
                               {formatPeso(Number(l.quantity_received) * Number(l.unit_cost))}
@@ -942,11 +949,11 @@ export default function GrnDetailPage() {
                           </>
                         )}
                       </tr>
-                      <tr className="border-b border-subtle bg-subtle/40">
+                      <tr className="h-row-compact border-b border-subtle bg-subtle/40">
                         <Td colSpan={columnCount}>
                           {isDraft ? (
                             <details className="text-sm">
-                              <summary className="cursor-pointer text-accent hover:underline">
+                              <summary className="cursor-pointer text-link hover:text-link-hover hover:underline">
                                 Add supplier lot or expiry (optional)
                               </summary>
                               <p className="mt-2 text-xs text-muted">
@@ -977,7 +984,7 @@ export default function GrnDetailPage() {
                               </div>
                             </details>
                           ) : (
-                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-2xs text-muted">
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-caption text-muted">
                               {l.quantity_received_in_uom !== null &&
                               l.received_uom_conversion_factor !== null ? (
                                 <span>
@@ -989,7 +996,10 @@ export default function GrnDetailPage() {
                                   {' · 1 '}
                                   {l.received_uom_code || l.item?.unit_of_measure}
                                   {' = '}
-                                  {Number(l.received_uom_conversion_factor).toFixed(6)}{' '}
+                                  {Number(l.received_uom_conversion_factor).toLocaleString('en-PH', {
+                                    minimumFractionDigits: 6,
+                                    maximumFractionDigits: 6,
+                                  })}{' '}
                                   {l.item?.unit_of_measure}
                                 </span>
                               ) : (
@@ -1041,7 +1051,7 @@ export default function GrnDetailPage() {
                                   {can('quality.inspections.view') ? (
                                     <Link
                                       to={`/quality/inspections/${l.inspection.id}`}
-                                      className="font-mono text-accent hover:underline"
+                                      className="font-mono text-link hover:text-link-hover hover:underline"
                                     >
                                       {l.inspection.inspection_number}
                                     </Link>
@@ -1063,7 +1073,7 @@ export default function GrnDetailPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScrollRegion>
             {isDraft && can('inventory.grn.create') && (
               <div className="mt-4 flex flex-col gap-3 border-t border-default pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-secondary" role="status">
@@ -1149,7 +1159,7 @@ export default function GrnDetailPage() {
                 <p key={hold.id} className="text-sm text-warning-fg">
                   {line.item?.code}: {formatQuantity(hold.quantity ?? 0)} held ·{' '}
                   {can('quality.ncr.view') ? (
-                    <Link className="text-accent hover:underline" to={`/quality/ncrs/${hold.id}`}>
+                    <Link data-touch-target className="text-link hover:text-link-hover hover:underline" to={`/quality/ncrs/${hold.id}`}>
                       {hold.ncr_number}
                     </Link>
                   ) : (
@@ -1233,6 +1243,6 @@ export default function GrnDetailPage() {
         variant="primary"
         pending={postBill.isPending}
       />
-    </div>
+    </PageShell>
   );
 }

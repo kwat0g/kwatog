@@ -25,6 +25,7 @@ it('keeps a blocker and its recovery visible once without hovering', () => {
   expect(
     screen.getAllByText('Invalid resin unit. PPC: correct the PR, then run MRP again.'),
   ).toHaveLength(1);
+  expect(screen.getByRole('region', { name: 'Document progress' })).toHaveAttribute('tabindex', '0');
   expect(screen.getByRole('link', { name: 'MRP Planned' })).toHaveAttribute('href', '/mrp/plans');
 });
 

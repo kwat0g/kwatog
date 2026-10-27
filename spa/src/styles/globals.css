@@ -260,6 +260,19 @@
       min-height: var(--touch-target-min);
     }
 
+    .page-shell [data-layout='table-scroller'] a {
+      display: inline-flex;
+      min-height: var(--touch-target-min);
+      align-items: center;
+    }
+
+    .page-shell a[data-touch-target] {
+      display: inline-flex;
+      min-width: var(--touch-target-min);
+      min-height: var(--touch-target-min);
+      align-items: center;
+    }
+
     .page-shell summary {
       display: flex;
       min-height: var(--touch-target-min);
