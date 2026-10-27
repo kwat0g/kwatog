@@ -62,9 +62,9 @@ class ReturnRestockNotificationTest extends TestCase
     /** A warehouse role holding inventory and return-request view access. */
     private function warehouseUser(): User
     {
-        $role = Role::query()->create(['name' => 'Warehouse Notify Test', 'slug' => 'warehouse-notify-test']);
+        $role = Role::query()->firstOrCreate(['slug' => 'warehouse-notify-test'], ['name' => 'Warehouse Notify Test']);
         $permissions = Permission::query()->whereIn('slug', ['inventory.view', 'return_management.view'])->pluck('id');
-        $role->permissions()->attach($permissions->all());
+        $role->permissions()->syncWithoutDetaching($permissions->all());
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }
@@ -240,6 +240,9 @@ class ReturnRestockNotificationTest extends TestCase
         $this->assertStringContainsString($rma->rma_number, $data['message']);
         $this->assertStringContainsString('8 unit(s)', $data['message'], 'Quantity renders without trailing decimal zeros.');
         $this->assertSame("/return-management/{$rma->hash_id}", $data['link_to']);
+        $this->assertSame(ReturnRequest::class, $data['subject_type']);
+        $this->assertSame((string) $rma->id, $data['subject_id']);
+        $this->actingAs($warehouse)->getJson('/api/v1/return-management/return-requests/'.$rma->hash_id)->assertOk();
 
         $this->actingAs($reviewer)
             ->postJson("/api/v1/inventory/mrb/{$released->hash_id}/release", [

@@ -609,16 +609,10 @@ class ReturnCaseService
                 ? User::query()->where('is_active', true)->whereKey($case->assigned_to)->get()
                     ->filter(fn (User $user): bool => $user->hasPermission('return_management.view'))
                 : collect();
-            if ($recipients->isEmpty()) {
-                $recipients = $this->notifications->usersWithPermission('return_management.manage')
-                    ->filter(fn (User $user): bool => $user->hasPermission('return_management.view'));
-            }
-            if ($recipients->isNotEmpty()) {
-                $this->notifications->send($recipients, 'return.case_updated', [
-                    'title' => $title.' — '.$case->case_number, 'message' => 'Open the case to review the latest quantities and next action.',
-                    'link_to' => '/return-management/cases/'.$case->hash_id, 'entity_type' => 'return_case', 'entity_id' => $case->hash_id,
-                ]);
-            }
+            $this->notifications->sendForSubject($case, $recipients, 'return.case_updated', [
+                'title' => $title.' — '.$case->case_number, 'message' => 'Open the case to review the latest quantities and next action.',
+                'link_to' => '/return-management/cases/'.$case->hash_id, 'entity_type' => 'return_case', 'entity_id' => $case->hash_id,
+            ]);
             if ($public) {
                 $realm = $case->type->value;
                 $portalClass = $realm === 'customer' ? \App\Modules\B2B\Models\CustomerPortalUser::class : \App\Modules\B2B\Models\SupplierPortalUser::class;
@@ -655,11 +649,11 @@ class ReturnCaseService
                     }
                 }
                 if ($needsFollowUp && $recipients->isNotEmpty()) {
-                    $this->notifications->sendInApp($recipients, 'return.case_updated', [
+                    $this->notifications->sendForSubject($case, $recipients, 'return.case_updated', [
                         'title' => $case->case_number.' needs direct follow-up',
                         'message' => 'At least one portal contact could not be emailed. Review the contact addresses and follow up on this report.',
                         'link_to' => '/return-management/cases/'.$case->hash_id,
-                    ], 'return-case-email-follow-up:'.$eventId);
+                    ], 'return-case-email-follow-up:'.$eventId, emailEnabled: false);
                 }
             }
         } catch (\Throwable $e) {

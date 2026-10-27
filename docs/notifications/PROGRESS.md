@@ -771,10 +771,16 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 
 - Current `EmailPartyOnReturnRequestUpdated::handle()` assigns `$isCustomer` before its first use. `git blame` attributes this line to PR #371 (`5f9ca6ae`). PR #450 proposed the same move from a stale base and had no unique code diff against current `main`; it was closed as redundant. No database was touched.
 
-## Separate finding: F-65 supplier-return audience permission (PR #451, pending merge)
+## Separate finding: F-65 supplier-return audience permission (PR #451, merged as `c7ce4bda`)
 
-- `notifySupplierShip()` now selects Purchasing users with seeded `purchasing.view`, then retains the `return_management.view` filter. The wrong `purchasing.po.view` selector returned no configured recipients. The separate ReturnRequest subject gate remains PR #452 work.
+- `notifySupplierShip()` now selects Purchasing users with seeded `purchasing.view`, then retains the `return_management.view` filter. The wrong `purchasing.po.view` selector returned no configured recipients. The ReturnRequest subject gate is added in PR #452.
 - Original-head `SupplierReturnShipNotificationTest.php` passed **4 / 13 assertions**, including a linked detail access check and unauthorized-recipient denial. Rebase tests are skipped against shared `ogami_test`; no database was touched.
+
+## Phase 3 Return Management subject access (PR #452, pending merge)
+
+- Internal ReturnRequest notices and ReturnCase status/follow-up notices now pass their linked record through `sendForSubject()`. Both gates require Return Management enablement, active user, and `return_management.view`; customer-only users cannot receive supplier ReturnRequest or supplier ReturnCase notices.
+- Removed the broad manager fallback when a ReturnCase has no assignee. No eligible assigned viewer means no notice; portal recipients remain account-scoped. Existing email versus in-app-only channel behavior remains.
+- Original-head targeted tests passed **13 / 140 assertions**, covering eligible/denied audiences, customer/supplier case scope, exact RMA link/metadata, and return workflows. Rebase tests are skipped against shared `ogami_test`; no database was touched.
 
 ## Outstanding proof / risks
 
@@ -787,4 +793,4 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 
 ## Resume instruction
 
-Merge PR #449. Continue remaining subject-access rules on separate PRs, then finish approved badge signals. Keep F-57 in its own bug-fix PR; update this file with verification and gaps.
+Merge PR #452. Continue remaining subject-access rules on separate PRs, then finish approved badge signals. Keep F-57 in its own bug-fix PR; update this file with verification and gaps.

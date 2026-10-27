@@ -47,7 +47,9 @@ use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\ReturnManagement\Enums\ReturnCaseType;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -58,7 +60,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -85,6 +87,11 @@ final class NotificationSubjectAccessRegistry
                 && $user->is_active
                 && $user->hasPermission('quality.ncr.view')
                 && $subject instanceof NonConformanceReport,
+            ReturnCase::class => app(SettingsService::class)->get('modules.return_management', false) === true
+                && $user->is_active
+                && $user->hasPermission('return_management.view')
+                && $subject instanceof ReturnCase
+                && ! (ReturnManagementAccess::customerReturnsOnly($user) && $subject->type === ReturnCaseType::Supplier),
             ReturnRequest::class => app(SettingsService::class)->get('modules.return_management', false) === true
                 && $user->is_active
                 && $user->hasPermission('return_management.view')
