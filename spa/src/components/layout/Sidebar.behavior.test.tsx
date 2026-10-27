@@ -77,6 +77,21 @@ it('opens Overtime on the actionable approval queue', () => {
   );
 });
 
+it('opens Supplier Listings on the pending-review queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'supplier_listings_pending'
+    ? { count: 2, severity: 'warning', label: 'Pending review', description: 'Supplier listings awaiting review' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/purchasing/supplier-listings']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Supplier Listings/ })).toHaveAttribute(
+    'href',
+    '/purchasing/supplier-listings?status=pending',
+  );
+});
+
 it('opens Leave Management on the current-stage approval queue', () => {
   badgeMock.getBadge.mockImplementation((key) => key === 'leaves'
     ? { count: 3, severity: 'warning', label: 'Leaves', description: 'Leave requests awaiting your approval' }

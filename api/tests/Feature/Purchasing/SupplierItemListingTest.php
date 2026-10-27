@@ -90,6 +90,20 @@ class SupplierItemListingTest extends TestCase
         return $listing;
     }
 
+    /** @param array<int, string> $permissions */
+    private function userWithPermissions(string $slug, array $permissions): User
+    {
+        $role = Role::query()->create([
+            'name' => $slug,
+            'slug' => $slug,
+            'description' => 'Test role',
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync(DB::table('permissions')->whereIn('slug', $permissions)->pluck('id'));
+
+        return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+    }
+
     /* ─── Portal: catalog ──────────────────────────────────── */
 
     public function test_catalog_returns_active_items_only(): void
@@ -246,6 +260,47 @@ class SupplierItemListingTest extends TestCase
         $this->actingAs($this->purchasingOfficer)
             ->getJson('/api/v1/purchasing/supplier-listings')
             ->assertOk();
+    }
+
+    public function test_pending_review_badge_matches_queue_and_requires_view_and_review_access(): void
+    {
+        $this->makeListing(['item_id' => Item::factory()->create()->id]);
+        $this->makeListing(['item_id' => Item::factory()->create()->id]);
+        $this->makeListing([
+            'item_id' => Item::factory()->create()->id,
+            'status' => SupplierListingStatus::Approved->value,
+        ]);
+
+        $badges = $this->actingAs($this->purchasingOfficer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $queue = $this->actingAs($this->purchasingOfficer, 'sanctum')
+            ->getJson('/api/v1/purchasing/supplier-listings?status=pending')
+            ->assertOk();
+
+        $this->assertSame(2, $badges['supplier_listings_pending']['count']);
+        $this->assertSame($badges['supplier_listings_pending']['count'], $queue->json('meta.total'));
+
+        $viewOnly = $this->userWithPermissions('test_supplier_listing_view_only', [
+            'purchasing.supplier_listings.view',
+        ]);
+        $viewOnlyBadges = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('supplier_listings_pending', $viewOnlyBadges);
+        $this->getJson('/api/v1/purchasing/supplier-listings?status=pending')->assertOk();
+
+        $reviewOnly = $this->userWithPermissions('test_supplier_listing_review_only', [
+            'purchasing.supplier_listings.review',
+        ]);
+        $reviewOnlyBadges = $this->actingAs($reviewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('supplier_listings_pending', $reviewOnlyBadges);
+        $this->getJson('/api/v1/purchasing/supplier-listings?status=pending')->assertForbidden();
     }
 
     public function test_review_queue_id_filter_returns_only_the_target_and_fails_closed_for_unknown_hash(): void

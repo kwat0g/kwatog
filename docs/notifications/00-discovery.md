@@ -310,7 +310,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/purchasing/purchase-requests` | `Purchase Requests` | `purchasing.view` | `purchasing` | `purchase_requests` |
 | `/purchasing/rfqs` | `Supplier RFQs` | `purchasing.rfq.view` | `purchasing` | — |
 | `/purchasing/approved-suppliers` | `Approved Suppliers` | `purchasing.po.create` | `purchasing` | — |
-| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.view` | `purchasing` | — |
+| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.view` | `purchasing` | `supplier_listings_pending` |
 | `/inventory/items` | `Inventory Items` | `inventory.view` | `inventory` | `low_stock` |
 | `/inventory/uoms` | `Units of Measure` | `inventory.items.manage` | `inventory` | — |
 | `/inventory/grn` | `Goods Receipts (GRN)` | `inventory.view` | `inventory` | `pending_grn` |
@@ -393,11 +393,11 @@ The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirm
 
 **Other navigation shells:** employee self-service bottom bar: `/self-service` (always), `/self-service/work-orders` (production feature), `/self-service/dtr` (attendance feature), `/self-service/leave` (leave feature), `/self-service/payslips` (payroll feature plus `payroll.view`), `/self-service/me` (always). Factory floor: `/factory`, `/factory/qc`. Maintenance mobile: `/maintenance/mobile`. These use no numeric badges.
 
-### Existing badge definitions
+### Badge definitions at the discovery baseline
 
-The 32 backend keys and their current meanings are defined in `api/app/Modules/Dashboard/Services/BadgeService.php`:
+The discovery snapshot contained 32 backend keys. Current `BadgeService` defines 47 keys; the 15 later keys are listed after this baseline table.
 
-| Key | Current count definition |
+| Key | Count definition captured at discovery |
 | --- | --- |
 | `approvals` | `ApprovalRecord` current/pending rows for the user's role or active delegated roles; no source-record scope filter here. |
 | `action_center` | `ActionCenterService::for($user)['summary']['total']`. |
@@ -432,11 +432,31 @@ The 32 backend keys and their current meanings are defined in `api/app/Modules/D
 | `pending_budgets` | Budgets with status `submitted`. |
 | `pending_transfers` | Phase 0 baseline counted all transfers with status `pending`; current scope counts pending transfers the user can approve under the direct/delegated maker-checker rule. |
 
+### Current definitions added after the discovery snapshot
+
+| Key | Current count definition |
+| --- | --- |
+| `overdue_purchase_orders` | Visible receivable purchase orders with expected delivery date before Manila today and at least one line with quantity remaining. `PurchaseOrderAccessPolicy` applies route visibility. |
+| `purchase_order_actions` | Purchase orders visible to the user and currently actionable by them: current approval step, an approved order they can send, or a pending supplier response they can resolve. |
+| `supplier_listings_pending` | `SupplierItemListing::pending()` shared reviewer queue; requires list-view access and direct or active delegated review permission. No per-reviewer assignment exists. |
+| `maintenance_wo_unassigned` | Open/assigned/in-progress Maintenance work orders with no assignee; requires Maintenance view and assignment permission. |
+| `out_of_stock` | Active Items with usable quantity at or below zero, from `InventoryDashboardService`; positive counts use critical severity. |
+| `overdue_ncrs` | Open/in-progress NCRs at or beyond the shared severity SLA from `NcrSlaService::overdueQuery()`. |
+| `calibration_overdue` | Calibration records with stored status `overdue`; positive counts use critical severity. |
+| `calibration_due` | Calibration records with stored status `due`, recomputed by the daily due-status command. |
+| `effectiveness_due` | Current user's corrective/preventive actions on closed NCRs, pending verification or ineffective, with a next check due by today plus the configured warning window. |
+| `inspection_reviews` | Inspections returned by `Inspection::awaitingReviewBy(current user)`; requires list and review permissions and excludes the inspector/result authors. |
+| `unpaid_invoices` | Open invoices with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
+| `overdue_invoices` | Unpaid invoices with due date before today in `Asia/Manila`; date-only boundary. |
+| `payment_review_invoices` | Open positive-balance invoices with a pending customer payment submission; requires invoice view and collection permission, and excludes `system_admin`. |
+| `unpaid_bills` | Open bills with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
+| `due_soon_bills` | Unpaid/partial bills with positive balance due today through three calendar days ahead, inclusive. |
+
 ## Candidate signal data discovery
 
-Status enums and due/state columns exist across the modules below. The candidate definitions are not approved policy; they are the proposed data-backed review set. Exact excluded/terminal status classification must be locked against each enum and destination list during Phase 2/implementation.
+Status enums and due/state columns exist across the modules below. Phase 2 approved the proposed defaults; implementation records candidates that remain deferred where status, audience, or destination filters are unverified.
 
-| Module | Relevant data found | Candidate signals to evaluate | Current sidebar badge |
+| Module | Relevant data found | Candidate signals to evaluate | Sidebar badge at discovery snapshot |
 | --- | --- | --- | --- |
 | Accounting | Invoice, bill, payment, journal, credit-note, and accounting-period status enums; due dates and payment submission rows | AR unpaid/partial/overdue/due soon; AP unpaid/partial/overdue; submitted payment review; draft/unposted invoice; unreconciled or failed posting; period close/reopen | Draft invoice, overdue bills |
 | Admin | Active/locked users, permission overrides, audit, backup operations, queue/failed-job health | Locked accounts; pending/expired invites; failed jobs, queue wait, backup failure; expiring system credential/certificate if stored | None |
