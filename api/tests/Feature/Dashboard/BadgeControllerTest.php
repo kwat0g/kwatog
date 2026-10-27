@@ -282,11 +282,13 @@ class BadgeControllerTest extends TestCase
         $this->assertSame($financeList->json('meta.total'), $financeBadge);
     }
 
-    public function test_inquiries_badge_matches_the_new_inquiry_list_filter(): void
+    public function test_inquiry_badge_matches_new_inquiry_list_and_requires_manage_permission(): void
     {
         $customerService = User::factory()->create([
             'role_id' => Role::where('slug', 'customer_service_officer')->value('id'),
         ]);
+        $this->assertTrue($customerService->hasPermission('crm.inquiries.view'));
+        $this->assertTrue($customerService->hasPermission('crm.inquiries.manage'));
         ContactInquiry::factory()->create(['status' => ContactInquiryStatus::New]);
         ContactInquiry::factory()->create(['status' => ContactInquiryStatus::InProgress]);
         ContactInquiry::factory()->create(['status' => ContactInquiryStatus::Closed]);
@@ -301,6 +303,26 @@ class BadgeControllerTest extends TestCase
 
         $this->assertSame(1, $list->json('meta.total'));
         $this->assertSame($list->json('meta.total'), $badge);
+
+        $viewer = User::factory()->create([
+            'role_id' => Role::where('slug', 'employee')->value('id'),
+        ]);
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+        $this->grantPermission($viewer, 'crm.inquiries.view', $admin);
+        $this->assertTrue($viewer->fresh()->hasPermission('crm.inquiries.view'));
+        $this->assertFalse($viewer->fresh()->hasPermission('crm.inquiries.manage'));
+
+        $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/v1/crm/inquiries?status=new')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $viewerBadges = $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('inquiries', $viewerBadges);
     }
 
     public function test_widened_scope_badge_counts_track_recent_rows(): void

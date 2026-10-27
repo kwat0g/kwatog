@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PR #380 scopes late-supplier notices to reviewers who can open the exact PO and merged as `7aa4820b`; PR #381 adds overdue, unpaid, and due-soon AP signals with badge/list parity and merged as `6c3124c0`. PR #382 excludes inactive and soft-deleted internal recipients and merged as `f53c4e7b`. PR #405 adds department-boundary proof for `training.expiry`; its targeted test passed on the original feature head, with post-rebase execution unavailable locally. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PR #380 scopes late-supplier notices to reviewers who can open the exact PO and merged as `7aa4820b`; PR #381 adds overdue, unpaid, and due-soon AP signals with badge/list parity and merged as `6c3124c0`. PR #382 excludes inactive and soft-deleted internal recipients and merged as `f53c4e7b`. PR #405 adds department-boundary proof for `training.expiry`; its targeted test passed on the original feature head, with post-rebase execution unavailable locally. PR #384 narrows the CRM inquiry triage badge to users with list and status-management access; its focused sidebar test passes after rebase. API test rerun and merge remain pending. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -11,10 +11,10 @@
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; partial targeted recipient and badge/list comparisons are recorded below. Full role/scope proof remains open. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
 | 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #380, #382, #485, and #487 are merged to `main`. Global record authorization coverage, signal registry, and remaining event families remain open. |
-| 4. Frontend | In progress | PR #378 hardens same-app notification destinations. PR #381 adds labeled AP signals and a keyboard-operable signal popover. Notification Center filters, responsive/browser QA, and multi-signal coverage for other modules remain open. |
-| 5. Migration | Partial | PR #380 scopes late-supplier notices to users who can open the linked PO. PR #381 aligns overdue, unpaid, and due-soon AP signals with filtered list scopes. PR #382 applies inactive-user exclusion through the shared internal delivery normalizer. PR #405 verifies a department-head recipient boundary for training-expiry notices. Remaining dispatch sites and sidebar signals remain open. |
+| 4. Frontend | In progress | PR #378 hardens same-app notification destinations. PR #381 adds labeled AP signals and a keyboard-operable signal popover. PR #384 links the existing CRM inquiry badge to its triage audience. Notification Center filters, responsive/browser QA, and multi-signal coverage for other modules remain open. |
+| 5. Migration | Partial | PR #380 scopes late-supplier notices to users who can open the linked PO. PR #381 aligns overdue, unpaid, and due-soon AP signals with filtered list scopes. PR #382 applies inactive-user exclusion through the shared internal delivery normalizer. PR #405 verifies a department-head recipient boundary for training-expiry notices. PR #384 restricts the triage badge to users with both list and status-management access. Remaining dispatch sites and sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | PR #381 targeted API parity tests passed **4 tests / 89 assertions** and `Sidebar.behavior.test.tsx` passed **30 tests** on the original feature head. PR #382 `NotificationServiceTest.php --filter=inactive_internal_users_are_excluded_from_notification_delivery` passed **1 test / 8 assertions** on its original feature head. PR #405 `TrainingExpiryAlertTest.php --filter=test_training_expiry_notice_only_reaches_department_heads_with_employee_scope` passed **1 test / 4 assertions** on its original feature head. Post-rebase tests were not run because PHP/PHPUnit are unavailable locally. CI is waived. Full role, channel, and badge parity, browser QA, and the full suite remain open. |
+| 7. Verification | Partial | PR #381 targeted API parity tests passed **4 tests / 89 assertions** and `Sidebar.behavior.test.tsx` passed **30 tests** on the original feature head. PR #382 `NotificationServiceTest.php --filter=inactive_internal_users_are_excluded_from_notification_delivery` passed **1 test / 8 assertions** on its original feature head. PR #405 `TrainingExpiryAlertTest.php --filter=test_training_expiry_notice_only_reaches_department_heads_with_employee_scope` passed **1 test / 4 assertions** on its original feature head. PR #384 `Sidebar.behavior.test.tsx` passed **34 tests** after rebase; PHP syntax checks, targeted ESLint, and diff checks passed. Its API test passed **1 test / 10 assertions** on the original feature head but was not rerun after rebase to avoid using the configured shared `ogami_test` database. CI is waived. Full role, channel, and badge parity, browser QA, and the full suite remain open. |
 
 ## Phase 3 PR stack
 
@@ -32,6 +32,7 @@
 | F-01. Profile-request badge route and query parity | `notifications/fix-profile-request-badge-route` | [#340](https://github.com/kwat0g/kwatog/pull/340) | merged as `ba5e429a` |
 | F-18. Pricing notification role audience | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | merged as `aa8d28b2` |
 | F-05. CRM inquiry badge filter parity | `notifications/fix-inquiry-badge-parity` | [#342](https://github.com/kwat0g/kwatog/pull/342) | merged as `2c0a78dd` |
+| F-36. CRM inquiry triage audience | `notifications/triage-inquiry-badge` | [#384](https://github.com/kwat0g/kwatog/pull/384) | `bd6378b8` |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -148,7 +149,13 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 
 - The inquiry badge now counts only `ContactInquiryStatus::New`. `ContactInquiryInboxService::listQuery()` powers the badge and list; the sidebar opens `/crm/inquiries?status=new`. Query-aware active-link and recent-page matching preserve navigation behavior with the filter.
 - On the pre-merge feature head: API parity test **1 passed / 4 assertions**; sidebar permission and behavior tests **46 passed across two files**. Tests were not rerun after merge.
-- Six badge definitions remain unattached; see `FINDINGS.md`. No full role matrix or browser layout check.
+- Five badge definitions remain unattached; see `FINDINGS.md`. No full role matrix or browser layout check.
+
+## Separate signal fix: F-36 CRM inquiry triage audience (draft PR [#384](https://github.com/kwat0g/kwatog/pull/384))
+
+- The inquiry badge now requires `crm.inquiries.manage`; its count also requires `crm.inquiries.view` and reuses `ContactInquiryInboxService::listQuery()` with the `new` filter. The inbox's `new` filter uses `ContactInquiry::scopeAwaitingTriage()`, shared with the badge query.
+- A read-only user with `crm.inquiries.view` can still open the filtered list but receives no triage badge. The seeded customer-service manager receives the count, equal to the filtered list total.
+- On the original feature head: `BadgeControllerTest::test_inquiry_badge_matches_new_inquiry_list_and_requires_manage_permission` passed **1 test / 10 assertions**; `Sidebar.behavior.test.tsx` passed **31 tests**. After rebase, `Sidebar.behavior.test.tsx` passed **34 tests**; targeted ESLint, PHP syntax checks, and `git diff --check` passed. The API test was not rerun because PHPUnit uses the configured shared `ogami_test` database. CI is waived. Browser QA remains outstanding.
 
 ## Separate finding fix: F-18
 

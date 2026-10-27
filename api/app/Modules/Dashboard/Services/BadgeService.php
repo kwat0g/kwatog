@@ -436,12 +436,14 @@ class BadgeService
 
             // CRM > Inquiries — public contact-form submissions not yet triaged.
             'inquiries' => [
-                'permissions' => ['crm.inquiries.view'],
-                'label'       => 'Inquiries',
-                'description' => 'New contact-form inquiries',
-                'counter'     => fn (): int => app(ContactInquiryInboxService::class)
-                    ->listQuery(['status' => ContactInquiryStatus::New->value])
-                    ->count(),
+                'permissions' => ['crm.inquiries.manage'],
+                'label'       => 'New inquiries',
+                'description' => 'New contact-form inquiries awaiting triage',
+                'counter'     => fn (): int => $user->hasPermission('crm.inquiries.view')
+                    ? app(ContactInquiryInboxService::class)
+                        ->listQuery(['status' => ContactInquiryStatus::New->value])
+                        ->count()
+                    : 0,
             ],
 
             // CRM > Complaints — open / investigating customer complaints.

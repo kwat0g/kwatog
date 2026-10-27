@@ -7,6 +7,7 @@ namespace App\Modules\Landing\Models;
 use App\Common\Traits\HasHashId;
 use App\Common\Traits\HasAuditLog;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -43,5 +44,10 @@ class ContactInquiry extends Model
             'status' => ContactInquiryStatus::class,
             'consent_at' => 'datetime',
         ];
+    }
+
+    public function scopeAwaitingTriage(Builder $query): Builder
+    {
+        return $query->where('status', ContactInquiryStatus::New->value);
     }
 }
