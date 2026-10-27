@@ -214,7 +214,7 @@ class NotificationService
 
         $data['subject_type'] = $class;
         $data['subject_id'] = (string) $subject->getKey();
-        $this->dispatch($eligible, $type, $data, $emailEnabled, $dedupeKey, $recipientReasons);
+        $this->dispatch($eligible, $type, $data, $emailEnabled, $dedupeKey, $recipientReasons, $subject);
     }
 
     /** Deliver an existing Laravel notification through the central dispatcher. */
@@ -297,6 +297,7 @@ class NotificationService
         bool $emailEnabled,
         ?string $dedupeKey,
         array $recipientReasons = [],
+        ?Model $failureSubject = null,
     ): void {
         $users = $this->normaliseRecipients($recipients);
 
@@ -393,7 +394,7 @@ class NotificationService
 
         // Deferred: a rollback after this point must not leave a broadcast or
         // an email behind. Runs inline when no transaction is open.
-        DB::afterCommit(function () use ($events, $emails, $type, $data, $dedupeKey): void {
+        DB::afterCommit(function () use ($events, $emails, $type, $data, $dedupeKey, $failureSubject): void {
             foreach ($events as $notificationEvent) {
                 try {
                     // The notification row is the durable business result.
@@ -416,7 +417,7 @@ class NotificationService
                 $deliveryKey = $dedupeKey === null
                     ? null
                     : hash('sha256', $type.'|'.$dedupeKey.'|'.strtolower($email['address']));
-                $this->queueEmail($email['address'], $recipientUserIds, $name, $type, $data, $deliveryKey);
+                $this->queueEmail($email['address'], $recipientUserIds, $name, $type, $data, $deliveryKey, $failureSubject);
             }
         });
     }
@@ -540,6 +541,7 @@ class NotificationService
         string $type,
         array $data,
         ?string $deliveryKey,
+        ?Model $failureSubject = null,
     ): void {
         if (filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
             Log::warning('Notification email skipped: invalid recipient address', [
@@ -558,6 +560,7 @@ class NotificationService
                 $recipientUserIds[0] ?? null,
                 $recipientUserIds,
                 deliveryKey: $deliveryKey,
+                failureSubject: $failureSubject,
             ));
         } catch (\Throwable $e) {
             Log::warning('Notification email dispatch failed', [
