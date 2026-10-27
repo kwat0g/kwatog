@@ -1,0 +1,11 @@
+# Layout Audit Measurement Summary
+
+Generated: 2026-10-27T15:55:00.924Z · Role: admin · Serial captures: 2.
+
+| Rank | Route | Viewport | Score | Findings |
+|---:|---|---:|---:|---|
+| 1 | /inventory/material-issues | 1440px | 0 | none |
+| 2 | /inventory/material-issues/layout-mis-00001 | 1440px | 0 | none |
+
+Full block geometry and grouped typography, table, overflow, and button samples: `report.json`; repeated samples retain counts and up to three text examples.
+16px sidebar clearance is a provisional audit threshold taken from the brief’s example, not an approved final token.
