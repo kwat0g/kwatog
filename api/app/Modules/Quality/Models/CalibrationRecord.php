@@ -7,6 +7,7 @@ namespace App\Modules\Quality\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Quality\Enums\CalibrationStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -29,4 +30,9 @@ class CalibrationRecord extends Model
         'frequency_days'        => 'integer',
         'status'                => CalibrationStatus::class,
     ];
+
+    public function scopeWithStatus(Builder $query, CalibrationStatus $status): Builder
+    {
+        return $query->where('status', $status->value);
+    }
 }

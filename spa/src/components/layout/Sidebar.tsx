@@ -147,6 +147,8 @@ function badgeDestination(path: string, key: string): string {
     maintenance_wo_unassigned: 'queue=unassigned',
     low_stock: 'signal=low_stock',
     out_of_stock: 'signal=out_of_stock',
+    calibration_overdue: 'status=overdue',
+    calibration_due: 'status=due',
     pending_returns: 'signal=pending',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
@@ -603,6 +605,14 @@ export const SECTIONS: NavSection[] = [
         feature: 'quality',
         permission: 'quality.ncr.view',
         badgeKey: 'ncrs',
+      },
+      {
+        to: '/quality/calibration',
+        label: 'Calibration Register',
+        icon: LuRuler,
+        feature: 'quality',
+        permission: 'quality.calibration.view',
+        badgeKeys: ['calibration_overdue', 'calibration_due'],
       },
       {
         to: '/quality/traceability',

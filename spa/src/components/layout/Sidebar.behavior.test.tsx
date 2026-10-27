@@ -249,6 +249,36 @@ it('opens Returns on the same non-terminal queue as its badge', () => {
   );
 });
 
+it('shows calibration due and overdue as separate filtered signals', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'calibration_overdue') {
+      return { count: 2, severity: 'danger', label: 'Overdue calibration', description: 'Calibration instruments past their due date' };
+    }
+    if (key === 'calibration_due') {
+      return { count: 3, severity: 'warning', label: 'Calibration due', description: 'Calibration instruments inside the due window' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/quality/calibration']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Calibration Register/ })).toHaveAttribute(
+    'href',
+    '/quality/calibration?status=overdue',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Calibration Register signals/ }));
+  expect(screen.getByRole('link', { name: 'Calibration instruments past their due date: 2' })).toHaveAttribute(
+    'href',
+    '/quality/calibration?status=overdue',
+  );
+  expect(screen.getByRole('link', { name: 'Calibration instruments inside the due window: 3' })).toHaveAttribute(
+    'href',
+    '/quality/calibration?status=due',
+  );
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'

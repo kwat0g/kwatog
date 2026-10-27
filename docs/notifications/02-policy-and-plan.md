@@ -237,7 +237,8 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `inventory.picking.awaiting_action` | Picking / action-required | Open pick/handover task assigned to current worker/queue; exact list status required. | A/S: assigned warehouse scope | `/inventory/picking?signal=awaiting_action` |
 | `quality.inspection.awaiting_my_action` | Inspection / action-required | Inspection in draft/in-progress or review state only when current inspector/reviewer has action. | A/S: quality permission + plant/lot scope | `/quality/inspections?signal=awaiting_my_action` |
 | `quality.lot.rejected` | Rejected lot / critical | Lot in rejected/held disposition not yet released/disposed; exact enum and owning list required. | S: quality/production with lot scope | `/quality/traceability?signal=rejected_or_held` |
-| `quality.calibration.due` | Calibration due / warning | Calibration records in `due` or `overdue`; exclude `retired`. The existing due-window setting is 30 days; use stored status recomputed from `next_calibration_date`. | S: `quality.calibration.view` plus equipment/site scope | `/quality/calibration?status=due` and `/quality/calibration?status=overdue`; no sidebar item currently links to this route |
+| `quality.calibration.due` | Calibration due / warning | Stored status `due`, derived from `next_calibration_date` within `quality.calibration.due_window_days` (default 30); due today is due. `calibration:check-due` recomputes daily at 06:50. | S: `quality.calibration.view`; company-wide, matching the list route | `/quality/calibration?status=due` |
+| `quality.calibration.overdue` | Calibration overdue / critical | Stored status `overdue`, derived from `next_calibration_date` before the current business date; exclude `retired`. `calibration:check-due` recomputes daily at 06:50. | S: `quality.calibration.view`; company-wide, matching the list route | `/quality/calibration?status=overdue` |
 | `quality.ncr.open` | Open NCR / action-required | NCR outside closed/cancelled, with assigned owner or actionable next step. | A/S: NCR view + site scope | `/quality/ncrs?signal=open` |
 | `quality.ncr.overdue` | Overdue / warning | Open NCR/CAPA/effectiveness record due date < Manila today; confirm authoritative due field. | A/S: assigned owner + scoped reviewer | `/quality/ncrs?signal=overdue` |
 | `quality.effectiveness.due` | Effectiveness check / warning | Approved corrective action with scheduled effectiveness check due within 3 days or overdue. | A/S: assigned quality reviewer | `/quality/ncrs?signal=effectiveness_due` |
@@ -287,7 +288,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 
 Maintenance scope reconciliation: Phase 2 proposed site scope and `signal=unassigned`. Source review found no site filter in the work-order list; `maintenance.view` opens the company-wide list, and the actual API filter is `queue=unassigned`. The signal therefore uses the list's company scope and additionally requires assignment permission. Site scoping remains unsupported; do not claim site-restricted parity.
 
-### Internal sidebar route coverage: 76 destinations (73 Phase 0 baseline)
+### Internal sidebar route coverage: 77 destinations (73 Phase 0 baseline)
 
 Every internal route appears below. `Current` is the current `Sidebar.tsx` key; `proposed` is for review, not an approved badge. `—` means no reliable actionable signal proposed from current evidence. Permission/feature gates are copied from discovery; backend route authorization remains authoritative.
 
@@ -335,6 +336,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/supply-chain/fleet` | — | `supply_chain.view` | supply_chain.vehicle.maintenance |
 | `/quality/inspection-specs` | — | `quality.specs.view` | — |
 | `/quality/inspections` | `pending_inspections` | `quality.inspections.view` | quality.inspection.awaiting_my_action |
+| `/quality/calibration` | `calibration_overdue`, `calibration_due` | `quality.calibration.view` | quality.calibration.overdue; quality.calibration.due |
 | `/quality/ncrs` | `ncrs` | `quality.ncr.view` | quality.ncr.open; quality.ncr.overdue; quality.effectiveness.due |
 | `/quality/traceability` | — | `quality.inspections.view` | quality.lot.rejected (covers held lots only if traceability filter exposes held disposition) |
 | `/budgeting` | `pending_budgets` | `budgeting.view` | finance.budget.awaiting_my_approval |
@@ -374,7 +376,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 
 Portal audience always means active contact bound to that route's customer/vendor account and authorized for the exact record. Proposed signals require API list-filter parity before release.
 
-`—` means no distinct actionable filter was verified, so no badge is proposed. The SPA also has `/quality/calibration` outside sidebar navigation; its status filter supports `due` and `overdue`, so the `quality.calibration.due` proposal is ready for review but has no sidebar attachment.
+`—` means no distinct actionable filter was verified, so no badge is proposed. `/quality/calibration` now has a sidebar entry for `quality.calibration.due` and `quality.calibration.overdue`; its route uses stored statuses recomputed once daily, so a missed scheduler run can delay status freshness.
 
 `/alerts` is also a standalone SPA route, not a sidebar item. `alerts.open` remains a candidate for its own filtered page; current unread-count/list parity defect is recorded in `FINDINGS.md`.
 
