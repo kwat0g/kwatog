@@ -181,6 +181,7 @@ final class SupplierRfqLifecycleMail extends QueuedMailable
             'Supplier RFQ',
             "Supplier RFQ {$this->rfq->rfq_number} email delivery failed; review portal delivery state.",
             ['link_to' => '/purchasing/rfqs/'.$this->rfq->hash_id, 'entity_type' => 'request_for_quote', 'entity_id' => $this->rfq->hash_id],
+            subject: $this->rfq,
         );
     }
 }

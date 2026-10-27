@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Mail\SupplierRfqLifecycleMail;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RequestForQuoteInvitation;
@@ -16,6 +18,37 @@ use Tests\TestCase;
 final class SupplierRfqLifecycleMailTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_email_failure_fallback_is_gated_by_the_rfq_subject(): void
+    {
+        $rfq = RequestForQuote::factory()->create(['rfq_number' => 'RFQ-2026-0032']);
+        $invitation = (new RequestForQuoteInvitation)->forceFill([
+            'request_for_quote_id' => $rfq->id,
+            'vendor_id' => Vendor::factory()->create()->id,
+            'invited_by' => $rfq->created_by,
+            'invited_at' => now(),
+            'status' => 'invited',
+        ]);
+        $invitation->save();
+        $user = User::factory()->create(['is_active' => true]);
+
+        $notifier = \Mockery::mock(EmailDeliveryFailureNotifier::class);
+        $notifier->shouldReceive('notifyUserIds')->once()->withArgs(
+            function (array $ids, string $feature, string $message, array $context, ?RequestForQuote $subject) use ($rfq, $user): bool {
+                $this->assertSame([$user->id], $ids);
+                $this->assertSame('Supplier RFQ', $feature);
+                $this->assertSame('Supplier RFQ RFQ-2026-0032 email delivery failed; review portal delivery state.', $message);
+                $this->assertSame('/purchasing/rfqs/'.$rfq->hash_id, $context['link_to']);
+                $this->assertTrue($subject?->is($rfq));
+
+                return true;
+            },
+        );
+        $this->app->instance(EmailDeliveryFailureNotifier::class, $notifier);
+
+        (new SupplierRfqLifecycleMail($rfq, $invitation, 'published', [$user->id]))
+            ->failed(new \RuntimeException('Mail delivery failed.'));
+    }
 
     public function test_lifecycle_variants_are_branded_actionable_private_and_accurate(): void
     {
