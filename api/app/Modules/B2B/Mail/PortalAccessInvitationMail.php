@@ -18,15 +18,18 @@ class PortalAccessInvitationMail extends QueuedMailable
 {
     use SerializesModels;
 
+    public readonly HtmlString $recipientName;
+
     /** @param list<int> $fallbackUserIds */
     public function __construct(
         public readonly string $portalType,
-        public readonly string $recipientName,
+        string $recipientName,
         public readonly string $token,
         public readonly int $subjectId,
         public readonly string $subjectLink,
         public readonly array $fallbackUserIds = [],
     ) {
+        $this->recipientName = $this->safeMarkdownText($recipientName);
         $this->onQueue('mail');
         $this->afterCommit();
     }
@@ -52,7 +55,7 @@ class PortalAccessInvitationMail extends QueuedMailable
                 'brand' => $brand,
                 'preheader' => 'Set a private password to activate your '.$this->portalType.' portal access.',
                 'portalType' => $this->portalType,
-                'safeRecipientName' => $this->safeMarkdownText($this->recipientName),
+                'safeRecipientName' => $this->recipientName,
                 'setupUrl' => $url,
             ],
         );
@@ -85,12 +88,13 @@ class PortalAccessInvitationMail extends QueuedMailable
 
     private function safeMarkdownText(string $value): HtmlString
     {
-        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', $value) ?? '');
+        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', strip_tags($value)) ?? '');
         if ($text === '') {
             return new HtmlString('there');
         }
 
-        $escaped = preg_replace('/([\\`*_{}\[\]()#+.!|])/u', '\\\\$1', $text) ?? 'there';
+        $text = preg_replace('/\[([^\]]*)\]\([^)]+\)/u', '$1', $text) ?? '';
+        $escaped = preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? 'there';
 
         return new HtmlString(htmlspecialchars($escaped, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
     }

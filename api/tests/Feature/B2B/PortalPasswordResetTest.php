@@ -234,7 +234,7 @@ class PortalPasswordResetTest extends TestCase
         Mail::assertQueued(PortalAccessInvitationMail::class, function (PortalAccessInvitationMail $queued) use (&$mail): bool {
             $mail = $queued;
 
-            return $queued->portalType === 'customer' && $queued->recipientName === 'Invited <img src=x onerror=alert(1)>';
+            return $queued->portalType === 'customer' && (string) $queued->recipientName === 'Invited';
         });
         self::assertNotNull($mail);
         $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
@@ -250,8 +250,8 @@ class PortalPasswordResetTest extends TestCase
         )->isFuture());
         $html = $mail->render();
         self::assertStringContainsString('/portal/password-reset?type=customer&amp;token='.$mail->token, $html);
-        self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
-        self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
+        self::assertStringContainsString('Hello Invited,', $html);
+        self::assertStringNotContainsString('onerror=alert(1)', $html);
         self::assertStringNotContainsString('temporary password', strtolower($html));
         $mail->assertSeeInText('/portal/password-reset?type=customer&token='.$mail->token);
     }
@@ -272,6 +272,21 @@ class PortalPasswordResetTest extends TestCase
             return ! str_contains($html, 'href="https://evil.example"')
                 && ! str_contains($html, '<script>');
         });
+    }
+
+    public function test_password_reset_and_invitation_display_names_are_inert_markdown(): void
+    {
+        $name = '[Billing](https://evil.example)<script>alert(1)</script>';
+        $resetMail = new PortalPasswordResetMail('customer', 'token', $name, 1, '/accounting/customers/customer-hash');
+        $invitationMail = new PortalAccessInvitationMail('customer', $name, 'token', 1, '/accounting/customers/customer-hash');
+
+        foreach ([$resetMail, $invitationMail] as $mail) {
+            $html = $mail->render();
+
+            $this->assertStringNotContainsString('href="https://evil.example"', $html);
+            $this->assertStringNotContainsString('<script>', $html);
+            $this->assertStringContainsString('Billing', $html);
+        }
     }
 
     public function test_supplier_invitation_uses_the_supplier_password_setup_route(): void
