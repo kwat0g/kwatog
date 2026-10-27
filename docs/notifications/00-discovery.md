@@ -29,7 +29,7 @@ The API contains 23 business/system modules: Accounting, Admin, Assets, Attendan
 
 - At discovery time, direct `$user->notify()` sites sent mail-only welcome, password-reset, and employee account messages: `Admin/UserAdminController.php:87`, `Auth/PasswordResetService.php:40`, and `HR/UserProvisioningService.php:79,170`. PR #370 routes these four sends through `sendLaravelNotification()`; the corresponding `via()` methods still return `['mail']`.
 - At discovery time, direct `Notification::send()` sites sent mail-only daily/weekly production summaries and critical alert email: `Console/Commands/SendDailyProductionSummary.php:68`, `SendWeeklyProductionSummary.php:66`, and `Common/Services/AlertEngineService.php:832`. PR #370 routes those three sends through `sendLaravelNotification()`. Their notification classes return `['mail']`. Laravel notification classes found: `WelcomeNotification`, `PasswordResetNotification`, `PasswordResetLinkNotification`, `EmployeeWelcomeNotification` and `EmployeePasswordResetNotification` (mail channels); `DailyProductionSummary`, `WeeklyProductionSummary`, and `CriticalAlertEmail` (mail only). No notification class with `toDatabase()` was found; in-app rows are inserted by `NotificationService`.
-- `EmailDeliveryFailureNotifier` converts selected external mail failures to in-app `email.delivery_failed` notices. Callers include recruitment, supplier response/dispatch, scheduled exports, production summaries, critical alerts, and accounting/dunning flows. Selection is explicit user IDs or users with a permission; the wrapper does not check subject visibility.
+- `EmailDeliveryFailureNotifier` converts selected external mail failures to in-app `email.delivery_failed` notices. Callers include recruitment, supplier response/dispatch, scheduled exports, production summaries, critical alerts, and accounting/dunning flows. The wrapper checks subject visibility only when the caller supplies a subject; many legacy paths still do not.
 - Payroll also has a direct `Mail::to(...)->send(new PayslipMail(...))` job path, separate from the `chain.payslip_ready` in-app notice.
 - `notifications:send-digest` runs daily at 07:05. Digest is opt-in via `notification_preferences` type `*`, channel `digest`. `notifications:prune --days=90` removes read rows older than 90 days. Unread rows have no expiry policy in the inspected code.
 
@@ -125,7 +125,7 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/Purchasing/Services/AutoPurchaseOrderService.php:209` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseRequestApproved.php:33` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php:32` |
-| `api/app/Modules/Accounting/Services/BillService.php:1070` |
+| `api/app/Modules/Accounting/Services/BillService.php:1042` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php:33` |
 | `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:81` |
 | `api/app/Modules/Accounting/Services/InvoiceService.php:184` |
@@ -205,7 +205,7 @@ The following lists every direct `Mail::to(...)` call found under `api/app`. The
 | `api/app/Modules/Accounting/Listeners/EmailCustomerOnOfficialReceiptIssued.php:51` | `$snapshot['customer_email']` | `queue` | `CustomerOfficialReceiptMail` |
 | `api/app/Modules/Accounting/Listeners/EmailPartyOnCreditNoteFinalized.php:43` | `$snapshot['party_email']` | `queue` | `PartyCreditNoteMail` |
 | `api/app/Modules/Accounting/Services/ArDunningService.php:102` | `$email` | `queue` | `InvoiceDunningMail` |
-| `api/app/Modules/B2B/Listeners/EmailSupplierOnInvoiceSubmitted.php:42` | `$snapshot['recipient_email']` | `queue` | `SupplierInvoiceStatusMail` |
+| `api/app/Modules/B2B/Listeners/EmailSupplierOnInvoiceSubmitted.php:44` | `$snapshot['recipient_email']` | `queue` | `SupplierInvoiceStatusMail` |
 | `api/app/Modules/B2B/Listeners/EmailSupplierOnPurchaseOrderCancelled.php:53` | `$snapshot['recipient_email']` | `queue` | `SupplierPurchaseOrderCancelledMail` |
 | `api/app/Modules/B2B/Services/PortalInvitationService.php:158` | `$email` | `queue` | `PortalAccessInvitationMail` |
 | `api/app/Modules/B2B/Services/PortalPasswordResetService.php:92` | `$recipient->email` | `queue` | `PortalPasswordResetMail` |
