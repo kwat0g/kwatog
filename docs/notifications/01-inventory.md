@@ -328,7 +328,7 @@ The supplied route table includes destinations with no existing badge. Candidate
 
 ## Production Work Orders signal verification
 
-PR #388 adds four filtered Work Order signals backed by shared scopes. API list route requires both `production.view` (route group) and `production.work_orders.view` (endpoint); the SPA route checks only `production.work_orders.view`. The new awaiting-confirmation and paused badges include the API parent permission. Existing overdue and new due-soon badge definitions do not; users granted only the child permission by override can see a count but receive 403 on the list. This is recorded as F-40 and must be fixed in a separate PR.
+PR #388 adds four filtered Work Order signals backed by shared scopes. API list route requires both `production.view` (route group) and `production.work_orders.view` (endpoint); the SPA route checks only `production.work_orders.view`. The new awaiting-confirmation and paused badges include the API parent permission. Existing overdue and new due-soon badge definitions do not; users granted only the child permission by override can see a count but receive 403 on the list. This is recorded as F-40 and is being fixed in separate draft PR #389.
 
 | Signal | Included records | Badge/list scope | Additional badge audience |
 | --- | --- | --- | --- |
