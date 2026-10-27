@@ -138,6 +138,9 @@ class PayrollMakerCheckerTest extends TestCase
             'notifiable_id' => $finance->id,
             'type' => 'approval.action_required',
         ]);
+        $notice = $finance->notifications()->where('type', 'approval.action_required')->firstOrFail();
+        $this->assertSame(PayrollPeriod::class, $notice->data['subject_type']);
+        $this->assertSame((string) $period->id, $notice->data['subject_id']);
     }
 
     public function test_system_admin_is_not_used_as_payroll_approval_fallback(): void
