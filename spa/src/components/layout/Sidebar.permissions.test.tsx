@@ -404,6 +404,7 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(supplierListings, {
       permissions: new Set(['purchasing.supplier_listings.view', 'purchasing.supplier_listings.review']),
     })).toBe(true);
+    expect(supplierListings.badgeKey).toBe('supplier_listings_pending');
   });
 
   it('uses shared Dashboard and permission-gates Finance pricing reviews', () => {

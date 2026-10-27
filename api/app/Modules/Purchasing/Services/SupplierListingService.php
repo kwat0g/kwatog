@@ -56,7 +56,9 @@ class SupplierListingService
         if (($filters['id'] ?? null) !== null) {
             $q->whereKey((int) $filters['id']);
         }
-        if (! empty($filters['status'])) {
+        if (($filters['status'] ?? null) === SupplierListingStatus::Pending->value) {
+            $q->pending();
+        } elseif (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['search'])) {
