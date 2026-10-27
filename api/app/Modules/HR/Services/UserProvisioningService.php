@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\TemporaryPasswordGenerator;
 use App\Modules\Auth\Models\PasswordHistory;
@@ -76,7 +77,10 @@ class UserProvisioningService
             if (($options['send_welcome'] ?? true) === true) {
                 DB::afterCommit(function () use ($user): void {
                     $setup = app(PasswordResetService::class)->createResetLink($user);
-                    $user->notify(new EmployeeWelcomeNotification($setup['url'], $setup['expiry_minutes']));
+                    app(NotificationService::class)->sendLaravelNotification(
+                        $user,
+                        new EmployeeWelcomeNotification($setup['url'], $setup['expiry_minutes']),
+                    );
                 });
             }
 
@@ -167,7 +171,10 @@ class UserProvisioningService
             $this->revokeSessionsAndTokens($user);
             DB::afterCommit(function () use ($user): void {
                 $reset = app(PasswordResetService::class)->createResetLink($user);
-                $user->notify(new EmployeePasswordResetNotification($reset['url'], $reset['expiry_minutes']));
+                app(NotificationService::class)->sendLaravelNotification(
+                    $user,
+                    new EmployeePasswordResetNotification($reset['url'], $reset['expiry_minutes']),
+                );
             });
 
             return $temp;

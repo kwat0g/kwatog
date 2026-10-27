@@ -229,6 +229,42 @@ class NotificationCatalogTest extends TestCase
         ));
     }
 
+    public function test_laravel_notification_dispatch_is_centralized(): void
+    {
+        $appPath = dirname(__DIR__, 2).'/app';
+        $offences = [];
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($appPath, \FilesystemIterator::SKIP_DOTS),
+        );
+
+        foreach ($files as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $source = (string) file_get_contents($file->getPathname());
+            $relative = str_replace(
+                str_replace('\\', '/', $appPath).'/',
+                '',
+                str_replace('\\', '/', $file->getPathname()),
+            );
+            if ($relative === 'Common/Services/NotificationService.php') {
+                continue;
+            }
+
+            if (preg_match('/->notify\(\s*new\s+/', $source)
+                || preg_match('/\bNotification(?:Facade)?::send(?:Now)?\s*\(/', $source)) {
+                $offences[] = $relative.' — use NotificationService::sendLaravelNotification()';
+            }
+        }
+
+        sort($offences);
+        $this->assertSame([], $offences, sprintf(
+            "Laravel Notification dispatches must use NotificationService.\n  %s",
+            implode("\n  ", $offences),
+        ));
+    }
+
     public function test_catalog_has_no_duplicate_keys(): void
     {
         $keys = [];

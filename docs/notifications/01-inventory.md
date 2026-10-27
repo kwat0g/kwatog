@@ -8,7 +8,7 @@
 
 `00-discovery.md` contains full module/status discovery, all 73 internal sidebar destinations, 19 portal destinations, nine compact-shell destinations, and the 29 backend badge definitions. This report cross-references that inventory and lists every one of the 129 `NotificationService` call sites with its event-type expression and immediate audience expression. Mail-only Laravel notifications, custom alert email, payroll payslip mail, digest, and failure-wrapper paths appear in the separate-path register below.
 
-Static source coverage is complete for the inspected repository. Runtime recipient-to-role delivery, authorization outcomes, badge/list parity, and frontend visual behavior are **not verified**. No seeded-user scenario, test suite, browser session, or production query ran. A source expression such as `$audience` identifies the value passed to the service; its construction remains in the cited caller and is not a runtime recipient trace.
+Static source coverage is complete for the inspected repository. Runtime recipient-to-role delivery, authorization outcomes, badge/list parity, and frontend visual behavior are **not verified**. No seeded-user scenario, test suite, browser session, or production query ran during discovery. A source expression such as `$audience` identifies the value passed to the service; its construction remains in the cited caller and is not a runtime recipient trace. Follow-up PR #370 centralizes the seven mail-only Laravel notification sends listed below; it preserves their explicit recipient selection and does not add policy-based resolution or record-access checks.
 
 ## Master notification findings
 
@@ -174,15 +174,15 @@ These are additional delivery paths; they are not hidden in the 129-row register
 
 | Path | Trigger / current recipient evidence | Channels / issue |
 | --- | --- | --- |
-| `api/app/Modules/Admin/Controllers/UserAdminController.php:87` | Account-admin action; direct `$user->notify(...)` | Welcome mail only; bypasses central in-app service. |
-| `api/app/Modules/Auth/Services/PasswordResetService.php:40` | Password reset recipient | Mail only; security flow must remain separate from in-app preferences. |
-| `api/app/Modules/HR/Services/UserProvisioningService.php:79,170` | Employee account provisioning | Mail only; account recipient. |
-| `api/app/Console/Commands/SendDailyProductionSummary.php:68` | Scheduled daily production summary; `Notification::send` to selected audience | Mail-only Laravel notification; selection needs role/scope review. |
-| `api/app/Console/Commands/SendWeeklyProductionSummary.php:66` | Scheduled weekly production summary; `Notification::send` to selected audience | Mail-only Laravel notification; selection needs role/scope review. |
-| `api/app/Common/Services/AlertEngineService.php:832` | Critical alert rule; `Notification::send` to configured recipient set | Email-only `CriticalAlertEmail`; configured role set plus alert permission. Alert row/count is separate. |
+| `api/app/Modules/Admin/Controllers/UserAdminController.php:88` | Account-admin action; `sendLaravelNotification($user, WelcomeNotification)` | Mail only; explicit account recipient. |
+| `api/app/Modules/Auth/Services/PasswordResetService.php:41` | Password reset recipient; `sendLaravelNotification($user, PasswordResetLinkNotification)` | Mail only; explicit account recipient. |
+| `api/app/Modules/HR/Services/UserProvisioningService.php:80,174` | Employee provisioning; `sendLaravelNotification()` after the existing transaction callbacks | Mail only; explicit account recipient. |
+| `api/app/Console/Commands/SendDailyProductionSummary.php:68` | Scheduled daily summary; `sendLaravelNotification($emailUsers, ...)` | Mail only; existing selected audience still needs role/scope review. |
+| `api/app/Console/Commands/SendWeeklyProductionSummary.php:66` | Scheduled weekly summary; `sendLaravelNotification($emailUsers, ...)` | Mail only; existing selected audience still needs role/scope review. |
+| `api/app/Common/Services/AlertEngineService.php:831` | Critical alert rule; `sendLaravelNotification($emailUsers, CriticalAlertEmail)` | Email only; configured role set plus alert permission. Alert row/count is separate. |
 | `api/app/Modules/Payroll/Jobs/SendPayslipEmailJob.php` (mail path) | Finalized payroll payslip job; `Mail::to(employee email)` | Sensitive payroll email; source path independently reviewed; not the same channel as `chain.payslip_ready`. |
 | `api/app/Common/Services/EmailDeliveryFailureNotifier.php:37` | Called after a selected mail delivery failure | Internal `email.delivery_failed` notification; callers include recruitment, supplier response/dispatch, scheduled exports, production summaries, critical alerts, and accounting/dunning. Explicit IDs or permission audience; no subject view gate. |
-| `api/app/Common/Services/NotificationService.php` | `send()` may queue email only for recipients whose per-type email preference is enabled; `sendInApp()` never queues it | Existing type-specific, opt-in behavior. No category-level mandatory/optional policy. |
+| `api/app/Common/Services/NotificationService.php:156` | `sendLaravelNotification()` normalizes/deduplicates explicit internal users and calls Laravel's notification facade | Central transport entry only; no recipient authorization or preference change. Existing `send()` / `sendInApp()` behavior remains separate. |
 | `api/app/Console/Commands/SendNotificationDigest.php` | `notifications:send-digest`, scheduled daily at 07:05 | Opt-in digest preference `type=*`; groups unread rows. Existing behavior not linked to event resolver. |
 | `api/app/Console/Commands/PruneOldNotifications.php` | `notifications:prune --days=90` | Removes read rows older than 90 days; unread rows have no expiry. |
 | `api/app/Common/Services/NotificationService.php:151` | `sendDssRecommendationInApp()` | Daily cap and dedupe implemented; no caller in inspected code. DSS detectors remain shadow. |

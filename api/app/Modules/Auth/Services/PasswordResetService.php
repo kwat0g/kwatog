@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Services;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\PasswordResetRequest;
@@ -37,7 +38,10 @@ class PasswordResetService
         $reset = $this->createResetLink($user, $request->ip());
 
         try {
-            $user->notify(new PasswordResetLinkNotification($reset['url'], $reset['expiry_minutes']));
+            app(NotificationService::class)->sendLaravelNotification(
+                $user,
+                new PasswordResetLinkNotification($reset['url'], $reset['expiry_minutes']),
+            );
         } catch (\Throwable $e) {
             app(EmailDeliveryFailureNotifier::class)->notifyUserId(
                 $user->id,
