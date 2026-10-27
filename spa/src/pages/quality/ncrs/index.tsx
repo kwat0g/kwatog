@@ -41,6 +41,7 @@ const DEFAULT_FILTERS: NcrListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  signal: '',
 };
 
 export default function NcrsListPage() {
@@ -164,6 +165,15 @@ export default function NcrsListPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
+    {
+      key: 'signal',
+      label: 'Queue',
+      type: 'select',
+      options: [
+        { value: '', label: 'All NCRs' },
+        { value: 'open', label: 'Open NCRs' },
+      ],
+    },
     {
       key: 'status',
       label: 'Status',

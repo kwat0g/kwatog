@@ -294,6 +294,21 @@ it('links assigned CAPA effectiveness badges to the current user queue', () => {
   );
 });
 
+it('links open NCR badges to the open and in-progress NCR list', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'ncrs'
+    ? { count: 2, severity: 'warning', label: 'NCRs', description: 'Open non-conformance reports' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/quality/ncrs']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
+    'href',
+    '/quality/ncrs?signal=open',
+  );
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'

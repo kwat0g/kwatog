@@ -86,6 +86,10 @@ class NcrService
             'reworkWorkOrder:id,wo_number,status,quantity_target',
         ]);
 
+        if (($filters['signal'] ?? null) === 'open') {
+            $q->open();
+        }
+
         foreach (['source', 'severity', 'status', 'disposition'] as $f) {
             if (! empty($filters[$f])) {
                 $q->where($f, $filters[$f]);
