@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PRs #391–#394 are merged. PR #395 adds Leave approval badge/list parity; its original-head API tests passed **14 tests / 44 assertions** and SPA tests passed **68**. Post-rebase checks are in progress. API tests were not rerun against shared `ogami_test`. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PRs #391–#394 are merged. PR #395 adds Leave approval badge/list parity; original-head API tests passed **14 tests / 44 assertions**. After rebase, three SPA suites passed **73 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -43,7 +43,7 @@
 | F-09. Maintenance Work Order badge/list parity | `notifications/maintenance-work-order-signals` | [#392](https://github.com/kwat0g/kwatog/pull/392) | merged as `fb904737`; original-head API and post-rebase SPA/syntax checks passed; post-rebase API test not run against shared DB |
 | F-42. Overtime route permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | merged as `5f630dd7`; original-head API test passed; post-rebase syntax/diff checks passed; API test not rerun against shared DB |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | merged as `1109dc43`; post-rebase Sidebar 42, permission 28, page 1, ESLint, PHP syntax, and diff checks passed; post-fix API test not run against shared DB |
-| F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | rebased on `1109dc43`; original-head API tests passed 14/44; post-rebase checks pending |
+| F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | rebased on `1109dc43`; original-head API tests passed 14/44; post-rebase SPA 73, ESLint, PHP syntax, and diff checks passed; API tests not rerun against shared DB |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -416,7 +416,7 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 
 - `LeaveApprovalPolicy::awaitingMyApprovalQuery()` powers both the `leaves` badge and `/leaves/requests?signal=awaiting_my_approval`. It requires `leave.view`, the current pending workflow step (`department_head` step 1 or `hr_officer` step 2), matching stage permission and role/delegation, the existing `DepartmentScope`, and excludes the employee's own request.
 - Signal mode ignores conflicting status and trashed filters; ordinary list behavior stays unchanged. Sidebar and page use the filtered queue link and hide the conflicting status filter.
-- Before rebase, `LeaveApprovalBadgeParityTest` and `LeaveRequestVisibilityTest` passed **14 tests / 44 assertions**; Sidebar and Leave page tests passed **68**. API tests are not rerun against shared `ogami_test`. Post-rebase SPA, lint, PHP syntax, and diff checks are pending.
+- Before rebase, `LeaveApprovalBadgeParityTest` and `LeaveRequestVisibilityTest` passed **14 tests / 44 assertions**; Sidebar and Leave page tests passed **68**. After rebase, Sidebar behavior passed **43**, Sidebar permissions **29**, and Leave page tests **1**; targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`.
 - F-32 remains separate: ordinary Leave list actions use permissions while the approval service also checks workflow role. F-44 records a separate unconfirmed delegation/self-approval policy question; the badge follows current endpoint actionability.
 
 ## Outstanding proof / risks
