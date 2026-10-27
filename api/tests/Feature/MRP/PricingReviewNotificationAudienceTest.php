@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\MRP;
 
+use App\Common\Services\NotificationService;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Services\PricingReviewService;
 use App\Modules\MRP\Events\BomPricingReviewRequested;
@@ -93,5 +96,41 @@ class PricingReviewNotificationAudienceTest extends TestCase
 
         $this->assertContains($financeUser->id, $recipientIds);
         $this->assertNotContains($hrUser->id, $recipientIds);
+    }
+
+    public function test_agreement_notice_requires_the_exact_record_route_and_view_permission(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $reviewerRole = Role::query()->where('slug', 'hr_officer')->firstOrFail();
+        $permission = Permission::query()->where('slug', 'crm.price_agreements.view')->firstOrFail();
+        $reviewerRole->permissions()->attach($permission->id);
+        $reviewer = User::factory()->withRole('hr_officer')->create();
+        $outsider = User::factory()->withRole('warehouse_staff')->create();
+        $product = Product::factory()->create();
+        $agreement = PriceAgreement::create([
+            'product_id' => $product->id,
+            'customer_id' => Customer::factory()->create()->id,
+            'price' => '50.00',
+            'effective_from' => today(),
+            'effective_to' => today()->addMonth(),
+            'pricing_method' => 'flat',
+        ]);
+        $data = [
+            'title' => 'Agreement needs review',
+            'message' => 'Review the active agreement.',
+            'link_to' => '/crm/price-agreements?agreement='.$agreement->hash_id,
+        ];
+
+        app(NotificationService::class)->sendForSubject($agreement, [$reviewer, $outsider], 'test.pricing_subject', $data, emailEnabled: false);
+        app(NotificationService::class)->sendForSubject($agreement, $reviewer, 'test.pricing_subject', [
+            ...$data,
+            'link_to' => '/crm/price-agreements',
+        ], 'wrong-route', emailEnabled: false);
+
+        $notice = DB::table('notifications')->where('notifiable_id', $reviewer->id)->where('type', 'test.pricing_subject')->firstOrFail();
+        $this->assertSame($data['link_to'], json_decode($notice->data, true)['link_to']);
+        $this->assertSame(PriceAgreement::class, json_decode($notice->data, true)['subject_type']);
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $reviewer->id)->where('type', 'test.pricing_subject')->count());
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $outsider->id, 'type' => 'test.pricing_subject']);
     }
 }

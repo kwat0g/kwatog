@@ -29,6 +29,7 @@ export default function PriceAgreementsListPage() {
   const canManage = can('crm.price_agreements.propose');
   const [filters, setFilters] = useUrlFilters<PriceAgreementListParams>({
     search: '',
+    agreement: '',
     page: 1,
     per_page: 25,
   });
