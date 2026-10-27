@@ -333,8 +333,9 @@ class ProductService
             }
             $values = ['standard_cost' => $data['standard_cost']];
             $row->forceFill(['financial_change_request' => ['id' => (string) Str::uuid(), 'values' => $values, 'notes' => $data['notes'], 'proposed_by' => $by->id, 'original' => $row->only(['standard_cost'])]])->save();
-            $users = User::where('is_active', true)->get()->filter(fn ($u) => $u->hasPermission('inventory.costs.approve'));
-            app(NotificationService::class)->sendInApp($users, 'pricing.review_required', ['title' => 'Standard cost review: '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$row->financial_change_request['id']);
+            $users = User::where('is_active', true)->get()
+                ->filter(fn (User $user) => $user->hasPermission('inventory.costs.approve') && $user->id !== $by->id);
+            app(NotificationService::class)->sendForSubject($row, $users, 'pricing.review_required', ['title' => 'Standard cost review: '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$row->financial_change_request['id'], emailEnabled: false);
 
             return $this->show($row);
         });
@@ -368,7 +369,7 @@ class ProductService
             // HasAuditLog preserves the proposal, decision actor and changed values.
             $user = User::find($proposal['proposed_by']);
             if ($user && $user->is_active) {
-                app(NotificationService::class)->sendInApp($user, 'pricing.review_required', ['title' => 'Standard cost proposal '.$data['decision'].': '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$proposal['id'].':'.$data['decision']);
+                app(NotificationService::class)->sendForSubject($row, $user, 'pricing.review_required', ['title' => 'Standard cost proposal '.$data['decision'].': '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$proposal['id'].':'.$data['decision'], emailEnabled: false);
             }
 
             return $this->show($row->fresh());

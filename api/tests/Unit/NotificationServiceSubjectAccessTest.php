@@ -1439,4 +1439,45 @@ class NotificationServiceSubjectAccessTest extends TestCase
         $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($viewer, $vendor, '/purchasing/suppliers'));
         $this->assertTrue(NotificationSubjectAccessRegistry::supports(Vendor::class));
     }
+
+    public function test_product_subject_matches_product_detail_permissions(): void
+    {
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
+        $productPermission = Permission::firstOrCreate(['slug' => 'crm.products.view'], ['name' => 'View products', 'module' => 'crm']);
+        $costPermission = Permission::firstOrCreate(['slug' => 'inventory.costs.approve'], ['name' => 'Approve cost proposals', 'module' => 'inventory']);
+        $productRole = Role::firstOrCreate(['slug' => 'notification_product_viewer'], ['name' => 'Notification Product Viewer']);
+        $productRole->permissions()->sync([$productPermission->id]);
+        $costRole = Role::firstOrCreate(['slug' => 'notification_cost_approver'], ['name' => 'Notification Cost Approver']);
+        $costRole->permissions()->sync([$costPermission->id]);
+        $productViewer = User::factory()->withRole($productRole->slug)->create(['is_active' => true]);
+        $costApprover = User::factory()->withRole($costRole->slug)->create(['is_active' => true]);
+        $withoutPermission = User::factory()->create(['is_active' => true]);
+        $product = Product::factory()->create();
+        $link = '/crm/products/'.$product->hash_id;
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.product_subject_access',
+                'subject_type' => Product::class,
+                'subject_id' => $product->id,
+                'user_ids' => [$withoutPermission->id],
+            ],
+        );
+
+        app(NotificationService::class)->sendForSubject($product, [$productViewer, $costApprover, $withoutPermission], 'test.product_subject_access', [
+            'title' => 'Product cost proposal',
+            'link_to' => $link,
+        ], emailEnabled: false);
+
+        foreach ([$productViewer, $costApprover] as $recipient) {
+            $this->assertDatabaseHas('notifications', ['notifiable_id' => $recipient->id, 'type' => 'test.product_subject_access']);
+        }
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => 'test.product_subject_access']);
+        $this->assertTrue(NotificationSubjectAccessRegistry::supports(Product::class));
+
+        app(SettingsService::class)->set('modules.crm', false, 'modules');
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($productViewer, $product));
+    }
 }
