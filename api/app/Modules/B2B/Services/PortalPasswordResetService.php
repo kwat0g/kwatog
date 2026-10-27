@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Services\AuthAuditLogger;
 use App\Modules\B2B\Mail\PortalPasswordResetMail;
 use App\Modules\B2B\Models\CustomerPortalUser;
@@ -71,6 +73,12 @@ class PortalPasswordResetService
             return;
         }
 
+        $subject = $this->masterRecord($type, $recipient);
+        if (! $subject) {
+            return;
+        }
+        $subjectLink = $this->masterRecordLink($subject);
+
         $this->audit->portal('portal.password.reset_requested', $recipient, $request);
 
         $notifier = app(EmailDeliveryFailureNotifier::class);
@@ -82,8 +90,11 @@ class PortalPasswordResetService
                 'Portal password reset email',
                 'A portal password reset was requested but the account email is not deliverable. Contact the portal user through an approved channel and verify the account before assisting with access.',
                 [
+                    'link_to' => $subjectLink,
+                    'entity_type' => $type.'_portal_user',
                     'reason' => 'The portal account email address is not valid.',
                 ],
+                $subject,
             );
 
             return;
@@ -93,6 +104,8 @@ class PortalPasswordResetService
             $type,
             $rawToken,
             $recipient->name,
+            (int) $subject->getKey(),
+            $subjectLink,
             $fallbackUserIds,
         ));
     }
@@ -205,6 +218,22 @@ class PortalPasswordResetService
     private function fallbackPermission(string $type): string
     {
         return $type === 'supplier' ? 'accounting.vendors.view' : 'accounting.customers.view';
+    }
+
+    private function masterRecord(string $type, CustomerPortalUser|SupplierPortalUser $user): Customer|Vendor|null
+    {
+        return match ($type) {
+            'customer' => Customer::query()->find($user->customer_id),
+            'supplier' => Vendor::query()->find($user->vendor_id),
+            default => null,
+        };
+    }
+
+    private function masterRecordLink(Customer|Vendor $subject): string
+    {
+        $path = $subject instanceof Vendor ? 'vendors' : 'customers';
+
+        return '/accounting/'.$path.'/'.$subject->hash_id;
     }
 
     private function parentIsActive(CustomerPortalUser|SupplierPortalUser $user): bool

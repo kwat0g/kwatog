@@ -77,7 +77,7 @@ class PortalInvitationService
             'link_to' => '/accounting/customers/'.$customer->hash_id,
             'entity_type' => 'customer_portal_user',
             'entity_id' => $user->hash_id,
-        ]);
+        ], $customer);
 
         return ['user' => $user];
     }
@@ -135,13 +135,13 @@ class PortalInvitationService
             'link_to' => '/accounting/vendors/'.$vendor->hash_id,
             'entity_type' => 'supplier_portal_user',
             'entity_id' => $user->hash_id,
-        ]);
+        ], $vendor);
 
         return ['user' => $user];
     }
 
     /** @param array<string, string> $context */
-    private function queueInvitation(string $email, string $name, string $portalType, string $token, array $context): void
+    private function queueInvitation(string $email, string $name, string $portalType, string $token, array $context, Customer|Vendor $subject): void
     {
         if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             app(EmailDeliveryFailureNotifier::class)->notifyPermission(
@@ -149,6 +149,7 @@ class PortalInvitationService
                 'Portal access invitation',
                 "The {$portalType} portal invitation for {$name} could not be sent because the email address is not usable. Verify the address and resend the secure setup link.",
                 $context + ['reason' => 'The recipient email address is not valid.'],
+                $subject,
             );
 
             return;
@@ -159,6 +160,8 @@ class PortalInvitationService
                 $portalType,
                 $name,
                 $token,
+                (int) $subject->getKey(),
+                $context['link_to'],
                 app(EmailDeliveryFailureNotifier::class)->userIdsWithPermission($context['permission']),
             ));
         } catch (\Throwable $e) {
@@ -167,6 +170,7 @@ class PortalInvitationService
                 'Portal access invitation',
                 "The {$portalType} portal invitation for {$name} could not be queued. Resend the invitation after verifying the contact's email address.",
                 $context + ['reason' => 'The email provider rejected or could not queue the portal invitation.'],
+                $subject,
             );
         }
     }

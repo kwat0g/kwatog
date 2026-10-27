@@ -7,6 +7,8 @@ namespace App\Modules\B2B\Mail;
 use App\Common\Mail\QueuedMailable;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Support\HtmlString;
@@ -21,8 +23,11 @@ class PortalPasswordResetMail extends QueuedMailable
         public readonly string $portalType,
         public readonly string $token,
         public readonly string $recipientName,
+        public readonly int $subjectId,
+        public readonly string $subjectLink,
         public readonly array $fallbackUserIds = [],
     ) {
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 
@@ -54,18 +59,26 @@ class PortalPasswordResetMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
-        $permission = $this->portalType === 'supplier' ? 'accounting.vendors.view' : 'accounting.customers.view';
+        $subject = match ($this->portalType) {
+            'customer' => Customer::query()->find($this->subjectId),
+            'supplier' => Vendor::query()->find($this->subjectId),
+            default => null,
+        };
+
+        if ($subject === null) {
+            return;
+        }
 
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Portal password reset email',
             'A portal password reset message could not be delivered. Contact the portal user through an approved channel and verify the account before assisting with access.',
             [
-                'link_to' => $this->portalType === 'supplier' ? '/purchasing/vendors' : '/accounting/customers',
+                'link_to' => $this->subjectLink,
                 'entity_type' => $this->portalType.'_portal_user',
                 'reason' => 'The email provider rejected or could not deliver the portal password reset message.',
-                'permission' => $permission,
             ],
+            $subject,
         );
     }
 

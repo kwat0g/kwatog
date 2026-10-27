@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\CreditNote;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BudgetService;
@@ -71,7 +72,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Bom::class, Clearance::class, CreditNote::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, PriceAgreement::class, Product::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, RequestForQuote::class, Vendor::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Bom::class, Clearance::class, CreditNote::class, Customer::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, PriceAgreement::class, Product::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, RequestForQuote::class, Vendor::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -90,6 +91,11 @@ final class NotificationSubjectAccessRegistry
                 && $linkTo === '/accounting/credit-notes/'.$subject->hash_id,
             Bill::class => app(SettingsService::class)->get('modules.accounting', false) === true
                 && $user->hasPermission('accounting.bills.view'),
+            Customer::class => app(SettingsService::class)->get('modules.accounting', false) === true
+                && $user->is_active
+                && $user->hasPermission('accounting.customers.view')
+                && $subject instanceof Customer
+                && $linkTo === '/accounting/customers/'.$subject->hash_id,
             StockAdjustment::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && ($user->hasPermission('inventory.adjust') || $user->hasPermission('inventory.adjust.approve')),
             StockCountItem::class => app(SettingsService::class)->get('modules.inventory', false) === true
@@ -219,11 +225,14 @@ final class NotificationSubjectAccessRegistry
                 && $user->is_active
                 && $subject instanceof RequestForQuote
                 && app(RequestForQuoteAccessPolicy::class)->canSee($user, $subject),
-            Vendor::class => app(SettingsService::class)->get('modules.purchasing', false) === true
-                && $user->is_active
-                && $user->hasPermission('purchasing.suppliers.performance.view')
+            Vendor::class => $user->is_active
                 && $subject instanceof Vendor
-                && $linkTo === '/purchasing/suppliers/'.$subject->hash_id.'/performance',
+                && ((app(SettingsService::class)->get('modules.accounting', false) === true
+                    && $user->hasPermission('accounting.vendors.view')
+                    && $linkTo === '/accounting/vendors/'.$subject->hash_id)
+                    || (app(SettingsService::class)->get('modules.purchasing', false) === true
+                        && $user->hasPermission('purchasing.suppliers.performance.view')
+                        && $linkTo === '/purchasing/suppliers/'.$subject->hash_id.'/performance')),
             default => ApprovalTypeRegistry::forClass($class) !== null
                 && ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $subject->getKey()),
         };

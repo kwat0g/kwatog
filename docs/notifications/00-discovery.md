@@ -207,8 +207,8 @@ The following lists every direct `Mail::to(...)` call found under `api/app`. The
 | `api/app/Modules/Accounting/Services/ArDunningService.php:102` | `$email` | `queue` | `InvoiceDunningMail` |
 | `api/app/Modules/B2B/Listeners/EmailSupplierOnInvoiceSubmitted.php:44` | `$snapshot['recipient_email']` | `queue` | `SupplierInvoiceStatusMail` |
 | `api/app/Modules/B2B/Listeners/EmailSupplierOnPurchaseOrderCancelled.php:53` | `$snapshot['recipient_email']` | `queue` | `SupplierPurchaseOrderCancelledMail` |
-| `api/app/Modules/B2B/Services/PortalInvitationService.php:158` | `$email` | `queue` | `PortalAccessInvitationMail` |
-| `api/app/Modules/B2B/Services/PortalPasswordResetService.php:92` | `$recipient->email` | `queue` | `PortalPasswordResetMail` |
+| `api/app/Modules/B2B/Services/PortalInvitationService.php:159` | `$email` | `queue` | `PortalAccessInvitationMail` |
+| `api/app/Modules/B2B/Services/PortalPasswordResetService.php:103` | `$recipient->email` | `queue` | `PortalPasswordResetMail` |
 | `api/app/Modules/B2B/Services/SupplierPortalDispatchGateway.php:51` | `$vendorEmail` | `queue` | `SupplierPurchaseOrderMail` |
 | `api/app/Modules/CRM/Listeners/EmailCustomerOnComplaintUpdated.php:42` | `$snapshot['recipient_email']` | `queue` | `CustomerComplaintUpdateMail` |
 | `api/app/Modules/CRM/Listeners/EmailCustomerOnSalesOrderConfirmed.php:51` | `$snapshot['customer_email']` | `queue` | `CustomerSalesOrderConfirmedMail` |
