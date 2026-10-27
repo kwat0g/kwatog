@@ -100,10 +100,10 @@ class InvoicePaymentSubmissionService
                     // System administrators bypass permissions; they are not payment reviewers.
                     ->reject(fn (User $user) => $user->role?->slug === 'system_admin')
                     ->filter(fn (User $user) => $user->hasPermission('accounting.invoices.view'));
-                $notifications->sendInApp($recipients, 'invoice.payment_submitted', [
+                $notifications->sendForSubject($locked, $recipients, 'invoice.payment_submitted', [
                     'title' => 'Customer payment awaits verification', 'message' => 'Review payment for '.$locked->invoice_number.'.',
                     'link_to' => '/accounting/invoices/'.$locked->hash_id,
-                ], 'invoice-payment:'.$row->hash_id.':pending');
+                ], 'invoice-payment:'.$row->hash_id.':pending', emailEnabled: false);
                 return $row;
             }, 3);
         } catch (\Throwable $error) {

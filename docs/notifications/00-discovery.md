@@ -1,7 +1,7 @@
 # Notification and badge discovery
 
 **Audit date:** 2026-10-25
-**Scope:** static source and configuration review across `api/`, `spa/`, migrations, tests, schedulers, and the running local Compose database. No notification or badge code changed.
+**Scope:** static source and configuration review across `api/`, `spa/`, migrations, tests, schedulers, and the running local Compose database. No notification or badge code changed during discovery; subsequent changes are tracked in `PROGRESS.md`.
 
 ## Evidence and limits
 
@@ -87,9 +87,9 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/CRM/Services/PriceNegotiationService.php:287` |
 | `api/app/Modules/CRM/Services/PriceNegotiationService.php:289` |
 | `api/app/Common/Services/CustomApprovalEscalationService.php:97` |
-| `api/app/Common/Services/EmailDeliveryFailureNotifier.php:37` |
-| `api/app/Common/Services/ApprovalService.php:367` |
-| `api/app/Common/Services/ApprovalService.php:392` |
+| `api/app/Common/Services/EmailDeliveryFailureNotifier.php:28` |
+| `api/app/Common/Services/ApprovalService.php:382` |
+| `api/app/Common/Services/ApprovalService.php:405` |
 | `api/app/Common/Services/ApprovalEscalationService.php:86` |
 | `api/app/Common/Services/ApprovalEscalationService.php:137` |
 | `api/app/Common/Services/ApprovalEscalationService.php:313` |
@@ -128,17 +128,17 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/Accounting/Services/BillService.php:1070` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php:33` |
 | `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:81` |
-| `api/app/Modules/Accounting/Services/InvoiceService.php:171` |
-| `api/app/Modules/Accounting/Services/InvoiceService.php:331` |
+| `api/app/Modules/Accounting/Services/InvoiceService.php:184` |
+| `api/app/Modules/Accounting/Services/InvoiceService.php:344` |
 | `api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php:259` |
 | `api/app/Modules/Accounting/Services/BudgetTransferService.php:87` |
 | `api/app/Modules/Accounting/Services/BudgetTransferService.php:194` |
 | `api/app/Modules/Purchasing/Listeners/AlertOnSupplierDeterioration.php:61` |
 | `api/app/Modules/Accounting/Services/BudgetService.php:135` |
 | `api/app/Modules/Accounting/Services/BudgetService.php:203` |
-| `api/app/Modules/Accounting/Services/ArDunningService.php:192` |
-| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:100` |
-| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:230` |
+| `api/app/Modules/Accounting/Services/ArDunningService.php:193` |
+| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:103` |
+| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:233` |
 | `api/app/Modules/Production/Services/WorkOrderReworkService.php:167` |
 | `api/app/Modules/Production/Services/WorkOrderReworkService.php:171` |
 | `api/app/Modules/Production/Services/WorkOrderAssignmentService.php:478` |
@@ -165,7 +165,7 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/Payroll/Listeners/NotifyEmployeesOnPayrollFinalized.php:71` |
 | `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeSubmitted.php:38` |
 | `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeDecided.php:29` |
-| `api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php:47` |
+| `api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php:48,50` |
 | `api/app/Modules/Accounting/Listeners/EmailCustomerOnInvoiceFinalized.php:28` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveSubmitted.php:40` |
 | `api/app/Modules/HR/Listeners/NotifyOnSeparationInitiated.php:34` |
@@ -202,7 +202,7 @@ The following lists every direct `Mail::to(...)` call found under `api/app`. The
 | `api/app/Common/Services/NotificationService.php:457` | `$address` | `queue` | `UserNotificationMail` |
 | `api/app/Console/Commands/RunDueScheduledExports.php:176` | `$recipient` | `queue` | `ScheduledExportMail` |
 | `api/app/Modules/Accounting/Listeners/EmailCustomerOnInvoiceFinalized.php:54` | `$recipient` | `queue` | `CustomerInvoiceFinalizedMail` |
-| `api/app/Modules/Accounting/Listeners/EmailCustomerOnOfficialReceiptIssued.php:41` | `$snapshot['customer_email']` | `queue` | `CustomerOfficialReceiptMail` |
+| `api/app/Modules/Accounting/Listeners/EmailCustomerOnOfficialReceiptIssued.php:51` | `$snapshot['customer_email']` | `queue` | `CustomerOfficialReceiptMail` |
 | `api/app/Modules/Accounting/Listeners/EmailPartyOnCreditNoteFinalized.php:43` | `$snapshot['party_email']` | `queue` | `PartyCreditNoteMail` |
 | `api/app/Modules/Accounting/Services/ArDunningService.php:102` | `$email` | `queue` | `InvoiceDunningMail` |
 | `api/app/Modules/B2B/Listeners/EmailSupplierOnInvoiceSubmitted.php:42` | `$snapshot['recipient_email']` | `queue` | `SupplierInvoiceStatusMail` |
@@ -247,7 +247,7 @@ Cadences below come from `api/routes/console.php`; indirect rows may publish a d
 | `approvals:run-escalations` | Every 6 hours | Sends approval reminders/escalations and custom approval escalations. | `ApprovalEscalationService.php`, `CustomApprovalEscalationService.php`; `console.php:193`. |
 | `ncr:escalate` | Every 15 minutes | Sends NCR escalation notices. | `NcrEscalationService.php:180`; `console.php:199`. |
 | `complaints:check-8d-slas` | Every 15 minutes | Sends 8D SLA notices. | `Complaint8dEscalationService.php:271`; `console.php:205`; current audience list needs scenario proof. |
-| `ar:run-dunning` | Daily 07:00 | Sends invoice dunning email and internal escalation notice. | `ArDunningService.php:102,192`; `console.php:408`; finance/customer boundaries need review. |
+| `ar:run-dunning` | Daily 07:00 | Sends invoice dunning email and internal escalation notice. | `ArDunningService.php:102,193`; `console.php:408`; finance/customer boundaries need review. |
 | `production:send-daily-summary` | Daily 18:00 | Sends production summary email to selected internal users. | `SendDailyProductionSummary.php:68`; `console.php:217`. |
 | `production:send-weekly-summary` | Fridays 18:00 | Sends production summary email to selected internal users. | `SendWeeklyProductionSummary.php:66`; `console.php:221`. |
 | `hr:onboarding-reminders` | Daily 09:00 | Sends HR reminders for stale onboarding. | `OnboardingService.php:231`; `console.php:229`. |

@@ -190,7 +190,7 @@ class ArDunningService
             return;
         }
 
-        $this->notifications->send($officers, 'ar.dunning.escalation', [
+        $this->notifications->sendForSubject($invoice, $officers, 'ar.dunning.escalation', [
             'title' => 'AR Escalation — Highest dunning tier reached',
             'message' => "Invoice {$invoice->invoice_number} for ".
                 ($invoice->customer?->name ?? 'unknown customer').
@@ -229,6 +229,7 @@ class ArDunningService
                 'entity_id' => $invoice->hash_id,
                 'reason' => 'The customer email was missing, unreachable, or rejected by the email provider.',
             ],
+            $invoice,
         );
     }
 }
