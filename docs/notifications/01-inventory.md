@@ -376,3 +376,7 @@ The 17-role matrix above is the per-role view. In all roles, source evidence is 
 ## Open defects and separate-track findings
 
 See `FINDINGS.md`. Findings here are not mixed into a code change. Confirmed source mismatches include profile badge attachment to the wrong route and badge definitions with no destination. Approval/PR counts, Alert count semantics, frontend/backend permissions, and some channel scopes are risks pending direct list and role scenarios, not confirmed data disclosure.
+
+## Follow-up status verification: Sales Orders
+
+The legacy `pending_so` badge counted every `draft`, including orders never sent to a customer. `requestCustomerConfirmation()` leaves the order in `draft` and records `customer_confirmation_requested_at`; portal-submitted orders use `awaiting_confirmation`; delivery proposals use `delivery_negotiation`. The badge and list now share that verified three-part filter. Tests cover every `SalesOrderStatus`, requested versus unsent drafts, soft deletion, permission denial, and badge/list total parity.

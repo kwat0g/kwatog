@@ -110,6 +110,28 @@ it('opens held material-review records from the MRB badge', () => {
   );
 });
 
+it('opens the confirmation queue when Sales Orders has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_so'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Confirmation queue',
+          description: 'Sales orders awaiting confirmation or response',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/crm/sales-orders']}>
+      <Sidebar roleSlug="sales_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Sales Orders/ })).toHaveAttribute(
+    'href',
+    '/crm/sales-orders?signal=awaiting_confirmation',
+  );
+});
+
 it('opens all active shipment stages from the inbound shipment badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'shipments'

@@ -10,6 +10,7 @@ import type {
 
 export interface SalesOrderListParams extends ListParams {
  customer_id?: string;
+ signal?: 'awaiting_confirmation' | '';
  /** Single status or an array (serialised as status[]=…, accepted by the list endpoint). */
  status?: string | string[];
  date_from?: string;

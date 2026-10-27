@@ -367,6 +367,8 @@ PR [#374](https://github.com/kwat0g/kwatog/pull/374) adds the `pending_budgets` 
 
 Draft PR [#375](https://github.com/kwat0g/kwatog/pull/375) corrects both budget and transfer action-notice audiences. They now apply the same per-record actionable scopes as their lists and badges, excluding a delegate when their delegator's role matches the submitter's role.
 
+The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirmation()` with `/crm/sales-orders?signal=awaiting_confirmation`. Workflow source shows that customer-sent drafts remain `draft` but set `customer_confirmation_requested_at`; unsent drafts are not actionable confirmation work. The scope includes those sent drafts, `awaiting_confirmation`, and `delivery_negotiation` records, and excludes soft-deleted rows through the model's default scope.
+
 | Shell | Path | Label |
 | --- | --- | --- |
 | Supplier portal | `/portal/supplier` | Dashboard |
