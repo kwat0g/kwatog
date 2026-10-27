@@ -87,7 +87,7 @@ class PriceNegotiationLifecycleTest extends TestCase
         $buyer = $this->portal();
         $product = $this->product();
         $agreement = app(PriceAgreementService::class)->create(['customer_id' => $buyer->customer_id, 'product_id' => $product->id, 'price' => '30.00', 'effective_from' => today()->toDateString(), 'effective_to' => today()->addMonth()->toDateString()]);
-        $this->actingAs($this->actor('customer_service_officer'), 'web')->putJson('/api/v1/crm/price-agreements/'.$agreement->hash_id, ['price' => '35.00'])->assertUnprocessable();
+        $this->actingAs($this->actor('system_admin'), 'web')->putJson('/api/v1/crm/price-agreements/'.$agreement->hash_id, ['price' => '35.00'])->assertUnprocessable();
         $this->deleteJson('/api/v1/crm/price-agreements/'.$agreement->hash_id)->assertUnprocessable();
         $this->assertSame('30.00', $agreement->fresh()->price);
     }
