@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { pricingRequestsApi } from '@/api/crm/pricingRequests';
 import { usePermission } from '@/hooks/usePermission';
@@ -18,16 +19,28 @@ import { PricingNavigation } from './PricingNavigation';
 
 export default function CostReviewsPage() {
   const { can, canApprove } = usePermission();
+  const [searchParams] = useSearchParams();
+  const linkedReviewId = searchParams.get('review');
+  const openedReviewId = useRef<string | null>(null);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ItemCostReview | null>(null);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const qc = useQueryClient();
   const query = useQuery({
-    queryKey: ['cost-reviews', page],
-    queryFn: () => pricingRequestsApi.costs(page),
+    queryKey: ['cost-reviews', page, linkedReviewId],
+    queryFn: () => pricingRequestsApi.costs(page, linkedReviewId ?? undefined),
     placeholderData: (p) => p,
   });
+  useEffect(() => {
+    if (!linkedReviewId || !query.data || openedReviewId.current === linkedReviewId) return;
+    const review = query.data.data.find((row) => row.id === linkedReviewId);
+    if (!review) return;
+    openedReviewId.current = linkedReviewId;
+    setSelected(review);
+    setNotes('');
+    setError('');
+  }, [linkedReviewId, query.data]);
   const mutation = useMutation({
     mutationFn: async (decision: 'approve' | 'reject' | 'renew') => {
       if (decision === 'renew') await pricingRequestsApi.renewCost(selected!.id, notes);
@@ -165,7 +178,11 @@ export default function CostReviewsPage() {
               <EmptyState
                 icon="dollar-sign"
                 title="No supplier cost reviews"
-                description="Supplier receipt cost changes appear here for Finance review before updating standard costs."
+                description={
+                  linkedReviewId
+                    ? 'This review is unavailable or you no longer have access.'
+                    : 'Supplier receipt cost changes appear here for Finance review before updating standard costs.'
+                }
               />
             }
           />
