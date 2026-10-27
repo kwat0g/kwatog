@@ -1,14 +1,51 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useChainProgress } from './useChainProgress';
 
-vi.mock('@/lib/echo', () => ({ getEcho: () => new Promise(() => {}) }));
+const echoMocks = vi.hoisted(() => {
+  const handlers: Record<string, (payload: { refresh: true }) => void> = {};
+  const channel = {
+    listen: vi.fn((event: string, handler: (payload: { refresh: true }) => void) => {
+      handlers[event] = handler;
+    }),
+    stopListening: vi.fn(),
+  };
+  const echo = { private: vi.fn(() => channel), leave: vi.fn() };
+
+  return { handlers, channel, echo };
+});
+
+vi.mock('@/lib/echo', () => ({ getEcho: async () => echoMocks.echo }));
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
+  Object.keys(echoMocks.handlers).forEach((event) => delete echoMocks.handlers[event]);
+  echoMocks.channel.listen.mockClear();
+  echoMocks.channel.stopListening.mockClear();
+  echoMocks.echo.private.mockClear();
+  echoMocks.echo.leave.mockClear();
+});
+
+it('refreshes the current record on a content-free chain broadcast', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  const fetchDetail = vi.fn(async () => 'current');
+  function Record() {
+    const detail = useQuery({ queryKey: ['record', 'one'], queryFn: fetchDetail, staleTime: Infinity });
+    useChainProgress('sales_order', 'one', ['record', 'one']);
+    return <div>{detail.data}</div>;
+  }
+
+  render(<QueryClientProvider client={client}><Record /></QueryClientProvider>);
+  await waitFor(() => expect(echoMocks.handlers['.chain.refresh']).toBeDefined());
+  expect(fetchDetail).toHaveBeenCalledTimes(1);
+
+  await act(async () => echoMocks.handlers['.chain.refresh']({ refresh: true }));
+
+  await waitFor(() => expect(fetchDetail).toHaveBeenCalledTimes(2));
+  client.clear();
 });
 
 it('refreshes active process views without broadcasts, pauses when hidden, and stops on unmount', async () => {
