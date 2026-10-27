@@ -236,7 +236,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `quality.ncr.overdue` | Overdue / warning | Open NCR/CAPA/effectiveness record due date < Manila today; confirm authoritative due field. | A/S: assigned owner + scoped reviewer | `/quality/ncrs?signal=overdue` |
 | `quality.effectiveness.due` | Effectiveness check / warning | Approved corrective action with scheduled effectiveness check due within 3 days or overdue. | A/S: assigned quality reviewer | `/quality/ncrs?signal=effectiveness_due` |
 | `maintenance.breakdown.open` | Breakdown / critical | Machine breakdown open and not restored/closed. | A/S: same-site assigned maintenance/production users | `/maintenance/work-orders?signal=breakdown` |
-| `maintenance.work_order.unassigned` | Unassigned / action-required | Open maintenance work order with no assignee; scoped dispatcher/supervisor only. | S: maintenance view + site scope | `/maintenance/work-orders?signal=unassigned` |
+| `maintenance.work_order.unassigned` | Unassigned / action-required | Open maintenance work order (`open`, `assigned`, or `in_progress`) with no assignee. | S: `maintenance.view` + `maintenance.wo.assign`; company-wide, matching the current list. Site scope is unsupported by the current list. | `/maintenance/work-orders?queue=unassigned` |
 | `maintenance.work_order.assigned` | Assigned work order / action-required | Nonterminal maintenance work orders assigned to the current technician; use the same assignment/site filter as the technician mobile list. | A: assigned technician and site | `/maintenance/mobile?signal=assigned` |
 | `maintenance.work_order.overdue` | Overdue / warning | Open maintenance work order past authoritative due date/time; determine whether waiting-parts pauses SLA. | A/S | `/maintenance/work-orders?signal=overdue` |
 | `maintenance.pm.due_soon` | PM due / warning | Active PM schedule with `next_due_at` from Manila now through +3 calendar days and no nonterminal generated work order. | S: maintenance view + site/equipment scope | `/maintenance/schedules?signal=due_soon` |
@@ -278,6 +278,8 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `admin.backup.failed_or_overdue` | Backup / critical | Required backup failed or scheduled backup missed approved SLA, only if scheduler stores reliable result/time. | Sys: backup admin permission | `/admin/backups?signal=failed_or_overdue` |
 | `alerts.open` | System alert / severity-derived | Unresolved, non-dismissed Alert rows; explicitly area-wide only if alert list is shared and filter identical. Never call personal unread. | S/Sys per alert type and subject scope | `/alerts?signal=open` |
 | `dss.critical` | DSS critical / critical | Open critical recommendation with active publisher, owner, and record-access rule; disabled today. | A/S only after detector owner approval | `/decision-center?signal=critical` |
+
+Maintenance scope reconciliation: Phase 2 proposed site scope and `signal=unassigned`. Source review found no site filter in the work-order list; `maintenance.view` opens the company-wide list, and the actual API filter is `queue=unassigned`. The signal therefore uses the list's company scope and additionally requires assignment permission. Site scoping remains unsupported; do not claim site-restricted parity.
 
 ### Internal sidebar route coverage: 76 destinations (73 Phase 0 baseline)
 

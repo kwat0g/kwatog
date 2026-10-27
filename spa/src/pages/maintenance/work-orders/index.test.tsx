@@ -44,12 +44,13 @@ it('labels page-scoped cards and counts only critical orders on the loaded page'
   });
 
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <MemoryRouter><MaintenanceWorkOrdersListPage /></MemoryRouter>
+    <MemoryRouter initialEntries={['/maintenance/work-orders?queue=open']}><MaintenanceWorkOrdersListPage /></MemoryRouter>
   </QueryClientProvider>);
 
   expect(await screen.findByText('57 orders')).toBeVisible();
+  expect(workOrdersApi.list).toHaveBeenCalledWith(expect.objectContaining({ queue: 'open' }));
   expect(screen.getByText('Critical priority')).toBeVisible();
-  expect(screen.getByRole('link', { name: /Critical priority/ })).toHaveAttribute('href', '/?queue=critical');
+  expect(screen.getByRole('link', { name: /Critical priority/ })).toHaveAttribute('href', '/maintenance/work-orders?queue=critical');
   // Read each figure from inside its own labelled card rather than by the
   // value's class: the label is the card's public identity, and the figure's
   // size is now responsive to the card width (F-009), so `text-2xl` is not a
