@@ -128,6 +128,7 @@ function badgeDestination(path: string, key: string): string {
     pending_transfers: 'status=pending&actionable=1',
     pending_grn: 'status=pending_qc',
     pending_inspections: 'work_queue=to_inspect',
+    mrb_holds: 'status=held',
     open_complaints: 'signal=open',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
@@ -449,6 +450,15 @@ export const SECTIONS: NavSection[] = [
         feature: 'inventory',
         permission: 'inventory.view',
         badgeKey: 'pending_grn',
+      },
+      {
+        to: '/inventory/mrb',
+        label: 'MRB / Quarantine',
+        description: 'Nonconforming material on hold',
+        icon: LuTriangleAlert,
+        feature: 'inventory',
+        permission: 'inventory.mrb.view',
+        badgeKey: 'mrb_holds',
       },
       {
         to: '/inventory/material-issues',
