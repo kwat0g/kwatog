@@ -145,6 +145,8 @@ function badgeDestination(path: string, key: string): string {
     leaves: 'signal=awaiting_my_approval',
     maintenance_wo: 'queue=open',
     maintenance_wo_unassigned: 'queue=unassigned',
+    low_stock: 'signal=low_stock',
+    out_of_stock: 'signal=out_of_stock',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',
@@ -457,7 +459,7 @@ export const SECTIONS: NavSection[] = [
         icon: InventoryIcon,
         feature: 'inventory',
         permission: 'inventory.view',
-        badgeKey: 'low_stock',
+        badgeKeys: ['out_of_stock', 'low_stock'],
       },
       {
         to: '/inventory/uoms',

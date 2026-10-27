@@ -24,8 +24,8 @@ use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
 use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
-use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Services\InventoryDashboardService;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Services\ContactInquiryInboxService;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
@@ -86,6 +86,7 @@ class BadgeService
         'maintenance_wo' => 'maintenance',
         'maintenance_wo_unassigned' => 'maintenance',
         'low_stock' => 'inventory',
+        'out_of_stock' => 'inventory',
         'ncrs' => 'quality',
         'profile_requests' => 'hr',
         'payroll' => 'payroll',
@@ -190,11 +191,13 @@ class BadgeService
                 // Per-badge override wins; missing override falls back to the
                 // global thresholds (e.g. overdue_bills.danger=3 so a handful
                 // of overdue payables is red before the global 20).
-                'severity'    => $this->severity(
-                    $count,
-                    $this->intSetting($settings, "dashboard.badges.overrides.{$key}.danger", $globalDanger),
-                    $this->intSetting($settings, "dashboard.badges.overrides.{$key}.warning", $globalWarning),
-                ),
+                'severity'    => $count > 0 && ($def['danger_when_positive'] ?? false)
+                    ? 'danger'
+                    : $this->severity(
+                        $count,
+                        $this->intSetting($settings, "dashboard.badges.overrides.{$key}.danger", $globalDanger),
+                        $this->intSetting($settings, "dashboard.badges.overrides.{$key}.warning", $globalWarning),
+                    ),
                 'label'       => $def['label'],
                 'description' => $def['description'],
             ];
@@ -207,6 +210,7 @@ class BadgeService
      *   permissions: array<int, string>,
      *   approval_permissions?: array<int, string>,
      *   required_permissions?: array<int, string>,
+     *   danger_when_positive?: bool,
      *   label: string,
      *   description: string,
      *   counter: Closure
@@ -326,10 +330,14 @@ class BadgeService
                 'permissions' => ['inventory.view'],
                 'label'       => 'Low Stock',
                 'description' => 'Items at or below reorder point',
-                'counter'     => fn (): int => Item::query()
-                    ->where('reorder_point', '>', 0)
-                    ->whereRaw('(SELECT COALESCE(SUM(quantity - reserved_quantity), 0) FROM stock_levels sl WHERE sl.item_id = items.id) <= items.reorder_point')
-                    ->count(),
+                'counter'     => fn (): int => (int) app(InventoryDashboardService::class)->summary()['items_low_stock'],
+            ],
+            'out_of_stock' => [
+                'permissions' => ['inventory.view'],
+                'label'       => 'Out of Stock',
+                'description' => 'Active items with no usable stock',
+                'counter'     => fn (): int => (int) app(InventoryDashboardService::class)->summary()['items_out_of_stock'],
+                'danger_when_positive' => true,
             ],
 
             // Quality > NCRs — open / not-yet-closed reports.

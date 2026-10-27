@@ -20,6 +20,7 @@ use App\Modules\Inventory\Services\ItemService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 class ItemController
 {
@@ -58,11 +59,15 @@ class ItemController
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $request->validate(['signal' => ['nullable', Rule::in(['low_stock', 'out_of_stock'])]]);
+
         return ItemResource::collection($this->service->list($request->query()));
     }
 
     public function catalog(Request $request): AnonymousResourceCollection
     {
+        $request->validate(['signal' => ['nullable', Rule::in(['low_stock', 'out_of_stock'])]]);
+
         return ItemCatalogOptionResource::collection($this->service->list($request->query()));
     }
 

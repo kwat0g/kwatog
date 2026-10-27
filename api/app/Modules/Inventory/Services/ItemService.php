@@ -34,9 +34,14 @@ class ItemService
 {
     public function list(array $filters): LengthAwarePaginator
     {
+        $signal = $filters['signal'] ?? null;
         $q = Item::query()->with('category:id,name,parent_id,item_type');
         $q->withExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]);
         TrashedFilter::apply($q, $filters);
+        if ($signal !== null) {
+            // Signals describe active inventory only, even when archive filters are also present.
+            $q->whereNull('items.deleted_at')->where('is_active', true);
+        }
 
         // Subqueries for available/on-hand to prevent N+1.
         $q->withSum(['stockLevels as on_hand_quantity' => fn ($s) => $s], 'quantity')
@@ -51,7 +56,7 @@ class ItemService
                 $q->where('category_id', $catId);
             }
         }
-        if (isset($filters['is_active']) && $filters['is_active'] !== '') {
+        if ($signal === null && isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
         }
         if (isset($filters['is_critical']) && $filters['is_critical'] !== '') {
@@ -69,11 +74,12 @@ class ItemService
         $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
         $status = $filters['stock_status'] ?? null;
         $belowReorder = filter_var($filters['below_reorder'] ?? false, FILTER_VALIDATE_BOOLEAN);
-        if (in_array($status, ['critical', 'low', 'ok'], true) || $belowReorder) {
+        if (in_array($status, ['critical', 'low', 'ok'], true) || $belowReorder || $signal !== null) {
             // ponytail: readiness filters scan matching items; materialize ledger holds if catalog scale makes this slow.
             $items = $q->get()->each(fn (Item $item) => $this->attachAvailability($item))
                 ->filter(fn (Item $item) => (! in_array($status, ['critical', 'low', 'ok'], true) || $item->stock_status === $status)
-                    && (! $belowReorder || bccomp($item->available, (string) $item->reorder_point, 3) <= 0))
+                    && (! $belowReorder || bccomp($item->available, (string) $item->reorder_point, 3) <= 0)
+                    && ($signal === null || $item->matchesStockSignal($signal, $item->available)))
                 ->values();
             $page = StockPaginator::resolveCurrentPage();
 

@@ -17,6 +17,7 @@ export interface ItemListParams extends ListParams {
   is_active?: boolean | string;
   is_critical?: boolean | string;
   stock_status?: 'critical' | 'low' | 'ok';
+  signal?: 'low_stock' | 'out_of_stock';
   below_reorder?: boolean | string;
 }
 

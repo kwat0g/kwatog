@@ -39,33 +39,34 @@ class InventoryDashboardService
         $availabilities = app(StockLocationSummaryService::class)->availabilityByItem($levels)->map(fn ($availability) => $availability['usable_quantity']);
 
         $items = Item::query()->where('is_active', true)
-            ->select('id', 'code', 'name', 'reorder_point', 'safety_stock', 'lead_time_days', 'is_critical')
+            ->select('id', 'code', 'name', 'reorder_point', 'safety_stock', 'lead_time_days', 'is_critical', 'is_active')
             ->get();
 
         $lowStockItemIds = $items
             ->filter(function (Item $item) use ($availabilities): bool {
                 $available = (string) ($availabilities[$item->id] ?? '0.000');
 
-                return bccomp($available, (string) $item->reorder_point, 3) <= 0;
+                return $item->matchesStockSignal('low_stock', $available);
             })
             ->pluck('id')
             ->all();
         $openPrByItem = $this->latestOpenPurchaseRequests($lowStockItemIds);
         $openPoByItem = $this->latestOpenPurchaseOrders($lowStockItemIds);
 
-        $belowReorder = 0;
         $critical = 0;
+        $lowStock = 0;
+        $outOfStock = 0;
         $lowStockAlerts = [];
         foreach ($items as $item) {
             $available = (string) ($availabilities[$item->id] ?? '0.000');
+            $lowStock += (int) $item->matchesStockSignal('low_stock', $available);
+            $outOfStock += (int) $item->matchesStockSignal('out_of_stock', $available);
             $safety = (string) $item->safety_stock;
             $reorder = (string) $item->reorder_point;
             if (bccomp($available, $safety, 3) <= 0) {
                 $critical++;
-            } elseif (bccomp($available, $reorder, 3) <= 0) {
-                $belowReorder++;
             }
-            if (bccomp($available, $reorder, 3) <= 0) {
+            if ($item->matchesStockSignal('low_stock', $available)) {
                 $openPr = $openPrByItem[$item->id] ?? null;
                 $openPo = $openPoByItem[$item->id] ?? null;
 
@@ -119,8 +120,10 @@ class InventoryDashboardService
         return [
             'consumption_history_days' => $historyDays,
             'total_stock_value' => Money::round2($totalStockValue),
-            'items_below_reorder' => $belowReorder,
+            'items_below_reorder' => $lowStock,
             'items_critical' => $critical,
+            'items_low_stock' => $lowStock,
+            'items_out_of_stock' => $outOfStock,
             'pending_grns' => $pendingGrns,
             'low_stock_alerts' => $lowStockAlerts,
             'recent_movements' => $recentMovements->map(fn ($m) => [
