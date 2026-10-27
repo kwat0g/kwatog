@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Common\Support\OutboxDispatchContext;
 use App\Modules\Auth\Models\User;
@@ -188,19 +189,37 @@ class PricingReviewService
             '/crm/price-agreements', $key, ['finance_officer', 'sales_officer', 'customer_service_officer', 'system_admin']);
     }
 
-    private function notify(string $type, string $title, string $message, string $link, string $key, array $roles): void
-    {
+    private function notify(
+        string $type,
+        string $title,
+        string $message,
+        string $link,
+        string $key,
+        array $roles,
+        ?ItemCostReview $subject = null,
+    ): void {
+        if ($link === '/crm/price-agreements/cost-reviews'
+            && app(SettingsService::class)->get('modules.inventory', false) !== true) {
+            return;
+        }
+
         $permission = $link === '/crm/price-agreements/cost-reviews' ? 'inventory.costs.review' : (str_starts_with($link, '/mrp') ? 'mrp.boms.view' : (str_starts_with($link, '/inventory') ? 'inventory.view' : 'crm.price_agreements.view'));
         $users = $this->activeUsers ??= User::query()->where('is_active', true)->get();
         $roleSlugs = array_fill_keys($roles, true);
         $audience = $users->filter(fn (User $user): bool => $user->hasPermission($permission)
             && ($roleSlugs === [] || isset($roleSlugs[$user->role?->slug])));
-        app(NotificationService::class)->sendInApp($audience, $type, ['title' => $title, 'message' => $message, 'link_to' => $link], $key);
+        $data = ['title' => $title, 'message' => $message, 'link_to' => $link];
+        if ($subject) {
+            app(NotificationService::class)->sendForSubject($subject, $audience, $type, $data, $key, emailEnabled: false);
+
+            return;
+        }
+        app(NotificationService::class)->sendInApp($audience, $type, $data, $key);
     }
 
     public function notifyCostReview(ItemCostReview $review, string $message): void
     {
         $this->notify('inventory.receipt_cost_changed', 'Supplier cost review: '.$review->item->code, $message,
-            '/crm/price-agreements/cost-reviews', 'pricing:cost-review:'.$review->id.':'.$review->version, []);
+            '/crm/price-agreements/cost-reviews', 'pricing:cost-review:'.$review->id.':'.$review->version, [], $review);
     }
 }

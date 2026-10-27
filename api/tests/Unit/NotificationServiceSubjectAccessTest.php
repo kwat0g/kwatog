@@ -23,12 +23,14 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\ItemCostReview;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderCrew;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -372,6 +374,110 @@ class NotificationServiceSubjectAccessTest extends TestCase
             'title' => 'Item update',
         ], emailEnabled: false);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.disabled_inventory_subject']);
+    }
+
+    public function test_item_cost_review_subject_requires_review_permission_and_enabled_inventory(): void
+    {
+        app(SettingsService::class)->set('modules.inventory', true, 'modules');
+        $reviewPermission = Permission::firstOrCreate(
+            ['slug' => 'inventory.costs.review'],
+            ['name' => 'Review inventory costs', 'module' => 'inventory'],
+        );
+        $inventoryPermission = Permission::firstOrCreate(
+            ['slug' => 'inventory.view'],
+            ['name' => 'View inventory', 'module' => 'inventory'],
+        );
+        $reviewerRole = Role::firstOrCreate(['slug' => 'notification_cost_review_access'], ['name' => 'Notification Cost Review Access']);
+        $reviewerRole->permissions()->syncWithoutDetaching([$reviewPermission->id]);
+        $viewerRole = Role::firstOrCreate(['slug' => 'notification_inventory_only'], ['name' => 'Notification Inventory Only']);
+        $viewerRole->permissions()->syncWithoutDetaching([$inventoryPermission->id]);
+        $reviewer = User::factory()->withRole($reviewerRole->slug)->create();
+        $inventoryViewer = User::factory()->withRole($viewerRole->slug)->create();
+        $withoutPermission = User::factory()->create();
+
+        $item = Item::factory()->create(['standard_cost' => '10.0000']);
+        $grn = GoodsReceiptNote::factory()->create(['status' => 'accepted', 'accepted_at' => now()]);
+        $purchaseOrderItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $grn->purchase_order_id,
+            'item_id' => $item->id,
+            'description' => 'Cost review access test',
+            'quantity' => '5',
+            'unit' => $item->unit_of_measure,
+            'unit_price' => '12.00',
+            'total' => '60.00',
+        ]);
+        $line = $grn->items()->create([
+            'purchase_order_item_id' => $purchaseOrderItem->id,
+            'location_id' => WarehouseLocation::factory()->create()->id,
+            'item_id' => $item->id,
+            'quantity_received' => '5',
+            'quantity_accepted' => '5',
+            'unit_cost' => '12.0000',
+        ]);
+        $review = ItemCostReview::create([
+            'item_id' => $item->id,
+            'grn_item_id' => $line->id,
+            'previous_cost' => '10.0000',
+            'proposed_cost' => '12.0000',
+        ]);
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.item_cost_review_subject_access',
+                'subject_type' => ItemCostReview::class,
+                'subject_id' => $review->id,
+                'user_ids' => [$inventoryViewer->id, $withoutPermission->id],
+            ],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.disabled_item_cost_review_subject',
+                'subject_type' => ItemCostReview::class,
+                'subject_id' => $review->id,
+                'user_ids' => [$reviewer->id],
+            ],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification delivery skipped: no eligible recipients.',
+            ['type' => 'test.disabled_item_cost_review_subject'],
+        );
+
+        app(NotificationService::class)->sendForSubject(
+            $review,
+            [$reviewer, $inventoryViewer, $withoutPermission],
+            'test.item_cost_review_subject_access',
+            ['title' => 'Cost review update'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $reviewer->id,
+            'type' => 'test.item_cost_review_subject_access',
+        ]);
+        foreach ([$inventoryViewer, $withoutPermission] as $denied) {
+            $this->assertDatabaseMissing('notifications', [
+                'notifiable_id' => $denied->id,
+                'type' => 'test.item_cost_review_subject_access',
+            ]);
+        }
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $reviewer->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => in_array($event->userId, [$inventoryViewer->id, $withoutPermission->id], true));
+
+        app(SettingsService::class)->set('modules.inventory', false, 'modules');
+        app(NotificationService::class)->sendForSubject(
+            $review,
+            $reviewer,
+            'test.disabled_item_cost_review_subject',
+            ['title' => 'Cost review update'],
+            emailEnabled: false,
+        );
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $reviewer->id,
+            'type' => 'test.disabled_item_cost_review_subject',
+        ]);
     }
 
     public function test_unregistered_subject_type_fails_closed(): void
