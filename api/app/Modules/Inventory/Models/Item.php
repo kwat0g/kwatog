@@ -165,6 +165,20 @@ class Item extends Model
         return 'ok';
     }
 
+    public function matchesStockSignal(string $signal, string $available): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        return match ($signal) {
+            'low_stock' => bccomp((string) $this->reorder_point, '0', 3) > 0
+                && bccomp($available, (string) $this->reorder_point, 3) <= 0,
+            'out_of_stock' => bccomp($available, '0', 3) <= 0,
+            default => false,
+        };
+    }
+
     public function canDelete(): bool
     {
         if ($this->stockLevels()->where(fn (Builder $query) => $query

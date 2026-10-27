@@ -204,6 +204,36 @@ it('opens PO actions first and keeps receipt overdue as a separate signal', () =
   })).toHaveAttribute('href', '/purchasing/purchase-orders?signal=receipt_overdue');
 });
 
+it('opens out-of-stock items first and keeps low stock as a separate signal', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'out_of_stock') {
+      return { count: 2, severity: 'danger', label: 'Out of Stock', description: 'Active items with no usable stock' };
+    }
+    if (key === 'low_stock') {
+      return { count: 4, severity: 'warning', label: 'Low Stock', description: 'Active items at or below reorder point' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/inventory/items']}>
+      <Sidebar roleSlug="warehouse_staff" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Inventory Items/ })).toHaveAttribute(
+    'href',
+    '/inventory/items?signal=out_of_stock',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Inventory Items signals/ }));
+  expect(screen.getByRole('link', { name: 'Active items with no usable stock: 2' })).toHaveAttribute(
+    'href',
+    '/inventory/items?signal=out_of_stock',
+  );
+  expect(screen.getByRole('link', { name: 'Active items at or below reorder point: 4' })).toHaveAttribute(
+    'href',
+    '/inventory/items?signal=low_stock',
+  );
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'

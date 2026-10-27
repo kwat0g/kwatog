@@ -301,6 +301,11 @@ export default function ItemsListPage() {
  { value: '', label: 'All' },
  ...(itemOptions?.stock_statuses ?? []),
  ]},
+ { key: 'signal', label: 'Stock signal', type: 'select', options: [
+ { value: '', label: 'All' },
+ { value: 'out_of_stock', label: 'Out of stock' },
+ { value: 'low_stock', label: 'Low stock' },
+ ]},
  { key: 'is_active', label: 'Active', type: 'select', options: [
  { value: '', label: 'All' }, { value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' },
  ]},

@@ -20,6 +20,7 @@ use App\Modules\Dashboard\Support\WidgetScope;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
+use App\Modules\Inventory\Services\InventoryDashboardService;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\MRP\Enums\MachineStatus;
@@ -590,7 +591,7 @@ class DashboardWidgetDataService
 
     private function lowStockCount(): int
     {
-        return DB::query()->fromSub(DB::table('items as i')->leftJoin('stock_levels as sl', 'sl.item_id', '=', 'i.id')->where('i.is_active', true)->groupBy('i.id', 'i.reorder_point')->selectRaw('i.id, i.reorder_point, COALESCE(SUM(sl.quantity - sl.reserved_quantity), 0) AS available'), 'stock')->whereColumn('available', '<=', 'reorder_point')->count();
+        return (int) app(InventoryDashboardService::class)->summary()['items_low_stock'];
     }
 
     private function latestPayslip(?int $employeeId): array
