@@ -124,6 +124,44 @@ class NotificationServiceTest extends TestCase
         Notification::assertNotSentTo($other, PasswordResetLinkNotification::class);
     }
 
+    public function test_inactive_internal_users_are_excluded_from_notification_delivery(): void
+    {
+        $active = User::factory()->create();
+        $inactive = User::factory()->create(['is_active' => false]);
+        $deleted = User::factory()->create();
+        $deleted->delete();
+        Event::fake([UserNotificationCreated::class]);
+        Notification::fake();
+
+        $this->service->send([$active, $inactive, $deleted], 'active.user.test', [
+            'title' => 'Active recipient',
+            'message' => 'Only active users should receive this.',
+        ]);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $active->id,
+            'type' => 'active.user.test',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $inactive->id,
+            'type' => 'active.user.test',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $deleted->id,
+            'type' => 'active.user.test',
+        ]);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $active->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $inactive->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $deleted->id);
+
+        $notice = new PasswordResetLinkNotification('https://ogami.test/reset?token=opaque', 30);
+        $this->service->sendLaravelNotification([$inactive, $deleted], $notice);
+        $this->service->notify([$inactive, $deleted], $notice, 'password.reset');
+
+        Notification::assertNotSentTo($inactive, PasswordResetLinkNotification::class);
+        Notification::assertNotSentTo($deleted, PasswordResetLinkNotification::class);
+    }
+
     public function test_dedupe_key_makes_replayed_send_idempotent(): void
     {
         $user = User::factory()->create();
