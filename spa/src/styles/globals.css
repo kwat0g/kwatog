@@ -196,13 +196,13 @@
     scrollbar-width: auto;
   }
 
-  .table-scroll-frame {
+  .scroll-edge-frame {
     position: relative;
     min-width: 0;
   }
 
-  .table-scroll-frame[data-more-left='true']::before,
-  .table-scroll-frame[data-more-right='true']::after {
+  .scroll-edge-frame[data-more-left='true']::before,
+  .scroll-edge-frame[data-more-right='true']::after {
     position: absolute;
     z-index: 11;
     top: 1px;
@@ -220,7 +220,7 @@
     touch-action: none;
   }
 
-  .table-scroll-frame[data-more-left='true']::before {
+  .scroll-edge-frame[data-more-left='true']::before {
     content: '‹';
     left: 1px;
     justify-content: flex-start;
@@ -228,7 +228,7 @@
     background: linear-gradient(90deg, var(--bg-surface) 20%, transparent 100%);
   }
 
-  .table-scroll-frame[data-more-right='true']::after {
+  .scroll-edge-frame[data-more-right='true']::after {
     content: '›';
     right: 1px;
     justify-content: flex-end;

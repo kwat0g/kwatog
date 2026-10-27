@@ -7,6 +7,7 @@ import { schedulerApi } from '@/api/mrp/scheduler';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
@@ -14,8 +15,8 @@ import { Select } from '@/components/ui/Select';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { GanttChart } from '@/components/production/GanttChart';
 import {
   offsetScheduleDate,
@@ -26,7 +27,13 @@ import {
 import { useDebounce } from '@/hooks/useDebounce';
 import { usePermission } from '@/hooks/usePermission';
 import { localIsoDate } from '@/lib/formatDate';
-import type { SchedulerConflict } from '@/types/mrp';
+import { formatQuantity } from '@/lib/formatNumber';
+import type { GanttBar, GanttRow, SchedulerConflict } from '@/types/mrp';
+
+type ScheduleEntry = GanttBar & {
+  machine_code: string;
+  current_owner?: GanttRow['current_owner'];
+};
 
 function errorMessage(error: unknown, fallback: string): string {
   return (
@@ -110,7 +117,11 @@ export default function ProductionSchedulePage() {
   const entries = useMemo(
     () =>
       rows
-        .flatMap((row) => row.bars.map((bar) => ({ ...bar, machine_code: row.machine_code })))
+        .flatMap((row) => row.bars.map((bar) => ({
+          ...bar,
+          machine_code: row.machine_code,
+          current_owner: row.current_owner,
+        })))
         .sort((a, b) => a.start.localeCompare(b.start)),
     [rows],
   );
@@ -150,9 +161,113 @@ export default function ProductionSchedulePage() {
   };
   const showError = operationError && !runReview;
 
+  const columns: Column<ScheduleEntry>[] = [
+    {
+      key: 'work-order', header: 'Work order / product', pinned: 'left', togglable: false,
+      width: 280, minWidth: 220, maxWidth: 560,
+      cell: (bar) => (
+        <div className="min-w-0 space-y-1">
+          {bar.wo_id ? (
+            <Link className="inline-flex min-h-11 max-w-full items-center truncate whitespace-nowrap font-mono font-medium tabular-nums text-link hover:underline xl:min-h-0" title={bar.wo_number ?? undefined} to={`/production/work-orders/${bar.wo_id}`}>
+              {bar.wo_number ?? 'Work order unavailable'}
+            </Link>
+          ) : <span className="truncate whitespace-nowrap font-mono tabular-nums" title={bar.wo_number ?? undefined}>{bar.wo_number ?? 'Work order unavailable'}</span>}
+          <p
+            className="truncate whitespace-nowrap text-secondary"
+            title={[bar.product_part_number, bar.product_name].filter(Boolean).join(' · ')}
+          >
+            {bar.product_part_number ? `${bar.product_part_number} · ` : ''}
+            {bar.product_name ?? 'Product unavailable'}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: 'sales-order', header: 'Sales order', width: 150, minWidth: 130, maxWidth: 240,
+      cell: (bar) => bar.sales_order ? (
+        can('crm.sales_orders.view') ? (
+          <Link className="inline-flex min-h-11 max-w-full items-center truncate whitespace-nowrap font-mono tabular-nums text-link hover:underline xl:min-h-0" title={bar.sales_order.so_number} to={`/crm/sales-orders/${bar.sales_order.id}`}>
+            {bar.sales_order.so_number}
+          </Link>
+        ) : <span className="truncate whitespace-nowrap font-mono tabular-nums" title={bar.sales_order.so_number}>{bar.sales_order.so_number}</span>
+      ) : <span className="text-secondary">—</span>,
+    },
+    {
+      key: 'quantity', header: 'Quantity', align: 'right', width: 140, minWidth: 112, maxWidth: 180,
+      cell: (bar) => <span className="tabular-nums">{formatQuantity(bar.quantity_target)}</span>,
+    },
+    {
+      key: 'machine-mold', header: 'Machine / mold', width: 180, minWidth: 160, maxWidth: 260,
+      cell: (bar) => (
+        <div className="min-w-0 space-y-1" title={[bar.machine_code, bar.mold_code ?? 'No mold assigned', bar.current_owner && `Current owner: ${bar.current_owner.wo_number}`].filter(Boolean).join(' · ')}>
+          <div className="truncate whitespace-nowrap font-mono tabular-nums">
+            {bar.machine_code} · {bar.mold_code ?? 'No mold assigned'}
+          </div>
+          {bar.current_owner && (
+            <div className="truncate whitespace-nowrap text-caption text-secondary">Current owner: {bar.current_owner.wo_number}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'scheduled-time', header: 'Scheduled time', width: 190, minWidth: 175, maxWidth: 260,
+      cell: (bar) => (
+        <div className="tabular-nums">
+          <div className="whitespace-nowrap">{scheduleDate(bar.start, timezone)}</div>
+          <div className="whitespace-nowrap text-secondary">
+            {scheduleTime(bar.start, timezone)}–{scheduleTime(bar.end, timezone)}
+            {scheduleDateKey(bar.start, timezone) !== scheduleDateKey(bar.end, timezone)
+              ? ` · ends ${scheduleDate(bar.end, timezone)}` : ''}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'schedule-status', header: 'Schedule status', width: 160, minWidth: 145, maxWidth: 240,
+      cell: (bar) => (
+        <div className="space-y-1">
+          <Chip variant={bar.status === 'pending' ? 'warning' : 'info'}>
+            {bar.status === 'pending' ? 'Awaiting approval' : bar.status === 'executed' ? 'Executed' : 'Confirmed'}
+          </Chip>
+          {bar.status === 'pending' && bar.wo_status !== 'planned' && (
+            <p className="max-w-40 truncate whitespace-nowrap text-caption text-danger-fg" title="WO already changed. Schedule needs review.">WO changed · review</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'work-order-status', header: 'Work order', width: 140, minWidth: 120, maxWidth: 220,
+      cell: (bar) => <span className="block truncate whitespace-nowrap capitalize text-secondary" title={bar.wo_status?.replaceAll('_', ' ') ?? 'Unavailable'}>{bar.wo_status?.replaceAll('_', ' ') ?? 'Unavailable'}</span>,
+    },
+    {
+      key: 'crew-readiness', header: 'Crew / readiness', width: 260, minWidth: 220, maxWidth: 500,
+      cell: (bar) => bar.staffing ? (() => {
+        const blockers = [...new Set([...bar.staffing.blockers, ...(bar.staffing.execution_blockers ?? [])])];
+        const workerNames = bar.staffing.worker_names.join(', ') || 'Crew not assigned';
+        const detail = [
+          `${bar.staffing.worker_count} workers · minimum ${bar.staffing.minimum_workers}`,
+          workerNames,
+          bar.staffing.recorder_name && `Recorder: ${bar.staffing.recorder_name}`,
+          bar.reserves_capacity === false && 'Capacity released · history',
+          ...blockers,
+        ].filter(Boolean).join(' · ');
+        return (
+          <div className="min-w-0 max-w-80 space-y-1" title={detail}>
+            <p className={`truncate whitespace-nowrap ${blockers.length ? 'text-warning-fg' : ''}`}>
+              {bar.staffing.worker_count} / {bar.staffing.minimum_workers} workers
+              {blockers.length ? ' · Needs review' : bar.reserves_capacity === false ? ' · History' : ''}
+            </p>
+            <p className="truncate whitespace-nowrap text-secondary">{workerNames}</p>
+          </div>
+        );
+      })() : <span className="text-secondary">Readiness unavailable</span>,
+    },
+  ];
+
   return (
-    <div>
+    <PageShell viewport className="flex flex-col gap-4 max-md:overflow-y-auto">
       <PageHeader
+        inset={false}
         title="Production schedule"
         subtitle="Review machine capacity, production timing, and worker readiness."
         refreshingQueryKey={['mrp', 'scheduler', 'snapshot']}
@@ -183,343 +298,201 @@ export default function ProductionSchedulePage() {
           </div>
         }
       />
-      <div className="space-y-4 px-5 py-4">
-        <div className="grid grid-cols-2 items-end gap-3 xl:grid-cols-[minmax(260px,2fr)_minmax(180px,1fr)_minmax(165px,1fr)_150px_150px]">
-          <Input
-            label="Find schedule"
-            placeholder="Work order, sales order, product, or mold…"
-            prefix={<LuSearch size={14} />}
-            containerClassName="col-span-2 xl:col-span-1"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-            }}
-            disabled={busy}
-          />
-          <Select
-            label="Machine"
-            searchable
-            value={machine}
-            onChange={(event) => {
-              setMachine(event.target.value);
-            }}
-            disabled={busy || !snapshot.data}
-          >
-            <option value="">All machines</option>
-            {(snapshot.data?.rows ?? []).map((row) => (
-              <option key={row.machine_id} value={row.machine_id}>
-                {row.machine_code} — {row.name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Schedule status"
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value);
-            }}
-            disabled={busy}
-          >
-            <option value="">All statuses</option>
-            <option value="pending">Awaiting approval</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="executed">Executed</option>
-          </Select>
-          <Input
-            type="date"
-            label="From date"
-            value={from}
-            onChange={(event) => {
-              setFrom(event.target.value);
-            }}
-            disabled={busy}
-          />
-          <Input
-            type="date"
-            label="Through date"
-            value={to}
-            onChange={(event) => {
-              setTo(event.target.value);
-            }}
-            disabled={busy}
-          />
-        </div>
-        {options.isError && (
-          <div
-            role="alert"
-            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-danger bg-danger-bg px-4 py-3 text-sm text-danger-fg"
-          >
-            <span>Schedule options could not be loaded.</span>
-            <Button onClick={() => options.refetch()}>Retry options</Button>
-          </div>
-        )}
-        {dateError && (from || to) && (
-          <p role="alert" className="text-sm text-danger-fg">
-            {dateError}
-          </p>
-        )}
-        {snapshot.isError && (
-          <div
-            role="alert"
-            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-danger bg-danger-bg px-4 py-3 text-sm text-danger-fg"
-          >
-            <span>Schedule could not be loaded. Retry to see the latest proposals.</span>
-            <Button onClick={() => snapshot.refetch()}>Retry schedule</Button>
-          </div>
-        )}
-        {showError && (
-          <p
-            role="alert"
-            className="rounded-md border border-danger bg-danger-bg p-3 text-sm text-danger-fg"
-          >
-            {operationError}
-          </p>
-        )}
-        {outcome && (
-          <p
-            role="status"
-            className={`rounded-md border px-4 py-3 text-sm ${outcomeKind === 'danger' ? 'border-danger bg-danger-bg text-danger-fg' : outcomeKind === 'warning' ? 'border-warning bg-warning-bg text-warning-fg' : 'border-success bg-success-bg text-success-fg'}`}
-          >
-            {outcome}
-          </p>
-        )}
-        {pending.length > 0 && (
-          <p className="text-sm text-secondary">
-            Review assigned workers and confirm each proposal from its work-order record.
-          </p>
-        )}
-        {displayedConflicts.length > 0 && (
-          <Panel
-            title="Work orders needing scheduling review"
-            meta={`${displayedConflicts.length} conflicts`}
-          >
-            <div className="space-y-3">
-              {displayedConflicts.map((conflict) => (
-                <div key={conflict.work_order_id} className="text-sm">
-                  <Link
-                    className="font-mono text-link hover:underline"
-                    to={`/production/work-orders/${conflict.work_order_id}`}
-                  >
-                    {conflict.wo_number}
-                  </Link>
-                  <p className="text-muted">
-                    {[...new Set(conflict.reasons)]
-                      .map((reason) => reason.replaceAll('_', ' '))
-                      .join('; ')}
-                    {conflict.checked_at && (
-                      <span className="block text-2xs">
-                        Last checked: {formatDateTime(conflict.checked_at)}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              ))}
+      <div
+        data-layout="filter-bar"
+        role="search"
+        className="grid shrink-0 grid-cols-2 items-end gap-3 xl:grid-cols-6"
+      >
+        <Input
+          label="Find schedule"
+          placeholder="Work order, sales order, product, or mold…"
+          prefix={<LuSearch size={14} />}
+          containerClassName="col-span-2 xl:col-span-2"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          disabled={busy}
+        />
+        <Select
+          label="Machine"
+          searchable
+          value={machine}
+          onChange={(event) => setMachine(event.target.value)}
+          disabled={busy || !snapshot.data}
+        >
+          <option value="">All machines</option>
+          {(snapshot.data?.rows ?? []).map((row) => (
+            <option key={row.machine_id} value={row.machine_id}>
+              {row.machine_code} — {row.name}
+            </option>
+          ))}
+        </Select>
+        <Select
+          label="Schedule status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          disabled={busy}
+        >
+          <option value="">All statuses</option>
+          <option value="pending">Awaiting approval</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="executed">Executed</option>
+        </Select>
+        <Input
+          type="date"
+          label="From date"
+          value={from}
+          onChange={(event) => setFrom(event.target.value)}
+          disabled={busy}
+        />
+        <Input
+          type="date"
+          label="Through date"
+          value={to}
+          onChange={(event) => setTo(event.target.value)}
+          disabled={busy}
+        />
+      </div>
+      {(options.isError || (dateError && (from || to)) || snapshot.isError || showError || outcome) && (
+        <div className="flex shrink-0 flex-col gap-2">
+          {options.isError && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-danger bg-danger-bg px-4 py-3 text-sm text-danger-fg">
+              <span>Schedule options could not be loaded.</span>
+              <Button onClick={() => options.refetch()}>Retry options</Button>
             </div>
-          </Panel>
-        )}
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-          <span>
-            {entries.length} schedules · {rows.length} {rows.length === 1 ? 'machine' : 'machines'}{' '}
-            · {pending.length} awaiting approval · Times: {timezone}
-          </span>
-          {(machine || status || search) && (
-            <Button variant="ghost" size="sm" onClick={resetFilters} disabled={busy}>
-              Clear filters
-            </Button>
+          )}
+          {dateError && (from || to) && <p role="alert" className="text-sm text-danger-fg">{dateError}</p>}
+          {snapshot.isError && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-danger bg-danger-bg px-4 py-3 text-sm text-danger-fg">
+              <span>Schedule could not be loaded. Retry to see the latest proposals.</span>
+              <Button onClick={() => snapshot.refetch()}>Retry schedule</Button>
+            </div>
+          )}
+          {showError && <p role="alert" className="rounded-md border border-danger bg-danger-bg p-3 text-sm text-danger-fg">{operationError}</p>}
+          {outcome && (
+            <p role="status" className={`rounded-md border px-4 py-3 text-sm ${outcomeKind === 'danger' ? 'border-danger bg-danger-bg text-danger-fg' : outcomeKind === 'warning' ? 'border-warning bg-warning-bg text-warning-fg' : 'border-success bg-success-bg text-success-fg'}`}>
+              {outcome}
+            </p>
           )}
         </div>
-        <Panel noPadding>
-          <Tabs
-            label="Schedule views"
-            value={view}
-            onChange={setView}
-            items={[
-              { key: 'timeline', label: 'Timeline' },
-              { key: 'list', label: 'Schedule list', count: entries.length },
-            ]}
-          />
-          <div role="tabpanel" aria-label={view === 'timeline' ? 'Timeline' : 'Schedule list'}>
-            {!snapshot.data && (snapshot.isLoading || options.isLoading) ? (
-              <SkeletonTable columns={6} rows={5} />
-            ) : !dateError && !snapshot.isError && snapshot.data ? (
-              <>
-                {view === 'timeline' ? (
-                  <>
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-default px-4 py-3">
-                      <p className="text-xs text-muted">
-                        One row per WO. Open a work order to review workers and confirm its
-                        schedule.
-                      </p>
-                      <SegmentedControl
-                        label="Timeline zoom"
-                        value={zoom}
-                        onChange={setZoom}
-                        options={[
-                          { value: 'Day', label: 'Day' },
-                          { value: 'Week', label: 'Week' },
-                          { value: 'Month', label: 'Month' },
-                        ]}
-                      />
-                    </div>
-                    <GanttChart
-                      rows={rows}
-                      from={snapshot.data.from}
-                      to={snapshot.data.to}
-                      timezone={timezone}
-                      viewMode={zoom}
-                      onBarClick={(id) => navigate(`/production/work-orders/${id}`)}
-                    />
-                  </>
-                ) : entries.length ? (
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className={`${tableCls} min-w-[960px]`}>
-                        <caption className="sr-only">
-                          Work order schedules with machine, mold, times, and approval status
-                        </caption>
-                        <thead>
-                          <tr className={theadTrCls}>
-                            <Th>Work order / product</Th>
-                            <Th>Sales order</Th>
-                            <Th align="right">Quantity</Th>
-                            <Th>Machine / mold</Th>
-                            <Th>Scheduled time</Th>
-                            <Th>Schedule</Th>
-                            <Th>Work order</Th>
-                            <Th>Crew / readiness</Th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {entries.map((bar) => (
-                            <tr key={bar.id} className={trCls}>
-                              <Td>
-                                {bar.wo_id ? (
-                                  <Link
-                                    className="font-mono text-link hover:underline"
-                                    to={`/production/work-orders/${bar.wo_id}`}
-                                  >
-                                    {bar.wo_number}
-                                  </Link>
-                                ) : (
-                                  'WO unavailable'
-                                )}
-                                <div className="max-w-64 text-muted">
-                                  {bar.product_part_number ? `${bar.product_part_number} · ` : ''}
-                                  {bar.product_name ?? 'Product unavailable'}
-                                </div>
-                              </Td>
-                              <Td>
-                                {bar.sales_order ? (
-                                  can('crm.sales_orders.view') ? (
-                                    <Link
-                                      className="font-mono text-link hover:underline"
-                                      to={`/crm/sales-orders/${bar.sales_order.id}`}
-                                    >
-                                      {bar.sales_order.so_number}
-                                    </Link>
-                                  ) : (
-                                    <span className="font-mono">{bar.sales_order.so_number}</span>
-                                  )
-                                ) : (
-                                  '—'
-                                )}
-                              </Td>
-                              <Td align="right" mono>
-                                {bar.quantity_target ?? '—'}
-                              </Td>
-                              <Td>
-                                <div className="font-mono">{bar.machine_code}</div>
-                                {rows.find((row) => row.machine_code === bar.machine_code)
-                                  ?.current_owner && (
-                                  <div className="text-2xs text-muted">
-                                    Current owner:{' '}
-                                    {
-                                      rows.find((row) => row.machine_code === bar.machine_code)
-                                        ?.current_owner?.wo_number
-                                    }
-                                  </div>
-                                )}
-                                <div className="font-mono text-muted">
-                                  {bar.mold_code ?? 'No mold assigned'}
-                                </div>
-                              </Td>
-                              <Td>
-                                <div className="font-mono">{scheduleDate(bar.start, timezone)}</div>
-                                <div className="font-mono text-muted">
-                                  {scheduleTime(bar.start, timezone)}–
-                                  {scheduleTime(bar.end, timezone)}
-                                  {scheduleDateKey(bar.start, timezone) !==
-                                  scheduleDateKey(bar.end, timezone)
-                                    ? ` · ends ${scheduleDate(bar.end, timezone)}`
-                                    : ''}
-                                </div>
-                              </Td>
-                              <Td>
-                                <Chip variant={bar.status === 'pending' ? 'warning' : 'info'}>
-                                  {bar.status === 'pending'
-                                    ? 'Awaiting approval'
-                                    : bar.status === 'executed'
-                                      ? 'Executed'
-                                      : 'Confirmed'}
-                                </Chip>
-                                {bar.status === 'pending' && bar.wo_status !== 'planned' && (
-                                  <p className="mt-1 max-w-40 text-2xs text-danger-fg">
-                                    WO already changed. Schedule needs review.
-                                  </p>
-                                )}
-                              </Td>
-                              <Td>
-                                <span className="text-xs capitalize">
-                                  {bar.wo_status?.replaceAll('_', ' ') ?? 'Unavailable'}
-                                </span>
-                              </Td>
-                              <Td>
-                                {bar.staffing && (
-                                  <div className="max-w-64 text-xs">
-                                    <p>
-                                      {bar.staffing.worker_count} workers · minimum{' '}
-                                      {bar.staffing.minimum_workers}
-                                    </p>
-                                    <p className="text-muted">
-                                      {bar.staffing.worker_names.join(', ') || 'Crew not assigned'}
-                                    </p>
-                                    {bar.staffing.recorder_name && (
-                                      <p>Recorder: {bar.staffing.recorder_name}</p>
-                                    )}
-                                    {bar.reserves_capacity === false ? (
-                                      <p className="text-muted">Capacity released · history</p>
-                                    ) : (
-                                      [
-                                        ...new Set([
-                                          ...bar.staffing.blockers,
-                                          ...(bar.staffing.execution_blockers ?? []),
-                                        ]),
-                                      ].map((message) => (
-                                        <p key={message} className="mt-1 text-warning-fg">
-                                          {message}
-                                        </p>
-                                      ))
-                                    )}
-                                  </div>
-                                )}
-                              </Td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : (
-                  <EmptyState
-                    icon="calendar"
-                    title="No schedules match these filters"
-                    description="Change the date range or clear filters. Running the scheduler creates proposals for planned work orders."
-                  />
-                )}
-              </>
-            ) : null}
+      )}
+      {pending.length > 0 && (
+        <p className="shrink-0 text-sm text-secondary">
+          Review assigned workers and confirm each proposal from its work-order record.
+        </p>
+      )}
+      {displayedConflicts.length > 0 && (
+        <Panel
+          className="shrink-0"
+          bodyClassName="max-h-36 overflow-y-auto"
+          title="Work orders needing scheduling review"
+          meta={`${displayedConflicts.length} conflicts`}
+        >
+          <div className="space-y-3">
+            {displayedConflicts.map((conflict) => (
+              <div key={conflict.work_order_id} className="text-sm">
+                <Link
+                  className="inline-flex min-h-11 items-center font-mono text-link hover:underline"
+                  to={`/production/work-orders/${conflict.work_order_id}`}
+                >
+                  {conflict.wo_number}
+                </Link>
+                <p className="text-muted">
+                  {[...new Set(conflict.reasons)].map((reason) => reason.replaceAll('_', ' ')).join('; ')}
+                  {conflict.checked_at && (
+                    <span className="block text-caption">
+                      Last checked: {formatDateTime(conflict.checked_at)}
+                    </span>
+                  )}
+                </p>
+              </div>
+            ))}
           </div>
         </Panel>
+      )}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-caption text-muted">
+        <span className="tabular-nums">
+          {entries.length.toLocaleString('en-PH')} schedules · {rows.length.toLocaleString('en-PH')} {rows.length === 1 ? 'machine' : 'machines'}
+          {' '}· {pending.length.toLocaleString('en-PH')} awaiting approval · Times: {timezone}
+        </span>
+        {(machine || status || search) && (
+          <Button variant="ghost" size="sm" onClick={resetFilters} disabled={busy}>
+            Clear filters
+          </Button>
+        )}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col max-md:flex-none">
+        <Tabs
+          className="shrink-0"
+          label="Schedule views"
+          value={view}
+          onChange={setView}
+          items={[
+            { key: 'timeline', label: 'Timeline' },
+            { key: 'list', label: 'Schedule list', count: entries.length },
+          ]}
+        />
+        <div
+          role="tabpanel"
+          aria-label={view === 'timeline' ? 'Timeline' : 'Schedule list'}
+          className="flex min-h-0 flex-1 flex-col pt-3 max-md:flex-none"
+        >
+          {!snapshot.data && (snapshot.isLoading || options.isLoading) ? (
+            <div className="min-h-0 h-full overflow-auto rounded-md border border-default">
+              <SkeletonTable columns={6} rows={5} />
+            </div>
+          ) : !dateError && !snapshot.isError && snapshot.data ? (
+            view === 'timeline' ? (
+              <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-default bg-canvas max-md:h-auto max-md:min-h-0">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-default px-4 py-3">
+                  <p className="text-sm text-secondary">
+                    One row per WO. Open a work order to review workers and confirm its schedule.
+                  </p>
+                  <SegmentedControl
+                    label="Timeline zoom"
+                    value={zoom}
+                    onChange={setZoom}
+                    options={[
+                      { value: 'Day', label: 'Day' },
+                      { value: 'Week', label: 'Week' },
+                      { value: 'Month', label: 'Month' },
+                    ]}
+                  />
+                </div>
+                <GanttChart
+                  className="h-full max-md:h-auto max-md:flex-none"
+                  fillHeight
+                  rows={rows}
+                  from={snapshot.data.from}
+                  to={snapshot.data.to}
+                  timezone={timezone}
+                  viewMode={zoom}
+                  onBarClick={(id) => navigate(`/production/work-orders/${id}`)}
+                />
+              </div>
+            ) : entries.length ? (
+              <DataTable
+                tableKey="production-schedule"
+                fillHeight
+                fixedColumnLayout
+                columns={columns}
+                data={entries}
+                emptyState={<EmptyState size="compact" icon="calendar" title="No schedules match these filters" />}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-md border border-default bg-canvas">
+                <EmptyState
+                  icon="calendar"
+                  title="No schedules match these filters"
+                  description="Change the date range or clear filters. Running the scheduler creates proposals for planned work orders."
+                />
+              </div>
+            )
+          ) : dateError ? (
+            <div className="flex h-full items-center justify-center rounded-md border border-default bg-canvas">
+              <EmptyState icon="calendar" title="Choose a valid date range" description={dateError} />
+            </div>
+          ) : null}
+        </div>
       </div>
       <ConfirmDialog
         isOpen={runReview}
@@ -550,6 +523,6 @@ export default function ProductionSchedulePage() {
           </div>
         }
       />
-    </div>
+    </PageShell>
   );
 }

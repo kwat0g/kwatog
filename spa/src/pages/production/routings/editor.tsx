@@ -446,7 +446,7 @@ export default function RoutingEditorPage() {
  </p>
  )}
  {/* Twelve columns do not fit a 375px viewport; scroll rather than clip. */}
- <div className="table-scroll-frame min-w-0" data-more-left={operationScrollEdges.left} data-more-right={operationScrollEdges.right}>
+ <div className="scroll-edge-frame min-w-0" data-more-left={operationScrollEdges.left} data-more-right={operationScrollEdges.right}>
  <div ref={operationScrollerRef} data-layout="table-scroller" role="region" aria-label="Routing operation table" tabIndex={0}
  className="table-scroll-container contain-layout w-full min-w-0 rounded-md border border-default overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">
  <table className={cn(tableCls, 'min-w-max table-fixed')}>

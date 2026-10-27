@@ -43,4 +43,10 @@ describe('GanttChart', () => {
       '2026-10-11',
     );
   });
+
+  it('exposes the timeline as a keyboard-scrollable region with a sticky date header', () => {
+    render(<GanttChart rows={rows} fillHeight />);
+    expect(screen.getByRole('region', { name: /Production timeline/ })).toHaveAttribute('tabindex', '0');
+    expect(document.querySelector('[data-layout="gantt-header"]')).toHaveClass('sticky', 'top-0');
+  });
 });

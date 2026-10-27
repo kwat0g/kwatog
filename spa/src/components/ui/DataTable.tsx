@@ -561,7 +561,7 @@ export function DataTable<T>({
       />
 
       <div
-        className={cn('table-scroll-frame min-w-0', fillHeight && 'min-h-0 flex-1')}
+        className={cn('scroll-edge-frame min-w-0', fillHeight && 'min-h-0 flex-1')}
         data-more-left={scrollEdges.left}
         data-more-right={scrollEdges.right}
       >
