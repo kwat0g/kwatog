@@ -16,6 +16,7 @@ use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -1804,6 +1805,102 @@ class BadgeControllerTest extends TestCase
             $this->assertSame(2, $badgeCount);
             $this->assertSame($badgeCount, $dueSoonList->json('meta.total'));
             $this->assertSame([$today->toDateString(), $inThreeDays], collect($dueSoonList->json('data'))->pluck('due_date')->sort()->values()->all());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_missing_time_out_badge_matches_filtered_attendance_list_and_scope(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-27 10:00:00', config('app.timezone')));
+
+        try {
+            $departmentA = Department::factory()->create();
+            $departmentB = Department::factory()->create();
+            $headEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $coworkerA = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $coworkerB = Employee::factory()->create(['department_id' => $departmentB->id]);
+            $todayEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $noTimeInEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $completedEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $archivedEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $yesterday = today()->subDay()->toDateString();
+            $today = today()->toDateString();
+
+            foreach ([$headEmployee, $coworkerA, $coworkerB] as $employee) {
+                Attendance::create([
+                    'employee_id' => $employee->id,
+                    'date' => $yesterday,
+                    'time_in' => "{$yesterday} 08:00:00",
+                ]);
+            }
+            Attendance::create([
+                'employee_id' => $todayEmployee->id,
+                'date' => $today,
+                'time_in' => "{$today} 08:00:00",
+            ]);
+            Attendance::create([
+                'employee_id' => $noTimeInEmployee->id,
+                'date' => $yesterday,
+            ]);
+            Attendance::create([
+                'employee_id' => $completedEmployee->id,
+                'date' => $yesterday,
+                'time_in' => "{$yesterday} 08:00:00",
+                'time_out' => "{$yesterday} 17:00:00",
+            ]);
+            Attendance::create([
+                'employee_id' => $archivedEmployee->id,
+                'date' => $yesterday,
+                'time_in' => "{$yesterday} 08:00:00",
+            ])->delete();
+
+            $hr = User::factory()->create(['role_id' => Role::where('slug', 'hr_officer')->value('id')]);
+            $head = User::factory()->create([
+                'employee_id' => $headEmployee->id,
+                'role_id' => Role::where('slug', 'department_head')->value('id'),
+            ]);
+            $employee = User::factory()->withRole('employee')->create(['employee_id' => $coworkerA->id]);
+
+            $hrList = $this->actingAs($hr, 'sanctum')
+                ->getJson('/api/v1/attendance/attendances?missing_time_out=1')
+                ->assertOk();
+            $hrBadge = $this->actingAs($hr, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.missing_time_out.count');
+            $this->assertSame(3, $hrList->json('meta.total'));
+            $this->assertSame($hrList->json('meta.total'), $hrBadge);
+
+            Attendance::query()
+                ->where('employee_id', $headEmployee->id)
+                ->whereDate('date', $yesterday)
+                ->firstOrFail()
+                ->update(['time_out' => "{$yesterday} 17:00:00"]);
+            $this->assertSame(2, $this->actingAs($hr, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.missing_time_out.count'));
+
+            $headList = $this->actingAs($head, 'sanctum')
+                ->getJson('/api/v1/attendance/attendances?missing_time_out=1')
+                ->assertOk();
+            $headBadge = $this->actingAs($head, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.missing_time_out.count');
+            $this->assertSame(1, $headList->json('meta.total'));
+            $this->assertSame($headList->json('meta.total'), $headBadge);
+
+            $employeeList = $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/attendance/attendances?missing_time_out=1')
+                ->assertOk();
+            $employeeBadges = $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data');
+            $this->assertSame(1, $employeeList->json('meta.total'));
+            $this->assertArrayNotHasKey('missing_time_out', $employeeBadges);
         } finally {
             Carbon::setTestNow();
         }

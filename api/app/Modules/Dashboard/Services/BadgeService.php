@@ -14,6 +14,7 @@ use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Services\AttendanceService;
 use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\CustomerComplaint;
@@ -90,6 +91,7 @@ class BadgeService
         'supplier_listings_pending' => 'purchasing',
         'leaves' => 'leave',
         'overtime' => 'attendance',
+        'missing_time_out' => 'attendance',
         'maintenance_wo' => 'maintenance',
         'maintenance_wo_unassigned' => 'maintenance',
         'low_stock' => 'inventory',
@@ -327,6 +329,16 @@ class BadgeService
                 'description' => 'Overtime requests awaiting your approval',
                 'counter'     => fn (): int => app(OvertimeDecisionPolicy::class)
                     ->awaitingMyApprovalQuery(OvertimeRequest::query(), $user)
+                    ->count(),
+            ],
+
+            'missing_time_out' => [
+                'permissions' => ['attendance.edit', 'attendance.import', 'attendance.ot.approve'],
+                'required_permissions' => ['attendance.view'],
+                'label' => 'Missing time-outs',
+                'description' => 'Past attendance records with a time in but no time out',
+                'counter' => fn (): int => app(AttendanceService::class)
+                    ->listQuery(['missing_time_out' => 1], $user)
                     ->count(),
             ],
 

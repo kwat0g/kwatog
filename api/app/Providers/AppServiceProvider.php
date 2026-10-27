@@ -334,6 +334,7 @@ class AppServiceProvider extends ServiceProvider
             Budget::class,
             BudgetTransfer::class,
             Employee::class,
+            Attendance::class,
         ] as $badgeModel) {
             $badgeModel::observe(BadgeInvalidationObserver::class);
         }
