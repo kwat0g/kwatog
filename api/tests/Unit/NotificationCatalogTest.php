@@ -238,7 +238,7 @@ class NotificationCatalogTest extends TestCase
         ));
     }
 
-    public function test_laravel_notification_dispatch_is_centralized(): void
+    public function test_laravel_notification_dispatch_is_centralized_and_mail_only_classes_stay_mail_only(): void
     {
         $appPath = dirname(__DIR__, 2).'/app';
         $offences = [];
@@ -297,6 +297,9 @@ class NotificationCatalogTest extends TestCase
             if (preg_match_all('/->notify\s*\(/', $source, $matches) > 0) {
                 $objectNotifyCalls[$relative] = count($matches[0]);
             }
+            if ($relative === 'Common/Services/NotificationService.php') {
+                continue;
+            }
             $calls = [];
             if (preg_match('/->notify\(\s*new\s+/', $source)) {
                 $calls[] = 'user.notify';
@@ -304,7 +307,7 @@ class NotificationCatalogTest extends TestCase
             if (preg_match('/->notify\(\s*\$notification\b/', $source)) {
                 $calls[] = 'user.notify.variable';
             }
-            if (preg_match('/\bNotification::(?:send|sendNow)\s*\(/', $source)) {
+            if (preg_match('/\bNotification(?:Facade)?::(?:send|sendNow)\s*\(/', $source)) {
                 $calls[] = 'Notification.send';
             }
             if (preg_match('/\bNotification::route\s*\(/', $source)) {
@@ -334,7 +337,14 @@ class NotificationCatalogTest extends TestCase
             'Modules/Quality/Jobs/ProcessNcrRecurrenceScan.php' => 1,
             'Modules/ReturnManagement/Services/ReturnCaseService.php' => 6,
         ], $objectNotifyCalls, 'Any new object-level notify call must be reviewed and inventoried; use NotificationService::send() for in-app notices.');
-        $this->assertSame([], $nativeCalls, 'Laravel notification dispatch outside NotificationService must be reviewed.');
+        $this->assertSame([], $nativeCalls, sprintf(
+            "Laravel Notification dispatches must use NotificationService::sendLaravelNotification().\n  %s",
+            implode("\n  ", array_map(
+                static fn (string $path, array $calls): string => $path.' ('.implode(', ', $calls).')',
+                array_keys($nativeCalls),
+                array_values($nativeCalls),
+            )),
+        ));
 
         $mailOnlyNotifications = [
             new WelcomeNotification('https://example.test/setup', 60),
