@@ -53,6 +53,9 @@ class SupplierListingService
         $q = SupplierItemListing::query()
             ->with(['item:id,code,name,unit_of_measure', 'vendor:id,name', 'reviewer:id,name']);
 
+        if (($filters['id'] ?? null) !== null) {
+            $q->whereKey((int) $filters['id']);
+        }
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }

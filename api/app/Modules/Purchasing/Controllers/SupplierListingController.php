@@ -29,7 +29,11 @@ class SupplierListingController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
+        $id = $request->validate(['id' => ['nullable', 'string', 'max:64']])['id'] ?? null;
         $paginator = $this->service->listForReview([
+            'id' => is_string($id) && $id !== ''
+                ? (HashIdFilter::decode($id, SupplierItemListing::class) ?? 0)
+                : null,
             'status' => $request->query('status'),
             'search' => $request->query('search'),
             'per_page' => $request->query('per_page', 25),
