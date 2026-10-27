@@ -144,7 +144,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `'supplier.po_responded'` | Internal buyer/PO owner who handles supplier response, with purchase-order visibility; no supplier portal audience from this call | send | `api/app/Modules/Purchasing/Services/SupplierResponseService.php:461` |
 | `'supplier.schedule_cancelled'` | Internal buyer/logistics owner responsible for the affected schedule, with schedule visibility | send | `api/app/Modules/B2B/Services/SupplierDeliveryScheduleService.php:237` |
 | `'supplier.shipment_late'` | Internal buyer/receiving owner for the affected PO, with source scope; no supplier portal audience from this call | sendInApp | `api/app/Modules/B2B/Services/SupplierShipmentService.php:273` |
-| `'supplier_listing_submitted'` | Current buyer/warehouse/approver with site/source scope; vendor only if explicitly portal-bound | send | `api/app/Modules/Purchasing/Services/SupplierListingService.php:350` |
+| `'supplier_listing_submitted'` | Current reviewer with subject/list access; no supplier-portal audience | sendForSubject | `api/app/Modules/Purchasing/Services/SupplierListingService.php:350` |
 | `'training.expiry'` | Active account linked to this employee for self-service; configured active department head/HR recipients only when employee/training view permission and row scope allow access | send | `api/app/Modules/HR/Services/TrainingExpiryService.php:186`, `api/app/Modules/HR/Services/TrainingExpiryService.php:190` |
 
 ### Sensitive policy defaults requiring explicit approval
