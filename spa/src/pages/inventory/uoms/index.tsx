@@ -18,6 +18,7 @@ import { FilterBar } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { onFormInvalid } from '@/lib/formErrors';
 import { usePermission } from '@/hooks/usePermission';
@@ -116,8 +117,9 @@ export default function UomCatalogPage() {
  ];
 
  return (
-  <div>
+  <PageShell viewport className="flex flex-col gap-3">
    <PageHeader
+    inset={false}
     title="Units of Measure"
     backTo="/inventory/items"
     backLabel="Items"
@@ -127,25 +129,30 @@ export default function UomCatalogPage() {
      </Button>
     )}
    />
-   <div className="px-5 py-4 space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-     <FilterBar onSearch={setSearch} searchPlaceholder="Search units..." />
-     <ArchiveFilter value={scope} onChange={setScope} />
-    </div>
+   <div className="min-h-0 flex-1 flex flex-col gap-3">
+    <FilterBar
+     inset={false}
+     className="w-full"
+     onSearch={setSearch}
+     searchPlaceholder="Search units..."
+     actions={<ArchiveFilter value={scope} onChange={setScope} />}
+    />
 
-    {query.isLoading && !query.data && <SkeletonTable rows={6} columns={4} />}
+    {query.isLoading && !query.data && <div className="min-h-0 flex-1 overflow-auto"><SkeletonTable rows={6} columns={4} /></div>}
     {query.isError && (
-     <EmptyState icon="alert-circle" title="Failed to load units" action={<Button variant="secondary" onClick={() => query.refetch()}>Retry</Button>} />
+     <div className="min-h-0 flex-1 flex items-center justify-center"><EmptyState icon="alert-circle" title="Failed to load units" action={<Button variant="secondary" onClick={() => query.refetch()}>Retry</Button>} /></div>
     )}
     {query.data && rows.length === 0 && (
-     <EmptyState
-      icon="inbox"
-      title={search ? 'No matching units' : 'No units in this view'}
-      description={!search && canManage ? 'Add a unit for inventory, purchasing, or quality records.' : undefined}
-      action={!search && canManage ? <Button variant="primary" onClick={() => { setEditing(null); setFormOpen(true); }}>New unit</Button> : undefined}
-     />
+     <div className="min-h-0 flex-1 flex items-center justify-center">
+      <EmptyState
+       icon="inbox"
+       title={search ? 'No matching units' : 'No units in this view'}
+       description={!search && canManage ? 'Add a unit for inventory, purchasing, or quality records.' : undefined}
+       action={!search && canManage ? <Button variant="primary" onClick={() => { setEditing(null); setFormOpen(true); }}>New unit</Button> : undefined}
+      />
+     </div>
     )}
-    {query.data && rows.length > 0 && <DataTable columns={columns} data={rows} />}
+    {query.data && rows.length > 0 && <div className="min-h-0 flex-1 flex flex-col"><DataTable tableKey="inventory-uoms" fillHeight columns={columns} data={rows} /></div>}
    </div>
 
    <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? `Edit ${editing.code}` : 'New unit'} size="sm">
@@ -179,7 +186,7 @@ export default function UomCatalogPage() {
     variant={pending?.action === 'restore' ? 'primary' : 'danger'}
     pending={archive.isPending || restore.isPending}
    />
-  </div>
+  </PageShell>
  );
 }
 

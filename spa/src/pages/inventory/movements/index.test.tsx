@@ -39,6 +39,6 @@ it('shows document references and negative delivery quantity without changing re
 
   expect(await screen.findByRole('link', { name: 'GRN-202610-0005' })).toHaveAttribute('href', '/inventory/grn/grn-1');
   expect(screen.getByRole('link', { name: 'DEL-202610-0001' })).toHaveAttribute('href', '/supply-chain/deliveries/delivery-1');
-  expect(screen.getByText('5.000 pcs')).toBeInTheDocument();
-  expect(screen.getByText('-498.000 pcs')).toBeInTheDocument();
+  expect(screen.getByText('5 pcs')).toBeInTheDocument();
+  expect(screen.getByText('-498 pcs')).toBeInTheDocument();
 });

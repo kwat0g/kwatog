@@ -17,10 +17,11 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { Modal } from '@/components/ui/Modal';
 import { ItemCategoriesManager } from '@/pages/inventory/categories';
 import { usePermission } from '@/hooks/usePermission';
-import { formatQuantity } from '@/lib/formatNumber';
+import { formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { reportMutationError } from '@/lib/formErrors';
 import { showUndoToast } from '@/lib/undoToast';
@@ -230,33 +231,39 @@ export default function ItemsListPage() {
  }];
 
  const columns: Column<Item>[] = [
- { key: 'code', header: 'Code', cell: (r) => (
- <span className="font-mono">{r.code}</span>
+ { key: 'code', header: 'Code', width: 175, minWidth: 140, maxWidth: 240, cell: (r) => (
+ <span className="block truncate font-mono" title={r.code}>{r.code}</span>
  ) },
- { key: 'name', header: 'Name', cell: (r) => (
- <div>
- <div className="font-medium">{r.name}</div>
- <div className="text-xs text-muted">{r.category?.name ?? '—'} · {r.item_type_label}</div>
+ { key: 'name', header: 'Name', width: 260, minWidth: 200, maxWidth: 360, cell: (r) => (
+ <div className="min-w-0">
+ <div className="truncate font-medium leading-tight" title={r.name}>{r.name}</div>
+ <div className="truncate text-xs text-muted leading-tight" title={`${r.category?.name ?? '—'} · ${r.item_type_label}`}>
+ {r.category?.name ?? '—'} · {r.item_type_label}
+ </div>
  {r.classification_needs_review && <span className="text-xs text-warning-fg">Classification needs review</span>}
  </div>
  ) },
- { key: 'uom', header: 'UOM', cell: (r) => r.unit_of_measure },
- { key: 'cost', header: 'Std Cost', align: 'right', cell: (r) => <NumCell>{Number(r.standard_cost).toFixed(4)}</NumCell> },
- { key: 'on_hand', header: 'On hand', align: 'right', cell: (r) => <NumCell>{formatQuantity(r.on_hand_quantity)}</NumCell> },
- { key: 'available', header: 'Available', align: 'right', cell: (r) => (
+ { key: 'uom', header: 'UOM', width: 72, minWidth: 64, maxWidth: 100, cell: (r) => r.unit_of_measure },
+ { key: 'cost', header: 'Std Cost', width: 148, minWidth: 136, maxWidth: 180, align: 'right', cell: (r) => <NumCell>{formatUnitCost(r.standard_cost)}</NumCell> },
+ { key: 'on_hand', header: 'On hand', width: 156, minWidth: 144, maxWidth: 190, align: 'right', cell: (r) => <NumCell>{formatQuantity(r.on_hand_quantity)}</NumCell> },
+ { key: 'available', header: 'Available', width: 156, minWidth: 144, maxWidth: 190, align: 'right', cell: (r) => (
  <NumCell className={r.stock_status === 'critical' ? 'text-danger-fg' : r.stock_status === 'low' ? 'text-warning-fg' : ''}>
  {formatQuantity(r.available_quantity)}
  </NumCell>
  ) },
- { key: 'reorder', header: 'Reorder pt', align: 'right', cell: (r) => <NumCell>{formatQuantity(r.reorder_point)}</NumCell> },
- { key: 'status', header: 'Stock', cell: (r) => <Chip variant={stockChip(r.stock_status)}>{stockStatusLabel(r.stock_status)}</Chip> },
- { key: 'quality', header: 'QC plan', cell: (r) => (
+ { key: 'reorder', header: 'Reorder pt', width: 136, minWidth: 128, maxWidth: 170, align: 'right', cell: (r) => <NumCell>{formatQuantity(r.reorder_point)}</NumCell> },
+ { key: 'status', header: 'Stock', width: 95, minWidth: 88, maxWidth: 128, cell: (r) => <Chip variant={stockChip(r.stock_status)}>{stockStatusLabel(r.stock_status)}</Chip> },
+ { key: 'quality', header: 'QC plan', width: 90, minWidth: 84, maxWidth: 120, cell: (r) => (
  <Chip variant={r.quality_plan_ready ? 'success' : 'warning'}>{r.quality_plan_ready ? 'ready' : 'missing'}</Chip>
  ) },
- { key: 'active', header: '', cell: (r) => r.is_active ? null : <Chip variant="neutral">inactive</Chip> },
+ { key: 'active', header: '', width: 72, minWidth: 64, maxWidth: 100, cell: (r) => r.is_active ? null : <Chip variant="neutral">inactive</Chip> },
  ...(canManage ? [{
  key: 'actions',
  header: '',
+ width: 80,
+ minWidth: 72,
+ maxWidth: 104,
+ resizable: false,
  align: 'right' as const,
  cell: (r: Item) => (
  <div className="flex justify-end gap-1">
@@ -300,8 +307,9 @@ export default function ItemsListPage() {
  ];
 
  return (
- <div>
+ <PageShell viewport className="flex flex-col gap-3">
  <PageHeader
+ inset={false}
  title="Items"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'item' : 'items'}` : undefined}
  actions={
@@ -322,6 +330,7 @@ export default function ItemsListPage() {
  }
  />
  <FilterBar
+ inset={false}
  filters={filterConfig}
  values={filters}
  onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
@@ -329,10 +338,10 @@ export default function ItemsListPage() {
  searchPlaceholder="Search code or name…"
  actions={<ArchiveFilter value={scope} onChange={setScope} />}
  />
- {isLoading && !data && <SkeletonTable columns={canManage ? 10 : 9} rows={8} />}
- {isError && <EmptyState icon="alert-circle" title="Failed to load items" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
+ {isLoading && !data && <div className="min-h-0 flex-1 overflow-auto"><SkeletonTable columns={canManage ? 10 : 9} rows={8} /></div>}
+ {isError && <div className="min-h-0 flex-1 flex items-center justify-center"><EmptyState icon="alert-circle" title="Failed to load items" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} /></div>}
  {data && (
-   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+   <div className="hidden sm:grid grid-cols-2 lg:grid-cols-4 gap-3 py-4 border-b border-default bg-canvas">
    <StatCard
      label="Active Items"
      value={data.data.filter(i => i.is_active).length}
@@ -362,14 +371,18 @@ export default function ItemsListPage() {
   )}
 
 {data && data.data.length === 0 && (
+ <div className="min-h-0 flex-1 flex items-center justify-center">
  <ListEmptyState searchTerm={filters.search || (filters.stock_status ? `stock status: ${filters.stock_status}` : undefined)} />
+ </div>
  )}
 
 
   {data && data.data.length > 0 && (
- <div className="px-5 py-4">
+ <div className="min-h-0 flex-1 flex flex-col">
   <DataTable
   tableKey="inventory-items"
+  fillHeight
+  fixedColumnLayout
   onRowClick={(r) => navigate(`/inventory/items/${r.id}`)}
  columns={columns}
  data={data.data}
@@ -453,6 +466,6 @@ export default function ItemsListPage() {
  <Modal isOpen={showCategories} onClose={() => setShowCategories(false)} size="xl" title="Item Categories">
  <ItemCategoriesManager />
  </Modal>
- </div>
+ </PageShell>
  );
 }
