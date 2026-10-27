@@ -19,6 +19,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\ItemService;
+use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Services\BomCostingService;
 use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Services\ProductionRoutingService;
@@ -101,6 +102,12 @@ class AutomaticBomPricingReviewTest extends TestCase
             'type' => 'bom.cost_updated',
             'notifiable_id' => $unlistedViewer->id,
         ]);
+        $bomNotice = DB::table('notifications')->where('type', 'bom.cost_updated')
+            ->where('notifiable_id', User::whereHas('role', fn ($role) => $role->where('slug', 'ppc_head'))->value('id'))
+            ->firstOrFail();
+        $bomNoticeData = json_decode($bomNotice->data, true);
+        $this->assertSame(Bom::class, $bomNoticeData['subject_type']);
+        $this->assertSame('/mrp/boms/'.$bom->hash_id, $bomNoticeData['link_to']);
         $this->assertDatabaseHas('notifications', ['type' => 'pricing.review_required']);
         $warehouse = User::whereHas('role', fn ($role) => $role->where('slug', 'warehouse_staff'))->firstOrFail();
         $this->assertSame(0, DB::table('notifications')->where('notifiable_id', $warehouse->id)->count());
@@ -145,8 +152,26 @@ class AutomaticBomPricingReviewTest extends TestCase
             'type' => 'pricing.agreement_expiring',
             'notifiable_id' => $finance->id,
         ]);
+        $notice = DB::table('notifications')->where('type', 'pricing.agreement_expiring')->firstOrFail();
+        $noticeData = json_decode($notice->data, true);
+        $this->assertSame(PriceAgreement::class, $noticeData['subject_type']);
+        $this->assertSame('/crm/price-agreements?agreement='.$agreement->hash_id, $noticeData['link_to']);
         $this->artisan('pricing:review-agreements')->assertSuccessful();
         $this->assertSame($count, DB::table('notifications')->where('type', 'pricing.agreement_expiring')->count());
+    }
+
+    public function test_agreement_filter_returns_only_the_linked_record_and_fails_closed(): void
+    {
+        $agreement = $this->agreement();
+        $this->agreement();
+
+        $admin = User::factory()->withRole('system_admin')->create();
+        $this->actingAs($admin)->getJson('/api/v1/crm/price-agreements?agreement=')
+            ->assertOk()->assertJsonPath('meta.total', 2);
+        $this->getJson('/api/v1/crm/price-agreements?agreement='.$agreement->hash_id)
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $agreement->hash_id);
+        $this->getJson('/api/v1/crm/price-agreements?agreement=not-a-valid-hash')
+            ->assertOk()->assertJsonPath('meta.total', 0);
     }
 
     public function test_missing_conversion_does_not_publish_a_false_success_and_recovers_after_fix(): void

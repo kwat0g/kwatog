@@ -462,7 +462,7 @@ class NotificationServiceSubjectAccessTest extends TestCase
             $review,
             [$reviewer, $inventoryViewer, $withoutPermission],
             'test.item_cost_review_subject_access',
-            ['title' => 'Cost review update'],
+            ['title' => 'Cost review update', 'link_to' => '/crm/price-agreements/cost-reviews?review='.$review->hash_id],
             emailEnabled: false,
         );
 
@@ -484,7 +484,7 @@ class NotificationServiceSubjectAccessTest extends TestCase
             $review,
             $reviewer,
             'test.disabled_item_cost_review_subject',
-            ['title' => 'Cost review update'],
+            ['title' => 'Cost review update', 'link_to' => '/crm/price-agreements/cost-reviews?review='.$review->hash_id],
             emailEnabled: false,
         );
         $this->assertDatabaseMissing('notifications', [

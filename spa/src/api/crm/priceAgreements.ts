@@ -3,6 +3,7 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { PriceAgreement, CreatePriceAgreementData, UpdatePriceAgreementData } from '@/types/crm';
 
 export interface PriceAgreementListParams extends ListParams {
+ agreement?: string;
  product_id?: string;
  customer_id?: string;
  active_on?: string;
