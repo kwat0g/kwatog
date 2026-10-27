@@ -51,6 +51,8 @@ use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Shipment;
+use App\Modules\SupplyChain\Enums\VehicleStatus;
+use App\Modules\SupplyChain\Models\Vehicle;
 use Closure;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +105,7 @@ class BadgeService
         'work_orders_due_soon' => 'production',
         'work_orders_paused' => 'production',
         'deliveries' => 'supply_chain',
+        'vehicles_maintenance' => 'supply_chain',
         'pending_so' => 'crm',
         'inquiries' => 'crm',
         'open_complaints' => 'crm',
@@ -494,6 +497,15 @@ class BadgeService
                 'description' => 'Deliveries in transit',
                 'counter'     => fn (): int => Delivery::query()
                     ->whereIn('status', ['loading', 'in_transit'])
+                    ->count(),
+            ],
+
+            'vehicles_maintenance' => [
+                'permissions' => ['supply_chain.view'],
+                'label' => 'In maintenance',
+                'description' => 'Vehicles unavailable for delivery',
+                'counter' => fn (): int => Vehicle::query()
+                    ->where('status', VehicleStatus::Maintenance->value)
                     ->count(),
             ],
 

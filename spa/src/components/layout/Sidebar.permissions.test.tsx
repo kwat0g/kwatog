@@ -407,6 +407,13 @@ describe('role-aligned sidebar permissions', () => {
     expect(supplierListings.badgeKey).toBe('supplier_listings_pending');
   });
 
+  it('gates Delivery Fleet and its status badge by supply-chain view permission', () => {
+    const fleet = item('/supply-chain/fleet');
+    expect(isNavItemVisible(fleet, { permissions: new Set() })).toBe(false);
+    expect(isNavItemVisible(fleet, { permissions: new Set(['supply_chain.view']) })).toBe(true);
+    expect(fleet.badgeKey).toBe('vehicles_maintenance');
+  });
+
   it('uses shared Dashboard and permission-gates Finance pricing reviews', () => {
     const finance = {
       permissions: new Set([
