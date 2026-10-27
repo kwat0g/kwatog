@@ -346,7 +346,7 @@ class MaintenanceWorkOrderService
                 if ($employee->user->role?->slug === 'employee') {
                     $payload['link_to'] = '/self-service/maintenance-work-orders/'.$locked->hash_id;
                 }
-                $this->notifications->send($employee->user, 'maintenance.assigned', $payload,
+                $this->notifications->sendForSubject($locked, $employee->user, 'maintenance.assigned', $payload,
                     'maintenance:assigned:'.$locked->id.':'.$employeeId.':'.$assignmentLog->id);
             }
 
@@ -622,7 +622,7 @@ class MaintenanceWorkOrderService
                 ->whereHas('role', fn ($q) => $q->where('slug', $this->verifierRole($locked)))->get()
                 ->filter(fn (User $user): bool => $user->hasPermission('maintenance.view'))
                 ->values();
-            $this->notifications->send($recipients, 'maintenance.repair_submitted',
+            $this->notifications->sendForSubject($locked, $recipients, 'maintenance.repair_submitted',
                 NotifyMaintenanceWorkOrder::payload($locked,
                     'Repair verification needed: '.$locked->mwo_number, 'Review technician evidence and independently verify recovery.'),
                 'maintenance:submitted:'.$locked->id.':'.$log->id);
@@ -668,7 +668,7 @@ class MaintenanceWorkOrderService
                     if ($technician->role?->slug === 'employee') {
                         $payload['link_to'] = '/self-service/maintenance-work-orders/'.$locked->hash_id;
                     }
-                    $this->notifications->send($technician, 'maintenance.repair_rejected',
+                    $this->notifications->sendForSubject($locked, $technician, 'maintenance.repair_rejected',
                         $payload,
                         'maintenance:rejected:'.$locked->id.':'.$log->id);
                 }

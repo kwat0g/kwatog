@@ -50,7 +50,9 @@ class MaintenanceRoutingNotificationTest extends TestCase
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.assignment_needed')->count());
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $inactive->id]);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revoked->id]);
-        $this->assertStringContainsString('/maintenance/work-orders/', json_decode(DB::table('notifications')->value('data'), true)['link_to']);
+        $data = json_decode((string) DB::table('notifications')->where('type', 'maintenance.assignment_needed')->value('data'), true);
+        $this->assertStringContainsString('/maintenance/work-orders/', $data['link_to']);
+        $this->assertSame(MaintenanceWorkOrder::class, $data['subject_type']);
     }
 
     public function test_missing_supervisor_records_setup_failure(): void
@@ -113,6 +115,9 @@ class MaintenanceRoutingNotificationTest extends TestCase
         $service->assign($order, $technician->employee_id, $supervisor, ['expected_assignee_id' => null]);
         $service->assign($order, $technician->employee_id, $supervisor, ['expected_assignee_id' => $technician->employee_id]);
         $this->assertSame(1, DB::table('notifications')->where('type', 'maintenance.assigned')->count());
+        $assignmentData = json_decode((string) DB::table('notifications')->where('type', 'maintenance.assigned')->value('data'), true);
+        $this->assertSame(MaintenanceWorkOrder::class, $assignmentData['subject_type']);
+        $this->assertSame((string) $order->id, $assignmentData['subject_id']);
         $this->artisan('maintenance:check-assignment')->assertSuccessful();
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.assignment_escalated')->count());
         $this->assertSame('assigned', $order->fresh()->status->value);
