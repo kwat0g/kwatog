@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\HR;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -250,7 +251,7 @@ class PublicRecruitmentTest extends TestCase
             ->once()
             ->andThrow(new \RuntimeException('Mail provider rejected the recipient'));
 
-        app(RecruitmentService::class)->submitApplication($this->posting, [
+        $application = app(RecruitmentService::class)->submitApplication($this->posting, [
             'first_name' => 'NoEmail',
             'last_name' => 'Candidate',
             'email' => 'unreachable@example.test',
@@ -259,10 +260,10 @@ class PublicRecruitmentTest extends TestCase
 
         $hrUser = User::where('role_id', Role::where('slug', 'hr_officer')->value('id'))->firstOrFail();
 
-        $this->assertDatabaseHas('notifications', [
-            'notifiable_id' => $hrUser->id,
-            'type' => 'recruitment.new_application',
-        ]);
+        $notice = $hrUser->notifications()->where('type', 'recruitment.new_application')->firstOrFail();
+        $this->assertSame(JobApplication::class, $notice->data['subject_type']);
+        $this->assertSame((string) $application->id, $notice->data['subject_id']);
+        $this->assertSame("/hr/recruitment/applications/{$application->hash_id}", $notice->data['link_to']);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $hrUser->id,
             'type' => 'email.delivery_failed',
@@ -292,5 +293,21 @@ class PublicRecruitmentTest extends TestCase
         $this->assertContains($allowed->id, $recipientIds);
         $this->assertNotContains($revoked->id, $recipientIds);
         $this->assertNotContains($inactive->id, $recipientIds);
+
+        Storage::fake('local');
+        Mail::fake();
+        $application = app(RecruitmentService::class)->submitApplication($this->posting, [
+            'first_name' => 'Access',
+            'last_name' => 'Check',
+            'email' => 'access-check@example.test',
+            'phone' => '09170000001',
+        ], UploadedFile::fake()->create('resume.pdf', 512, 'application/pdf'));
+        app(NotificationService::class)->sendForSubject($application, [$allowed, $revoked, $inactive], 'test.recruitment_subject_access', ['title' => 'New application'], emailEnabled: false);
+
+        $this->assertSame(1, $allowed->notifications()->where('type', 'test.recruitment_subject_access')->count());
+        $this->assertSame(0, $revoked->notifications()->where('type', 'test.recruitment_subject_access')->count());
+        $this->assertSame(0, $inactive->notifications()->where('type', 'test.recruitment_subject_access')->count());
+        $this->actingAs($allowed)->getJson('/api/v1/hr/recruitment/applications/'.$application->hash_id)->assertOk();
+        $this->actingAs($revoked)->getJson('/api/v1/hr/recruitment/applications/'.$application->hash_id)->assertForbidden();
     }
 }
