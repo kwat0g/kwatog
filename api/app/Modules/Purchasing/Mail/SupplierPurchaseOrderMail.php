@@ -90,6 +90,7 @@ class SupplierPurchaseOrderMail extends QueuedMailable
                 'entity_id' => $snapshot['purchase_order_hash_id'],
                 'reason' => 'The supplier email was unreachable or the email provider rejected the message.',
             ],
+            $this->purchaseOrder,
         );
     }
 
