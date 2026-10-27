@@ -942,6 +942,70 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(['pending_qc', 'pending_qc'], $list->json('data.*.status'));
     }
 
+    public function test_inspection_review_badge_matches_the_current_users_review_list(): void
+    {
+        $maker = User::factory()->create(['role_id' => Role::query()->where('slug', 'qc_inspector')->value('id')]);
+        $checker = User::factory()->create(['role_id' => Role::query()->where('slug', 'qc_inspector')->value('id')]);
+        $contributor = User::factory()->create(['role_id' => Role::query()->where('slug', 'production_manager')->value('id')]);
+        $viewOnly = User::factory()->create(['role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id')]);
+        $viewOnly->role->permissions()->syncWithoutDetaching([
+            Permission::query()->where('slug', 'quality.inspections.view')->value('id'),
+        ]);
+        $viewOnly->flushPermissionsCache();
+        $product = Product::factory()->create();
+
+        DB::table('inspections')->insert([
+            'inspection_number' => 'INS-REVIEW-DRAFT', 'stage' => 'incoming', 'status' => 'draft',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => $maker->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('inspections')->insert([
+            'inspection_number' => 'INS-REVIEW-0001', 'stage' => 'incoming', 'status' => 'awaiting_review',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => $maker->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $contributed = DB::table('inspections')->insertGetId([
+            'inspection_number' => 'INS-REVIEW-0002', 'stage' => 'outgoing', 'status' => 'awaiting_review',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => $maker->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('inspection_result_authors')->insert([
+            'inspection_id' => $contributed, 'user_id' => $contributor->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('inspections')->insert([
+            'inspection_number' => 'INS-REVIEW-0003', 'stage' => 'incoming', 'status' => 'awaiting_review',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => null, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        foreach ([
+            [$checker, 2, ['INS-REVIEW-0001', 'INS-REVIEW-0002']],
+            [$contributor, 1, ['INS-REVIEW-0001']],
+            [$maker, 0, []],
+        ] as [$user, $expected, $inspectionNumbers]) {
+            $list = $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/quality/inspections?status=awaiting_review&signal=awaiting_my_review')
+                ->assertOk();
+            $badges = $this->actingAs($user, 'sanctum')->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+
+            $this->assertSame($expected, $list->json('meta.total'));
+            $this->assertSame($expected, $badges['inspection_reviews']['count']);
+            $this->assertEqualsCanonicalizing($inspectionNumbers, $list->json('data.*.inspection_number'));
+            if ($user->is($checker)) {
+                $this->assertSame(1, $badges['pending_inspections']['count']);
+            }
+        }
+
+        $viewOnlyList = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/quality/inspections?status=awaiting_review&signal=awaiting_my_review')
+            ->assertOk();
+        $viewOnlyBadges = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+        $this->assertSame(0, $viewOnlyList->json('meta.total'));
+        $this->assertArrayNotHasKey('inspection_reviews', $viewOnlyBadges);
+        $this->assertArrayNotHasKey('pending_inspections', $viewOnlyBadges);
+    }
+
     public function test_mrb_hold_badge_matches_the_filtered_list_and_requires_view_permission(): void
     {
         $warehouseUser = User::factory()->create([

@@ -105,6 +105,7 @@ class BadgeService
         'inquiries' => 'crm',
         'open_complaints' => 'crm',
         'pending_inspections' => 'quality',
+        'inspection_reviews' => 'quality',
         'pending_grn' => 'inventory',
         'mrb_holds' => 'inventory',
         'shipments' => 'supply_chain',
@@ -527,12 +528,22 @@ class BadgeService
 
             // Quality > Inspections — drafts awaiting readings + active ones.
             'pending_inspections' => [
-                'permissions' => ['quality.inspections.view'],
-                'label'       => 'Inspections',
+                'permissions' => ['quality.inspections.manage'],
+                'required_permissions' => ['quality.inspections.view'],
+                'label'       => 'Inspections to complete',
                 'description' => 'Inspections awaiting completion',
                 'counter'     => fn (): int => Inspection::query()
                     ->toInspect()
                     ->count(),
+            ],
+
+            'inspection_reviews' => [
+                'permissions' => ['quality.inspections.review'],
+                'required_permissions' => ['quality.inspections.view'],
+                'danger_when_positive' => true,
+                'label'       => 'Inspection reviews',
+                'description' => 'Inspections awaiting your review',
+                'counter'     => fn (): int => Inspection::query()->awaitingReviewBy((int) $user->id)->count(),
             ],
 
             // Warehouse > Receiving — goods receipts waiting on QC acceptance.

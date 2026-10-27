@@ -60,7 +60,9 @@ class ActionCenterService
         // queue can never surface a row the module list endpoint would refuse:
         // quality splits inspections/NCRs like Quality/routes.php, deliveries
         // accept the narrow deliveries slug like SupplyChain/routes.php.
-        $this->append($items, $failedSources, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.view']);
+        if ($user->hasPermission('quality.inspections.view') && $user->hasPermission('quality.inspections.manage')) {
+            $this->append($items, $failedSources, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.manage']);
+        }
         // A result awaiting its checker gates the outgoing lot's delivery.
         // Inspections carry no row scope; require list and review access, and
         // exclude every recorded result author from review work.

@@ -184,6 +184,21 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
             Permission::query()->where('slug', 'quality.inspections.view')->value('id'),
         ]);
         $viewOnly->flushPermissionsCache();
+        $this->assertNotContains($key, $keys($viewOnly), 'view-only users cannot review inspections');
+        $draft = Inspection::query()->create([
+            'inspection_number' => 'QC-VIEW-ONLY-'.substr(uniqid(), -6),
+            'stage' => InspectionStage::Incoming,
+            'status' => InspectionStatus::Draft,
+            'product_id' => Product::factory()->create()->id,
+            'batch_quantity' => 1,
+            'sample_size' => 1,
+            'inspector_id' => $maker->id,
+        ]);
+        $this->assertNotContains(
+            'quality:inspection:'.$draft->hash_id,
+            $keys($viewOnly),
+            'view-only users cannot act on completion tasks',
+        );
         $this->actingAs($viewOnly)
             ->patchJson('/api/v1/dashboards/action-center/tasks', ['item_ids' => [$key], 'action' => 'claim'])
             ->assertForbidden();
