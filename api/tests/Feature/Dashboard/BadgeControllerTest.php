@@ -35,6 +35,7 @@ use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use Carbon\Carbon;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -664,6 +665,74 @@ class BadgeControllerTest extends TestCase
             ->assertOk()
             ->json('data');
         $this->assertArrayNotHasKey('mrb_holds', $employeeBadges);
+    }
+
+    public function test_shipment_badge_matches_the_mid_pipe_list_for_both_read_permissions(): void
+    {
+        $purchasingOfficer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'purchasing_officer')->value('id'),
+        ]);
+        $impexOfficer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'impex_officer')->value('id'),
+        ]);
+        $warehouseUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+        ]);
+
+        $this->assertTrue($purchasingOfficer->hasPermission('supply_chain.shipments.view'));
+        $this->assertFalse($purchasingOfficer->hasPermission('supply_chain.view'));
+        $this->assertTrue($impexOfficer->hasPermission('supply_chain.view'));
+        $this->assertTrue($warehouseUser->hasPermission('supply_chain.deliveries.view'));
+        $this->assertFalse($warehouseUser->hasPermission('supply_chain.shipments.view'));
+        $this->assertFalse($warehouseUser->hasPermission('supply_chain.view'));
+
+        foreach (ShipmentStatus::cases() as $index => $status) {
+            $purchaseOrder = PurchaseOrder::factory()->create();
+            DB::table('shipments')->insert([
+                'shipment_number' => 'SHP-MIDPIPE-'.$index,
+                'purchase_order_id' => $purchaseOrder->id,
+                'status' => $status->value,
+                'created_by' => $impexOfficer->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $deletedPurchaseOrder = PurchaseOrder::factory()->create();
+        DB::table('shipments')->insert([
+            'shipment_number' => 'SHP-MIDPIPE-DELETED',
+            'purchase_order_id' => $deletedPurchaseOrder->id,
+            'status' => ShipmentStatus::InTransit->value,
+            'created_by' => $impexOfficer->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+            'deleted_at' => now(),
+        ]);
+
+        foreach ([$purchasingOfficer, $impexOfficer] as $viewer) {
+            $list = $this->actingAs($viewer, 'sanctum')
+                ->getJson('/api/v1/supply-chain/shipments?status=mid_pipe')
+                ->assertOk();
+            $badge = $this->actingAs($viewer, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.shipments.count');
+
+            $this->assertSame(3, $list->json('meta.total'));
+            $this->assertSame($list->json('meta.total'), $badge);
+            $this->assertEqualsCanonicalizing(
+                [ShipmentStatus::InTransit->value, ShipmentStatus::Customs->value, ShipmentStatus::Cleared->value],
+                $list->json('data.*.status'),
+            );
+        }
+
+        $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/supply-chain/shipments?status=mid_pipe')
+            ->assertForbidden();
+        $warehouseBadges = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('shipments', $warehouseBadges);
     }
 
     public function test_per_badge_severity_override_beats_global_threshold(): void

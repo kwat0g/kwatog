@@ -58,7 +58,7 @@ export default function ShipmentsListPage() {
  ];
 
  const filterConfig: FilterConfig[] = [
- { key: 'status', label: 'Status', type: 'select', options: [{ value: '', label: 'All' }, ...(shipmentOptions?.statuses ?? [])] },
+ { key: 'status', label: 'Status', type: 'select', options: [{ value: '', label: 'All' }, ...(shipmentOptions?.statuses ?? []), { value: 'mid_pipe', label: 'In transit, customs, or cleared' }] },
  ];
 
  return (

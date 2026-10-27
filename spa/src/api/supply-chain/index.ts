@@ -4,7 +4,7 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { ContainerSize, ContainerType, Shipment, ShipmentContainer, ShipmentContainerData, ShipmentDocument, ShipmentDocumentType, Delivery, DeliveryProof, DeliveryProofType, Vehicle, ShipmentStatus, ShipmentPurchaseOrderOption, ShipmentPurchaseOrderOptionParams, DeliveryStatus, Incoterm, LandedCostAllocationMethod } from '@/types/supplyChain';
 
 export interface ShipmentListParams extends ListParams {
- status?: ShipmentStatus;
+ status?: ShipmentStatus | 'mid_pipe';
  purchase_order_id?: string;
 }
 

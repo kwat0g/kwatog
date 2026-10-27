@@ -305,7 +305,7 @@ Local aggregate rows include `chain.payslip_ready` (526 rows, many users with em
 
 ## Sidebar audit and badge parity status
 
-The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus current implementation deltas. All 29 backend definitions are enumerated there. The Phase 0 baseline had 22 attached keys and seven unattached definitions; PR #342 attached `inquiries`, PR #367 attached `pending_transfers`, and replacement PR #490 attaches `mrb_holds`, leaving four unattached: `training_expiry`, `training_upcoming`, `open_postings`, and `shipments`.
+The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus current implementation deltas. All 29 backend definitions are enumerated there. The Phase 0 baseline had 22 attached keys and seven unattached definitions; PR #342 attached `inquiries`, PR #367 attached `pending_transfers`, replacement PR #490 attached `mrb_holds`, and PR #386 adds `shipments`, leaving three unattached after merge: `training_expiry`, `training_upcoming`, and `open_postings`.
 
 | Finding | Current implementation | Destination/parity result | Severity |
 | --- | --- | --- | --- |
@@ -321,7 +321,7 @@ The route inventory is the 73-row Phase 0 internal destination table, 19-row por
 | Alerts | `/alerts` uses `Alert::active()` for unresolved/non-dismissed rows; `unreadCount()` counts that same scope with `is_read=false`. Both are permission gated. PR #366 adds `is_read=false` filtering and a “shared unread” page action that opens the count's scope. There is no sidebar Alerts item or current caller of the count endpoint. | The count is global because alert read/dismiss fields are on the shared `alerts` row. Filtered list and count have parity coverage; whether the business wants personal read state remains open. | Medium |
 | Budget Transfers | `budgeting.view` or `budgeting.approve`; count uses `BudgetTransfer::awaitingApprovalFor($user)`. | A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; the same scope powers list and badge. Approval-only users see only actionable rows. Direct and eligible delegated approvers have parity tests; view-only users get zero. | Medium |
 | Accounts Payable Bills | `accounting.bills.view`; unpaid/partial bills with due date before app `today()` (default `Asia/Manila`). | Positive `overdue_bills` opens `/accounting/bills?overdue=1`; `Bill::scopeOverdue()` powers badge and list. `Bill::isOverdue()` uses the same date boundary, so due-today rows do not display as overdue. | Finance Officer test compares badge and list totals and excludes due-today, paid, draft, and cancelled rows. The due-today resource-flag assertion was added in PR #369 and awaits CI. | Medium |
-| Unwired badge definitions | Four backend counts have no sidebar destination: `training_expiry`, `training_upcoming`, `open_postings`, and `shipments`. | No clickable matching list item. | Medium |
+| Unwired badge definitions | Three backend counts will remain without sidebar destinations after PR #386: `training_expiry`, `training_upcoming`, and `open_postings`. | No clickable matching list item. | Medium |
 | Compact shells | Employee self-service, factory, maintenance mobile show no counters. | Candidate actionable signals are absent; no visual or route parity checked. | Medium |
 
 The supplied route table includes destinations with no existing badge. Candidate signals are listed per module in `00-discovery.md` and proposed in `02-policy-and-plan.md`; unknowns are marked where status/date/owner semantics need business confirmation.
@@ -367,7 +367,7 @@ The supplied route table includes destinations with no existing badge. Candidate
 | Purchasing | PR/PO approval, supplier response/listing/dispatch, RFQ, auto-PO | Purchase Requests `purchase_requests`; Purchase Orders/RFQ no badge | Delegate/source scope and supplier action signals absent. |
 | Quality | NCR, inspection review/fail, incoming QC, effectiveness, recurrence/escalation | Inspections `pending_inspections`; NCRs `ncrs` | Rejected, due, CAPA/effectiveness states not separated. |
 | ReturnManagement | Case updates, RMA, supplier defect, return receipts/decisions | Returns `pending_returns`; Problem Reports no badge | Status/workflow incomplete; don't infer counts beyond implemented list. |
-| SupplyChain | Delivery, attempts, shipment, schedule and invoice failure | Deliveries `deliveries`; Fleet no badge | `shipments` count exists but no sidebar item; acknowledgment and overdue are absent. |
+| SupplyChain | Delivery, attempts, shipment, schedule and invoice failure | Deliveries `deliveries`; Shipments `shipments`; Fleet no badge | The shipment badge and `status=mid_pipe` list share `Shipment::scopeMidPipe()` and both read permissions; acknowledgment and overdue signals remain absent. |
 
 ### Role × intended access and current selector evidence
 

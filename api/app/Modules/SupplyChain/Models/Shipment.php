@@ -56,6 +56,15 @@ class Shipment extends Model
         'landed_cost_calculated_at' => 'datetime',
     ];
 
+    public function scopeMidPipe(Builder $query): Builder
+    {
+        return $query->whereIn('status', [
+            ShipmentStatus::InTransit->value,
+            ShipmentStatus::Customs->value,
+            ShipmentStatus::Cleared->value,
+        ]);
+    }
+
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
