@@ -8,6 +8,7 @@ use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Mail\QueuedMailable;
+use App\Modules\Accounting\Models\CreditNote;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
@@ -71,6 +72,11 @@ class PartyCreditNoteMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $creditNote = CreditNote::query()->whereHash($this->snapshot['hash_id'])->first();
+        if ($creditNote === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Credit note email',
@@ -81,6 +87,7 @@ class PartyCreditNoteMail extends QueuedMailable
                 'entity_id' => $this->snapshot['hash_id'],
                 'reason' => 'The party email was unreachable or the email provider rejected the message.',
             ],
+            $creditNote,
         );
     }
 

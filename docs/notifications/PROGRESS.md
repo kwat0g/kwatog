@@ -867,14 +867,23 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 
 - Both interview email failure callbacks now read candidate name and application hash from the saved email snapshot, matching the email rendering path.
 - Original-head `RecruitmentApplicationTest.php` selected case passed **1 / 5 assertions**. The rebased test now mutates the snapshot and verifies both fallback notices use its values; that assertion change was not run. No database was touched.
-- The test calls `failed()` on constructed mailables; it does not reproduce a real queued-mail serialization/retry failure. That proof remains open.
+- The test calls `failed()` on constructed mailables; it does not reproduce a real queued-mail serialization/retry failure. PR #466 separately added subject access checks for the fallback recipients.
 
-## Phase 3 Recruitment mail-failure subject access (PR #466, in progress)
+## Phase 3 Recruitment mail-failure subject access (PR #466, merged as `cca7386c`)
 
 - The four synchronous recruitment email-failure fallbacks and four queued-mail failure callbacks now pass their `JobApplication` subject through `EmailDeliveryFailureNotifier`. The subject gate requires enabled HR and Recruitment modules, an active user with `hr.recruitment.view`, and the exact `/hr/recruitment/applications/{hash}` target. The application detail endpoint uses the same permission and route feature gates.
 - Existing recipient selection and event timing stay unchanged. Fallback user IDs are reloaded as active users, then rejected if the subject gate fails. Each queued-mail callback now resolves the current application before notifying; `JobApplication` has no soft-delete behavior, so physical deletion fails closed.
-- Original-head `RecruitmentApplicationTest.php --filter test_recruitment_email_failure_fallbacks_require_application_access` passed **1 / 18 assertions**. It covers eligible HR, an inactive HR user, an outsider, exact links, and all four queued-mail failure callbacks. The rebased test adds a deleted-application assertion; it and the code have not been rerun to avoid shared `ogami_test`; `git diff --check` only. No database was touched.
+- Original-head `RecruitmentApplicationTest.php --filter test_recruitment_email_failure_fallbacks_require_application_access` passed **1 / 18 assertions**. The rebased test adds a deleted-application assertion; no rebase tests ran to avoid shared `ogami_test`. `git diff --check` passed. No database was touched.
 - The full recruitment feature file had **2 errors and 2 failures** in unrelated cases on the original PR head. PR evidence attributes the API CI syntax stop to inherited F-22 (`PdfRenderService::ensureDompdfDirs()` duplicate declaration); user waived CI. No browser or real queue retry test ran.
+
+## Separate finding review: stale interview mail property PR #467
+
+- Closed as superseded. Its base branch lacked constructor property assignments that are already present on current `main`; applying it would duplicate existing behavior. Its proposed F-59 also collided with the existing Quality scope finding. F-74 keeps the queue rehydration question; no new claim of a reproduced queue bug.
+
+## Phase 3 Credit Note email-failure subject access (PR #468, in progress)
+
+- Customer and supplier credit-note email failure notices now pass the current `CreditNote` subject to the common notifier. Delivery requires Accounting enabled, an active user with `accounting.credit_notes.view`, and the exact `/accounting/credit-notes/{hash}` SPA target. This matches the API detail route permission. Existing role-to-permission selector and event timing remain; the access gate narrows it.
+- The original-head focused `FeatureEmailIntegrationTest.php --filter test_credit_note_email_failure_fallbacks_require_credit_note_access` passed **1 / 13 assertions**. Rebase tests have not run against shared `ogami_test`; `git diff --check` remains the only rebase check. No database was touched.
 
 ## Resume instruction
 

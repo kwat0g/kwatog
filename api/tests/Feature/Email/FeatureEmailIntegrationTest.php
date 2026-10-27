@@ -34,6 +34,8 @@ use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Listeners\EmailCustomerOnDeliveryConfirmed;
 use App\Modules\SupplyChain\Mail\CustomerDeliveryConfirmedMail;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Common\Mail\EmailIntegrationTestMail;
 use App\Common\Services\EmailBrandingService;
@@ -42,6 +44,7 @@ use App\Common\Services\SettingsService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -584,6 +587,53 @@ class FeatureEmailIntegrationTest extends TestCase
             && str_contains($mail->render(), 'Supplier Credit note SCN-2026-001 finalized')
             && str_contains($mail->render(), 'Open supplier portal')
         );
+    }
+
+    public function test_credit_note_email_failure_fallbacks_require_credit_note_access(): void
+    {
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+        $invoiceOnlyRole = Role::create(['name' => 'Credit note invoice-only viewer', 'slug' => 'credit_note_invoice_only', 'is_system' => false]);
+        $invoiceOnlyRole->permissions()->sync([
+            Permission::query()->where('slug', 'accounting.invoices.view')->firstOrFail()->id,
+        ]);
+        $invoiceOnlyViewer = User::factory()->create(['role_id' => $invoiceOnlyRole->id, 'is_active' => true]);
+        $finance = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->firstOrFail()->id,
+            'is_active' => true,
+        ]);
+        $customer = Customer::factory()->create(['email' => 'invalid-email']);
+        $creditNote = CreditNote::create([
+            'credit_note_number' => 'CN-FAIL-001',
+            'type' => 'customer',
+            'customer_id' => $customer->id,
+            'date' => '2026-10-20',
+            'subtotal' => '1000.00',
+            'vat_amount' => '120.00',
+            'total_amount' => '1120.00',
+            'balance' => '1120.00',
+        ]);
+        $event = new CreditNoteFinalized($creditNote);
+
+        $this->actingAs($finance)->getJson('/api/v1/accounting/credit-notes/'.$creditNote->hash_id)->assertOk();
+        $this->actingAs($invoiceOnlyViewer)->getJson('/api/v1/accounting/credit-notes/'.$creditNote->hash_id)->assertForbidden();
+
+        app(\App\Modules\Accounting\Listeners\EmailPartyOnCreditNoteFinalized::class)->handle($event);
+        (new PartyCreditNoteMail($event->snapshot, [$finance->id, $invoiceOnlyViewer->id]))
+            ->failed(new \RuntimeException('Mail provider rejected message.'));
+
+        $notices = DB::table('notifications')->where('type', 'email.delivery_failed')->get();
+        $this->assertCount(2, $notices);
+        $this->assertSame(2, $notices->where('notifiable_id', $finance->id)->count());
+        $this->assertSame(0, $notices->where('notifiable_id', $invoiceOnlyViewer->id)->count());
+        $this->assertTrue($invoiceOnlyViewer->hasPermission('accounting.invoices.view'));
+        $this->assertFalse($invoiceOnlyViewer->hasPermission('accounting.credit_notes.view'));
+
+        foreach ($notices as $notice) {
+            $data = json_decode($notice->data, true);
+            $this->assertSame(CreditNote::class, $data['subject_type']);
+            $this->assertSame((string) $creditNote->id, $data['subject_id']);
+            $this->assertSame('/accounting/credit-notes/'.$creditNote->hash_id, $data['link_to']);
+        }
     }
 
     public function test_supplier_purchase_order_email_is_queued_with_supplier_data(): void
