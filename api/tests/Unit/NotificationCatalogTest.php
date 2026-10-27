@@ -278,6 +278,7 @@ class NotificationCatalogTest extends TestCase
     {
         $appPath = dirname(__DIR__, 2).'/app';
         $nativeCalls = [];
+        $objectNotifyCalls = [];
         $files = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($appPath, \FilesystemIterator::SKIP_DOTS),
         );
@@ -293,6 +294,9 @@ class NotificationCatalogTest extends TestCase
                 '',
                 str_replace('\\', '/', $file->getPathname()),
             );
+            if (preg_match_all('/->notify\s*\(/', $source, $matches) > 0) {
+                $objectNotifyCalls[$relative] = count($matches[0]);
+            }
             $calls = [];
             if (preg_match('/->notify\(\s*new\s+/', $source)) {
                 $calls[] = 'user.notify';
@@ -313,8 +317,23 @@ class NotificationCatalogTest extends TestCase
         }
 
         ksort($nativeCalls);
+        ksort($objectNotifyCalls);
         $notificationService = (string) file_get_contents($appPath.'/Common/Services/NotificationService.php');
         $this->assertDoesNotMatchRegularExpression('/public function notify\s*\(/', $notificationService);
+        $this->assertSame([
+            'Common/Services/AlertEngineService.php' => 1,
+            'Common/Services/EmailDeliveryFailureNotifier.php' => 2,
+            'Console/Commands/RunDueScheduledExports.php' => 1,
+            'Console/Commands/SendDailyProductionSummary.php' => 2,
+            'Console/Commands/SendWeeklyProductionSummary.php' => 2,
+            'Modules/CRM/Services/PricingReviewService.php' => 7,
+            'Modules/HR/Services/RecruitmentService.php' => 4,
+            'Modules/HR/Services/TrainingExpiryService.php' => 1,
+            'Modules/Production/Observers/ProductionStaffingObserver.php' => 2,
+            'Modules/Purchasing/Services/SupplierResponseService.php' => 1,
+            'Modules/Quality/Jobs/ProcessNcrRecurrenceScan.php' => 1,
+            'Modules/ReturnManagement/Services/ReturnCaseService.php' => 6,
+        ], $objectNotifyCalls, 'Any new object-level notify call must be reviewed and inventoried; use NotificationService::send() for in-app notices.');
         $this->assertSame([], $nativeCalls, 'Laravel notification dispatch outside NotificationService must be reviewed.');
 
         $mailOnlyNotifications = [
