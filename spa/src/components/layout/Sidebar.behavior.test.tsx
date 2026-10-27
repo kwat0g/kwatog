@@ -309,6 +309,21 @@ it('links open NCR badges to the open and in-progress NCR list', () => {
   );
 });
 
+it('links overdue NCR badges to the severity-SLA queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'overdue_ncrs'
+    ? { count: 2, severity: 'warning', label: 'Overdue NCRs', description: 'Open NCRs at or past their severity response SLA' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/quality/ncrs']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
+    'href',
+    '/quality/ncrs?signal=overdue',
+  );
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'
