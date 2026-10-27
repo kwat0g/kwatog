@@ -131,11 +131,11 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/Accounting/Services/InvoiceService.php:184` |
 | `api/app/Modules/Accounting/Services/InvoiceService.php:344` |
 | `api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php:259` |
-| `api/app/Modules/Accounting/Services/BudgetTransferService.php:87` |
-| `api/app/Modules/Accounting/Services/BudgetTransferService.php:194` |
+| `api/app/Modules/Accounting/Services/BudgetTransferService.php:89` |
+| `api/app/Modules/Accounting/Services/BudgetTransferService.php:196` |
 | `api/app/Modules/Purchasing/Listeners/AlertOnSupplierDeterioration.php:61` |
-| `api/app/Modules/Accounting/Services/BudgetService.php:135` |
-| `api/app/Modules/Accounting/Services/BudgetService.php:203` |
+| `api/app/Modules/Accounting/Services/BudgetService.php:137` |
+| `api/app/Modules/Accounting/Services/BudgetService.php:205` |
 | `api/app/Modules/Accounting/Services/ArDunningService.php:193` |
 | `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:103` |
 | `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:233` |

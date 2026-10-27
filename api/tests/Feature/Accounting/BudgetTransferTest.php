@@ -6,6 +6,7 @@ namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
@@ -355,6 +356,7 @@ class BudgetTransferTest extends TestCase
         $this->actingAs($approver)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.can_approve', true);
+        $this->assertTrue(NotificationSubjectAccessRegistry::userCanViewRecord($approver->fresh(), $transfer->fresh()));
 
         $sameRoleRequester = User::factory()->withRole('employee')->create();
         $sameRoleTransfer = $service->request([
@@ -377,6 +379,10 @@ class BudgetTransferTest extends TestCase
             ->assertJsonPath('data.can_approve', false);
         $outsider = User::factory()->withRole('employee')->create();
         $this->actingAs($outsider)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")->assertForbidden();
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($outsider->fresh(), $transfer->fresh()));
+
+        $transfer->forceFill(['requested_by' => null])->save();
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($outsider->fresh(), $transfer->fresh()));
     }
 
     public function test_delegated_approver_badge_matches_their_pending_transfer_list(): void

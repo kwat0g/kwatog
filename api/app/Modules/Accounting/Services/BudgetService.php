@@ -134,7 +134,7 @@ class BudgetService
                     ->whereKey($locked->getKey())
                     ->awaitingApprovalFor($user)
                     ->exists());
-            $notifications->send($audience, 'approval.action_required', [
+            $notifications->sendForSubject($locked, $audience, 'approval.action_required', [
                 'title' => "Budget {$locked->name} needs approval",
                 'message' => 'A submitted budget is waiting for review.',
                 'link_to' => "/budgeting/{$locked->hash_id}",
@@ -202,7 +202,7 @@ class BudgetService
             return;
         }
 
-        app(NotificationService::class)->send($submitter, $type, [
+        app(NotificationService::class)->sendForSubject($budget, $submitter, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your budget was returned for revision.' : 'Your budget was approved.',
             'link_to' => "/budgeting/{$budget->hash_id}",
