@@ -35,7 +35,7 @@ type CustomerLoginResponse = {
 };
 
 export const customerPortalApi = {
-  priceRequests: (page = 1) => portalClient.get<PaginatedResponse<PriceRequest>>('/b2b/customer/price-requests', { params: { page } }).then(r => r.data),
+  priceRequests: (page = 1, request?: string) => portalClient.get<PaginatedResponse<PriceRequest>>('/b2b/customer/price-requests', { params: { page, request } }).then(r => r.data),
   requestPrice: (data: { product_id: string; quantity: number; requested_price?: string; notes: string }) => portalClient.post('/b2b/customer/price-requests', data),
   respondPrice: (id: string, decision: 'accept' | 'reject', version: number) => portalClient.post(`/b2b/customer/price-requests/${id}/respond`, { decision, version }),
  // ── Auth ──────────────────────────────────────────

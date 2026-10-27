@@ -3,9 +3,9 @@ import type { PaginatedResponse } from '@/types';
 import type { PriceOffer, PriceRequest, ItemCostReview } from '@/types/pricing';
 
 export const pricingRequestsApi = {
-  list: (page = 1) =>
+  list: (page = 1, request?: string) =>
     client
-      .get<PaginatedResponse<PriceRequest>>('/crm/price-requests', { params: { page } })
+      .get<PaginatedResponse<PriceRequest>>('/crm/price-requests', { params: { page, request } })
       .then((r) => r.data),
   show: (id: string) =>
     client.get<{ data: PriceRequest }>(`/crm/price-requests/${id}`).then((r) => r.data.data),
