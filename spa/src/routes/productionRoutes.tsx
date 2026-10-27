@@ -19,7 +19,7 @@ const RoutingEditorPage = lazy(() => import('@/pages/production/routings/editor'
 export const productionRoutes = (
  <>
  {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58; WO create added in audit §3.1) */}
- <Route element={<ModuleGuard module="production" />}>
+ <Route element={<PermissionGuard permission="production.view"><ModuleGuard module="production" /></PermissionGuard>}>
  {/* Sprint 6 audit §3.5: redirect /production to work orders so users
  without the dashboard permission don't hit a 403 immediately.
  The dashboard remains the natural home for those who have it. */}

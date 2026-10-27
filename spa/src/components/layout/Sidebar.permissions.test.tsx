@@ -66,6 +66,13 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(tracker, { permissions: new Set() })).toBe(false);
   });
 
+  it('shows Production Work Orders only when the module and list permissions both exist', () => {
+    const workOrders = item('/production/work-orders');
+    expect(isNavItemVisible(workOrders, { permissions: new Set(['production.work_orders.view']), features: allFeatures })).toBe(false);
+    expect(isNavItemVisible(workOrders, { permissions: new Set(['production.view']), features: allFeatures })).toBe(false);
+    expect(isNavItemVisible(workOrders, { permissions: new Set(['production.view', 'production.work_orders.view']), features: allFeatures })).toBe(true);
+  });
+
   it('shows supervisor machine and maintenance navigation through explicit read permissions', () => {
     const context = {
       permissions: new Set(['maintenance.view', 'maintenance.wo.assign', 'maintenance.wo.verify', 'mrp.machines.view', 'assets.view']),
