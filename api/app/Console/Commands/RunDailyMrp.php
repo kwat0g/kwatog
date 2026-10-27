@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Common\Services\NotificationService;
-use App\Common\Services\SettingsService;
-use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Services\MrpAutomationService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Task A1 — Daily MRP run, scheduled at 06:00 in routes/console.php.
@@ -22,7 +18,7 @@ class RunDailyMrp extends Command
 
     protected $description = 'Re-run MRP across all active sales orders (Task A1)';
 
-    public function handle(MrpAutomationService $automation, SettingsService $settings): int
+    public function handle(MrpAutomationService $automation): int
     {
         $this->info('Starting daily MRP run...');
 
@@ -37,30 +33,6 @@ class RunDailyMrp extends Command
             $run->prs_updated,
             $run->duration_ms ?? 0,
         ));
-
-        // Notify configured MRP audience.
-        try {
-            $roles = array_values(array_filter((array) $settings->get('mrp.daily_run.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-            $ppcHeads = User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
-                ->where('is_active', true)
-                ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('mrp.plans.view'));
-
-            app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [
-                'title' => 'Daily MRP run finished',
-                'message' => "Daily MRP complete. {$run->shortages_found} shortages found. {$run->prs_created} PRs created, {$run->prs_updated} updated.",
-                // There is no run-detail route; send operators to the existing
-                // MRP plans/run history surface instead of a dead URL.
-                'link_to' => '/mrp/plans',
-                'shortages_found' => $run->shortages_found,
-                'prs_created' => $run->prs_created,
-                'prs_updated' => $run->prs_updated,
-                'plans_generated' => $run->plans_generated,
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('mrp:run-daily — notify failed', ['error' => $e->getMessage()]);
-        }
 
         if ($run->status === MrpRunStatus::Failed) {
             return self::FAILURE;

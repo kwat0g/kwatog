@@ -9,6 +9,7 @@ use App\Common\Enums\AlertType;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\OutboxEventCodec;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
@@ -49,9 +50,11 @@ class MrpAutomationTest extends TestCase
     {
         $this->seed(RolePermissionSeeder::class);
         $sales = User::factory()->withRole('sales_officer')->create();
+        $ppcActor = User::factory()->withRole('ppc_head')->create();
         $ppc = User::factory()->withRole('ppc_head')->create();
         $warehouse = User::factory()->withRole('warehouse_staff')->create();
-        $run = MrpRun::create(['run_at' => now(), 'triggered_by' => 'automatic', 'status' => 'partial', 'failed_sales_orders' => 1]);
+        app(SettingsService::class)->set('modules.mrp', true, 'modules');
+        $run = MrpRun::create(['run_at' => now(), 'triggered_by' => 'automatic', 'triggered_by_user_id' => $ppcActor->id, 'status' => 'partial', 'failed_sales_orders' => 1]);
         $engine = Mockery::mock(MrpEngineService::class);
         $engine->shouldReceive('runForActiveSalesOrders')->twice()->andReturn($run);
         $planner = Mockery::mock(CapacityPlanningService::class);
@@ -62,12 +65,20 @@ class MrpAutomationTest extends TestCase
         $service->run([], MrpRunTrigger::Automatic, null, 'sales_order_confirmed');
         $service->run([], MrpRunTrigger::Automatic, null, 'sales_order_confirmed');
         $notices = DB::table('notifications')->where('type', 'mrp_run_completed')->get();
-        $this->assertCount(2, $notices);
-        $this->assertEqualsCanonicalizing([$sales->id, $ppc->id], $notices->pluck('notifiable_id')->map(fn ($id) => (int) $id)->all());
+        $this->assertCount(1, $notices);
+        $this->assertSame($ppc->id, (int) $notices->first()->notifiable_id);
+        $this->assertNotContains($sales->id, $notices->pluck('notifiable_id')->all());
+        $this->assertNotContains($ppcActor->id, $notices->pluck('notifiable_id')->all());
         $this->assertNotContains($warehouse->id, $notices->pluck('notifiable_id')->all());
-        $this->assertStringContainsString('MRP planning needs attention', $notices->first()->data);
-        $this->assertSame('/crm/sales-orders', json_decode($notices->firstWhere('notifiable_id', $sales->id)->data, true)['link_to']);
-        $this->assertSame('/mrp/plans', json_decode($notices->firstWhere('notifiable_id', $ppc->id)->data, true)['link_to']);
+        $data = json_decode($notices->first()->data, true);
+        $this->assertStringContainsString('MRP planning needs attention', $data['title']);
+        $this->assertSame('/mrp/plans?run='.$run->hash_id, $data['link_to']);
+        $this->assertSame(MrpRun::class, $data['subject_type']);
+        $this->assertSame((string) $run->id, $data['subject_id']);
+        $this->actingAs($ppc)->getJson('/api/v1/mrp/runs?run='.$run->hash_id)
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $run->hash_id);
+        $this->actingAs($ppc)->getJson('/api/v1/mrp/runs?run=invalid')
+            ->assertOk()->assertJsonCount(0, 'data');
     }
 
     public function test_sales_order_confirmation_queues_scoped_automatic_mrp(): void
@@ -342,17 +353,18 @@ class MrpAutomationTest extends TestCase
         }
     }
 
-    public function test_daily_mrp_notice_requires_access_to_its_plan_link(): void
+    public function test_daily_mrp_notice_requires_access_to_its_exact_run_link(): void
     {
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.mrp', true, 'modules');
         $eligible = User::factory()->withRole('ppc_head')->create();
         $revoked = User::factory()->withRole('ppc_head')->create();
         $actor = User::factory()->withRole('system_admin')->create();
-        app(\App\Common\Services\SettingsService::class)
+        app(SettingsService::class)
             ->set('mrp.daily_run.notification_roles', ['ppc_head']);
         DB::table('user_permission_overrides')->insert([
             'user_id' => $revoked->id,
-            'permission_id' => DB::table('permissions')->where('slug', 'mrp.plans.view')->value('id'),
+            'permission_id' => DB::table('permissions')->where('slug', 'mrp.runs.view')->value('id'),
             'type' => 'revoke',
             'granted_by' => $actor->id,
             'reason' => 'MRP notice visibility regression test',
@@ -366,19 +378,26 @@ class MrpAutomationTest extends TestCase
             'sales_orders_evaluated' => 1,
             'plans_generated' => 1,
         ]);
-        $automation = Mockery::mock(MrpAutomationService::class);
-        $automation->shouldReceive('run')->once()->andReturn($run);
-        $this->app->instance(MrpAutomationService::class, $automation);
-
-        $this->artisan('mrp:run-daily')->assertSuccessful();
+        $engine = Mockery::mock(MrpEngineService::class);
+        $engine->shouldReceive('runForActiveSalesOrders')->once()->andReturn($run);
+        $planner = Mockery::mock(CapacityPlanningService::class);
+        $planner->shouldNotReceive('run');
+        $alerts = Mockery::mock(AlertEngineService::class);
+        $alerts->shouldNotReceive('raise');
+        (new MrpAutomationService($engine, $planner, $alerts))->run(null, MrpRunTrigger::Scheduled, null, 'daily_fallback');
 
         $notice = DB::table('notifications')->where('notifiable_id', $eligible->id)
             ->where('type', 'mrp_run_completed')->first();
         $this->assertNotNull($notice);
-        $this->assertSame('/mrp/plans', json_decode($notice->data, true)['link_to']);
+        $data = json_decode($notice->data, true);
+        $this->assertSame('/mrp/plans?run='.$run->hash_id, $data['link_to']);
+        $this->assertSame(MrpRun::class, $data['subject_type']);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $revoked->id,
             'type' => 'mrp_run_completed',
         ]);
+        $this->actingAs($eligible)->getJson('/api/v1/mrp/runs?run='.$run->hash_id)
+            ->assertOk()->assertJsonPath('data.0.id', $run->hash_id);
+        $this->actingAs($revoked)->getJson('/api/v1/mrp/runs?run='.$run->hash_id)->assertForbidden();
     }
 }

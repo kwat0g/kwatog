@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { LuPlay } from '@/lib/icons';
@@ -33,6 +33,8 @@ const DEFAULT_FILTERS: MrpPlanListParams = {
 
 export default function MrpPlansListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const runId = searchParams.get('run') ?? undefined;
   const queryClient = useQueryClient();
   const { can } = usePermission();
   // Bound to the URL so dashboard drill-downs (?status=active) arrive
@@ -67,13 +69,14 @@ export default function MrpPlansListPage() {
     (planOptions?.statuses ?? []).map((option) => [option.value, option.label]),
   );
   const runHistory = useQuery({
-    queryKey: ['mrp', 'runs', 'history'],
-    queryFn: () => mrpRunsApi.list({ per_page: 8, page: 1 }),
+    queryKey: ['mrp', 'runs', 'history', runId],
+    queryFn: () => mrpRunsApi.list({ per_page: runId ? 1 : 8, page: 1, run: runId }),
     enabled: can('mrp.runs.view'),
+    placeholderData: runId ? undefined : (prev) => prev,
     staleTime: 5_000,
     refetchInterval: 15_000,
   });
-  const latestVisibleRun = latestRun.data ?? runHistory.data?.data[0];
+  const latestVisibleRun = runId ? runHistory.data?.data[0] : latestRun.data ?? runHistory.data?.data[0];
 
   const triggerRun = useMutation({
     mutationFn: () => mrpRunsApi.trigger(),
@@ -206,6 +209,11 @@ export default function MrpPlansListPage() {
             Refresh run status
           </Button>
         </div>
+      )}
+      {runId && runHistory.data && runHistory.data.data.length === 0 && (
+        <p role="status" className="mx-5 mb-3 text-sm text-muted">
+          This MRP run is unavailable.
+        </p>
       )}
       <FilterBar
         filters={filterConfig}
