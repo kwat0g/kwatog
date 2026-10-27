@@ -1021,7 +1021,7 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Added API badge/list parity and denied-viewer coverage plus sidebar destination and permission assertions. Tests were not run: PHP and Vitest are unavailable, and API test execution would touch shared `ogami_test`. `git diff --check` passed. No database operation performed.
 - Discovery, inventory, and approved policy crosswalk now list the signal. F-82 records the prior SPA/API filter mismatch and its fix.
 
-## Invoice due-date boundary fix
+## Invoice due-date boundary fix (PR #514)
 
 - `Invoice::isOverdue()` and `Invoice::agingBucket()` now compare date-only due dates against the Manila calendar date; due today remains current through the whole day.
 - Added a unit regression test covering 18:00 on the due date and 00:01 the following day. Test not run: PHP unavailable. No database operation performed.
