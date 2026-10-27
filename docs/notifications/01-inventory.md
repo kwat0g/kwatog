@@ -6,7 +6,7 @@
 
 ## Coverage and confidence
 
-`00-discovery.md` contains full module/status discovery, all 73 internal sidebar destinations, 19 portal destinations, nine compact-shell destinations, and the 29 backend badge definitions. This report cross-references that inventory and lists every one of the 129 `NotificationService` call sites with its event-type expression and immediate audience expression. Mail-only Laravel notifications, custom alert email, payroll payslip mail, digest, and failure-wrapper paths appear in the separate-path register below.
+`00-discovery.md` contains full module/status discovery, all 73 internal sidebar destinations, 19 portal destinations, nine compact-shell destinations, and 32 backend badge definitions after PR #388. This report cross-references that inventory and lists every one of the 129 `NotificationService` call sites with its event-type expression and immediate audience expression. Mail-only Laravel notifications, custom alert email, payroll payslip mail, digest, and failure-wrapper paths appear in the separate-path register below.
 
 Static source coverage is complete for the inspected repository. Runtime recipient-to-role delivery, authorization outcomes, badge/list parity, and frontend visual behavior are **not verified**. No seeded-user scenario, test suite, browser session, or production query ran during discovery. A source expression such as `$audience` identifies the value passed to the service; its construction remains in the cited caller and is not a runtime recipient trace. Follow-up PR #370 centralizes the seven mail-only Laravel notification sends listed below; it preserves their explicit recipient selection and does not add policy-based resolution or record-access checks.
 
@@ -305,12 +305,12 @@ Local aggregate rows include `chain.payslip_ready` (526 rows, many users with em
 
 ## Sidebar audit and badge parity status
 
-The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus current implementation deltas. All 29 backend definitions are enumerated there. The Phase 0 baseline had 22 attached keys and seven unattached definitions; PR #342 attached `inquiries`, PR #367 attached `pending_transfers`, replacement PR #490 attached `mrb_holds`, and PR #386 adds `shipments`, leaving three unattached after merge: `training_expiry`, `training_upcoming`, and `open_postings`.
+The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus current implementation deltas. All 32 backend definitions are enumerated there. The Phase 0 baseline had 22 attached keys and seven unattached definitions; PR #342 attached `inquiries`, PR #367 attached `pending_transfers`, replacement PR #490 attached `mrb_holds`, PR #386 added `shipments`, and PR #388 adds three Work Order signals. Three definitions remain unattached: `training_expiry`, `training_upcoming`, and `open_postings`.
 
 | Finding | Current implementation | Destination/parity result | Severity |
 | --- | --- | --- | --- |
-| Single signal only | One numeric count per item; no multi-signal chips, per-signal links, or legend. | User cannot tell whether count means approval, overdue, unpaid, stock, or informational work; click goes to module root. | High |
-| Query drift | Badge closures independently implement status/query logic; list endpoints do not reuse same scopes; no parity tests found. | No signal has proven `badge count == filtered list total` across roles. | High |
+| Multi-signal coverage | Accounts Payable and Production Work Orders expose labeled signals with filtered destinations; most sidebar items still have one count or a broad destination. | The user can distinguish those signal types, but remaining modules still need signal-specific links and parity verification. | Medium-high |
+| Query drift | Selected signals now share model/service scopes with list filters; many remaining badge closures still implement status/query logic independently. | Parity is covered only for selected signals and roles; full role/scope parity remains open. | High |
 | Approval count | `approvals` counts current pending rows by own/delegated role, without `ApprovalSourceScope` or source visibility. | Approval board service filters source visibility; expected mismatch and possible hidden totals. | High |
 | PR approval count | `purchase_requests` counts only own role and pending PR state. | Does not include active delegate; does not share source-view scope. | High |
 | Misattached badge | `profile_requests` is attached to `/hr/employees`; intended destination is `/hr/profile-update-requests`. | Count is on wrong list, and its destination lacks badge. | High |
@@ -321,10 +321,23 @@ The route inventory is the 73-row Phase 0 internal destination table, 19-row por
 | Alerts | `/alerts` uses `Alert::active()` for unresolved/non-dismissed rows; `unreadCount()` counts that same scope with `is_read=false`. Both are permission gated. PR #366 adds `is_read=false` filtering and a “shared unread” page action that opens the count's scope. There is no sidebar Alerts item or current caller of the count endpoint. | The count is global because alert read/dismiss fields are on the shared `alerts` row. Filtered list and count have parity coverage; whether the business wants personal read state remains open. | Medium |
 | Budget Transfers | `budgeting.view` or `budgeting.approve`; count uses `BudgetTransfer::awaitingApprovalFor($user)`. | A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; the same scope powers list and badge. Approval-only users see only actionable rows. Direct and eligible delegated approvers have parity tests; view-only users get zero. | Medium |
 | Accounts Payable Bills | `accounting.bills.view`; unpaid/partial bills with due date before app `today()` (default `Asia/Manila`). | Positive `overdue_bills` opens `/accounting/bills?overdue=1`; `Bill::scopeOverdue()` powers badge and list. `Bill::isOverdue()` uses the same date boundary, so due-today rows do not display as overdue. | Finance Officer test compares badge and list totals and excludes due-today, paid, draft, and cancelled rows. The due-today resource-flag assertion was added in PR #369 and awaits CI. | Medium |
-| Unwired badge definitions | Three backend counts will remain without sidebar destinations after PR #386: `training_expiry`, `training_upcoming`, and `open_postings`. | No clickable matching list item. | Medium |
+| Unwired badge definitions | Three backend counts remain without sidebar destinations after PR #388: `training_expiry`, `training_upcoming`, and `open_postings`. | No clickable matching list item. | Medium |
 | Compact shells | Employee self-service, factory, maintenance mobile show no counters. | Candidate actionable signals are absent; no visual or route parity checked. | Medium |
 
 The supplied route table includes destinations with no existing badge. Candidate signals are listed per module in `00-discovery.md` and proposed in `02-policy-and-plan.md`; unknowns are marked where status/date/owner semantics need business confirmation.
+
+## Production Work Orders signal verification
+
+PR #388 adds four filtered Work Order signals backed by shared scopes. API list route requires both `production.view` (route group) and `production.work_orders.view` (endpoint); the SPA route checks only `production.work_orders.view`. The new awaiting-confirmation and paused badges include the API parent permission. Existing overdue and new due-soon badge definitions do not; users granted only the child permission by override can see a count but receive 403 on the list. This is recorded as F-40 and must be fixed in a separate PR.
+
+| Signal | Included records | Badge/list scope | Additional badge audience |
+| --- | --- | --- | --- |
+| Awaiting confirmation | `planned`; no assigned confirmer relation | `WorkOrder::scopeAwaitingConfirmation()` / `signal=release` | `production.view`, `production.work_orders.view`, `production.wo.confirm` |
+| Overdue | `confirmed` or `in_progress`, `planned_end < now()` in `Asia/Manila` by default | `WorkOrder::scopeOverdue()` / `signal=overdue` | Currently only declares `production.work_orders.view`; parent route gate mismatch is F-40 |
+| Due soon | `planned`, `confirmed`, `in_progress`, or `paused`; `planned_end` from now through end of the date N days ahead (default N=3, configurable 0–365) | `WorkOrder::scopeDueSoon()` / `signal=due_soon` | Currently only declares `production.work_orders.view`; parent route gate mismatch is F-40 |
+| Paused | `paused` | `WorkOrder::scopePaused()` / `signal=paused` | `production.view`, `production.work_orders.view`, `production.work_orders.lifecycle` |
+
+All four exclude soft-deleted rows. The list has no site, line, or assigned-confirmation scope, so counts are company-wide for users passing the route and signal permission gates. API parity tests passed on the original feature head; after rebase only SPA and static checks ran because PHPUnit is configured for the shared `ogami_test` database.
 
 ## Root causes
 
@@ -363,7 +376,7 @@ The supplied route table includes destinations with no existing badge. Candidate
 | Maintenance | Assignment, breakdown, repeat breakdown, repair, part request, schedule reminders | Work Orders `maintenance_wo`; Schedules no badge | Due/assigned/breakdown categories are collapsed or absent. |
 | MRP | Run completion / daily plan | MRP Plans `mrp_plans` | Badge only counts active plans with shortages. |
 | Payroll | Period/adjustment approval, payslip-ready, mail summary/payslip | Periods `payroll`; Adjustments no badge | Sensitive audience and badge permission mismatch. |
-| Production | Crew, assignment, rework, pause/complete, schedule reminders, breakdown | Work Orders `work_orders`; Schedule no badge | Work-order badge only overdue planned end; other action states absent. |
+| Production | Crew, assignment, rework, pause/complete, schedule reminders, breakdown | Work Orders `work_orders_awaiting_confirmation`, `work_orders`, `work_orders_due_soon`, `work_orders_paused`; Schedule no badge | PR #388 shares each signal scope with its list filter. Release and paused signals require their action permission. Overdue and due-soon still miss the API parent route gate `production.view` under custom permission overrides; F-40 tracks separate correction. No site/line scope or assigned confirmer exists. |
 | Purchasing | PR/PO approval, supplier response/listing/dispatch, RFQ, auto-PO | Purchase Requests `purchase_requests`; Purchase Orders/RFQ no badge | Delegate/source scope and supplier action signals absent. |
 | Quality | NCR, inspection review/fail, incoming QC, effectiveness, recurrence/escalation | Inspections `pending_inspections`; NCRs `ncrs` | Rejected, due, CAPA/effectiveness states not separated. |
 | ReturnManagement | Case updates, RMA, supplier defect, return receipts/decisions | Returns `pending_returns`; Problem Reports no badge | Status/workflow incomplete; don't infer counts beyond implemented list. |

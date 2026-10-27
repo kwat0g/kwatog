@@ -298,7 +298,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/crm/complaints` | `Customer Complaints` | `crm.complaints.view` | `crm` | `open_complaints` |
 | `/return-management` | `Returns (RMA)` | `return_management.view` | `return_management` | `pending_returns` |
 | `/return-management/cases` | `Problem Reports` | `return_management.view` | `return_management` | — |
-| `/production/work-orders` | `Production Work Orders` | `production.work_orders.view` | `production` | `work_orders` |
+| `/production/work-orders` | `Production Work Orders` | `production.view` (API route group) + `production.work_orders.view` | `production` | `work_orders_awaiting_confirmation`, `work_orders`, `work_orders_due_soon`, `work_orders_paused` |
 | `/production/schedule` | `Production Schedule (Gantt)` | `production.schedule.view` | `production` | — |
 | `/production/routings` | `Production Routings` | `production.routings.view` | `production` | — |
 | `/mrp/plans` | `MRP Plans` | `mrp.plans.view` | `mrp` | `mrp_plans` |
@@ -395,7 +395,7 @@ The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirm
 
 ### Existing badge definitions
 
-The 29 backend keys and their current meanings are defined in `api/app/Modules/Dashboard/Services/BadgeService.php`:
+The 32 backend keys and their current meanings are defined in `api/app/Modules/Dashboard/Services/BadgeService.php`:
 
 | Key | Current count definition |
 | --- | --- |
@@ -412,10 +412,13 @@ The 29 backend keys and their current meanings are defined in `api/app/Modules/D
 | `training_expiry` | Employee training status `expired`. |
 | `training_upcoming` | Non-cancelled/non-expired training scheduled within 14 days or completed certification expiring within 30 days. |
 | `open_postings` | Job postings with status `open`. |
-| `work_orders` | Work orders `confirmed`/`in_progress` with `planned_end < now()`. |
+| `work_orders` | Work orders in `confirmed`/`in_progress` with non-null `planned_end < now()` in app timezone (`Asia/Manila` by default); exclude soft-deleted rows. PR #388 shares `WorkOrder::scopeOverdue()` with `signal=overdue`. |
+| `work_orders_awaiting_confirmation` | `planned` work orders only; no per-work-order confirmer assignment exists. PR #388 shares `WorkOrder::scopeAwaitingConfirmation()` with `signal=release`; badge requires `production.view`, `production.work_orders.view`, and `production.wo.confirm`. |
+| `work_orders_due_soon` | `planned`, `confirmed`, `in_progress`, or `paused` with non-null `planned_end` between now and the end of the date `production.work_orders.due_soon_days` calendar days ahead (default 3; admin configurable 0–365); exclude soft-deleted rows. PR #388 shares `WorkOrder::scopeDueSoon()` with `signal=due_soon`. |
+| `work_orders_paused` | `paused` work orders only; exclude soft-deleted rows. PR #388 shares `WorkOrder::scopePaused()` with `signal=paused`; badge requires `production.view`, `production.work_orders.view`, and `production.work_orders.lifecycle`. |
 | `deliveries` | Deliveries in `loading` or `in_transit`. |
 | `unread` | Current user's unread Laravel notifications. |
-| `pending_so` | Sales orders in `draft`, `awaiting_confirmation`, or `delivery_negotiation`. |
+| `pending_so` | Sales orders in `awaiting_confirmation` or `delivery_negotiation`, plus drafts with `customer_confirmation_requested_at`; excludes unsent drafts and soft-deleted rows. Badge and `signal=awaiting_confirmation` list share `SalesOrder::scopeAwaitingConfirmation()`. |
 | `inquiries` | Contact inquiries in `new` or `in_progress`. |
 | `open_complaints` | Complaints outside `resolved`, `closed`, and `cancelled`. |
 | `pending_inspections` | Inspections in `draft` or `in_progress`. |
@@ -453,7 +456,7 @@ Status enums and due/state columns exist across the modules below. The candidate
 | Maintenance | Maintenance work-order statuses, preventive maintenance generation and machine breakdown events | Unassigned work orders; open breakdown; PM due/overdue; part request handoff; maintenance SLA | Open maintenance WOs |
 | MRP | Run/plan, machine and mold statuses; shortage count and shot limits | Active shortage; failed/stale run; machine down/shot limit; plan needs review | Active shortage plans |
 | Payroll | Period, adjustment, bank file, GL handoff statuses and restricted payroll scopes; payslip email status also persists `failed` | Pending my approval/review; `manual_required` bank/GL handoff; failed payslip email for the affected employee; no `failed` value exists in bank/GL enums; never a broad HR/finance payroll count | Draft/processing periods |
-| Production | Work-order, schedule, operation, late-report and receipt handoff statuses; planned start/end | Pending release; overdue/starting soon; paused/blocked; missing output confirmation; material block; staffing assignment change | Overdue work orders |
+| Production | Work-order, schedule, operation, late-report and receipt handoff statuses; planned start/end | Planned confirmation; overdue/starting soon; paused; missing output confirmation; material block; staffing assignment change | Four Work Order signals: awaiting confirmation, overdue, due soon, and paused. No site/line/assignee filter exists. Existing overdue/due-soon badge gates omit the parent `production.view` route permission under custom overrides; see F-40. |
 | Purchasing | PR/PO, RFQ, supplier response/listing/dispatch statuses; approval records | Pending current approval; supplier response/quote due; unfulfilled/late PO; auto-PO review; supplier listing review; inbound receipt and failed conversion | PR approvals only |
 | Quality | Inspection, NCR, effectiveness, calibration, PPAP statuses and due dates | Inspection awaiting completion/review; rejected lot; open/overdue NCR/CAPA/effectiveness; calibration due/expired; customer complaint response SLA | Pending inspections, open NCRs |
 | ReturnManagement | Return request/case, inspection handoff, restock and supplier-return state | Open customer/supplier return needing current owner; overdue inspection/credit; rejected/returned outcome for requester; only fields supported by current return implementation | Pending returns |
