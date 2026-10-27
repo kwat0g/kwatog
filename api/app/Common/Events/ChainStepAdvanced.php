@@ -23,20 +23,20 @@ use Illuminate\Queue\SerializesModels;
  *
  * **Security note:** the payload is a content-free refresh ping. The SPA
  * refetches the record through its normal authorized API route. Do NOT add
- * record details here; channel authorization is permission-based.
+ * record details here; channel authorization mirrors the detail route.
  */
 class ChainStepAdvanced implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
-     * @param string             $entityType    one of ChainDefinitions::allowedTypes()
-     * @param string             $entityHashId  hashed id (never raw int)
-     * @param string             $docNumber     human-readable doc no (e.g. SO-202604-0003)
-     * @param string             $newStatus     the resulting status string
-     * @param string             $activeStep    derived from ChainDefinitions::resolve()
-     * @param array<int,string>  $completedSteps prefix of chain that is already done
-     * @param string|null        $actorName     who triggered the change (display name)
+     * @param  string  $entityType  one of ChainDefinitions::allowedTypes()
+     * @param  string  $entityHashId  hashed id (never raw int)
+     * @param  string  $docNumber  human-readable doc no (e.g. SO-202604-0003)
+     * @param  string  $newStatus  the resulting status string
+     * @param  string  $activeStep  derived from ChainDefinitions::resolve()
+     * @param  array<int,string>  $completedSteps  prefix of chain that is already done
+     * @param  string|null  $actorName  who triggered the change (display name)
      */
     public function __construct(
         public string $entityType,
@@ -44,7 +44,7 @@ class ChainStepAdvanced implements ShouldBroadcastNow
         public string $docNumber,
         public string $newStatus,
         public string $activeStep,
-        public array  $completedSteps,
+        public array $completedSteps,
         public ?string $actorName = null,
     ) {}
 

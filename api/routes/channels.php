@@ -5,11 +5,21 @@ declare(strict_types=1);
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Support\ApprovalSourceScope;
 use App\Common\Support\ChainDefinitions;
+use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Invoice;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\SupplyChain\Models\Delivery;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Support\Facades\Broadcast;
 
 /**
@@ -90,18 +100,44 @@ Broadcast::channel('badges', fn (User $user): bool => true);
  */
 Broadcast::channel(
     'chain.{entityType}.{hashId}',
-    function (User $user, string $entityType, string $hashId) use ($canViewSubject): bool {
+    function (User $user, string $entityType, string $hashId): bool {
         if (! in_array($entityType, ChainDefinitions::allowedTypes(), true)) {
             return false;
         }
 
-        $class = ChainBroadcaster::entityClassFor($entityType);
+        [$feature, $model, $permissionGroups] = match ($entityType) {
+            'sales_order' => ['crm', SalesOrder::class, [['crm.sales_orders.view']]],
+            'work_order' => ['production', WorkOrder::class, [['production.view', 'production.work_orders.view']]],
+            'purchase_request' => ['purchasing', PurchaseRequest::class, [['purchasing.view']]],
+            'purchase_order' => ['purchasing', PurchaseOrder::class, [['purchasing.view'], ['purchasing.po.approve']]],
+            'delivery' => ['supply_chain', Delivery::class, [['supply_chain.view'], ['supply_chain.deliveries.view']]],
+            'grn' => ['inventory', GoodsReceiptNote::class, [['inventory.view']]],
+            'bill' => ['accounting', Bill::class, [['accounting.bills.view']]],
+            'invoice' => ['accounting', Invoice::class, [['accounting.invoices.view']]],
+            default => [null, null, []],
+        };
 
-        return $class !== null && $canViewSubject(
-            $user,
-            $hashId,
-            ChainDefinitions::viewPermission($entityType),
-            $class,
+        if ($feature === null || ! app(SettingsService::class)->requiredBool("modules.{$feature}")) {
+            return false;
+        }
+
+        $hasRoutePermission = collect($permissionGroups)->contains(
+            fn (array $group): bool => collect($group)->every(fn (string $permission): bool => $user->hasPermission($permission)),
         );
+        if (! $hasRoutePermission) {
+            return false;
+        }
+
+        $id = $model::tryDecodeHash($hashId);
+        $record = $id === null ? null : $model::query()->find($id);
+        if ($record === null) {
+            return false;
+        }
+
+        return match ($entityType) {
+            'purchase_request' => app(PurchaseRequestAccessPolicy::class)->canView($user, $record),
+            'purchase_order' => app(PurchaseOrderAccessPolicy::class)->canView($user, $record),
+            default => true,
+        };
     }
 );
