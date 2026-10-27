@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\DSS;
 
+use App\Common\Services\SettingsService;
 use App\Modules\DSS\Detectors\NcrSlaBreachDetector;
 use App\Modules\DSS\Services\DetectorRegistry;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -70,6 +71,19 @@ class NcrSlaBreachDetectorTest extends TestCase
         $this->ncr('low', 200, ['created_at' => now()->subHours(200), 'last_escalated_at' => now()->subHour()]);
 
         $this->assertSame([], $this->detector()->detect()->emissions);
+    }
+
+    public function test_sla_boundary_is_overdue_for_the_aggregate_detector(): void
+    {
+        $this->travelTo(now()->setTime(12, 0));
+        app(SettingsService::class)->set('quality.ncr.sla_critical_hours', 8, 'quality');
+        $this->ncr('critical', 8);
+        $this->ncr('critical', 8, ['created_at' => now()->subHours(8)->addSecond()]);
+
+        $emissions = $this->detector()->detect()->emissions;
+
+        $this->assertCount(1, $emissions);
+        $this->assertSame(1, $emissions[0]->rationale['affected_count']);
     }
 
     public function test_closed_and_cancelled_ncrs_are_ignored(): void

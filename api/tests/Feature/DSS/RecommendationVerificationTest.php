@@ -18,6 +18,7 @@ use App\Modules\DSS\Verifiers\NcrSlaVerifier;
 use App\Modules\DSS\Verifiers\WorkOrderInterventionVerifier;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\NcrSlaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -159,7 +160,7 @@ class RecommendationVerificationTest extends TestCase
             'last_escalated_at' => null,
             'escalation_level' => 0,
         ]);
-        $verifier = new NcrSlaVerifier($settings);
+        $verifier = new NcrSlaVerifier(app(NcrSlaService::class));
         $context = [
             'source_id' => $ncr->id,
             'severity' => 'low',
@@ -182,6 +183,29 @@ class RecommendationVerificationTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/[0-9\\\\]/', $result->proof);
     }
 
+    public function test_ncr_verifier_keeps_the_exact_sla_boundary_open(): void
+    {
+        $this->travelTo(now()->setTime(12, 0));
+        app(SettingsService::class)->set('quality.ncr.sla_low_hours', 2);
+        $ncr = NonConformanceReport::factory()->create([
+            'severity' => 'low',
+            'status' => 'open',
+            'created_at' => now()->subHours(2),
+        ]);
+        $context = [
+            'source_id' => $ncr->id,
+            'severity' => 'low',
+            'sla_hours' => 2,
+            'source_clock' => $ncr->created_at->toIso8601String(),
+            'source_clock_rule' => 'COALESCE(last_escalated_at, created_at)',
+        ];
+
+        $result = app(NcrSlaVerifier::class)
+            ->verify($this->recommendation('dss.quality_ncr_sla', $context));
+
+        $this->assertSame(VerificationResult::STILL_OPEN, $result->status);
+    }
+
     public function test_ncr_verifier_returns_unavailable_when_sla_scope_changes_or_source_is_missing(): void
     {
         $settings = app(SettingsService::class);
@@ -198,7 +222,7 @@ class RecommendationVerificationTest extends TestCase
             'source_clock' => $ncr->created_at->toIso8601String(),
             'source_clock_rule' => 'COALESCE(last_escalated_at, created_at)',
         ];
-        $verifier = new NcrSlaVerifier($settings);
+        $verifier = new NcrSlaVerifier(app(NcrSlaService::class));
 
         $settings->set('quality.ncr.sla_low_hours', 3);
         $this->assertSame(VerificationResult::UNAVAILABLE, $verifier->verify(
