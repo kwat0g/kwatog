@@ -54,6 +54,8 @@
 | F-10. Shared alert unread/list parity | `notifications/fix-alert-count-parity` | [#366](https://github.com/kwat0g/kwatog/pull/366) | merged as `49649075` |
 | F-05/F-09. Budget-transfer badge/list parity | `notifications/fix-budget-transfer-badge-parity` | [#367](https://github.com/kwat0g/kwatog/pull/367) | merged as `5364a1b0` |
 | F-09/F-30. AP overdue badge and row-status parity | `notifications/fix-ap-bills-badge-parity` | [#369](https://github.com/kwat0g/kwatog/pull/369) | merged as `46b81627` |
+| F-09. Budget approval badge/list parity | `notifications/fix-budget-approval-badge-parity` | [#374](https://github.com/kwat0g/kwatog/pull/374) | rebased on `main` |
+| F-32. Restricted budget approval-only queue | `notifications/fix-budget-approval-only-queue` | [#377](https://github.com/kwat0g/kwatog/pull/377) | stacked on #374; separate fix in progress |
 | F-09. Budget approval badge/list parity | `notifications/fix-budget-approval-badge-parity` | [#374](https://github.com/kwat0g/kwatog/pull/374) | rebased on `main`; review in progress |
 | F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
@@ -278,6 +280,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - `Budget::scopeAwaitingApprovalFor()` powers `pending_budgets` and `/budgeting?signal=awaiting_my_approval`. It covers submitted budgets awaiting the current direct approver or active delegate, applies the existing maker-checker role separation, and excludes self-submission. The badge and destination require `budgeting.view`.
 - On the original feature head, `BadgeControllerTest.php` passed **16 tests / 189 assertions**, including VP/Finance role separation, delegation, and badge/list parity. `Sidebar.behavior.test.tsx` plus `budgeting/index.test.tsx` passed **31 tests**. Targeted ESLint and `git diff --check` passed.
 - These tests were not rerun after rebase. PHP and Vitest are unavailable locally. Browser visual QA and full-suite verification remain open.
+
+## Separate finding fix: F-32 restricted budget approval-only queue (PR [#377](https://github.com/kwat0g/kwatog/pull/377))
+
+- `budgeting.approve` users without `budgeting.view` can access allowed detail records but cannot reach the actionable submitted-budget list. PR #374 keeps the badge behind `budgeting.view`; PR #377 adds a filtered approval-only queue and limits it to records the user may act on.
+- PR #377's feature-head results: API `BadgeControllerTest.php` plus `ApprovalBoardTest.php` **23 passed / 230 assertions**; SPA sidebar permissions plus budget page tests **24 passed**. Targeted ESLint and `git diff --check` passed before rebase.
+- F-27 remains payroll; the stale branch label was renumbered F-32. PHP and Vitest are unavailable locally, so no post-rebase test run.
 
 ## Outstanding proof / risks
 
