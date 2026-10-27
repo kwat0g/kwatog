@@ -150,6 +150,7 @@ function badgeDestination(path: string, key: string): string {
     calibration_overdue: 'status=overdue',
     calibration_due: 'status=due',
     effectiveness_due: 'signal=awaiting_my_action',
+    overdue_ncrs: 'signal=overdue',
     pending_returns: 'signal=pending',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
@@ -610,7 +611,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuTriangleAlert,
         feature: 'quality',
         permission: 'quality.ncr.view',
-        badgeKeys: ['ncrs', 'effectiveness_due'],
+        badgeKeys: ['overdue_ncrs', 'effectiveness_due', 'ncrs'],
       },
       {
         to: '/quality/calibration',

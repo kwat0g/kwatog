@@ -172,6 +172,7 @@ export default function NcrsListPage() {
       options: [
         { value: '', label: 'All NCRs' },
         { value: 'open', label: 'Open NCRs' },
+        { value: 'overdue', label: 'Overdue NCRs' },
       ],
     },
     {

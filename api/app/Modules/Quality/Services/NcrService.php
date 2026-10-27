@@ -88,6 +88,8 @@ class NcrService
 
         if (($filters['signal'] ?? null) === 'open') {
             $q->open();
+        } elseif (($filters['signal'] ?? null) === 'overdue') {
+            $q->whereIn('id', $this->slaOverdueQuery()->select('id'));
         }
 
         foreach (['source', 'severity', 'status', 'disposition'] as $f) {
@@ -116,6 +118,24 @@ class NcrService
 
         return $q->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 20), 100));
+    }
+
+    /** Open NCRs at or past their severity SLA, using the escalation clock. */
+    public function slaOverdueQuery(): Builder
+    {
+        $now = now();
+
+        return NonConformanceReport::query()->open()->where(function (Builder $query) use ($now): void {
+            foreach (NcrSeverity::cases() as $severity) {
+                $hours = $this->settings->requiredInt("quality.ncr.sla_{$severity->value}_hours", 1, 87600);
+                $cutoff = $now->copy()->subHours($hours);
+
+                $query->orWhere(function (Builder $severityQuery) use ($severity, $cutoff): void {
+                    $severityQuery->where('severity', $severity->value)
+                        ->whereRaw('COALESCE(last_escalated_at, created_at) <= ?', [$cutoff]);
+                });
+            }
+        });
     }
 
     public function show(NonConformanceReport $ncr): NonConformanceReport

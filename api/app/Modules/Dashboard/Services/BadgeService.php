@@ -44,6 +44,7 @@ use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\EffectivenessService;
+use App\Modules\Quality\Services\NcrService;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
@@ -90,6 +91,7 @@ class BadgeService
         'low_stock' => 'inventory',
         'out_of_stock' => 'inventory',
         'ncrs' => 'quality',
+        'overdue_ncrs' => 'quality',
         'profile_requests' => 'hr',
         'payroll' => 'payroll',
         'training_expiry' => 'hr',
@@ -351,6 +353,12 @@ class BadgeService
                 'label'       => 'NCRs',
                 'description' => 'Open non-conformance reports',
                 'counter'     => fn (): int => NonConformanceReport::query()->open()->count(),
+            ],
+            'overdue_ncrs' => [
+                'permissions' => ['quality.ncr.view'],
+                'label'       => 'Overdue NCRs',
+                'description' => 'Open NCRs at or past their severity response SLA',
+                'counter'     => fn (): int => app(NcrService::class)->slaOverdueQuery()->count(),
             ],
 
             'calibration_overdue' => [
