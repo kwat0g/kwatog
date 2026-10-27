@@ -9,6 +9,7 @@ use App\Common\Services\ApprovalService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
@@ -79,6 +80,71 @@ final class PurchaseOrderAccessPolicy
                 $scope->orWhereHas('approvalRecords', function ($records) use ($stepRoles): void {
                     $records->whereIn('role_slug', $stepRoles);
                 });
+            }
+        });
+    }
+
+    /**
+     * Filter POs where this user can take the next approval, send, or supplier-response action.
+     */
+    public function awaitingMyAction(Builder $query, User $user, ?string $actionType = null): Builder
+    {
+        if (! $user->hasPermission('purchasing.view')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $stepRoles = $this->approvalRoleSlugs($user);
+        $canApprove = $user->hasPermission('purchasing.po.approve') && $stepRoles !== [];
+        $canSend = $user->hasPermission('purchasing.po.send');
+        $canResolveResponses = $user->hasPermission('purchasing.po.responses.resolve');
+
+        return $query->where(function (Builder $actions) use ($user, $actionType, $stepRoles, $canApprove, $canSend, $canResolveResponses): void {
+            $hasAction = false;
+
+            if (($actionType === null || $actionType === 'approval') && $canApprove) {
+                $actions->where(function (Builder $approval) use ($user, $stepRoles): void {
+                    $approval->where('purchase_orders.status', PurchaseOrderStatus::PendingApproval->value)
+                        ->where('purchase_orders.created_by', '!=', $user->id)
+                        ->whereHas('approvalRecords', function ($records) use ($stepRoles): void {
+                            $records->where('action', 'pending')
+                                ->whereIn('role_slug', $stepRoles)
+                                // Mirror ApprovalService::nextStep() ordering: the first pending
+                                // current record is the only step that can act.
+                                ->whereNotExists(function ($earlier): void {
+                                    $earlier->selectRaw('1')
+                                        ->from('approval_records as earlier')
+                                        ->whereColumn('earlier.approvable_type', 'approval_records.approvable_type')
+                                        ->whereColumn('earlier.approvable_id', 'approval_records.approvable_id')
+                                        ->where('earlier.is_current', true)
+                                        ->where('earlier.action', 'pending')
+                                        ->whereRaw('(
+                                            earlier.attempt > approval_records.attempt
+                                            OR (earlier.attempt = approval_records.attempt AND earlier.step_order < approval_records.step_order)
+                                            OR (earlier.attempt = approval_records.attempt AND earlier.step_order = approval_records.step_order AND earlier.id < approval_records.id)
+                                        )');
+                                });
+                        });
+                });
+                $hasAction = true;
+            }
+
+            if (($actionType === null || $actionType === 'send') && $canSend) {
+                $actions->orWhere(function (Builder $send) use ($user): void {
+                    $send->where('purchase_orders.status', PurchaseOrderStatus::Approved->value);
+                    if (! $user->hasPermission('purchasing.po.approve') && ! $user->hasPermission('purchasing.po.view_all')) {
+                        $send->where('purchase_orders.created_by', $user->id);
+                    }
+                });
+                $hasAction = true;
+            }
+
+            if (($actionType === null || $actionType === 'supplier_response') && $canResolveResponses) {
+                $actions->orWhereHas('responses', fn ($responses) => $responses->where('status', PurchaseOrderResponseStatus::Pending->value));
+                $hasAction = true;
+            }
+
+            if (! $hasAction) {
+                $actions->whereRaw('1 = 0');
             }
         });
     }

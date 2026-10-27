@@ -80,6 +80,7 @@ class BadgeService
     private const FEATURE_BY_BADGE = [
         'purchase_requests' => 'purchasing',
         'overdue_purchase_orders' => 'purchasing',
+        'purchase_order_actions' => 'purchasing',
         'leaves' => 'leave',
         'overtime' => 'attendance',
         'maintenance_wo' => 'maintenance',
@@ -268,6 +269,17 @@ class BadgeService
                 'counter' => fn (): int => app(PurchaseOrderAccessPolicy::class)
                     ->visibleTo(PurchaseOrder::query()->receiptOverdue(), $user)
                     ->count(),
+            ],
+
+            'purchase_order_actions' => [
+                'permissions' => ['purchasing.view'],
+                'label' => 'Needs your action',
+                'description' => 'Purchase orders you can approve, send, or resolve a supplier response on',
+                'counter' => function () use ($user): int {
+                    $access = app(PurchaseOrderAccessPolicy::class);
+
+                    return $access->visibleTo($access->awaitingMyAction(PurchaseOrder::query(), $user), $user)->count();
+                },
             ],
 
             // HR > Leave management — pending requests visible to this approver tier.

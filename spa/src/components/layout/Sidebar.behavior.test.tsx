@@ -166,6 +166,44 @@ it('opens only receipt-overdue purchase orders from the PO badge', () => {
   );
 });
 
+it('opens PO actions first and keeps receipt overdue as a separate signal', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'purchase_order_actions') {
+      return {
+        count: 1,
+        severity: 'warning',
+        label: 'Needs your action',
+        description: 'Purchase orders you can approve, send, or resolve a supplier response on',
+      };
+    }
+    if (key === 'overdue_purchase_orders') {
+      return {
+        count: 2,
+        severity: 'warning',
+        label: 'Receipt overdue',
+        description: 'Open purchase orders past the expected receipt date with quantity remaining',
+      };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/purchasing/purchase-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Purchase Orders/ })).toHaveAttribute(
+    'href',
+    '/purchasing/purchase-orders?signal=action',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Purchase Orders signals/ }));
+  expect(screen.getByRole('link', {
+    name: 'Purchase orders you can approve, send, or resolve a supplier response on: 1',
+  })).toHaveAttribute('href', '/purchasing/purchase-orders?signal=action');
+  expect(screen.getByRole('link', {
+    name: 'Open purchase orders past the expected receipt date with quantity remaining: 2',
+  })).toHaveAttribute('href', '/purchasing/purchase-orders?signal=receipt_overdue');
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'
