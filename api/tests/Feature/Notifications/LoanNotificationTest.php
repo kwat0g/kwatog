@@ -113,6 +113,13 @@ class LoanNotificationTest extends TestCase
             'notifiable_id' => $eligible->id,
             'type' => 'loans.submitted',
         ]);
+        $submittedNotice = DB::table('notifications')
+            ->where('notifiable_id', $eligible->id)
+            ->where('type', 'loans.submitted')
+            ->first();
+        $submittedData = json_decode((string) $submittedNotice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(EmployeeLoan::class, $submittedData['subject_type']);
+        $this->assertSame((string) $loan->id, $submittedData['subject_id']);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_type' => User::class,
             'notifiable_id' => $revoked->id,
@@ -142,6 +149,8 @@ class LoanNotificationTest extends TestCase
         $data = json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame("/self-service/loans/{$loan->hash_id}", $data['link_to']);
         $this->assertSame($loan->hash_id, $data['entity_id']);
+        $this->assertSame(EmployeeLoan::class, $data['subject_type']);
+        $this->assertSame((string) $loan->id, $data['subject_id']);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_type' => User::class,
             'notifiable_id' => $other->id,
