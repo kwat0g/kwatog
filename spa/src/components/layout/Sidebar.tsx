@@ -149,6 +149,7 @@ function badgeDestination(path: string, key: string): string {
     out_of_stock: 'signal=out_of_stock',
     calibration_overdue: 'status=overdue',
     calibration_due: 'status=due',
+    effectiveness_due: 'signal=awaiting_my_action',
     pending_returns: 'signal=pending',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
@@ -161,8 +162,12 @@ function badgeDestination(path: string, key: string): string {
     pending_so: 'signal=awaiting_confirmation',
     overtime: 'signal=awaiting_my_approval',
   };
+  const destinations: Record<string, string> = {
+    effectiveness_due: '/quality/ncrs/effectiveness',
+  };
+  const target = destinations[key] ?? path;
   const filter = filters[key];
-  return filter ? `${path}?${filter}` : path;
+  return filter ? `${target}?${filter}` : target;
 }
 
 /**
@@ -604,7 +609,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuTriangleAlert,
         feature: 'quality',
         permission: 'quality.ncr.view',
-        badgeKey: 'ncrs',
+        badgeKeys: ['ncrs', 'effectiveness_due'],
       },
       {
         to: '/quality/calibration',

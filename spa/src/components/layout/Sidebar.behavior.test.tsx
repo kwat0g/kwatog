@@ -279,6 +279,21 @@ it('shows calibration due and overdue as separate filtered signals', () => {
   );
 });
 
+it('links assigned CAPA effectiveness badges to the current user queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'effectiveness_due'
+    ? { count: 2, severity: 'warning', label: 'CAPA checks due', description: 'Effectiveness checks assigned to you due soon or overdue' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/quality/ncrs']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
+    'href',
+    '/quality/ncrs/effectiveness?signal=awaiting_my_action',
+  );
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'

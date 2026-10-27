@@ -51,18 +51,14 @@ class EffectivenessController
     {
         $data = $request->validate([
             'per_page' => ['nullable', 'integer', 'between:1,100'],
+            'signal' => ['nullable', Rule::in(['awaiting_my_action'])],
         ]);
 
-        $due = NcrAction::query()
+        $due = $this->service->dueChecksQuery(
+            ($data['signal'] ?? null) === 'awaiting_my_action' ? (int) $request->user()->id : null,
+            ($data['signal'] ?? null) === 'awaiting_my_action',
+        )
             ->with(['owner:id,name', 'performer:id,name', 'ncr:id,ncr_number,status'])
-            ->whereIn('action_type', [NcrActionType::Corrective->value, NcrActionType::Preventive->value])
-            ->whereHas('ncr', fn ($q) => $q->where('status', NcrStatus::Closed->value))
-            ->whereIn('effectiveness_status', [
-                EffectivenessStatus::PendingVerification->value,
-                EffectivenessStatus::Ineffective->value,
-            ])
-            ->whereNotNull('next_effectiveness_check_at')
-            ->whereDate('next_effectiveness_check_at', '<=', now()->toDateString())
             ->orderBy('next_effectiveness_check_at')
             ->paginate((int) ($data['per_page'] ?? 25));
 

@@ -43,6 +43,7 @@ use App\Modules\Quality\Enums\CalibrationStatus;
 use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\EffectivenessService;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
@@ -108,6 +109,7 @@ class BadgeService
         'mrp_plans' => 'mrp',
         'calibration_due' => 'quality',
         'calibration_overdue' => 'quality',
+        'effectiveness_due' => 'quality',
         'pending_returns' => 'return_management',
         'draft_invoices' => 'accounting',
         'unpaid_invoices' => 'accounting',
@@ -365,6 +367,15 @@ class BadgeService
                 'label' => 'Calibration due',
                 'description' => 'Calibration instruments inside the due window',
                 'counter' => fn (): int => CalibrationRecord::query()->withStatus(CalibrationStatus::Due)->count(),
+            ],
+
+            'effectiveness_due' => [
+                'permissions' => ['quality.ncr.view'],
+                'label' => 'CAPA checks due',
+                'description' => 'Effectiveness checks assigned to you due soon or overdue',
+                'counter' => fn (): int => app(EffectivenessService::class)
+                    ->dueChecksQuery($user->id, true)
+                    ->count(),
             ],
 
             // HR > Profile change requests — pending review queue.
