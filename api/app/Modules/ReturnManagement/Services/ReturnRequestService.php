@@ -3274,7 +3274,7 @@ class ReturnRequestService
             'return.shipped_to_vendor',
             'Returned goods shipped to vendor',
             'were shipped back to the vendor. Track the shipment and follow up on the credit.',
-            'purchasing.po.view',
+            'purchasing.view',
         );
     }
 
