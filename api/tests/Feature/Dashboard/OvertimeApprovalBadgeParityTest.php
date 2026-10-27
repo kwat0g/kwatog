@@ -66,12 +66,12 @@ class OvertimeApprovalBadgeParityTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->overtime($delegatorEmployee);
+        $delegatorRequest = $this->overtime($delegatorEmployee);
         $this->overtime(Employee::factory()->create(['department_id' => $production->id]));
         $this->overtime(Employee::factory()->create(['department_id' => $quality->id]));
 
         $this->assertTrue(ApprovalDelegation::canActForPermission($delegate->fresh(), 'attendance.ot.approve'));
-        $this->assertSame(2, $this->assertBadgeMatchesList($delegate->fresh()));
+        $this->assertSame(1, $this->assertBadgeMatchesList($delegate->fresh(), $delegatorRequest->hash_id));
     }
 
     public function test_view_only_user_cannot_load_the_actionable_signal(): void
@@ -88,15 +88,18 @@ class OvertimeApprovalBadgeParityTest extends TestCase
         $this->assertArrayNotHasKey('overtime', $this->badges($viewer));
     }
 
-    private function assertBadgeMatchesList(User $user): int
+    private function assertBadgeMatchesList(User $user, ?string $excludedRequestId = null): int
     {
         $badgeCount = $this->badges($user)['overtime']['count'];
-        $listCount = $this->actingAs($user, 'sanctum')
+        $list = $this->actingAs($user, 'sanctum')
             ->getJson('/api/v1/attendance/overtime-requests?signal=awaiting_my_approval')
-            ->assertOk()
-            ->json('meta.total');
+            ->assertOk();
+        $listCount = $list->json('meta.total');
 
         $this->assertSame($badgeCount, $listCount);
+        if ($excludedRequestId !== null) {
+            $this->assertNotContains($excludedRequestId, array_column($list->json('data'), 'id'));
+        }
 
         return $badgeCount;
     }

@@ -26,7 +26,11 @@ class OvertimeDecisionPolicy
     {
         $query->where('status', OvertimeStatus::Pending->value);
 
-        if (! ApprovalDelegation::canActForPermission($user, 'attendance.ot.approve')) {
+        $canApproveDirectly = $user->hasPermission('attendance.ot.approve');
+        $delegatorIds = $canApproveDirectly
+            ? []
+            : ApprovalDelegation::delegatorsForPermission($user, 'attendance.ot.approve')->modelKeys();
+        if (! $canApproveDirectly && $delegatorIds === []) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -34,6 +38,10 @@ class OvertimeDecisionPolicy
 
         if ($user->employee_id !== null) {
             $query->where('employee_id', '<>', $user->employee_id);
+        }
+
+        if ($delegatorIds !== []) {
+            $query->whereDoesntHave('employee.user', fn (Builder $submitter) => $submitter->whereKey($delegatorIds));
         }
 
         return $query;
