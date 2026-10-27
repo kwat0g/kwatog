@@ -158,6 +158,10 @@ class NotificationService
     {
         $users = $this->normaliseRecipients($recipients);
         if ($users === []) {
+            Log::warning('Laravel notification delivery skipped: no eligible recipients.', [
+                'notification_class' => $notification::class,
+            ]);
+
             return;
         }
 
@@ -188,7 +192,14 @@ class NotificationService
             if ((clone $notifications)->where('dedupe_key', $dedupeKey)->exists()) {
                 return true;
             }
-            if ($lockedRecipient === null || ! $lockedRecipient->is_active || $cap < 1) {
+            if ($lockedRecipient === null || ! $lockedRecipient->is_active) {
+                Log::warning('DSS recommendation delivery skipped: no active recipient.', [
+                    'type' => 'dss.recommendation',
+                ]);
+
+                return false;
+            }
+            if ($cap < 1) {
                 return false;
             }
 
@@ -226,6 +237,10 @@ class NotificationService
         $users = $this->normaliseRecipients($recipients);
 
         if ($users === []) {
+            Log::warning('Notification delivery skipped: no eligible recipients.', [
+                'type' => $type,
+            ]);
+
             return;
         }
 

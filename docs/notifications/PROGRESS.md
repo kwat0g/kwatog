@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PRs #391–#402 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, #399 as `aa993b56`, #400 as `313dfbf0`, #401 as `a8fd87df`, and #402 as `64ed9288`. PR #404 adds the HR password-reset notification to mail-only catalog coverage. Original-head Leave API tests passed **34 tests / 160 assertions**; post-rebase SPA tests passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PRs #391–#402, #404, and #405 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, #399 as `aa993b56`, #400 as `313dfbf0`, #401 as `a8fd87df`, #402 as `64ed9288`, #404 as `71c8cc61`, and #405 as `3f96ddcb`. PR #403 duplicates the inactive-recipient fix already merged in #382; PR #407's missing-import fix is already in main via #371. Both remain queued for cleanup. PR #406 adds safe warnings for empty notification audiences. API tests remain skipped after rebase to avoid shared `ogami_test`; CI is waived per the user instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -51,7 +51,8 @@
 | F-12. Payroll progress channel access | `notifications/scope-payroll-progress-channel` | [#400](https://github.com/kwat0g/kwatog/pull/400) | merged as `313dfbf0`; original-head authorization test passed 12/36; post-rebase diff check passed; API test skipped to avoid shared DB; PHP unavailable |
 | F-12. Operational channel route authorization | `notifications/scope-operational-channels` | [#401](https://github.com/kwat0g/kwatog/pull/401) | merged as `a8fd87df`; original-head authorization test passed 16/48; post-rebase `git diff --check` passed; API test skipped to avoid shared DB; PHP unavailable |
 | 1.2. Laravel notification dispatch guard | `notifications/centralize-laravel-notifications-reconciled` | [#402](https://github.com/kwat0g/kwatog/pull/402) | merged as `64ed9288`; existing sends already used central service on current main; dispatch guard strengthened; post-rebase API tests skipped to avoid shared DB |
-| HR password-reset mail-only catalog coverage | `notifications/integrate-password-reset-fix` | [#404](https://github.com/kwat0g/kwatog/pull/404) | ready; parent signature fix already in main via #371; original-head mail-channel test passed 1/2; post-rebase test skipped to avoid shared DB |
+| F-35. Inactive recipient duplicate | `notifications/exclude-inactive-notice-recipients` | [#403](https://github.com/kwat0g/kwatog/pull/403) | redundant; behavior and tests already merged in #382/#402; close and delete branch during final cleanup |
+| HR password-reset mail-only catalog coverage | `notifications/integrate-password-reset-fix` | [#404](https://github.com/kwat0g/kwatog/pull/404) | merged as `71c8cc61`; parent signature fix already in main via #371; original-head mail-channel test passed 1/2 |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -83,7 +84,9 @@
 | F-34. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | merged as `7aa4820b` |
 | F-13. AP multi-signal sidebar | `notifications/multi-signal-ap-badges` | [#381](https://github.com/kwat0g/kwatog/pull/381) | merged as `6c3124c0` |
 | F-35. Inactive internal notification recipients | `notifications/filter-inactive-notice-recipients` | [#382](https://github.com/kwat0g/kwatog/pull/382) | merged as `f53c4e7b` |
-| F-14. Training-expiry department scope proof | `notifications/verify-training-expiry-audience-stack` | [#405](https://github.com/kwat0g/kwatog/pull/405) | rebased on current `main`; merge pending |
+| F-14. Training-expiry department scope proof | `notifications/verify-training-expiry-audience-stack` | [#405](https://github.com/kwat0g/kwatog/pull/405) | merged as `3f96ddcb`; original-head boundary test passed 1/4; post-merge runtime recheck not run |
+| Empty notification recipient audit | `notifications/audit-empty-recipient-audiences` | [#406](https://github.com/kwat0g/kwatog/pull/406) | ready; original-head `NotificationServiceTest.php` passed 12/44; post-rebase API tests skipped to avoid shared DB |
+| Duplicate final-pay import fix | `fix/hr-final-pay-service-import` | [#407](https://github.com/kwat0g/kwatog/pull/407) | redundant; import already merged in #371; close and delete branch during final cleanup |
 | F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
 ## Coverage ledger
@@ -474,11 +477,17 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Original-head results: `NotificationServiceTest` **9 passed / 28 assertions**; `NotificationCatalogTest` **9 passed / 74 assertions**; password-reset, employee-welcome, and admin-welcome targeted tests passed. After rebase, API tests were skipped to avoid shared `ogami_test`; `git diff --check` is the static check.
 - Recipient resolution policy, subject access checks, preferences for native email notifications, and lifecycle handling remain separate work.
 
-## HR password-reset mail-only catalog coverage (PR #404, ready for merge)
+## HR password-reset mail-only catalog coverage (PR #404, merged as `71c8cc61`)
 
 - The inherited parent callback signature fix was already present on current `main` through PR #371; no production change remains here.
 - `NotificationCatalogTest` now instantiates `EmployeePasswordResetNotification` and verifies it remains mail-only. Original-head results: subclass serialization test **1 passed / 2 assertions**, `NotificationCatalogTest` **9 passed / 76 assertions**, `UserProvisioningTest` **8 passed / 25 assertions**, and `UserAdministrationHardeningTest` **8 passed / 27 assertions**.
 - After rebase, API tests were skipped to avoid shared `ogami_test`; PHP is unavailable. No database was accessed.
+
+## Empty notification recipient audit (PR #406, ready for merge)
+
+- `NotificationService` warns when structured, Laravel, or DSS notification delivery has no active recipient. Logs include only the notification type/class; no fallback recipient, database row, realtime event, or Laravel send is added.
+- Original-head `NotificationServiceTest.php`: **12 passed / 44 assertions**, including inactive DSS suppression. After rebase, API tests were skipped to avoid shared `ogami_test`; PHP is unavailable.
+- Behavior and recipients remain unchanged for eligible active users.
 
 ## Outstanding proof / risks
 
