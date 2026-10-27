@@ -22,6 +22,8 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\EmployeeTraining;
+use App\Modules\HR\Models\Training;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCostReview;
@@ -650,6 +652,49 @@ class NotificationServiceSubjectAccessTest extends TestCase
         app(NotificationService::class)->sendForSubject($period, $periodViewer, 'test.disabled_payroll_subject', ['title' => 'Payroll review'], emailEnabled: false);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $periodViewer->id, 'type' => 'test.disabled_payroll_subject']);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_payroll_subject');
+    }
+
+    public function test_employee_training_subject_matches_hr_scope_and_self_service_routes(): void
+    {
+        app(SettingsService::class)->set('modules.hr', true, 'modules');
+        $trainingView = Permission::firstOrCreate(['slug' => 'hr.employees.trainings.view'], ['name' => 'View employee training records', 'module' => 'hr']);
+        $role = Role::firstOrCreate(['slug' => 'notification_training_viewer'], ['name' => 'Notification Training Viewer']);
+        $role->permissions()->syncWithoutDetaching([$trainingView->id]);
+        $department = Department::firstOrCreate(['code' => 'TRAINING-SCOPE'], ['name' => 'Training scope']);
+        $otherDepartment = Department::firstOrCreate(['code' => 'TRAINING-OTHER'], ['name' => 'Other training scope']);
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $inScopeEmployee = Employee::factory()->create(['department_id' => $department->id]);
+        $outOfScopeEmployee = Employee::factory()->create(['department_id' => $otherDepartment->id]);
+        $owner = User::factory()->create(['employee_id' => $employee->id]);
+        $inScopeViewer = User::factory()->withRole($role->slug)->create(['employee_id' => $inScopeEmployee->id]);
+        $outOfScopeViewer = User::factory()->withRole($role->slug)->create(['employee_id' => $outOfScopeEmployee->id]);
+        $withoutPermission = User::factory()->create();
+        $training = Training::create(['name' => 'Forklift safety', 'validity_months' => 12, 'is_active' => true]);
+        $record = EmployeeTraining::create([
+            'employee_id' => $employee->id,
+            'training_id' => $training->id,
+            'scheduled_for' => now()->toDateString(),
+            'completed_at' => now()->toDateString(),
+            'expires_at' => now()->addYear()->toDateString(),
+        ]);
+        Event::fake([UserNotificationCreated::class]);
+
+        app(NotificationService::class)->sendForSubject($record, [$owner, $inScopeViewer, $outOfScopeViewer, $withoutPermission], 'test.training_subject_access', ['title' => 'Training expiry'], emailEnabled: false);
+
+        foreach ([$owner, $inScopeViewer] as $recipient) {
+            $this->assertDatabaseHas('notifications', ['notifiable_id' => $recipient->id, 'type' => 'test.training_subject_access']);
+        }
+        foreach ([$outOfScopeViewer, $withoutPermission] as $recipient) {
+            $this->assertDatabaseMissing('notifications', ['notifiable_id' => $recipient->id, 'type' => 'test.training_subject_access']);
+        }
+        $data = json_decode((string) DB::table('notifications')->where('notifiable_id', $owner->id)->where('type', 'test.training_subject_access')->value('data'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(EmployeeTraining::class, $data['subject_type']);
+        $this->assertSame((string) $record->id, $data['subject_id']);
+
+        app(SettingsService::class)->set('modules.hr', false, 'modules');
+        app(NotificationService::class)->sendForSubject($record, $inScopeViewer, 'test.disabled_training_subject', ['title' => 'Training expiry'], emailEnabled: false);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $inScopeViewer->id, 'type' => 'test.disabled_training_subject']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_training_subject');
     }
 
     public function test_unregistered_subject_type_fails_closed(): void
