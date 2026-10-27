@@ -19,7 +19,7 @@ import type { Bill } from '@/types/accounting';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: BillListParams = {
- page: 1, per_page: 25, status: '',
+ page: 1, per_page: 25, status: '', signal: '',
 };
 
 export default function BillsPage() {
@@ -61,6 +61,9 @@ export default function BillsPage() {
  ...(billOptions?.statuses ?? []),
  ] },
  {
+ key: 'signal', label: 'Signal', type: 'select',
+ options: [{ value: '', label: 'All' }, { value: 'unpaid', label: 'Open balance' }, { value: 'due_soon', label: 'Due within 3 days' }] },
+ {
  key: 'overdue', label: 'Overdue', type: 'select',
  options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }] },
  ];
@@ -87,10 +90,10 @@ export default function BillsPage() {
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
 
   <StatCard
-    label={statusLabel('unpaid')}
-    value={data.data.filter(i => i.status === 'unpaid').length}
+    label="Unpaid balance"
+    value={data.data.filter(i => ['unpaid', 'partial'].includes(i.status) && Number(i.balance ?? 0) > 0).length}
     helper="in current view"
-    linkTo="?status=unpaid"
+    linkTo="?signal=unpaid"
   />
   <StatCard
     label={statusLabel('overdue')}

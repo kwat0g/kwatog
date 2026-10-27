@@ -924,7 +924,7 @@ class BadgeControllerTest extends TestCase
         return [
             'inquiries', 'open_complaints', 'pending_inspections', 'pending_grn',
             'mrb_holds', 'shipments', 'mrp_plans', 'pending_returns',
-            'draft_invoices', 'overdue_bills', 'training_upcoming', 'open_postings',
+            'draft_invoices', 'overdue_bills', 'unpaid_bills', 'due_soon_bills', 'training_upcoming', 'open_postings',
         ];
     }
 
@@ -1154,6 +1154,70 @@ class BadgeControllerTest extends TestCase
             $dueTodayRow = collect($unpaidList->json('data'))->firstWhere('id', $dueTodayBill->hash_id);
             $this->assertNotNull($dueTodayRow);
             $this->assertFalse($dueTodayRow['is_overdue']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_unpaid_bill_badge_matches_the_open_balance_list(): void
+    {
+        $finance = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        Bill::factory()->create(['status' => 'unpaid', 'balance' => 500]);
+        Bill::factory()->create(['status' => 'partial', 'amount_paid' => 500, 'balance' => 500]);
+        Bill::factory()->create(['status' => 'partial', 'amount_paid' => 1000, 'balance' => 0]);
+        Bill::factory()->create(['status' => 'paid', 'amount_paid' => 1000, 'balance' => 0]);
+        Bill::factory()->create(['status' => 'draft', 'balance' => 500]);
+        Bill::factory()->create(['status' => 'cancelled', 'balance' => 500]);
+
+        $badgeCount = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.unpaid_bills.count');
+        $unpaidList = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/bills?signal=unpaid')
+            ->assertOk();
+
+        $this->assertSame(2, $badgeCount);
+        $this->assertSame($badgeCount, $unpaidList->json('meta.total'));
+        $this->assertSame(['partial', 'unpaid'], collect($unpaidList->json('data'))->pluck('status')->sort()->values()->all());
+        $this->assertSame([500.0, 500.0], collect($unpaidList->json('data'))->pluck('balance')->map(fn ($balance) => (float) $balance)->sort()->values()->all());
+    }
+
+    public function test_due_soon_bill_badge_matches_the_filtered_bill_list(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-15 00:01:00', config('app.timezone')));
+
+        try {
+            $finance = User::factory()->create([
+                'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+            ]);
+            $today = today();
+            $inThreeDays = $today->copy()->addDays(3)->toDateString();
+            $inFourDays = $today->copy()->addDays(4)->toDateString();
+            $yesterday = $today->copy()->subDay()->toDateString();
+
+            Bill::factory()->create(['status' => 'unpaid', 'balance' => 500, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'partial', 'amount_paid' => 500, 'balance' => 500, 'due_date' => $inThreeDays]);
+            Bill::factory()->create(['status' => 'unpaid', 'balance' => 500, 'due_date' => $inFourDays]);
+            Bill::factory()->create(['status' => 'unpaid', 'balance' => 500, 'due_date' => $yesterday]);
+            Bill::factory()->create(['status' => 'partial', 'balance' => 0, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'paid', 'balance' => 0, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'draft', 'balance' => 500, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'cancelled', 'balance' => 500, 'due_date' => $today]);
+
+            $badgeCount = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.due_soon_bills.count');
+            $dueSoonList = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/bills?signal=due_soon')
+                ->assertOk();
+
+            $this->assertSame(2, $badgeCount);
+            $this->assertSame($badgeCount, $dueSoonList->json('meta.total'));
+            $this->assertSame([$today->toDateString(), $inThreeDays], collect($dueSoonList->json('data'))->pluck('due_date')->sort()->values()->all());
         } finally {
             Carbon::setTestNow();
         }

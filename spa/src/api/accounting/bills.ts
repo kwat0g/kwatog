@@ -4,6 +4,7 @@ import type { Bill, BillPayment, CreateBillData, CreateBillPaymentData } from '@
 
 export interface BillListParams extends ListParams {
  status?: string;
+ signal?: string;
  vendor_id?: string;
  from?: string;
  to?: string;

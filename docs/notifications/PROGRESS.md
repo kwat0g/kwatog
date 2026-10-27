@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PR #377 adds the restricted budget approval-only queue and merged as `75d3d4e5`; #378 hardens notification destinations and preserves anchor behavior, merged as `a143fbb4`. PR #380 narrows late-supplier notices to active reviewers who can open the exact PO; it is rebased on current `main` and awaiting merge. Its targeted tests passed on the original feature head; PHP is unavailable locally for a post-rebase rerun. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PR #380 narrows late-supplier notices to active reviewers who can open the exact PO and merged as `7aa4820b`. PR #381 adds separate AP overdue, unpaid, and due-soon signals with shared badge/list scopes and the first multi-signal sidebar item. Its targeted API and SPA tests passed on the original feature head; post-rebase test execution is unavailable locally. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; partial targeted recipient and badge/list comparisons are recorded below. Full role/scope proof remains open. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #485, and #487 are merged to `main`. PR #380 narrows the late-supplier audience and is awaiting merge. Remaining global authorization coverage, signal registry, and event families remain open. |
-| 4. Frontend | In progress | PR #378 rejects external, malformed, and cross-portal notification destinations while preserving same-app anchors. Notification Center filters, responsive QA, and multi-signal sidebar remain open. |
-| 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. PR #370 routes seven existing Laravel mail notifications through `NotificationService`; their current audiences and timing remain unchanged. PR #380 scopes late-supplier notices to users who can open the linked PO. Remaining dispatch sites and sidebar signals remain open. |
+| 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #380, #485, and #487 are merged to `main`. Remaining global authorization coverage, signal registry, and event families remain open. |
+| 4. Frontend | In progress | PR #378 hardens same-app notification destinations. PR #381 adds labeled AP signals and a keyboard-operable signal popover. Notification Center filters, responsive/browser QA, and multi-signal coverage for other modules remain open. |
+| 5. Migration | Partial | PR #380 scopes late-supplier notices to users who can open the linked PO. PR #381 aligns overdue, unpaid, and due-soon AP signals with filtered list scopes. Remaining dispatch sites and sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted tests exist for merged PRs and results are recorded below; full role, channel, and badge parity remain incomplete. PR #380's `SupplierShipmentTest.php --filter=test_late_eta` passed **2 tests / 13 assertions** on its original feature head, including system-admin and review-only negatives. It was not rerun after rebase because PHP/PHPUnit are unavailable locally. CI is waived. Tests did not use the user's application database. Full suite, browser QA, all-role/channel coverage, and broad badge parity remain open. |
+| 7. Verification | Partial | PR #381 targeted API parity tests passed **2 tests / 73 assertions** and `Sidebar.behavior.test.tsx` passed **30 tests** on the original feature head. Post-rebase tests were not run because PHP/PHPUnit and Vitest are unavailable locally. CI is waived. Full role, channel, and badge parity, browser QA, and the full suite remain open. |
 
 ## Phase 3 PR stack
 
@@ -60,7 +60,8 @@
 | F-28. Budget/transfer action-notice audience | `notifications/fix-budget-approval-recipient-audience` | [#375](https://github.com/kwat0g/kwatog/pull/375) | merged as `09237d48` |
 | F-33. Stock-adjustment notice links | `notifications/fix-stock-adjustment-notice-target` | [#376](https://github.com/kwat0g/kwatog/pull/376) | merged as `ee1861a6` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
-| F-34. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | rebased on current `main`; merge pending |
+| F-34. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | merged as `7aa4820b` |
+| F-13. AP multi-signal sidebar | `notifications/multi-signal-ap-badges` | [#381](https://github.com/kwat0g/kwatog/pull/381) | `6f57ef60`, `133008db`; merge pending |
 | F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
 ## Coverage ledger
@@ -80,7 +81,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. F-34 documents the late-supplier audience defect fixed by PR #380; its negative recipient tests passed on the original feature head, but post-rebase verification is unavailable. Remaining high-priority mismatches include Notification Center behavior, configured-role audiences without record scope, and all-role badge parity (F-09). Full role coverage remains unverified. No public channel or all-users notification dispatch found in the audited paths.
+See `FINDINGS.md`. PR #380 fixed the late-supplier audience and merged as `7aa4820b`. PR #381 aligns three AP badge signals with filtered list scopes; its multi-signal rendering currently covers Bills only. Configured-role audiences without record scope, remaining Notification Center behavior, full role coverage, and broad badge parity remain open.
 
 ## Phase 3 unit 1 verification
 
@@ -301,12 +302,19 @@ See `FINDINGS.md`. F-34 documents the late-supplier audience defect fixed by PR 
 - Approval-required and requester outcome notices link to `/inventory/stock-adjustments?id={hash_id}`. The list endpoint decodes the hash and returns only the matching row; invalid hashes return an empty list. The SPA labels the focused view, offers “Show all adjustments,” and explains when the record is missing or inaccessible. This also preserves current `PageShell` layout and status details from main.
 - Merged as `ee1861a6`. On the original feature head, `StockAdjustmentQueueTest.php` passed **7 tests / 32 assertions**; the SPA page test passed **1 test**. The red test failed with the old queue link. Targeted SPA ESLint and Vitest passed; PHP syntax checks passed. Tests were not rerun after rebase. The earlier CI attempt stopped before tests on duplicate PDF helper and npm audit failures; user waived CI as a merge gate. Browser visual QA and full-suite verification remain open.
 
-## Separate finding fix: F-34 late supplier notice audience (draft PR [#380](https://github.com/kwat0g/kwatog/pull/380))
+## Separate finding fix: F-34 late supplier notice audience (PR [#380](https://github.com/kwat0g/kwatog/pull/380))
 
 - Late-ETA notifications now resolve active `purchasing.delivery_schedules.review` permission holders, exclude `system_admin`, and require both purchase-order detail permission (`purchasing.view` or `purchasing.po.approve`) and `PurchaseOrderAccessPolicy::canView()` for the exact PO. Each notice stores `purchasing_delivery_schedule_reviewer` as its recipient reason. Event timing, ETA condition, message, deep link, and dedupe key stay unchanged.
 - Before the fix, the negative test failed because a system administrator received the notice. Its custom review-only fixture also lacked the route's `purchasing.view`/`purchasing.po.approve` gate; the old selector included that role. After the fix, the existing purchasing-officer positive case plus both negative cases pass: **2 tests / 13 assertions**. `git diff --check` passes.
 - API test execution ran in the mounted Laravel container with the changed files safely overlaid and restored. The host has no PHP CLI, so host-side syntax and Pint checks were not run.
 - PR #380 API CI failed before PHPUnit during its PHP syntax scan on the inherited duplicate `PdfRenderService::ensureDompdfDirs()` declaration (F-22); governance check passed. No changed-file failure was reported.
+
+## Separate signal fix: F-13 Accounts Payable multi-signal item (draft PR [#381](https://github.com/kwat0g/kwatog/pull/381))
+
+- Bills now expose separate overdue, unpaid, and due-soon counts. `Bill::scopeOverdue()`, `scopeUnpaid()`, and `scopeDueSoon()` power both the badge and `/accounting/bills` filters (`overdue=1`, `signal=unpaid`, `signal=due_soon`). Due soon means open balance due today through three calendar days ahead in the application timezone; zero-balance rows are excluded.
+- The Bills sidebar item shows labeled severity chips, links the item to the highest-severity active signal, and offers all active filtered destinations in a keyboard-operable popover. Expanded, collapsed, hover, focus, tap, Escape, and link behavior have targeted coverage.
+- On the original feature head, `BadgeControllerTest.php` targeted cases passed **4 tests / 89 assertions**; `Sidebar.behavior.test.tsx` passed **30 tests**. Targeted ESLint and `git diff --check` passed. PHP/PHPUnit and Vitest are unavailable locally, so tests were not rerun after rebase. Browser visual QA and full-suite checks remain outstanding.
+- Pint `--test` reports style findings in touched PHP files; no broad formatting was applied. Earlier CI stopped before PHPUnit on the inherited duplicate PDF helper; CI is waived per the user's instruction.
 
 ## Outstanding proof / risks
 
