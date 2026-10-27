@@ -6,9 +6,6 @@ namespace App\Common\Support;
 
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\SettingsService;
-use App\Modules\Attendance\Models\Attendance;
-use App\Modules\Attendance\Models\OvertimeRequest;
-use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Accounting\Enums\BudgetStatus;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
@@ -16,6 +13,9 @@ use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Models\Clearance;
@@ -29,6 +29,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCostReview;
 use App\Modules\Inventory\Models\StockAdjustment;
+use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Maintenance\Models\MaintenancePartRequest;
@@ -60,7 +61,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -76,6 +77,10 @@ final class NotificationSubjectAccessRegistry
                 && $user->hasPermission('accounting.bills.view'),
             StockAdjustment::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && ($user->hasPermission('inventory.adjust') || $user->hasPermission('inventory.adjust.approve')),
+            StockCountItem::class => app(SettingsService::class)->get('modules.inventory', false) === true
+                && $user->is_active
+                && $user->hasPermission('inventory.stock_count.view')
+                && $subject instanceof StockCountItem,
             GoodsReceiptNote::class, Item::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && $user->hasPermission('inventory.view')
                 && ($subject instanceof GoodsReceiptNote || $subject instanceof Item),
