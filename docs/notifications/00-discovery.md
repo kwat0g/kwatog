@@ -321,7 +321,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/inventory/transfer-orders` | `Inventory Transfers` | `inventory.adjust` | `inventory` | — |
 | `/inventory/picking` | `Material Handover` | `inventory.picking.view` | `inventory` | — |
 | `/supply-chain/deliveries` | `Outbound Deliveries` | any: supply_chain.view, supply_chain.deliveries.view | `supply_chain` | `deliveries` |
-| `/supply-chain/fleet` | `Delivery Fleet` | `supply_chain.view` | `supply_chain` | — |
+| `/supply-chain/fleet` | `Delivery Fleet` | `supply_chain.view` | `supply_chain` | `vehicles_maintenance` |
 | `/quality/inspection-specs` | `Inspection Specifications` | `quality.specs.view` | `quality` | — |
 | `/quality/inspections` | `Quality Inspections` | `quality.inspections.view` | `quality` | `pending_inspections` |
 | `/quality/ncrs` | `Nonconformance Reports (NCRs)` | `quality.ncr.view` | `quality` | `ncrs` |
@@ -395,7 +395,7 @@ The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirm
 
 ### Badge definitions at the discovery baseline
 
-The discovery snapshot contained 32 backend keys. Current `BadgeService` defines 47 keys; the 15 later keys are listed after this baseline table.
+The discovery snapshot contained 32 backend keys. Current `BadgeService` defines 48 keys; the 16 later keys are listed after this baseline table.
 
 | Key | Count definition captured at discovery |
 | --- | --- |
@@ -451,6 +451,7 @@ The discovery snapshot contained 32 backend keys. Current `BadgeService` defines
 | `payment_review_invoices` | Open positive-balance invoices with a pending customer payment submission; requires invoice view and collection permission, and excludes `system_admin`. |
 | `unpaid_bills` | Open bills with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
 | `due_soon_bills` | Unpaid/partial bills with positive balance due today through three calendar days ahead, inclusive. |
+| `vehicles_maintenance` | Non-archived fleet vehicles with `VehicleStatus::Maintenance`; status is filtered by the same `status=maintenance` query on the Fleet page. |
 
 ## Candidate signal data discovery
 

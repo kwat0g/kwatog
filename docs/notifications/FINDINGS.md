@@ -121,4 +121,6 @@
 
 | F-81 | Medium; reliable lot state and destination required | The proposed rejected-lot signal has no aggregate lot status or list filter to count and open. | `TraceabilityService::search()` requires a lot/batch term. `MrbStatus::Held` represents quarantined material, while `NcrDisposition` is an NCR decision; neither supplies a general rejected-lot list. The proposed traceability `signal` URL is unsupported. | Keep the MRB held queue and NCR queues; add a rejected-lot signal only after an authoritative list-level status and filter exist. |
 
+| F-82 | Fixed in this change | Fleet API accepted a `status` filter, but the SPA Fleet page ignored URL filters, so the maintenance-vehicle badge could not link to a matching list. | Fleet now binds `status` through `useUrlFilters`, exposes a status selector, and uses the API result for `/supply-chain/fleet?status=maintenance`. Added badge/list parity coverage; test execution unavailable in this workspace. | Keep the fleet badge on `VehicleStatus::Maintenance`; soft-deleted and retired vehicles stay out of the count. |
+
 Findings track discrete defects alongside broader notification/badge work; fixing one finding does not establish global recipient or badge parity. No claim of a confirmed cross-user leak is made without runtime evidence.

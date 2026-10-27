@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { vehiclesApi } from '@/api/supply-chain';
+import { vehiclesApi, type VehicleListParams } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -17,6 +18,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { usePermission } from '@/hooks/usePermission';
 import type { Vehicle } from '@/types/supplyChain';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 
 const STATUS_CHIP: Record<string, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  available: 'success',
@@ -59,12 +61,11 @@ export default function FleetPage() {
  const [editing, setEditing] = useState<Vehicle | null>(null);
  const [form, setForm] = useState<VehicleForm>(EMPTY_FORM);
  const [archiveId, setArchiveId] = useState<string | null>(null);
- const [page, setPage] = useState(1);
- const [perPage, setPerPage] = useState(50);
+ const [filters, setFilters] = useUrlFilters<VehicleListParams>({ page: 1, per_page: 50 });
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['supply-chain', 'vehicles', { showArchived, page, perPage }],
- queryFn: () => vehiclesApi.list({ page, per_page: perPage, trashed: showArchived ? 'with' : undefined }),
+ queryKey: ['supply-chain', 'vehicles', { ...filters, showArchived }],
+ queryFn: () => vehiclesApi.list({ ...filters, trashed: showArchived ? 'with' : undefined }),
  placeholderData: (prev) => prev,
  });
  const { data: vehicleOptions } = useQuery({
@@ -74,6 +75,15 @@ export default function FleetPage() {
  });
  const statusLabels = Object.fromEntries((vehicleOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const typeLabels = Object.fromEntries((vehicleOptions?.types ?? []).map((option) => [option.value, option.label]));
+ const filterConfig: FilterConfig[] = [{
+  key: 'status',
+  label: 'Status',
+  type: 'select',
+  options: [
+   { value: '', label: 'All statuses' },
+   ...(vehicleOptions?.statuses ?? []).map((option) => ({ value: option.value, label: option.label })),
+  ],
+ }];
 
  const save = useMutation({
  mutationFn: () => {
@@ -137,12 +147,11 @@ export default function FleetPage() {
 
  const toggleArchived = () => {
   setShowArchived((value) => !value);
-  setPage(1);
+  setFilters((current) => ({ ...current, page: 1 }));
  };
 
  const changePageSize = (nextPerPage: number) => {
-  setPerPage(nextPerPage);
-  setPage(1);
+  setFilters((current) => ({ ...current, per_page: nextPerPage, page: 1 }));
  };
 
  const columns: Column<Vehicle>[] = [
@@ -179,10 +188,18 @@ export default function FleetPage() {
     </div>
    }
   />
+  <div className="px-5 pt-4">
+   <FilterBar
+    filters={filterConfig}
+    values={filters}
+    onSearch={(search) => setFilters((current) => ({ ...current, search, page: 1 }))}
+    onFilter={(key, value) => setFilters((current) => ({ ...current, [key]: value, page: 1 }))}
+   />
+  </div>
   {isLoading && !data && <SkeletonTable columns={canManage ? 6 : 5} rows={5} />}
   {isError && <EmptyState icon="alert-circle" title="Failed to load fleet" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
-  {data && data.data.length === 0 && <EmptyState icon="truck" title={showArchived ? 'No archived vehicles' : 'No vehicles'} description={canManage ? 'Create a vehicle to make it available for delivery assignment.' : undefined} />}
-  {data && data.data.length > 0 && <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={setPage} onPageSizeChange={changePageSize} /></div>}
+  {data && data.data.length === 0 && <EmptyState icon="truck" title={filters.status === 'maintenance' ? 'No vehicles in maintenance' : showArchived ? 'No archived vehicles' : 'No vehicles'} description={canManage ? 'Create a vehicle to make it available for delivery assignment.' : undefined} />}
+  {data && data.data.length > 0 && <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((current) => ({ ...current, page }))} onPageSizeChange={changePageSize} /></div>}
 
   <Modal isOpen={formOpen} onClose={() => { if (!save.isPending) setFormOpen(false); }} title={editing ? `Edit ${editing.name}` : 'New vehicle'}>
    <div className="space-y-3">

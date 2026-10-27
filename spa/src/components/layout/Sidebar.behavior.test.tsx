@@ -92,6 +92,21 @@ it('opens Supplier Listings on the pending-review queue', () => {
   );
 });
 
+it('opens Delivery Fleet on the maintenance vehicle list', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'vehicles_maintenance'
+    ? { count: 1, severity: 'warning', label: 'In maintenance', description: 'Vehicles unavailable for delivery' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/supply-chain/fleet']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Delivery Fleet/ })).toHaveAttribute(
+    'href',
+    '/supply-chain/fleet?status=maintenance',
+  );
+});
+
 it('opens Leave Management on the current-stage approval queue', () => {
   badgeMock.getBadge.mockImplementation((key) => key === 'leaves'
     ? { count: 3, severity: 'warning', label: 'Leaves', description: 'Leave requests awaiting your approval' }
