@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PRs #391–#402, #404–#406 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, #399 as `aa993b56`, #400 as `313dfbf0`, #401 as `a8fd87df`, #402 as `64ed9288`, #404 as `71c8cc61`, and #405 as `3f96ddcb`, #406 as `4a33bf31`. PR #403 duplicates the inactive-recipient fix already merged in #382; PR #407's missing-import fix is already in main via #371. Both remain queued for cleanup. PR #406 merged safe warnings for empty notification audiences. PR #408 merged as `ee8beae6`, scopes separation notices to clearance visibility, and excludes the initiator; its original-head audience test passed 2/9, post-rebase API tests skipped to avoid shared `ogami_test`. PR #409 merged as `fcf9c988`; original-head API passed 1/26 and SPA passed 42 tests across two files; post-rebase tests were not run here. PR #410 merged as `6f4d4661`; original-head API passed 1/27 and SPA passed 42 tests. PR #411 merged as `ee585af0`; original-head API passed 1/14 and portal layout passed 1 test. PR #412 adds an approval-subject authorization gate; its original-head tests passed and post-rebase tests were skipped to avoid shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PRs #391–#402, #404–#406 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, #399 as `aa993b56`, #400 as `313dfbf0`, #401 as `a8fd87df`, #402 as `64ed9288`, #404 as `71c8cc61`, and #405 as `3f96ddcb`, #406 as `4a33bf31`. PR #403 duplicates the inactive-recipient fix already merged in #382; PR #407's missing-import fix is already in main via #371. Both remain queued for cleanup. PR #406 merged safe warnings for empty notification audiences. PR #408 merged as `ee8beae6`, scopes separation notices to clearance visibility, and excludes the initiator; its original-head audience test passed 2/9, post-rebase API tests skipped to avoid shared `ogami_test`. PR #409 merged as `fcf9c988`; original-head API passed 1/26 and SPA passed 42 tests across two files; post-rebase tests were not run here. PR #410 merged as `6f4d4661`; original-head API passed 1/27 and SPA passed 42 tests. PR #411 merged as `ee585af0`; original-head API passed 1/14 and portal layout passed 1 test. PR #412 merged as `c39257c3`, adding the approval-subject authorization gate; its original-head tests passed and post-rebase tests were skipped to avoid shared `ogami_test`. PR #413 corrects a stale inactive-recipient test expectation; original-head targeted tests passed, production behavior is unchanged. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -90,7 +90,7 @@
 | F-05/F-09. HR training badge/list parity | `notifications/hr-training-signal-parity` | [#409](https://github.com/kwat0g/kwatog/pull/409) | merged as `fcf9c988`; original-head API passed 1/26 and SPA passed 42 tests across two files; post-rebase `git diff --check` passed |
 | F-09/F-13. Internal AR invoice signals | `notifications/ar-invoice-signal-parity` | [#410](https://github.com/kwat0g/kwatog/pull/410) | merged as `6f4d4661`; original-head API passed 1/27, Sidebar tests 42, targeted ESLint passed; after rebase API/SPA tests skipped due shared DB and missing tools; `git diff --check` passed |
 | F-09/F-13. Customer portal AR invoice signals | `notifications/customer-ar-signals` | [#411](https://github.com/kwat0g/kwatog/pull/411) | original-head API passed 1/14 and portal layout passed 1 test; post-rebase API test skipped to avoid shared DB; `git diff --check` passed |
-| Approval notification subject access gate | `notifications/subject-access-gate` | [#412](https://github.com/kwat0g/kwatog/pull/412) | rebased onto current `main`; original-head tests passed 25 tests / 84 assertions; post-rebase API tests skipped to avoid shared DB; `git diff --check` passed |
+| Approval notification subject access gate | `notifications/subject-access-gate` | [#412](https://github.com/kwat0g/kwatog/pull/412) | merged as `c39257c3`; original-head tests passed 25 tests / 84 assertions; post-rebase API tests skipped to avoid shared DB; `git diff --check` passed |
 | Duplicate final-pay import fix | `fix/hr-final-pay-service-import` | [#407](https://github.com/kwat0g/kwatog/pull/407) | redundant; import already merged in #371; close and delete branch during final cleanup |
 | F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
@@ -529,6 +529,12 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Structured notification data now stores the subject model class and key. Missing, soft-deleted, and unsupported subjects fail closed. No database migration.
 - Original-head tests: subject-access unit tests **3 passed / 15 assertions**, approval visibility tests **3 / 20**, submitter outcome test **1 / 5**, and approval service tests **18 / 44**. Targeted PHP syntax, Pint, and diff checks passed per the PR record. The original API tests used a temporary removal of inherited F-22 duplicate code, restored byte-for-byte afterward.
 - After rebase, API tests were not rerun to avoid shared `ogami_test`; `git diff --check` passed. Other notification modules still need exact subject-access rules and migration.
+
+## Separate finding fix: F-48 inactive-recipient test correction (PR #413)
+
+- Corrected the stale in-app row expectation from four to three. Inactive users are excluded by `NotificationService::normaliseRecipients()` from database, broadcast, and email delivery.
+- `NotificationServiceHardeningTest.php`: **22 passed / 62 assertions**. PHP syntax, targeted Pint, and `git diff --check` pass. Test used a temporary local workaround for inherited F-22 and restored that file exactly.
+- Production behavior is unchanged. The fix is isolated from notification feature work.
 
 ## Outstanding proof / risks
 
