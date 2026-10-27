@@ -147,6 +147,7 @@ function badgeDestination(path: string, key: string): string {
     maintenance_wo_unassigned: 'queue=unassigned',
     low_stock: 'signal=low_stock',
     out_of_stock: 'signal=out_of_stock',
+    pending_returns: 'signal=pending',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',
