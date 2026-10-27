@@ -335,10 +335,10 @@ class BadgeService
             // HR > Profile change requests — pending review queue.
             'profile_requests' => [
                 'permissions' => ['hr.employees.view', 'hr.profile_updates.finance_review'],
-                'label'       => 'Profile Requests',
-                'description' => 'Pending employee profile change requests',
+                'label'       => 'Awaiting my action',
+                'description' => 'Profile changes you can review',
                 'counter'     => fn (): int => app(ProfileUpdateRequestService::class)
-                    ->reviewQueueQuery($user)
+                    ->awaitingMyActionQuery($user)
                     ->count(),
             ],
 
