@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { LuArrowDown, LuArrowUp, LuChevronDown } from '@/lib/icons';
 import { cn } from '@/lib/cn';
+import { horizontalScrollEdges } from '@/lib/horizontalScrollEdges';
 import { focusRingInset } from '@/lib/focus';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
@@ -201,8 +202,7 @@ export function DataTable<T>({
     const scroller = tableScrollerRef.current;
     if (!scroller) return;
     const update = () => {
-      const maxScroll = scroller.scrollWidth - scroller.clientWidth;
-      const next = { left: scroller.scrollLeft > 1, right: maxScroll - scroller.scrollLeft > 1 };
+      const next = horizontalScrollEdges(scroller);
       setScrollEdges((current) => current.left === next.left && current.right === next.right ? current : next);
     };
     update();

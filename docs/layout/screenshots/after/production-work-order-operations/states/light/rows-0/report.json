@@ -1,0 +1,712 @@
+{
+  "generatedAt": "2026-10-27T10:22:36.956Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "production",
+  "theme": "light",
+  "fixtureRowsRequested": 0,
+  "widths": [
+    1440
+  ],
+  "routes": [
+    "/production/work-orders/layout-wo-001"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/production/work-orders/layout-wo-001",
+      "role": "production",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/production/work-orders/layout-wo-001",
+      "role": "production",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/after/production-work-order-operations/states/light/rows-0/production-work-orders-layout-wo-001-1440.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": null,
+      "scheduleBottomSample": null,
+      "url": "/production/work-orders/layout-wo-001",
+      "title": "WO-LAYOUT-202610-001 In progress · Production · ERP",
+      "h1": "WO-LAYOUT-202610-001In progress",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 3,
+        "links": 1,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 2
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 900,
+        "width": 1200,
+        "height": 852
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 32,
+      "sidebarClearanceByBlock": {
+        "header": 32,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 272,
+          "right": 1408,
+          "top": 48,
+          "bottom": 171.5,
+          "width": 1136,
+          "height": 123.5
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas",
+          "heading": "WO-LAYOUT-202610-001In progress",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 48,
+            "bottom": 171.5,
+            "width": 1136,
+            "height": 123.5
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "0px",
+            "bottom": "16px",
+            "left": "0px"
+          },
+          "gapAfter": 24,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "flex items-center gap-3 border-b border-default",
+          "heading": "",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 195.5,
+            "bottom": 236.5,
+            "width": 1136,
+            "height": 41
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "gapAfter": 24,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 2,
+          "tag": "div",
+          "className": "",
+          "heading": "Operations",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 260.5,
+            "bottom": 399.875,
+            "width": 1136,
+            "height": 139.375
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-60",
+          "left": 0,
+          "right": 240,
+          "width": 240,
+          "scrollWidth": 239,
+          "clientWidth": 239,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "page-shell page-shell--grid",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 97,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "span",
+          "className": "min-w-0 flex-1 truncate",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": true,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 180,
+          "clientWidth": 175,
+          "scrollHeight": 21,
+          "clientHeight": 21,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 180,
+          "maxClientWidth": 175,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 21
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": false,
+      "doubleVerticalScroll": false,
+      "scheduleScrollRegion": null,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "a",
+            "className": "inline-flex min-h-11 items-center gap-1 text-caption text-muted hover:text-primary mb-1 xl:min-h-0",
+            "text": "Work orders",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Work orders"
+            ]
+          },
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "WO-LAYOUT-202610-001In progress",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "WO-LAYOUT-202610-001In progress"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "PART-001 — Layout test product",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "PART-001 — Layout test product"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Record output",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "contrast": 4.83,
+            "count": 1,
+            "examples": [
+              "Record output"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "relative inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm whitespace-nowrap transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset disabled:opacity-50 disabled:cursor-not-allowed text-secondary hover:text-primary hover:bg-subtle",
+            "text": "Details",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.62,
+            "count": 1,
+            "examples": [
+              "Details"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "relative inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm whitespace-nowrap transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset disabled:opacity-50 disabled:cursor-not-allowed text-primary font-medium",
+            "text": "Operations",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Operations"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "mb-3 text-sm text-muted",
+            "text": "Operation operator: Assign a crew first (designated output recorder).",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Operation operator: Assign a crew first (designated output recorder)."
+            ]
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Operations",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Operations"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "0 operations",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "0 operations"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "p-4 text-sm text-muted",
+            "text": "No operations defined for this work order.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "No operations defined for this work order."
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none"
+        ],
+        "below13px": [],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Record output",
+          "width": 135,
+          "height": 28,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
+        },
+        {
+          "label": "Details",
+          "width": 74,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.290196 0.258824 0.223529)",
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
+        },
+        {
+          "label": "Operations",
+          "width": 99,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Record output",
+          "width": 135,
+          "height": 28,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
+        },
+        {
+          "label": "Details",
+          "width": 74,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.290196 0.258824 0.223529)",
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
+        },
+        {
+          "label": "Operations",
+          "width": 99,
+          "height": 40,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "label": "Work orders",
+          "width": 87,
+          "height": 18,
+          "count": 1,
+          "examples": [
+            "Work orders"
+          ]
+        },
+        {
+          "label": "Record output",
+          "width": 135,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
+        },
+        {
+          "label": "Operations",
+          "width": 99,
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Work orders",
+          "width": 87,
+          "height": 18,
+          "count": 1,
+          "examples": [
+            "Work orders"
+          ]
+        },
+        {
+          "label": "Record output",
+          "width": 135,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
+        },
+        {
+          "label": "Operations",
+          "width": 99,
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
+        }
+      ],
+      "scrollContextCount": 0
+    }
+  ]
+}

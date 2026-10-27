@@ -15,6 +15,11 @@ const quantity = new Intl.NumberFormat('en-PH', {
  maximumFractionDigits: 3,
 });
 
+const preciseQuantity = new Intl.NumberFormat('en-PH', {
+ minimumFractionDigits: 0,
+ maximumFractionDigits: 4,
+});
+
 const unitCost = new Intl.NumberFormat('en-PH', {
  minimumFractionDigits: 4,
  maximumFractionDigits: 4,
@@ -71,6 +76,12 @@ export function formatDecimal(value: number | string | null | undefined, fallbac
 export function formatQuantity(value: number | string | null | undefined, fallback = '—'): string {
  const n = toNumber(value);
  return n === null ? fallback : quantity.format(n);
+}
+
+/** Preserve the four decimal places used by production-operation quantities. */
+export function formatPreciseQuantity(value: number | string | null | undefined, fallback = '—'): string {
+ const n = toNumber(value);
+ return n === null ? fallback : preciseQuantity.format(n);
 }
 
 export function formatPercent(value: number | string | null | undefined, fallback = '—'): string {
