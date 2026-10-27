@@ -50,9 +50,23 @@ class InvoiceService
         private readonly OfficialReceiptService $receipts,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $viewer = null): LengthAwarePaginator
     {
         $q = Invoice::query()->with(['customer:id,name']);
+
+        match ($filters['signal'] ?? null) {
+            'unpaid' => $q->unpaid(),
+            'overdue' => $q->overdue(),
+            'payment_review' => $viewer !== null
+                && $viewer->role?->slug !== 'system_admin'
+                && $viewer->hasPermission('accounting.invoices.collect')
+                    ? $q->awaitingPaymentReview()
+                    : $q->whereRaw('1 = 0'),
+            'draft' => $viewer !== null
+                ? $q->draftsOwnedBy($viewer)
+                : $q->whereRaw('1 = 0'),
+            default => null,
+        };
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -64,8 +78,7 @@ class InvoiceService
         if (! empty($filters['from'])) $q->whereDate('date', '>=', $filters['from']);
         if (! empty($filters['to']))   $q->whereDate('date', '<=', $filters['to']);
         if (! empty($filters['overdue'])) {
-            $q->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial])
-              ->whereDate('due_date', '<', now());
+            $q->overdue();
         }
         if (! empty($filters['search'])) {
             $term = $filters['search'];

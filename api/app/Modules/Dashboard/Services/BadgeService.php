@@ -102,6 +102,9 @@ class BadgeService
         'mrp_plans' => 'mrp',
         'pending_returns' => 'return_management',
         'draft_invoices' => 'accounting',
+        'unpaid_invoices' => 'accounting',
+        'overdue_invoices' => 'accounting',
+        'payment_review_invoices' => 'accounting',
         'overdue_bills' => 'accounting',
         'unpaid_bills' => 'accounting',
         'due_soon_bills' => 'accounting',
@@ -214,6 +217,15 @@ class BadgeService
                 ->selectSub(Bill::query()->unpaid()->selectRaw('COUNT(*)'), 'unpaid')
                 ->selectSub(Bill::query()->dueSoon()->selectRaw('COUNT(*)'), 'due_soon')
                 ->first() ?? (object) ['overdue' => 0, 'unpaid' => 0, 'due_soon' => 0];
+        };
+        $invoiceSignalCounts = null;
+        $countInvoiceSignals = function () use (&$invoiceSignalCounts, $user): object {
+            return $invoiceSignalCounts ??= DB::query()
+                ->selectSub(Invoice::query()->draftsOwnedBy($user)->selectRaw('COUNT(*)'), 'draft')
+                ->selectSub(Invoice::query()->unpaid()->selectRaw('COUNT(*)'), 'unpaid')
+                ->selectSub(Invoice::query()->overdue()->selectRaw('COUNT(*)'), 'overdue')
+                ->selectSub(Invoice::query()->awaitingPaymentReview()->selectRaw('COUNT(*)'), 'payment_review')
+                ->first() ?? (object) ['draft' => 0, 'unpaid' => 0, 'overdue' => 0, 'payment_review' => 0];
         };
 
         return [
@@ -514,14 +526,36 @@ class BadgeService
                     ->count(),
             ],
 
-            // Finance > Invoices (AR) — drafts awaiting finalization/posting.
+            // Finance > Invoices (AR) — personal drafts plus open receivables and payment review.
             'draft_invoices' => [
                 'permissions' => ['accounting.invoices.view'],
-                'label'       => 'Invoices (AR)',
-                'description' => 'Invoices awaiting posting',
-                'counter'     => fn (): int => Invoice::query()
-                    ->where('status', InvoiceStatus::Draft->value)
-                    ->count(),
+                'label'       => 'Draft invoices',
+                'description' => 'Your draft invoices awaiting posting',
+                'counter'     => fn (): int => (int) $countInvoiceSignals()->draft,
+            ],
+
+            'unpaid_invoices' => [
+                'permissions' => ['accounting.invoices.view'],
+                'label'       => 'Unpaid',
+                'description' => 'Open invoices with an unpaid balance',
+                'counter'     => fn (): int => (int) $countInvoiceSignals()->unpaid,
+            ],
+
+            'overdue_invoices' => [
+                'permissions' => ['accounting.invoices.view'],
+                'label'       => 'Overdue',
+                'description' => 'Open invoices past their due date',
+                'counter'     => fn (): int => (int) $countInvoiceSignals()->overdue,
+            ],
+
+            'payment_review_invoices' => [
+                'permissions' => ['accounting.invoices.collect'],
+                'required_permissions' => ['accounting.invoices.view'],
+                'label'       => 'Payment review',
+                'description' => 'Customer payments awaiting Finance verification',
+                'counter'     => fn (): int => $user->role?->slug === 'system_admin'
+                    ? 0
+                    : (int) $countInvoiceSignals()->payment_review,
             ],
 
             // Finance > Bills (AP) — payable bills past their due date.
