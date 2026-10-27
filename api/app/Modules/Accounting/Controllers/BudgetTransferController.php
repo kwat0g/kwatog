@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
-use App\Common\Support\HashIdFilter;
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Enums\BudgetTransferStatus;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\BudgetTransfer;
@@ -31,11 +31,17 @@ class BudgetTransferController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'nullable|integer|min:1',
             'status' => ['nullable', Rule::enum(BudgetTransferStatus::class)],
+            'actionable' => 'nullable|boolean',
         ]);
 
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 403);
+        $actionable = ! $actor->hasPermission('budgeting.view') || $request->boolean('actionable');
         $query = BudgetTransfer::with(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver', 'rejecter'])
             ->orderByDesc('created_at');
-        if ($request->filled('status')) {
+        if ($actionable) {
+            $query->awaitingApprovalFor($actor);
+        } elseif ($request->filled('status')) {
             $query->where('status', $request->input('status'));
         }
 

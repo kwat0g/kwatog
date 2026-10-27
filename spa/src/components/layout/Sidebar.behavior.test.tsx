@@ -132,13 +132,34 @@ it('opens the assigned complaint queue when complaints has a positive badge', ()
   );
 });
 
-
 it('keeps the narrow-screen sidebar rail collapsed while restoring expand all separately', () => {
   vi.stubGlobal('innerWidth', 1024);
   useSidebarStore.getState().init(false, true, true);
   expect(useSidebarStore.getState().collapsed).toBe(true);
   expect(useSidebarStore.getState().expandAll).toBe(true);
   vi.unstubAllGlobals();
+});
+
+it('opens the actionable pending-transfer list when transfers have a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_transfers'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Budget transfers',
+          description: 'Budget transfers awaiting approval',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/budgeting/transfers']}>
+      <Sidebar roleSlug="vice_president" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Budget Transfers/ })).toHaveAttribute(
+    'href',
+    '/budgeting/transfers?status=pending&actionable=1',
+  );
 });
 
 it('expands the active module, expires unvisited peeks, and keeps visited modules open', () => {

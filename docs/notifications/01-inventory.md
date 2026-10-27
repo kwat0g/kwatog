@@ -305,7 +305,7 @@ Local aggregate rows include `chain.payslip_ready` (526 rows, many users with em
 
 ## Sidebar audit and badge parity status
 
-The exhaustive route inventory is the 73-row internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`. Current 29 definitions are likewise fully enumerated there. 22 keys are attached to nav items; seven definitions are not attached: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, `shipments`, and `pending_transfers`.
+The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus the Budget Transfers implementation delta. Current 29 definitions are fully enumerated there. The Phase 0 baseline had 22 attached keys and seven unattached definitions; the current implementation attaches `pending_transfers`, leaving six unattached: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, and `shipments`.
 
 | Finding | Current implementation | Destination/parity result | Severity |
 | --- | --- | --- | --- |
@@ -319,7 +319,8 @@ The exhaustive route inventory is the 73-row internal destination table, 19-row 
 | Query cost | One closure/query per active badge key; not a single grouped query. Cache TTL defaults to 30s. | Count query volume can approach active keys per user/cache miss; no p95/query-count benchmark ran. | Medium-high |
 | Refresh and invalidation | SPA polls every 60s; pauses hidden; cache version globally touched by 26 observed model classes; `StockLevel` intentionally absent. | Low-stock can be stale until TTL/poll; not every contributing model write proven covered. | Medium |
 | Alerts | `/alerts` uses `Alert::active()` for unresolved/non-dismissed rows; `unreadCount()` counts that same scope with `is_read=false`. Both are permission gated. PR #366 adds `is_read=false` filtering and a “shared unread” page action that opens the count's scope. There is no sidebar Alerts item or current caller of the count endpoint. | The count is global because alert read/dismiss fields are on the shared `alerts` row. Filtered list and count have parity coverage; whether the business wants personal read state remains open. | Medium |
-| Unwired badge definitions | Seven backend counts have no sidebar destination. | No clickable matching list item. | Medium |
+| Budget Transfers | `budgeting.view` or `budgeting.approve`; count uses `BudgetTransfer::awaitingApprovalFor($user)`. | A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; the same scope powers list and badge. Approval-only users see only actionable rows. Direct and eligible delegated approvers have parity tests; view-only users get zero. | Medium |
+| Unwired badge definitions | Six backend counts have no sidebar destination: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, and `shipments`. | No clickable matching list item. | Medium |
 | Compact shells | Employee self-service, factory, maintenance mobile show no counters. | Candidate actionable signals are absent; no visual or route parity checked. | Medium |
 
 The supplied route table includes destinations with no existing badge. Candidate signals are listed per module in `00-discovery.md` and proposed in `02-policy-and-plan.md`; unknowns are marked where status/date/owner semantics need business confirmation.
@@ -343,7 +344,7 @@ The supplied route table includes destinations with no existing badge. Candidate
 
 | Module | Notification types/triggers found | Sidebar item / current badge keys | Coverage note |
 | --- | --- | --- | --- |
-| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Statements/vendors no count | Candidate AR/AP states exceed current two signals. |
+| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Budget Transfers `pending_transfers`; Statements/vendors no count | Candidate AR/AP states exceed current signals. Phase 2's combined budget approval signal remains incomplete. |
 | Admin | Permission override, account provisioning, mail failure, backup/queue/system paths | Users, roles, audit, settings, sessions, backups, gov tables; no sidebar counts | System-health notices need admin-only destinations and permissions. |
 | Assets | No `NotificationService` call identified | Fixed Assets; no badge | Asset transfer/disposal state exists; candidate only if actionable list is reliable. |
 | Attendance | Missing timeout, overtime submitted/decided | Attendance no count; Overtime `overtime` | Own exception vs approver action must be separated. |
