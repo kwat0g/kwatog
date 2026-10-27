@@ -166,6 +166,7 @@ use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Listeners\TriggerInProcessQC;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\ReturnManagement\Events\ReturnRequestUpdated;
@@ -319,6 +320,7 @@ class AppServiceProvider extends ServiceProvider
             ContactInquiry::class,
             CustomerComplaint::class,
             Inspection::class,
+            CalibrationRecord::class,
             GoodsReceiptNote::class,
             MaterialReviewRecord::class,
             Shipment::class,

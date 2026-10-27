@@ -39,6 +39,8 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\Quality\Enums\CalibrationStatus;
+use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
@@ -104,6 +106,8 @@ class BadgeService
         'mrb_holds' => 'inventory',
         'shipments' => 'supply_chain',
         'mrp_plans' => 'mrp',
+        'calibration_due' => 'quality',
+        'calibration_overdue' => 'quality',
         'pending_returns' => 'return_management',
         'draft_invoices' => 'accounting',
         'unpaid_invoices' => 'accounting',
@@ -347,6 +351,20 @@ class BadgeService
                 'counter'     => fn (): int => NonConformanceReport::query()
                     ->whereNotIn('status', ['closed', 'cancelled'])
                     ->count(),
+            ],
+
+            'calibration_overdue' => [
+                'permissions' => ['quality.calibration.view'],
+                'label' => 'Overdue calibration',
+                'description' => 'Calibration instruments past their due date',
+                'counter' => fn (): int => CalibrationRecord::query()->withStatus(CalibrationStatus::Overdue)->count(),
+                'danger_when_positive' => true,
+            ],
+            'calibration_due' => [
+                'permissions' => ['quality.calibration.view'],
+                'label' => 'Calibration due',
+                'description' => 'Calibration instruments inside the due window',
+                'counter' => fn (): int => CalibrationRecord::query()->withStatus(CalibrationStatus::Due)->count(),
             ],
 
             // HR > Profile change requests — pending review queue.
