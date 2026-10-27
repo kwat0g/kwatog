@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Carbon;
 
 class Invoice extends Model
 {
@@ -150,17 +151,19 @@ class Invoice extends Model
     public function isOverdue(): bool
     {
         if (in_array($this->status, [InvoiceStatus::Paid, InvoiceStatus::Cancelled, InvoiceStatus::Draft], true)) return false;
-        return $this->due_date && $this->due_date->isPast();
+        return $this->due_date !== null
+            && $this->due_date->toDateString() < today('Asia/Manila')->toDateString();
     }
 
     public function agingBucket(?\Carbon\Carbon $asOf = null): string
     {
-        $asOf = $asOf ?? now();
+        $asOfDate = ($asOf ?? now('Asia/Manila'))->copy()->setTimezone('Asia/Manila')->toDateString();
         if (in_array($this->status, [InvoiceStatus::Paid, InvoiceStatus::Cancelled, InvoiceStatus::Draft], true)) {
             return $this->status->value;
         }
-        if (! $this->due_date || $this->due_date->gte($asOf)) return 'current';
-        $days = $this->due_date->diffInDays($asOf, true);
+        $dueDate = $this->due_date?->toDateString();
+        if ($dueDate === null || $dueDate >= $asOfDate) return 'current';
+        $days = Carbon::parse($dueDate, 'Asia/Manila')->diffInDays(Carbon::parse($asOfDate, 'Asia/Manila'), true);
         return match (true) {
             $days <= 30  => 'd1_30',
             $days <= 60  => 'd31_60',
