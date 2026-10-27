@@ -3,6 +3,8 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { EmployeeTraining, AssignTrainingData } from '@/types/hr';
 
 export const employeeTrainingsApi = {
+ listAll: (params?: ListParams) =>
+  client.get<PaginatedResponse<EmployeeTraining>>('/hr/employee-trainings', { params }).then((r) => r.data),
  list: (employeeId: string, params?: ListParams) =>
  client.get<PaginatedResponse<EmployeeTraining>>(`/hr/employees/${employeeId}/trainings`, { params }).then((r) => r.data),
  show: (id: string) =>

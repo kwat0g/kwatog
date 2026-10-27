@@ -92,6 +92,36 @@ it('opens Leave Management on the current-stage approval queue', () => {
   );
 });
 
+it('shows expired and upcoming employee training signals with matching filters', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'training_expiry') {
+      return { count: 2, severity: 'warning', label: 'Expired', description: 'Expired employee training' };
+    }
+    if (key === 'training_upcoming') {
+      return { count: 3, severity: 'danger', label: 'Upcoming / expiring', description: 'Upcoming or expiring employee training' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/hr/employee-trainings']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Employee Training Records/ })).toHaveAttribute(
+    'href',
+    '/hr/employee-trainings?signal=upcoming',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Employee Training Records signals/ }));
+  expect(screen.getByRole('link', { name: 'Expired employee training: 2' })).toHaveAttribute(
+    'href',
+    '/hr/employee-trainings?signal=expired',
+  );
+  expect(screen.getByRole('link', { name: 'Upcoming or expiring employee training: 3' })).toHaveAttribute(
+    'href',
+    '/hr/employee-trainings?signal=upcoming',
+  );
+});
+
 it('opens the awaiting-approval filter when purchase requests has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'purchase_requests'
