@@ -41,7 +41,6 @@ use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
-use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
@@ -540,21 +539,17 @@ class BadgeService
                     ->count(),
             ],
 
-            // Returns (RMA) — any non-terminal request in the workflow.
+            // Returns (RMA) — non-terminal requests, matching the pending list filter.
             'pending_returns' => [
                 'permissions' => ['return_management.view'],
                 'label'       => 'Returns (RMA)',
-                'description' => 'Returns awaiting processing',
+                'description' => 'Non-terminal return requests',
                 'counter'     => fn (): int => ReturnRequest::query()
                     ->when(
                         ReturnManagementAccess::customerReturnsOnly($user),
                         fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
                     )
-                    ->whereNotIn('status', [
-                        ReturnRequestStatus::Completed->value,
-                        ReturnRequestStatus::Rejected->value,
-                        ReturnRequestStatus::Cancelled->value,
-                    ])
+                    ->awaitingProcessing()
                     ->count(),
             ],
 

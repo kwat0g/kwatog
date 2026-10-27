@@ -305,7 +305,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/crm/products` | — | `crm.products.view` | pricing.review_required (item-cost review only if Product list exposes same filter) |
 | `/crm/price-agreements` | — | `crm.price_agreements.view` | pricing.agreement_expiring (if end date/active state reliable) |
 | `/crm/complaints` | `open_complaints` | `crm.complaints.view` | crm.complaint.open; crm.complaint.sla_due |
-| `/return-management` | `pending_returns` | `return_management.view` | returns.open_action |
+| `/return-management` | `pending_returns` (area-wide non-terminal queue; not “waiting on me”) | `return_management.view` | returns.open_action (owner/next-action map still requires verification) |
 | `/return-management/cases` | — | `return_management.view` | returns.case_action |
 | `/production/work-orders` | `work_orders_awaiting_confirmation`, `work_orders`, `work_orders_due_soon`, `work_orders_paused` | API: `production.view` + `production.work_orders.view`; release additionally requires `production.wo.confirm`; paused additionally requires `production.work_orders.lifecycle` | production.release; production.overdue; production.due_soon; production.paused; production.blocked (deferred); production.output_pending |
 | `/production/schedule` | — | `production.schedule.view` | production.schedule.due_soon; production.schedule.conflict (alert list has persisted types; add matching SPA filter and source access scope) |

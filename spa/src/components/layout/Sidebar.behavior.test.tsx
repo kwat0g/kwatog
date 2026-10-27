@@ -234,6 +234,21 @@ it('opens out-of-stock items first and keeps low stock as a separate signal', ()
   );
 });
 
+it('opens Returns on the same non-terminal queue as its badge', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'pending_returns'
+    ? { count: 3, severity: 'warning', label: 'Returns (RMA)', description: 'Non-terminal return requests' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/return-management']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Returns \(RMA\)/ })).toHaveAttribute(
+    'href',
+    '/return-management?signal=pending',
+  );
+});
+
 it('opens the overdue filter when Production Work Orders has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'work_orders'
