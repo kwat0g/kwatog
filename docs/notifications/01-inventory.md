@@ -375,7 +375,7 @@ All four exclude soft-deleted rows. The list has no site, line, or assigned-conf
 | HR | Onboarding, training, recruitment, separation, provisioning | Employees `profile_requests` (misattached); Bank Account Changes no badge; Recruitment/Training/Separations no badge | Sensitive queues need narrow assignee/department scope. |
 | Inventory | Adjustment approval, replenishment blocked, low-stock PR, GRN, cost review, MRB hold | Items `low_stock`; GRN `pending_grn`; MRB `mrb_holds` | Receipt, inspection, transfer, shortage signals need destination parity. |
 | Landing | No notification dispatch found; inquiry data exists | CRM Inquiries `inquiries` opens the `new` filter; only users with view and manage permissions receive the triage badge | Inquiry list is company-wide and has no assignee field; read-only access remains available without the actionable badge. |
-| Leave | Submitted, rejected, pending-HR, approved | Leave Management `leaves` | Requester outcome and approver queue should be distinct signals. |
+| Leave | Submitted, rejected, pending-HR, approved | Leave Management `leaves` | `hr.leave.awaiting_my_approval` now has an exact stage/role/scope filter shared with the destination; requester outcome remains separate. |
 | Loans | Submitted/decided | Employee Loans; no badge | Current approval state may be actionable but role scope needs confirmation. |
 | Maintenance | Assignment, breakdown, repeat breakdown, repair, part request, schedule reminders | Work Orders `maintenance_wo`; Schedules no badge | Due/assigned/breakdown categories are collapsed or absent. |
 | MRP | Run completion / daily plan | MRP Plans `mrp_plans` | Badge only counts active plans with shortages. |
@@ -397,3 +397,10 @@ See `FINDINGS.md`. Findings here are not mixed into a code change. Confirmed sou
 ## Follow-up status verification: Sales Orders
 
 The legacy `pending_so` badge counted every `draft`, including orders never sent to a customer. `requestCustomerConfirmation()` leaves the order in `draft` and records `customer_confirmation_requested_at`; portal-submitted orders use `awaiting_confirmation`; delivery proposals use `delivery_negotiation`. The badge and list now share that verified three-part filter. Tests cover every `SalesOrderStatus`, requested versus unsent drafts, soft deletion, permission denial, and badge/list total parity.
+
+## Follow-up verification: Leave approval badge
+
+- `LeaveApprovalPolicy::awaitingMyApprovalQuery()` is shared by the `leaves` badge and `/leaves/requests?signal=awaiting_my_approval`. It includes only `pending_dept` with a current pending `department_head` step 1 or `pending_hr` with a current pending `hr_officer` step 2.
+- It requires `leave.view`, the stage permission, and the active direct/delegated workflow role, applies the same `DepartmentScope` as the list service, excludes the employee's own request, and ignores status/trashed overrides in signal mode. The SPA sidebar deep link and page filter use the same signal key.
+- `LeaveApprovalBadgeParityTest` covers department and HR scope, own/cross-department rows, terminal and stale rows, wrong-role permission holders, active same-department delegates, and badge/list total parity. See `PROGRESS.md` for test evidence.
+- Static review found a separate mismatch: the ordinary page exposes approve buttons by permission while the API additionally requires workflow role. Logged as F-32; kept out of this badge unit.

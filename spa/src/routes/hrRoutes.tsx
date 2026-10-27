@@ -141,7 +141,7 @@ export const hrRoutes = (
  <Route element={<ModuleGuard module="leave" />}>
  <Route
  path="/hr/leaves"
- element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage']}><LeavesPage /></PermissionGuard>}
+ element={<PermissionGuard permission="leave.view"><PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage']}><LeavesPage /></PermissionGuard></PermissionGuard>}
  />
  <Route
  path="/hr/leaves/calendar"
