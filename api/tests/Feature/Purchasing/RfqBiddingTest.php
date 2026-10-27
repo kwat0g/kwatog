@@ -510,7 +510,8 @@ final class RfqBiddingTest extends TestCase
         RequestForQuote::query()->sole()->forceFill(['closes_at' => now()->subMinute()])->save();
         $other = $this->roleUser('department_head');
 
-        $this->actingAsFresh($other)->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
+        $this->actingAsFresh($other);
+        $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
 
         $this->assertSame('open', RequestForQuote::query()->sole()->status->value);
     }
