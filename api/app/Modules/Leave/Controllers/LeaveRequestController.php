@@ -16,6 +16,7 @@ use App\Modules\Leave\Requests\ApproveLeaveRequest;
 use App\Modules\Leave\Requests\RejectLeaveRequest;
 use App\Modules\Leave\Requests\StoreLeaveRequestRequest;
 use App\Modules\Leave\Resources\LeaveRequestResource;
+use App\Modules\Leave\Services\LeaveApprovalPolicy;
 use App\Modules\Leave\Services\LeaveRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,7 @@ class LeaveRequestController
     public function __construct(
         private readonly LeaveRequestService $service,
         private readonly HolidayService $holidays,
+        private readonly LeaveApprovalPolicy $approvalPolicy,
     ) {}
 
     public function options(Request $request): JsonResponse
@@ -85,6 +87,8 @@ class LeaveRequestController
     public function show(LeaveRequest $leaveRequest, Request $request): LeaveRequestResource
     {
         $this->authorizeView($leaveRequest, $request->user());
+        $user = $request->user();
+        $leaveRequest->setAttribute('can_approve', $user !== null && $this->approvalPolicy->canApprove($leaveRequest, $user));
 
         return new LeaveRequestResource($leaveRequest->load([
             'employee',

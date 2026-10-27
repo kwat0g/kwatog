@@ -13,6 +13,7 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Services\LeaveRequestService;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -80,7 +81,90 @@ class LeaveApprovalBadgeParityTest extends TestCase
             ->getJson('/api/v1/leaves/requests?signal=awaiting_my_approval')
             ->assertOk()
             ->assertJsonPath('meta.total', 0);
+        $request = LeaveRequest::query()->where('status', LeaveRequestStatus::PendingDept->value)->firstOrFail();
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/leaves/requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.can_approve', false);
+        $this->actingAs($approver, 'sanctum')
+            ->getJson("/api/v1/leaves/requests/{$request->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_approve', false);
+        $admin = User::factory()->withRole('system_admin')->create();
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/leaves/requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.can_approve', false);
+        $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/v1/leaves/requests/{$request->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_approve', false);
         $this->assertSame(0, $this->badges($approver)['leaves']['count']);
+    }
+
+    public function test_rejection_requires_permission_for_the_current_stage(): void
+    {
+        $department = Department::query()->where('code', 'PROD')->firstOrFail();
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $approver = User::factory()->withRole('department_head')->create(['employee_id' => $employee->id]);
+        $request = $this->leave(Employee::factory()->create(['department_id' => $department->id]), LeaveRequestStatus::PendingDept);
+
+        foreach ([['leave.approve_dept', 'revoke'], ['leave.approve_hr', 'grant']] as [$slug, $type]) {
+            DB::table('user_permission_overrides')->insert([
+                'user_id' => $approver->id,
+                'permission_id' => Permission::query()->where('slug', $slug)->value('id'),
+                'type' => $type,
+                'granted_by' => $approver->id,
+                'reason' => 'Leave stage permission regression test',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $approver = $approver->fresh();
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/leaves/requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.can_approve', false);
+        $this->actingAs($approver, 'sanctum')
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/reject", ['reason' => 'Current stage only.'])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'You do not have permission to reject this approval stage.');
+        $this->assertSame(LeaveRequestStatus::PendingDept, $request->fresh()->status);
+    }
+
+    public function test_prior_approver_cannot_receive_next_stage_actionability(): void
+    {
+        $department = Department::query()->where('code', 'PROD')->firstOrFail();
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $approver = User::factory()->withRole('department_head')->create(['employee_id' => $employee->id]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'leave.approve_hr')->value('id'),
+            'type' => 'grant',
+            'granted_by' => $approver->id,
+            'reason' => 'Leave separation-of-duties regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $approver = $approver->fresh();
+        $hr = User::factory()->withRole('hr_officer')->create();
+        $request = $this->leave(Employee::factory()->create(['department_id' => $department->id]), LeaveRequestStatus::PendingDept);
+        app(LeaveRequestService::class)->approveDept($request, $approver);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $hr->id,
+            'delegate_user_id' => $approver->id,
+            'role_slug' => 'hr_officer',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $this->assertSame(0, $this->assertBadgeMatchesList($approver));
+        $this->actingAs($approver, 'sanctum')
+            ->getJson("/api/v1/leaves/requests/{$request->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_approve', false);
     }
 
     public function test_approver_without_leave_read_permission_gets_no_badge(): void
@@ -134,10 +218,17 @@ class LeaveApprovalBadgeParityTest extends TestCase
     private function assertBadgeMatchesList(User $user): int
     {
         $badgeCount = $this->badges($user)['leaves']['count'];
-        $listCount = $this->actingAs($user, 'sanctum')
+        $response = $this->actingAs($user, 'sanctum')
             ->getJson('/api/v1/leaves/requests?signal=awaiting_my_approval&status=approved&trashed=with')
-            ->assertOk()
-            ->json('meta.total');
+            ->assertOk();
+        $listCount = $response->json('meta.total');
+        foreach ($response->json('data') as $request) {
+            $this->assertTrue($request['can_approve']);
+            $this->actingAs($user, 'sanctum')
+                ->getJson("/api/v1/leaves/requests/{$request['id']}")
+                ->assertOk()
+                ->assertJsonPath('data.can_approve', true);
+        }
 
         $this->assertSame($badgeCount, $listCount);
 

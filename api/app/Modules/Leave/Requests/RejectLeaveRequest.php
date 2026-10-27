@@ -10,8 +10,7 @@ class RejectLeaveRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Rejection is allowed by anyone with dept or HR approval permission.
-        // The route middleware enforces the specific permission gate.
+        // The service enforces the permission for the request's active stage.
         return (bool) $this->user();
     }
 

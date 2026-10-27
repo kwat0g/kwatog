@@ -14,7 +14,6 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ApprovalTimeline } from '@/components/chain';
 import { fromLeaveRequest } from '@/lib/approvals';
-import { CanDo } from '@/components/guards/CanDo';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
 
@@ -101,18 +100,17 @@ export default function LeaveDetailPage() {
  backLabel={isOwner ? 'My leaves' : 'Leaves'}
  actions={
  <>
- {/* Series R/R3 — declarative permission gating via <CanDo>. */}
- {req.status === 'pending_dept' && (
- <CanDo permission="leave.approve_dept">
+ {req.status === 'pending_dept' && req.can_approve && (
+ <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => setConfirmApproveDept(true)}>Approve</Button>
  <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
- </CanDo>
+ </>
  )}
- {req.status === 'pending_hr' && (
- <CanDo permission="leave.approve_hr">
+ {req.status === 'pending_hr' && req.can_approve && (
+ <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => setConfirmApproveHR(true)}>Approve</Button>
  <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
- </CanDo>
+ </>
  )}
  {canCancel && (
  <Button variant="secondary" size="sm" icon={<LuRotateCcw size={12} />} onClick={() => setConfirmCancel(true)} disabled={cancelMut.isPending}>Cancel</Button>
