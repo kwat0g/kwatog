@@ -37,7 +37,7 @@ class NotifyOnLeaveSubmitted implements ShouldQueue
                 ->filter(fn (User $user): bool => $user->hasPermission('leave.approve_dept'))
                 ->values();
 
-            $this->notifications->send($audience, 'leave.submitted', [
+            $this->notifications->sendForSubject($req, $audience, 'leave.submitted', [
                 'title'       => "Leave Request from {$emp->full_name}",
                 'message'     => "{$req->leaveType?->name} — {$req->days} day(s) from {$req->start_date->format('M j')} to {$req->end_date->format('M j')}.",
                 'link_to'     => "/hr/leaves/{$req->hash_id}",

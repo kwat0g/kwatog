@@ -29,7 +29,7 @@ class NotifyOnLeavePendingHR implements ShouldQueue
                 ->filter(fn (User $user): bool => $user->hasPermission('leave.approve_hr') && $user->hasPermission('leave.view'))
                 ->values();
 
-            $this->notifications->send($audience, 'leave.pending_hr', [
+            $this->notifications->sendForSubject($req, $audience, 'leave.pending_hr', [
                 'title' => "Leave Needs HR Approval — {$emp->full_name}",
                 'message' => "{$req->leaveType?->name} — {$req->days} day(s). Leave request is awaiting HR approval.",
                 'link_to' => "/hr/leaves/{$req->hash_id}",

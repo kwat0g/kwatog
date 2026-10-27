@@ -23,7 +23,7 @@ class NotifyOnLeaveApproved implements ShouldQueue
                 return;
             }
 
-            $this->notifications->send($user, 'leave.approved', [
+            $this->notifications->sendForSubject($req, $user, 'leave.approved', [
                 'title'       => 'Leave Request Approved',
                 'message'     => "Your {$req->leaveType?->name} ({$req->days} day(s)) from {$req->start_date->format('M j, Y')} to {$req->end_date->format('M j, Y')} has been approved.",
                 'link_to'     => "/self-service/leaves/{$req->hash_id}",

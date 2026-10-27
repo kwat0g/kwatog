@@ -26,6 +26,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCostReview;
 use App\Modules\Inventory\Models\StockAdjustment;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Maintenance\Models\MaintenancePartRequest;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
@@ -102,6 +103,10 @@ final class NotificationSubjectAccessRegistry
                 && $user->is_active
                 && $user->hasPermission('hr.recruitment.view')
                 && $subject instanceof JobPosting,
+            LeaveRequest::class => app(SettingsService::class)->get('modules.leave', false) === true
+                && $user->is_active
+                && $subject instanceof LeaveRequest
+                && ApprovalTypeRegistry::userCanViewRecord($user, LeaveRequest::class, (int) $subject->getKey()),
             PayrollPeriod::class => app(SettingsService::class)->get('modules.payroll', false) === true
                 && $user->is_active
                 && $user->hasPermission('payroll.periods.view')
