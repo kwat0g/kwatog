@@ -767,6 +767,15 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - The immediate post-commit failure notice and durable `DeliveryConfirmed` listener now use `invoice.auto_failed` and the same `invoice-auto-failed:{delivery_id}` key. The outbox path remains the recovery path; one delivery produces one Finance notification.
 - Original-head `AutoInvoiceOnDeliveryConfirmTest.php` passed **6 / 56 assertions**. Rebase tests are skipped against shared `ogami_test`; no database was touched. Existing rows are not backfilled.
 
+## Separate finding: F-64 ReturnRequest listener ordering (already fixed in PR #371; PR #450 closed)
+
+- Current `EmailPartyOnReturnRequestUpdated::handle()` assigns `$isCustomer` before its first use. `git blame` attributes this line to PR #371 (`5f9ca6ae`). PR #450 proposed the same move from a stale base and had no unique code diff against current `main`; it was closed as redundant. No database was touched.
+
+## Separate finding: F-65 supplier-return audience permission (PR #451, pending merge)
+
+- `notifySupplierShip()` now selects Purchasing users with seeded `purchasing.view`, then retains the `return_management.view` filter. The wrong `purchasing.po.view` selector returned no configured recipients. The separate ReturnRequest subject gate remains PR #452 work.
+- Original-head `SupplierReturnShipNotificationTest.php` passed **4 / 13 assertions**, including a linked detail access check and unauthorized-recipient denial. Rebase tests are skipped against shared `ogami_test`; no database was touched.
+
 ## Outstanding proof / risks
 
 1. HR/Finance must configure the payroll-adjustment checker. Review remaining HR/discipline, finance escalation, system-admin fanout, and portal contacts before broadening recipients.
