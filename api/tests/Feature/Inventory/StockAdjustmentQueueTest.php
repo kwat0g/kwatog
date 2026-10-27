@@ -92,6 +92,39 @@ class StockAdjustmentQueueTest extends TestCase
         $this->assertSame('pending', $response->json('data.0.status'));
     }
 
+    public function test_approval_notice_links_to_exact_adjustment_and_id_filter_returns_only_that_row(): void
+    {
+        $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
+        $finance = $this->userWith('finance_officer', ['inventory.adjust.approve']);
+        $target = $this->pendingAdjustment($warehouse);
+        $this->pendingAdjustment($warehouse);
+
+        $notice = $finance->notifications()
+            ->where('type', 'approval.action_required')
+            ->whereRaw("data->>'entity_id' = ?", [$target->hash_id])
+            ->firstOrFail();
+        $this->assertSame('/inventory/stock-adjustments?id='.$target->hash_id, $notice->data['link_to']);
+
+        $response = $this->actingAs($finance)
+            ->getJson('/api/v1/inventory/stock-adjustments?id='.$target->hash_id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->assertSame($target->hash_id, $response->json('data.0.id'));
+
+        $this->actingAs($finance)
+            ->getJson('/api/v1/inventory/stock-adjustments?id=not-a-stock-adjustment')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($finance)
+            ->patchJson('/api/v1/inventory/stock-adjustments/'.$target->hash_id.'/approve')
+            ->assertOk();
+
+        $outcome = $warehouse->notifications()->where('type', 'approval.completed')->firstOrFail();
+        $this->assertSame('/inventory/stock-adjustments?id='.$target->hash_id, $outcome->data['link_to']);
+    }
+
     public function test_index_hides_approved_rows_when_filtered_pending(): void
     {
         $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);

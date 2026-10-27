@@ -29,7 +29,7 @@ const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'danger' | 'neutral
 };
 
 const DEFAULT_FILTERS: StockAdjustmentListParams = {
- page: 1, per_page: 50, status: '',
+ page: 1, per_page: 50, status: '', id: '',
 };
 
 function statusDetail(row: StockAdjustment): string {
@@ -153,6 +153,13 @@ export default function StockAdjustmentsPage() {
  searchPlaceholder="Search item, reason…"
  />
 
+ {filters.id && (
+  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-sm text-muted">
+   <span>Showing one stock adjustment from your notification.</span>
+   <Button size="xs" variant="secondary" onClick={() => setFilters((current) => ({ ...current, id: '', page: 1 }))}>Show all adjustments</Button>
+  </div>
+ )}
+
  {isLoading && <div className="min-h-0 flex-1 overflow-auto"><SkeletonTable columns={can('inventory.adjust.approve') || can('inventory.adjust') ? 10 : 9} rows={8} /></div>}
  {isError && (
  <div className="min-h-0 flex-1 flex items-center justify-center">
@@ -167,8 +174,8 @@ export default function StockAdjustmentsPage() {
  <div className="min-h-0 flex-1 flex items-center justify-center">
  <EmptyState
  icon="inbox"
- title="No adjustments found"
- description={filters.status || filters.search ? 'Try a different search or clear the filters.' : 'Record an adjustment when stock needs a manual correction.'}
+ title={filters.id ? 'Stock adjustment unavailable' : 'No adjustments found'}
+ description={filters.id ? 'This adjustment may have been removed or you may no longer have access.' : filters.status || filters.search ? 'Try a different search or clear the filters.' : 'Record an adjustment when stock needs a manual correction.'}
  />
  </div>
  )}
