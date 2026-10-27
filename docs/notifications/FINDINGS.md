@@ -79,4 +79,6 @@
 
 | F-60 | Medium; separate route-filter fix required | Missing time-out notifications link to a list filter that may not show the prior-day rows described by the notice. | The scheduled notice counts yesterday's rows, while the SPA attendance page defaults its date filter to today; `missing_time_out=1` does not override that default. PR #443 scopes recipients but leaves the target filter unchanged; PR #445 carries the notice date into the list filter. | Link the notice to the exact affected date and make the destination apply it. Keep the access gate scoped to the same attendance list visibility. |
 
+| F-61 | Fixed in PR [#444](https://github.com/kwat0g/kwatog/pull/444) | A department head who submitted an overtime request could receive the approval notice about their own request. | `NotifyOnOvertimeSubmitted` selected active same-department users with `attendance.ot.approve` but did not exclude the requesting employee's linked account. PR #444 adds that exclusion; the original-head test verifies requester-negative and second-head-positive delivery. | Exclude the requester while preserving other eligible same-department approvers. |
+
 Findings track discrete defects alongside broader notification/badge work; fixing one finding does not establish global recipient or badge parity. No claim of a confirmed cross-user leak is made without runtime evidence.

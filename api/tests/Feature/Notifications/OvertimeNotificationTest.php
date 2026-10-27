@@ -139,6 +139,30 @@ class OvertimeNotificationTest extends TestCase
         $this->actingAs($outOfScope)->getJson('/api/v1/attendance/overtime-requests/'.$ot->hash_id)->assertForbidden();
     }
 
+    public function test_submitting_department_head_does_not_receive_own_approver_notice(): void
+    {
+        $ot = OvertimeRequest::factory()->pending()->create();
+        $owner = User::factory()->withRole('department_head')->create([
+            'employee_id' => $ot->employee_id,
+            'is_active' => true,
+        ]);
+        $otherHead = $this->departmentHeadFor($ot);
+
+        app(NotifyOnOvertimeSubmitted::class)
+            ->handle(new OvertimeRequestSubmitted($ot->fresh(['employee'])));
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $owner->id,
+            'type' => 'attendance.ot_submitted',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $otherHead->id,
+            'type' => 'attendance.ot_submitted',
+        ]);
+    }
+
     /**
      * approve() fires OvertimeRequestDecided with approved = true.
      */
