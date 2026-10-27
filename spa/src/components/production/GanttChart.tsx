@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/cn';
+import { horizontalScrollEdges } from '@/lib/horizontalScrollEdges';
 import { focusRing } from '@/lib/focus';
 import type { GanttRow } from '@/types/mrp';
 import { scheduleDateKey, scheduleDate, scheduleTime } from './scheduleDates';
@@ -58,8 +59,7 @@ export function GanttChart({
     const scroller = scrollerRef.current;
     if (!scroller) return;
     const update = () => {
-      const maxScroll = scroller.scrollWidth - scroller.clientWidth;
-      const next = { left: scroller.scrollLeft > 1, right: maxScroll - scroller.scrollLeft > 1 };
+      const next = horizontalScrollEdges(scroller);
       setScrollEdges((current) => current.left === next.left && current.right === next.right ? current : next);
     };
     update();

@@ -147,7 +147,7 @@ Case: sentence case for buttons, labels, and table headers. Dates are not IDs an
 ### Number and decimal policy
 
 - Money: configured functional currency, grouping separators, exactly 2 decimal places. Formatting only; calculations stay in integer centavos or backend decimal strings.
-- Quantity: use unit/domain precision, up to the supported 3 decimals in inventory; do not add or drop significant quantity precision. Group large values.
+- Quantity: use unit/domain precision, up to the supported 3 decimals in inventory and up to 4 decimals for Production Work Order operation values; do not add or drop significant quantity precision. Group large values.
 - Whole counts: 0 decimals. Display percentages: 1 decimal by default; use domain-specific precision only when the field requires it. Do not call `.toFixed()` ad hoc in cell renderers.
 - Compact currency: keep K/M suffix but still group the scaled number and use exactly 2 decimals. The shared helper now groups the scaled value.
 - Business date/time: format explicitly in `Asia/Manila`; test timestamp-with-offset, date-only, and midnight-boundary cases.

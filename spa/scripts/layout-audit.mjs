@@ -132,7 +132,7 @@ function localUser(role, themeMode) {
     name: `Layout Audit ${role}`,
     email: ROLE_EMAILS[role],
     role: { id: `layout-audit-${role}`, slug: slugs[role], name: slugs[role] },
-    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
+    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
     delegated_approvals: [],
     features: ['inventory', 'production', 'notifications', 'search', 'b2b_portals'],
     employee: { id: 'layout-audit-employee', employee_no: 'LAYOUT-AUDIT' },
@@ -207,6 +207,50 @@ const sampleWorkOrder = {
   outputs: [], inspections: [], rework: [], execution_history: [],
   created_at: '2026-10-25T08:00:00+08:00', updated_at: '2026-10-25T09:00:00+08:00',
 };
+
+const operationStatuses = ['pending', 'setup', 'in_progress', 'paused', 'completed', 'skipped'];
+function sampleWorkOrderOperations(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const status = operationStatuses[index % operationStatuses.length];
+    return {
+      id: `layout-operation-${String(index + 1).padStart(6, '0')}`,
+      sequence: (index + 1) * 10,
+      operation_name: index === 1
+        ? 'Long injection molding and detailed first-article inspection operation name'
+        : `Production operation ${index + 1}`,
+      status,
+      status_label: status.replaceAll('_', ' '),
+      machine: {
+        id: 'layout-machine-1',
+        machine_code: index === 2 ? 'MACHINE-REFERENCE-000000000000000000000001' : 'MC-01',
+        name: 'Layout press',
+      },
+      mold: { id: 'layout-mold-1', mold_code: 'MOLD-01', name: 'Layout mold' },
+      operator: status === 'pending' ? null : {
+        id: `layout-operator-${index + 1}`,
+        first_name: index === 3 ? 'Alexandria-Maria' : 'Ana',
+        last_name: index === 3 ? 'Santos-Dela-Cruz' : 'Santos',
+      },
+      planned_start: '2026-10-25T08:00:00+08:00',
+      planned_end: '2026-10-25T16:00:00+08:00',
+      actual_start: status === 'pending' ? null : '2026-10-25T08:15:00+08:00',
+      actual_end: status === 'completed' ? '2026-10-25T16:00:00+08:00' : null,
+      setup_start: null,
+      setup_end: null,
+      qty_planned: index === 2 ? '123456789.8754' : '200',
+      qty_completed: index === 2 ? '98765432.1256' : String(index * 25),
+      qty_scrapped: '0',
+      scrap_reason: null,
+      downtime_minutes: '0',
+      notes: null,
+      logs: [],
+    };
+  });
+}
+
+for (const count of [0, 1, 10, 50, 500]) {
+  assert.equal(sampleWorkOrderOperations(count).length, count);
+}
 
 function sampleWorkOrders(count) {
   return Array.from({ length: count }, (_, index) => ({
@@ -392,6 +436,7 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
       },
     };
     else if (pathname.endsWith(`/inventory/items/${sampleItem.id}`)) json = { data: sampleItem };
+    else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}/operations`)) json = { data: sampleWorkOrderOperations(rowCount) };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}`)) json = { data: sampleWorkOrder };
     else if (pathname.endsWith(`/production/routings/${sampleRouting.id}`)) json = { data: sampleRouting };
     else if (pathname.endsWith('/production/routings')) json = {
@@ -970,6 +1015,20 @@ async function captureTableSamples(page, out, route, width, rowCount) {
         element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * position.y);
       }, { x, y });
       await page.waitForTimeout(80);
+      if (dimensions.maxX > 1) {
+        await page.waitForTimeout(300);
+        const edges = await scroller.evaluate((element) => {
+          const frame = element.closest('.scroll-edge-frame');
+          return {
+            left: frame?.getAttribute('data-more-left') === 'true',
+            right: frame?.getAttribute('data-more-right') === 'true',
+            scrollLeft: element.scrollLeft,
+            maxScroll: element.scrollWidth - element.clientWidth,
+          };
+        });
+        assert.equal(edges.left, x === 1, `horizontal table scroll must update the left edge cue: ${JSON.stringify(edges)}`);
+        assert.equal(edges.right, x === 0, `horizontal table scroll must update the right edge cue: ${JSON.stringify(edges)}`);
+      }
       const file = path.join(out, `${slug(route)}-${width}-table-${yName}-${xName}.png`);
       await scroller.screenshot({ path: file });
       screenshots.push(path.relative(ROOT, file));
@@ -981,39 +1040,31 @@ async function captureTableSamples(page, out, route, width, rowCount) {
 async function captureLongTableSamples(page, out, route, width) {
   const scroller = page.locator('[data-layout="table-scroller"]');
   const hasScroller = await scroller.count() > 0;
-  const metrics = hasScroller
+  const tableMetrics = hasScroller
     ? await scroller.evaluate((element) => ({
       maxY: element.scrollHeight - element.clientHeight,
       maxX: element.scrollWidth - element.clientWidth,
     }))
-    : await page.evaluate(() => ({
-      maxY: document.documentElement.scrollHeight - window.innerHeight,
-      maxX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    }));
+    : null;
+  const useTableScroll = Boolean(tableMetrics && tableMetrics.maxY > 1);
   const screenshots = [];
   for (const [position, name] of [[0, 'top'], [0.5, 'middle'], [1, 'bottom']]) {
-    if (metrics.maxY > 1) {
-      if (hasScroller) {
-        await scroller.evaluate((element, y) => { element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * y); }, position);
-      } else {
-        await page.evaluate((y) => window.scrollTo(0, Math.round((document.documentElement.scrollHeight - window.innerHeight) * y)), position);
-      }
-      await page.waitForTimeout(80);
-      const file = path.join(out, `${slug(route)}-${width}-long-${name}.png`);
-      if (hasScroller) await scroller.screenshot({ path: file });
-      else await page.screenshot({ path: file });
-      screenshots.push(path.relative(ROOT, file));
+    if (useTableScroll) {
+      await scroller.evaluate((element, y) => {
+        element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * y);
+      }, position);
     } else {
-      if (!hasScroller) await page.evaluate((y) => window.scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * y)), position);
-      await page.waitForTimeout(80);
-      const file = path.join(out, `${slug(route)}-${width}-long-${name}.png`);
-      if (hasScroller) await scroller.screenshot({ path: file });
-      else await page.screenshot({ path: file });
-      screenshots.push(path.relative(ROOT, file));
+      await page.evaluate((y) => window.scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * y)), position);
     }
+    await page.waitForTimeout(80);
+    const file = path.join(out, `${slug(route)}-${width}-long-${name}.png`);
+    if (useTableScroll) await scroller.screenshot({ path: file });
+    else await page.screenshot({ path: file });
+    screenshots.push(path.relative(ROOT, file));
   }
   await page.evaluate(() => window.scrollTo(0, 0));
-  if (metrics.maxX > 1) console.log(`${route} @ ${width}: horizontal table scroll ${metrics.maxX}px`);
+  if (useTableScroll) await scroller.evaluate((element) => { element.scrollTop = 0; });
+  if ((tableMetrics?.maxX ?? 0) > 1) console.log(`${route} @ ${width}: horizontal table scroll ${tableMetrics.maxX}px`);
   return screenshots;
 }
 
@@ -1101,6 +1152,10 @@ async function main() {
         if (route === '/production/schedule' && process.argv.includes('--schedule-list')) {
           await page.getByRole('tab', { name: /Schedule list/ }).click();
           await page.waitForTimeout(100);
+        }
+        if (route === `/production/work-orders/${sampleWorkOrder.id}` && process.argv.includes('--work-order-operations')) {
+          await page.getByRole('tab', { name: 'Operations' }).click();
+          await page.waitForTimeout(150);
         }
         await page.waitForTimeout(350);
         const screenshot = path.join(out, `${slug(route)}-${width}.png`);

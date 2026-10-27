@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { woOperationsApi } from '@/api/production/routings';
 import { Button } from '@/components/ui/Button';
+import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Chip } from '@/components/ui/Chip';
 import { productionDateTime, scheduleDate } from '@/components/production/scheduleDates';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -37,11 +38,11 @@ import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
-import { formatInt, formatPeso } from '@/lib/formatNumber';
+import { formatInt, formatPeso, formatPreciseQuantity } from '@/lib/formatNumber';
 import { formatDate, formatDateIso } from '@/lib/formatDate';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import type { MachineDowntimeCategory } from '@/types/production';
-import type { WoOperationStatus } from '@/types/production/routing';
+import type { WoOperation, WoOperationStatus } from '@/types/production/routing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
 import { AssignmentReview, CrewPanel } from './CrewPanel';
@@ -145,7 +146,6 @@ export default function WorkOrderDetailPage() {
     queryFn: () => woOperationsApi.list(id!),
     enabled: !!id && tab === 'operations',
   });
-
   // Live updates from output recordings.
   useEcho(`production.wo.${id}`, '.output.recorded', () => {
     qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
@@ -341,6 +341,170 @@ export default function WorkOrderDetailPage() {
         />
       </PageShell>
     );
+
+  const operationColumns: Column<WoOperation>[] = [
+    {
+      key: 'sequence', header: '#', align: 'right', width: 56, minWidth: 56, maxWidth: 80,
+      resizable: false, cell: (op) => <span className="tabular-nums">{op.sequence}</span>,
+    },
+    {
+      key: 'operation', header: 'Operation', width: 192, minWidth: 192, maxWidth: 400,
+      cell: (op) => (
+        <>
+          <span className="block truncate" title={op.operation_name}>{op.operation_name}</span>
+          {op.logs?.filter((log) => log.material_handover_exception).map((log) => (
+            <MaterialHandoverExceptionDetails
+              key={log.id}
+              exception={log.material_handover_exception}
+            />
+          ))}
+        </>
+      ),
+    },
+    {
+      key: 'status', header: 'Status', width: 112, minWidth: 96, maxWidth: 200,
+      cell: (op) => (
+        <Chip variant={OP_STATUS_CHIP[op.status]}>
+          {operationStatusLabels.get(op.status) ?? op.status}
+        </Chip>
+      ),
+    },
+    {
+      key: 'operator', header: 'Operator', width: 160, minWidth: 144, maxWidth: 320,
+      cell: (op) => op.operator
+        ? `${op.operator.first_name} ${op.operator.last_name}`
+        : <span className="text-muted">—</span>,
+    },
+    {
+      key: 'machine', header: 'Machine', width: 144, minWidth: 128, maxWidth: 280,
+      cell: (op) => op.machine?.machine_code
+        ? <span className="block truncate font-mono" title={op.machine.machine_code}>{op.machine.machine_code}</span>
+        : <span className="text-muted">—</span>,
+    },
+    {
+      key: 'quantity', header: 'Qty progress', align: 'right', width: 300, minWidth: 280, maxWidth: 400,
+      cell: (op) => (
+        <span className="whitespace-nowrap tabular-nums">
+          {formatPreciseQuantity(op.qty_completed)} / {formatPreciseQuantity(op.qty_planned)}
+        </span>
+      ),
+    },
+    {
+      key: 'start', header: 'Start', width: 176, minWidth: 160, maxWidth: 240,
+      cell: (op) => <span className="whitespace-nowrap tabular-nums">{formatDateTime(op.actual_start)}</span>,
+    },
+    {
+      key: 'end', header: 'End', width: 176, minWidth: 160, maxWidth: 240,
+      cell: (op) => <span className="whitespace-nowrap tabular-nums">{formatDateTime(op.actual_end)}</span>,
+    },
+    {
+      key: 'actions', header: 'Actions', align: 'right', width: 192, minWidth: 180, maxWidth: 360,
+      cell: (op) => data.status !== 'in_progress' ? (
+        <span className="text-xs text-muted">Available after WO start</span>
+      ) : (
+        <div className="flex flex-wrap justify-end gap-1">
+          {op.status === 'pending' && canLifecycle && (
+            <>
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={!employeeId || operationMut.isPending || setupBlocked}
+                onClick={() => operationMut.mutate({ action: 'startSetup', operationId: op.id })}
+              >
+                Setup
+              </Button>
+              <Button
+                size="xs"
+                variant="primary"
+                disabled={!employeeId || operationMut.isPending || processQcBlocked}
+                onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}
+              >
+                Start
+              </Button>
+            </>
+          )}
+          {op.status === 'setup' && canLifecycle && (
+            <>
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={operationMut.isPending || setupBlocked}
+                onClick={() => operationMut.mutate({ action: 'endSetup', operationId: op.id })}
+              >
+                End setup
+              </Button>
+              <Button
+                size="xs"
+                variant="primary"
+                disabled={!employeeId || operationMut.isPending || processQcBlocked}
+                onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}
+              >
+                Start
+              </Button>
+            </>
+          )}
+          {op.status === 'in_progress' && (
+            <>
+              {canLifecycle && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={operationMut.isPending}
+                  onClick={() => operationMut.mutate({ action: 'pause', operationId: op.id })}
+                >
+                  Pause
+                </Button>
+              )}
+              {canRecord && (
+                <Button
+                  size="xs"
+                  variant="primary"
+                  disabled={!employeeId || operationDialogMut.isPending || processQcBlocked}
+                  onClick={() => {
+                    setOperationHandoverAcknowledged(false);
+                    setOperationHandoverReason('');
+                    setOperationDialog({ kind: 'record', operation: op });
+                  }}
+                >
+                  Output
+                </Button>
+              )}
+              {canLifecycle && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={operationMut.isPending || processQcBlocked}
+                  onClick={() => operationMut.mutate({ action: 'complete', operationId: op.id })}
+                >
+                  Complete
+                </Button>
+              )}
+            </>
+          )}
+          {op.status === 'paused' && canLifecycle && (
+            <Button
+              size="xs"
+              variant="primary"
+              disabled={!employeeId || operationMut.isPending || processQcBlocked}
+              onClick={() => operationMut.mutate({ action: 'resume', operationId: op.id })}
+            >
+              Resume
+            </Button>
+          )}
+          {canLifecycle && !['completed', 'skipped'].includes(op.status) && (
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={!employeeId || operationDialogMut.isPending || processQcBlocked}
+              onClick={() => setOperationDialog({ kind: 'skip', operation: op })}
+            >
+              Skip
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   const pendingRepair = data.rework?.find(
     (repair) => !['closed', 'cancelled'].includes(repair.status),
@@ -1392,206 +1556,12 @@ export default function WorkOrderDetailPage() {
               </div>
             )}
             {operations.data && operations.data.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className={`${tableCls} min-w-[980px]`}>
-                  <thead>
-                    <tr className={theadTrCls}>
-                      <Th align="right" className="w-14">
-                        #
-                      </Th>
-                      <Th>Operation</Th>
-                      <Th>Status</Th>
-                      <Th>Operator</Th>
-                      <Th>Machine</Th>
-                      <Th align="right">Qty progress</Th>
-                      <Th>Start</Th>
-                      <Th>End</Th>
-                      <Th>Actions</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {operations.data.map((op) => (
-                      <tr key={op.id} className={trCls}>
-                        <Td align="right" mono>
-                          {op.sequence}
-                        </Td>
-                        <Td>{op.operation_name}{op.logs?.filter((log) => log.material_handover_exception).map((log) => <MaterialHandoverExceptionDetails key={log.id} exception={log.material_handover_exception} />)}</Td>
-                        <Td>
-                          <Chip variant={OP_STATUS_CHIP[op.status]}>
-                            {operationStatusLabels.get(op.status) ?? op.status}
-                          </Chip>
-                        </Td>
-                        <Td>
-                          {op.operator ? (
-                            `${op.operator.first_name} ${op.operator.last_name}`
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
-                        </Td>
-                        <Td mono>
-                          {op.machine?.machine_code ?? <span className="text-muted">—</span>}
-                        </Td>
-                        <Td align="right" mono>
-                          {formatInt(op.qty_completed)} / {formatInt(op.qty_planned)}
-                        </Td>
-                        <Td mono>{formatDateTime(op.actual_start)}</Td>
-                        <Td mono>{formatDateTime(op.actual_end)}</Td>
-                        <Td>
-                          {data.status !== 'in_progress' ? (
-                            <span className="text-xs text-muted">Available after WO start</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1">
-                              {op.status === 'pending' && (
-                                <>
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={
-                                        !employeeId || operationMut.isPending || setupBlocked
-                                      }
-                                      onClick={() =>
-                                        operationMut.mutate({
-                                          action: 'startSetup',
-                                          operationId: op.id,
-                                        })
-                                      }
-                                    >
-                                      Setup
-                                    </Button>
-                                  )}
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="primary"
-                                      disabled={
-                                        !employeeId || operationMut.isPending || processQcBlocked
-                                      }
-                                      onClick={() =>
-                                        operationMut.mutate({ action: 'start', operationId: op.id })
-                                      }
-                                    >
-                                      Start
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {op.status === 'setup' && (
-                                <>
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={operationMut.isPending || setupBlocked}
-                                      onClick={() =>
-                                        operationMut.mutate({
-                                          action: 'endSetup',
-                                          operationId: op.id,
-                                        })
-                                      }
-                                    >
-                                      End setup
-                                    </Button>
-                                  )}
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="primary"
-                                      disabled={
-                                        !employeeId || operationMut.isPending || processQcBlocked
-                                      }
-                                      onClick={() =>
-                                        operationMut.mutate({ action: 'start', operationId: op.id })
-                                      }
-                                    >
-                                      Start
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {op.status === 'in_progress' && (
-                                <>
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={operationMut.isPending}
-                                      onClick={() =>
-                                        operationMut.mutate({ action: 'pause', operationId: op.id })
-                                      }
-                                    >
-                                      Pause
-                                    </Button>
-                                  )}
-                                  {canRecord && (
-                                    <Button
-                                      size="xs"
-                                      variant="primary"
-                                      disabled={
-                                        !employeeId ||
-                                        operationDialogMut.isPending ||
-                                        processQcBlocked
-                                      }
-                                      onClick={() =>
-                                        { setOperationHandoverAcknowledged(false); setOperationHandoverReason(''); setOperationDialog({ kind: 'record', operation: op }); }
-                                      }
-                                    >
-                                      Output
-                                    </Button>
-                                  )}
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={operationMut.isPending || processQcBlocked}
-                                      onClick={() =>
-                                        operationMut.mutate({
-                                          action: 'complete',
-                                          operationId: op.id,
-                                        })
-                                      }
-                                    >
-                                      Complete
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {op.status === 'paused' && canLifecycle && (
-                                <Button
-                                  size="xs"
-                                  variant="primary"
-                                  disabled={
-                                    !employeeId || operationMut.isPending || processQcBlocked
-                                  }
-                                  onClick={() =>
-                                    operationMut.mutate({ action: 'resume', operationId: op.id })
-                                  }
-                                >
-                                  Resume
-                                </Button>
-                              )}
-                              {canLifecycle && !['completed', 'skipped'].includes(op.status) && (
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  disabled={
-                                    !employeeId || operationDialogMut.isPending || processQcBlocked
-                                  }
-                                  onClick={() =>
-                                    setOperationDialog({ kind: 'skip', operation: op })
-                                  }
-                                >
-                                  Skip
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={operationColumns}
+                data={operations.data}
+                tableKey="work-order-operations"
+                fixedColumnLayout
+              />
             )}
           </Panel>
         </div>

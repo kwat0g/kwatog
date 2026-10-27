@@ -27,6 +27,7 @@ import { AxiosError } from 'axios';
 import { LuCheck, LuCopy, LuPlus, LuTrash2, LuGripVertical } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
+import { horizontalScrollEdges } from '@/lib/horizontalScrollEdges';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
@@ -142,8 +143,7 @@ export default function RoutingEditorPage() {
  const scroller = operationScrollerRef.current;
  if (!scroller) return;
  const update = () => {
- const maxScroll = scroller.scrollWidth - scroller.clientWidth;
- const next = { left: scroller.scrollLeft > 1, right: maxScroll - scroller.scrollLeft > 1 };
+ const next = horizontalScrollEdges(scroller);
  setOperationScrollEdges((current) => current.left === next.left && current.right === next.right ? current : next);
  };
  update();
