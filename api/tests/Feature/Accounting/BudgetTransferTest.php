@@ -71,6 +71,42 @@ class BudgetTransferTest extends TestCase
         $this->assertSame('1300.00', $to->fresh()->annual_total);
     }
 
+    public function test_transfer_action_notice_excludes_delegate_of_the_requester_role(): void
+    {
+        [$service, $maker, , $from, $to] = $this->livePair('1000.00', '1000.00');
+        $delegator = User::factory()->withRole('vice_president')->create();
+        $delegate = User::factory()->withRole('employee')->create();
+        UserPermissionOverride::create([
+            'user_id' => $delegate->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $delegator->id,
+            'reason' => 'Budget transfer recipient scope test.',
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'vice_president',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        $delegate->flushPermissionsCache();
+        $payload = [
+            'from_line_item_id' => $from->id,
+            'to_line_item_id' => $to->id,
+            'month' => 'jan',
+            'amount' => '25.00',
+            'reason' => 'Recipient scope probe.',
+        ];
+
+        $service->request($payload, $maker->id);
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->count());
+
+        $service->request($payload, $delegator->id);
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->count());
+    }
+
     public function test_transfer_outcome_notice_is_suppressed_without_budget_view_access(): void
     {
         [$service, $maker, $checker, $from, $to] = $this->livePair('1000.00', '1000.00');
