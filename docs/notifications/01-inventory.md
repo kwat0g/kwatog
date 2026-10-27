@@ -251,8 +251,8 @@ Each call below invokes `EmailDeliveryFailureNotifier` or its assigned fallback 
 | `api/app/Modules/CRM/Services/SalesOrderResponseService.php:552` | `...->notifyPermission(..., $so)` |
 | `api/app/Modules/HR/Mail/ApplicationReceivedMail.php:67` | `app(EmailDeliveryFailureNotifier::class)->notifyUserIds(` |
 | `api/app/Modules/HR/Mail/ApplicationStatusUpdatedMail.php:65` | `app(EmailDeliveryFailureNotifier::class)->notifyUserIds(` |
-| `api/app/Modules/HR/Mail/InterviewDetailsUpdatedMail.php:80` | `app(EmailDeliveryFailureNotifier::class)->notifyUserIds(` |
-| `api/app/Modules/HR/Mail/InterviewScheduledMail.php:79` | `app(EmailDeliveryFailureNotifier::class)->notifyUserIds(` |
+| `api/app/Modules/HR/Mail/InterviewDetailsUpdatedMail.php:93` | `snapshotData()` name/link → `EmailDeliveryFailureNotifier::notifyUserIds($this->fallbackUserIds, …)`; no subject gate yet (PR #466) |
+| `api/app/Modules/HR/Mail/InterviewScheduledMail.php:90` | `snapshotData()` name/link → `EmailDeliveryFailureNotifier::notifyUserIds($this->fallbackUserIds, …)`; no subject gate yet (PR #466) |
 | `api/app/Modules/HR/Notifications/EmployeePasswordResetNotification.php:22` | `app(EmailDeliveryFailureNotifier::class)->notifyPermission(` |
 | `api/app/Modules/HR/Notifications/EmployeeWelcomeNotification.php:27` | `app(EmailDeliveryFailureNotifier::class)->notifyPermission(` |
 | `api/app/Modules/HR/Services/RecruitmentService.php:200` | `app(EmailDeliveryFailureNotifier::class)->notify(` |

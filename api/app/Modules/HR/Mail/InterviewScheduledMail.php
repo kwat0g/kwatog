@@ -86,14 +86,15 @@ class InterviewScheduledMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $snapshot = $this->snapshotData();
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment interview notification',
-            "The interview email for {$this->applicantName} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+            "The interview email for {$snapshot['applicant_name']} could not be delivered. Review the interview and contact the candidate through an approved channel.",
             [
-                'link_to' => '/hr/recruitment/applications/'.$this->applicationHashId,
+                'link_to' => '/hr/recruitment/applications/'.$snapshot['application_hash_id'],
                 'entity_type' => 'job_application',
-                'entity_id' => $this->applicationHashId,
+                'entity_id' => $snapshot['application_hash_id'],
                 'reason' => 'The candidate interview email job failed in the queue.',
             ],
         );
