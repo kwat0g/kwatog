@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PRs #391–#395 are merged; #395 merged as `d7795f26`. PR #396 aligns Leave approval and rejection controls with the API current-step policy. Original-head API tests passed **34 tests / 160 assertions** and SPA tests passed **7**. Post-rebase verification is in progress. API tests will not be rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PRs #391–#395 are merged; #395 merged as `d7795f26`. PR #396 aligns Leave approval and rejection controls with the API current-step policy. Original-head API tests passed **34 tests / 160 assertions**; after rebase, its three SPA suites passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -44,7 +44,7 @@
 | F-42. Overtime route permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | merged as `5f630dd7`; original-head API test passed; post-rebase syntax/diff checks passed; API test not rerun against shared DB |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | merged as `1109dc43`; post-rebase Sidebar 42, permission 28, page 1, ESLint, PHP syntax, and diff checks passed; post-fix API test not run against shared DB |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | merged as `d7795f26`; original-head API tests passed 14/44; post-rebase SPA 73, ESLint, PHP syntax, and diff checks passed; API tests not rerun against shared DB |
-| F-45. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | rebased on `d7795f26`; original-head API tests passed 34/160 and SPA tests 7; post-rebase checks pending |
+| F-45. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | rebased on `d7795f26`; original-head API tests passed 34/160 and SPA tests 7; post-rebase SPA 7, ESLint, PHP syntax, and diff checks passed; API tests not rerun against shared DB |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -424,7 +424,7 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 
 - `LeaveApprovalPolicy` supplies `can_approve` for list and detail resources using the current pending step, stage permission, active workflow role/delegation, row scope, submitter exclusion, and prior-step separation of duties. List actionability uses one batch query per page; detail uses the same policy.
 - Leave row, detail, and bulk controls use `can_approve`. Rejection requires the permission for the active stage. Approval and notification event timing stays unchanged.
-- Original-head API `LeaveApprovalBadgeParityTest`, `LeaveRequestVisibilityTest`, and `LeaveRequestHardeningTest`: **34 passed / 160 assertions**. Original-head SPA leave list/detail and approval-history tests: **7 passed**. Post-rebase verification is pending; API tests remain skipped against shared `ogami_test`.
+- Original-head API `LeaveApprovalBadgeParityTest`, `LeaveRequestVisibilityTest`, and `LeaveRequestHardeningTest`: **34 passed / 160 assertions**. Original-head SPA leave list/detail and approval-history tests: **7 passed**. After rebase, the same SPA tests passed **7**, targeted ESLint and PHP 8.3 syntax checks passed, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`.
 - F-44 remains an unconfirmed business-policy question about delegates approving their delegator's own leave submission.
 
 ## Outstanding proof / risks
