@@ -68,8 +68,8 @@ it('shows one WO summary and expands exact material quantities and locations', a
   expect(screen.queryByRole('link', { name: 'WO-202610-0014' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Expand row' }));
   expect(screen.getByText('RM-001')).toBeVisible();
-  expect(screen.getByText('1.890 kg')).toBeVisible();
-  expect(screen.getByText('100.000 pcs')).toBeVisible();
+  expect(screen.getByText('1.89 kg')).toBeVisible();
+  expect(screen.getByText('100 pcs')).toBeVisible();
   expect(screen.getByText('MW-A-A-01')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Collapse row' }));
   expect(screen.queryByText('RM-001')).not.toBeInTheDocument();

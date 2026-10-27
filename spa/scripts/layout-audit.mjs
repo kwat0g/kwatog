@@ -67,6 +67,12 @@ function groupSamples(items, fields) {
       const aggregate = `max${field[0].toUpperCase()}${field.slice(1)}`;
       group[aggregate] = Math.max(group[aggregate] ?? item[field], item[field]);
     }
+    for (const field of ['width', 'height']) {
+      if (typeof item[field] !== 'number') continue;
+      const title = field[0].toUpperCase() + field.slice(1);
+      group[`min${title}`] = Math.min(group[`min${title}`] ?? item[field], item[field]);
+      group[`max${title}`] = Math.max(group[`max${title}`] ?? item[field], item[field]);
+    }
     groups.set(key, group);
   }
   return [...groups.values()];
@@ -86,10 +92,15 @@ function compactMetricSamples(metrics) {
     metrics.typography[field] = groupSamples(metrics.typography[field], ['tag', 'size', 'contrast', 'color', 'background']);
   }
   metrics.table?.textBelowMinimum && (metrics.table.textBelowMinimum = groupSamples(metrics.table.textBelowMinimum, ['tag', 'size']));
-  metrics.buttons = groupSamples(metrics.buttons, ['label', 'width', 'height', 'background', 'color']);
-  metrics.buttonTargetsBelow44 = groupSamples(metrics.buttonTargetsBelow44, ['label', 'width', 'height', 'background', 'color']);
-  metrics.controls = groupSamples(metrics.controls, ['label', 'width', 'height']);
-  metrics.controlsBelow44 = groupSamples(metrics.controlsBelow44, ['label', 'width', 'height']);
+  const groupTargets = (items, colors = false) => groupSamples(
+    items.map((item) => ({ ...item, widthBelow44: item.width < 44, heightBelow44: item.height < 44 })),
+    ['widthBelow44', 'heightBelow44', ...(colors ? ['background', 'color'] : [])],
+  ).map(({ widthBelow44, heightBelow44, ...item }) => item);
+  metrics.buttons = groupTargets(metrics.buttons, true);
+  metrics.buttonTargetsBelow44 = groupTargets(metrics.buttonTargetsBelow44, true);
+  metrics.controls = groupTargets(metrics.controls);
+  metrics.controlsBelow44 = groupTargets(metrics.controlsBelow44);
+  metrics.recordLinks = groupSamples(metrics.recordLinks, ['color', 'contrast', 'distinctFromBodyText']);
   return metrics;
 }
 
@@ -132,7 +143,7 @@ function localUser(role, themeMode) {
     name: `Layout Audit ${role}`,
     email: ROLE_EMAILS[role],
     role: { id: `layout-audit-${role}`, slug: slugs[role], name: slugs[role] },
-    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
+    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'inventory.warehouse.manage', 'inventory.issue.create', 'accounting.journal.post', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
     delegated_approvals: [],
     features: ['inventory', 'production', 'notifications', 'search', 'b2b_portals'],
     employee: { id: 'layout-audit-employee', employee_no: 'LAYOUT-AUDIT' },
@@ -187,6 +198,23 @@ const sampleItem = {
   classification_needs_review: false, created_at: '2026-10-01T09:14:00+08:00',
   updated_at: '2026-10-25T16:20:00+08:00',
 };
+
+function sampleItems(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...sampleItem,
+    id: index === 0 ? sampleItem.id : `layout-item-${String(index + 1).padStart(6, '0')}`,
+    code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+    name: index === 1
+      ? 'A long inventory item description used to check truncation, wrapping, and column sizing across the entire table'
+      : index === 0 ? sampleItem.name : `Inventory item ${index + 1}`,
+    standard_cost: index === 2 ? '123456789.1234' : sampleItem.standard_cost,
+    on_hand_quantity: index === 2 ? '987654321.125' : sampleItem.on_hand_quantity,
+    available_quantity: index === 2 ? '987654320.875' : sampleItem.available_quantity,
+    stock_status: index % 5 === 0 ? 'critical' : index % 3 === 0 ? 'ok' : 'low',
+    is_active: index % 7 !== 0,
+    quality_plan_ready: index % 4 !== 0,
+  }));
+}
 
 const sampleWorkOrder = {
   id: 'layout-wo-001', wo_number: 'WO-LAYOUT-202610-001', batch_number: 'BATCH-202610-001',
@@ -318,24 +346,147 @@ assert.equal(sampleWorkOrders(0).length, 0);
 assert.equal(sampleWorkOrders(1)[0].id, sampleWorkOrder.id);
 assert.equal(sampleWorkOrders(500).length, 500);
 
-const sampleWarehouse = [{
-  id: 'layout-warehouse-1', name: 'Main Warehouse', code: 'MW', address: null, is_active: true,
-  zones: [{
-    id: 'layout-zone-1', name: 'Raw materials', code: 'RM', zone_type: 'raw_materials',
-    locations: [{
-      id: 'layout-location-1', zone_id: 'layout-zone-1', code: 'A-01-01', rack: 'A-01', bin: '01',
-      is_active: true, is_blocked: false, full_code: 'MW-RM-A-01-01',
+function sampleWarehouseTree(count) {
+  return [{
+    id: 'layout-warehouse-1', name: 'Main Warehouse', code: 'MW', address: null, is_active: true,
+    zones: [{
+      id: 'layout-zone-1', name: 'Raw materials', code: 'RM', zone_type: 'raw_materials',
+      zone_type_label: 'Raw materials',
+      locations: Array.from({ length: count }, (_, index) => ({
+        id: `layout-location-${index + 1}`, zone_id: 'layout-zone-1',
+        code: index === 1 ? 'LOC-REFERENCE-00001' : `A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+        rack: `A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}`,
+        bin: String((index % 100) + 1).padStart(2, '0'),
+        is_active: true, is_blocked: index % 17 === 0,
+        full_code: `MW-RM-A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+      })),
     }],
-  }],
-}];
+  }];
+}
 
 const sampleStockLevel = {
   item: { id: sampleItem.id, code: sampleItem.code, name: sampleItem.name, unit_of_measure: sampleItem.unit_of_measure },
   location: { id: 'layout-location-1', code: 'A-01-01', full_code: 'MW-RM-A-01-01' },
   quantity: '123456789.125', reserved_quantity: '234567.250', available: '123222221.875',
+  usable_quantity: '123222221.875', expired_quantity: '0.000', unusable_zone_quantity: '25.000',
   quality_held_quantity: '1200.000', weighted_avg_cost: '1234567.8900', total_value: '152415787517145.00',
   lock_version: 0, last_counted_at: '2026-10-01T09:14:00+08:00',
 };
+
+function sampleStockLevels(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...sampleStockLevel,
+    item: {
+      ...sampleStockLevel.item,
+      id: index === 0 ? sampleItem.id : `layout-item-${String(index + 1).padStart(6, '0')}`,
+      code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+      name: index === 1
+        ? 'Long inventory material description for stock level column sizing and truncation checks'
+        : index === 0 ? sampleItem.name : `Inventory item ${index + 1}`,
+    },
+    location: {
+      id: `layout-location-${index + 1}`,
+      code: `A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+      full_code: `MW-RM-A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+    },
+    quantity: index === 2 ? '987654321.125' : sampleStockLevel.quantity,
+    reserved_quantity: index === 2 ? '12345678.250' : sampleStockLevel.reserved_quantity,
+    available: index === 2 ? '975308642.875' : sampleStockLevel.available,
+    usable_quantity: index === 2 ? '975308642.875' : sampleStockLevel.usable_quantity,
+    weighted_avg_cost: index === 2 ? '123456789.1234' : sampleStockLevel.weighted_avg_cost,
+    total_value: index === 2 ? '999999999999999.99' : sampleStockLevel.total_value,
+  }));
+}
+
+function sampleUoms(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: index === 0 ? 'layout-uom-kg' : `layout-uom-${String(index + 1).padStart(6, '0')}`,
+    code: index === 0 ? 'kg' : `UOM-${String(index + 1).padStart(4, '0')}`,
+    name: index === 1
+      ? 'Long unit name for layout checks, readability, and narrow table behavior'
+      : index === 0 ? 'Kilogram' : `Unit ${index + 1}`,
+    deleted_at: null,
+  }));
+}
+
+const movementTypes = ['grn_receipt', 'material_issue', 'material_return', 'transfer', 'adjustment_in', 'delivery'];
+function sampleStockMovements(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const movementType = movementTypes[index % movementTypes.length];
+    return {
+      id: `layout-movement-${String(index + 1).padStart(6, '0')}`,
+      created_at: `2026-10-${String((index % 28) + 1).padStart(2, '0')}T09:14:00+08:00`,
+      movement_type: movementType,
+      movement_type_label: movementType.replaceAll('_', ' '),
+      item: {
+        id: `layout-item-${String(index + 1).padStart(6, '0')}`,
+        code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+        name: index === 1
+          ? 'Long material description for checking stock movement table wrapping and truncation behavior'
+          : `Inventory item ${index + 1}`,
+        unit_of_measure: 'kg',
+      },
+      from_location: movementType === 'material_issue' || movementType === 'transfer'
+        ? { id: 'layout-location-from', code: 'MW-RM-A-01-01' } : null,
+      to_location: movementType === 'grn_receipt' || movementType === 'transfer'
+        ? { id: 'layout-location-to', code: 'MW-RM-A-02-01' } : null,
+      quantity: index === 2 ? '987654321.125' : `${(index + 1) * 1.125}`,
+      unit_cost: index === 2 ? '123456789.1234' : '1234.5000',
+      total_cost: index === 2 ? '999999999999999.99' : '1388.81',
+      lot_number: index % 2 ? `LOT-${String(index + 1).padStart(6, '0')}` : null,
+      expiry_date: null,
+      gl_handoff: {
+        status: index % 3 === 0 ? 'generated' : index % 3 === 1 ? 'manual_required' : 'not_required',
+        status_label: index % 3 === 0 ? 'Posted' : index % 3 === 1 ? 'Manual required' : 'Not required',
+        message: null,
+        at: '2026-10-25T09:14:00+08:00',
+      },
+      reference_type: 'material_issue',
+      reference_id: `REF-${String(index + 1).padStart(6, '0')}`,
+      reference_label: index === 1 ? 'Long material reference with a description that should not widen the table' : `Movement reference ${index + 1}`,
+      reference_work_order_id: null,
+      reference_url: null,
+      remarks: index === 2 ? 'Long movement note used to check tooltip and text overflow behavior.' : null,
+      creator: { id: 'layout-user-1', name: index === 1 ? 'Alexandria-Maria Santos-Dela-Cruz' : 'Ana Santos' },
+    };
+  });
+}
+
+function sampleReservations(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `layout-reservation-group-${index + 1}`,
+    work_order: {
+      id: `layout-work-order-${index + 1}`,
+      wo_number: index === 1 ? 'WO-202610-0000000000001' : `WO-202610-${String(index + 1).padStart(6, '0')}`,
+    },
+    materials: [
+      {
+        id: `layout-reservation-${index + 1}-1`,
+        work_order: { id: `layout-work-order-${index + 1}`, wo_number: `WO-202610-${String(index + 1).padStart(6, '0')}` },
+        item: {
+          id: `layout-item-${index + 1}`,
+          code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+          name: index === 1 ? 'Long material description for expanded reservation details' : `Inventory item ${index + 1}`,
+          unit_of_measure: 'kg',
+        },
+        location: { id: `layout-location-${index + 1}`, full_code: `MW-RM-A-${String(index + 1).padStart(2, '0')}-01` },
+        quantity: index === 2 ? '987654321.125' : `${(index + 1) * 10}.000`,
+        status: index % 3 === 0 ? 'reserved' : index % 3 === 1 ? 'issued' : 'released',
+        reserved_at: '2026-10-25T09:14:00+08:00',
+        ended_at: null,
+      },
+    ],
+  }));
+}
+
+for (const count of [0, 1, 10, 50, 500]) {
+  assert.equal(sampleItems(count).length, count);
+  assert.equal(sampleUoms(count).length, count);
+  assert.equal(sampleWarehouseTree(count)[0].zones[0].locations.length, count);
+  assert.equal(sampleStockLevels(count).length, count);
+  assert.equal(sampleStockMovements(count).length, count);
+  assert.equal(sampleReservations(count).length, count);
+}
 
 function addDays(date, days) {
   const value = new Date(`${date}T00:00:00Z`);
@@ -480,16 +631,36 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
     };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}/chain`)) json = { data: [] };
     else if (pathname.endsWith('/inventory/items')) json = {
-      data: [sampleItem], meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+      data: sampleItems(rowCount), meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 100)), per_page: 100, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 100) },
       links: { first: '', last: '', prev: null, next: null },
     };
-    else if (pathname.endsWith('/inventory/warehouse')) json = { data: sampleWarehouse };
+    else if (pathname.endsWith('/inventory/warehouse')) json = { data: sampleWarehouseTree(rowCount) };
     else if (pathname.endsWith('/inventory/stock-levels')) json = {
-      data: [sampleStockLevel], meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+      data: sampleStockLevels(rowCount), meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 100)), per_page: 100, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 100) },
       links: { first: '', last: '', prev: null, next: null },
+    };
+    else if (pathname.endsWith('/inventory/stock-movements/options')) json = {
+      data: { movement_types: movementTypes.map((value) => ({ value, label: value.replaceAll('_', ' ') })) },
+    };
+    else if (/\/inventory\/stock-movements\/[^/]+\/return-options$/.test(pathname)) json = {
+      data: {
+        eligible: true, source_movement_id: 'layout-movement-000002', issued_quantity: '20.000',
+        returned_quantity: '0.000', returned_cost: '0.00', returnable_quantity: '20.000',
+        unit_cost: '1234.5000', unit_of_measure: 'kg', total_returned_at_original_cost: '0.00',
+        location: 'MW-RM-A-01-01', lot_number: 'LOT-000002', gross_production_units: '0',
+        consumption_floor: '0', consumption_basis: 'unlinked_issue', message: null,
+      },
+    };
+    else if (pathname.endsWith('/inventory/stock-movements')) json = {
+      data: sampleStockMovements(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
+    else if (pathname.endsWith('/inventory/material-reservations')) json = {
+      data: sampleReservations(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
     };
     else if (pathname.endsWith('/inventory/uoms')) json = {
-      data: [{ id: 'layout-uom-kg', code: 'kg', name: 'Kilogram', deleted_at: null }],
+      data: sampleUoms(rowCount),
     };
     else if (pathname.includes('/inventory/stock-adjustments/options')) json = {
       data: {
@@ -609,12 +780,42 @@ async function measure(page) {
         verticalOverflow: element.scrollHeight > element.clientHeight + 1,
       };
     });
+    const sections = [...(main?.querySelectorAll('[data-layout="section"]') ?? [])].map((section) => {
+      const style = getComputedStyle(section);
+      const parent = section.parentElement;
+      const parentStyle = parent ? getComputedStyle(parent) : null;
+      const body = section.lastElementChild;
+      const bodyStyle = body ? getComputedStyle(body) : null;
+      return {
+        title: (section.querySelector('h2,h3,h4')?.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 100),
+        className: typeof section.className === 'string' ? section.className : '',
+        bounds: rect(section),
+        display: style.display,
+        overflowY: style.overflowY,
+        gridParent: parent ? {
+          className: typeof parent.className === 'string' ? parent.className : '',
+          bounds: rect(parent),
+          display: parentStyle.display,
+          gridTemplateRows: parentStyle.gridTemplateRows,
+        } : null,
+        body: body ? {
+          className: typeof body.className === 'string' ? body.className : '',
+          bounds: rect(body),
+          display: bodyStyle.display,
+          overflowY: bodyStyle.overflowY,
+          scrollHeight: body.scrollHeight,
+          clientHeight: body.clientHeight,
+        } : null,
+      };
+    });
     const filterBar = main?.querySelector('[data-layout="filter-bar"]')
       ?? main?.querySelector('[role="search"]')?.parentElement;
     const table = main?.querySelector('[data-layout="table"]') ?? main?.querySelector('table');
     const scheduleScroller = main?.querySelector('[data-layout="schedule-scroll-region"]');
     const scheduleFrame = scheduleScroller?.closest('.scroll-edge-frame');
     const tableCard = table?.closest('[data-layout="table-scroller"]') ?? table?.parentElement;
+    const tableSection = table?.closest('[data-layout="section"]');
+    const tableAlignmentReference = tableSection?.lastElementChild ?? pageHeader;
     const tableRoot = table?.closest('[data-layout="data-table"]') ?? tableCard?.parentElement;
     const toolbar = tableRoot?.querySelector('[data-layout="table-toolbar"]')
       ?? (tableRoot && [...tableRoot.children].find((element) => element.classList.contains('justify-end')));
@@ -628,13 +829,18 @@ async function measure(page) {
       pagination: rect(pagination),
     };
     const reference = pageBlocks.header;
-    const alignment = Object.fromEntries(Object.entries(pageBlocks).map(([key, box]) => [key,
-      box && reference
-        ? { leftDelta: Math.round((box.left - reference.left) * 100) / 100,
-            rightDelta: Math.round((box.right - reference.right) * 100) / 100,
-            aligned: Math.abs(box.left - reference.left) <= 1 && Math.abs(box.right - reference.right) <= 1 }
+    const alignment = Object.fromEntries(Object.entries(pageBlocks).map(([key, box]) => {
+      const edgeReference = ['toolbar', 'table', 'pagination'].includes(key) && tableSection
+        ? rect(tableAlignmentReference) : reference;
+      return [key,
+      box && edgeReference
+        ? { reference: ['toolbar', 'table', 'pagination'].includes(key) && tableSection ? 'section-content' : 'page-content',
+            leftDelta: Math.round((box.left - edgeReference.left) * 100) / 100,
+            rightDelta: Math.round((box.right - edgeReference.right) * 100) / 100,
+            aligned: Math.abs(box.left - edgeReference.left) <= 1 && Math.abs(box.right - edgeReference.right) <= 1 }
         : null,
-    ]));
+    ];
+    }));
     const sidebar = document.querySelector('aside[aria-label="Sidebar"]');
     const sidebarBox = sidebar ? sidebar.getBoundingClientRect() : null;
     const firstContentLeft = reference?.left ?? pageBlocks.toolbar?.left ?? main?.getBoundingClientRect().left ?? 0;
@@ -644,7 +850,8 @@ async function measure(page) {
       countSidebarRail && box
         ? Math.round((box.left - sidebarBox.right) * 100) / 100 : null,
     ]));
-    const rows = table ? [...table.querySelectorAll('tbody tr')].filter((row) => row.offsetHeight > 0) : [];
+    const rows = table ? [...table.querySelectorAll('tbody > tr')]
+      .filter((row) => row.closest('table') === table && row.offsetHeight > 0) : [];
     const heights = rows.map((row) => Math.round(row.getBoundingClientRect().height * 100) / 100);
     const unique = (values) => [...new Set(values)];
     const typeNodes = [
@@ -745,7 +952,8 @@ async function measure(page) {
           width: Math.round(box.width),
           height: Math.round(box.height),
         };
-      });
+      })
+      .filter((control) => control.width > 0 && control.height > 0);
     const bodyTextColor = getComputedStyle(document.body).color;
     const recordLinks = [...(main?.querySelectorAll('a[href].font-mono,button.font-mono') ?? [])]
       .map((element) => {
@@ -908,6 +1116,7 @@ async function measure(page) {
       sidebarClearanceByBlock,
       blocks: pageBlocks,
       flowBlocks,
+      sections,
       edgeAlignment: alignment,
       verticalGaps: {
         headerToFilters: yGap(pageBlocks.header, pageBlocks.filters),
@@ -945,7 +1154,9 @@ async function measure(page) {
       table: table ? {
         density: tableDensity,
         scrollAffordance: tableCard ? {
-          needed: tableCard.scrollWidth > tableCard.clientWidth + 1,
+          needed: tableCard.scrollWidth - tableCard.offsetWidth
+            + (Number.parseFloat(getComputedStyle(tableCard).borderLeftWidth) || 0)
+            + (Number.parseFloat(getComputedStyle(tableCard).borderRightWidth) || 0) > 1,
           left: tableCard.closest('.scroll-edge-frame')?.getAttribute('data-more-left') === 'true',
           right: tableCard.closest('.scroll-edge-frame')?.getAttribute('data-more-right') === 'true',
           keyboardFocusable: tableCard.tabIndex >= 0,
@@ -1090,6 +1301,33 @@ async function probeColumnResize(page, screenshotPath) {
   return { before, after, reset: true, screenshot: path.relative(ROOT, screenshotPath) };
 }
 
+async function captureInventoryDialog(page, out, route, width, themeMode, label, buttonName) {
+  if (buttonName) {
+    const button = page.getByRole('button', { name: buttonName, exact: true }).first();
+    if (!(await button.count())) return null;
+    await button.click();
+  }
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor({ state: 'visible', timeout: 5_000 });
+  await page.waitForTimeout(350);
+  const screenshot = path.join(out, `${slug(route)}-${width}-${slug(`/${label}`)}-dialog.png`);
+  await page.screenshot({ path: screenshot });
+  const metrics = await measure(page);
+  const sample = {
+    label,
+    screenshot: path.relative(ROOT, screenshot),
+    visible: metrics.counts.dialogs === 1,
+    theme: metrics.appliedTheme,
+    contrastFailures: metrics.typography.contrastBelowAA.reduce((sum, item) => sum + item.count, 0),
+  };
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached', timeout: 5_000 });
+  assert.equal(sample.visible, true, `${label} dialog must render before screenshot`);
+  assert.equal(sample.theme, themeMode, `${label} dialog must retain the active theme`);
+  assert.equal(sample.contrastFailures, 0, `${label} dialog text must meet AA contrast`);
+  return sample;
+}
+
 async function main() {
   const role = arg('role', 'admin');
   const themeMode = arg('theme', 'light');
@@ -1156,6 +1394,13 @@ async function main() {
         if (route === `/production/work-orders/${sampleWorkOrder.id}` && process.argv.includes('--work-order-operations')) {
           await page.getByRole('tab', { name: 'Operations' }).click();
           await page.waitForTimeout(150);
+        }
+        if (process.argv.includes('--expand-first-row') && new URL(route, BASE).searchParams.get('view') === 'reservations') {
+          const expand = page.getByRole('button', { name: 'Expand row' }).first();
+          if (await expand.count()) {
+            await expand.click();
+            await page.waitForTimeout(100);
+          }
         }
         await page.waitForTimeout(350);
         const screenshot = path.join(out, `${slug(route)}-${width}.png`);
@@ -1236,7 +1481,30 @@ async function main() {
           assert.equal(scheduleDialogSample.visible, true, 'schedule confirmation must render before screenshot');
           assert.equal(scheduleDialogSample.contrastFailures, 0, 'schedule confirmation text must meet AA contrast');
         }
-        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, dialogSample, scheduleDialogSample, scheduleBottomSample, ...metrics });
+        const inventoryDialogSamples = [];
+        if (process.argv.includes('--inventory-dialog-samples') && [375, 1440].includes(width)) {
+          const capture = async (label, buttonName) => {
+            const sample = await captureInventoryDialog(page, out, route, width, themeMode, label, buttonName);
+            if (sample) inventoryDialogSamples.push(sample);
+          };
+          if (route === '/inventory/items') await capture('categories', 'Categories');
+          if (route === '/inventory/uoms') await capture('new-unit', 'New unit');
+          if (route === '/inventory/warehouse') {
+            await capture('new-warehouse', 'New warehouse');
+            await capture('new-zone', 'Zone');
+            await capture('new-location', 'Location');
+          }
+          if (new URL(route, BASE).searchParams.get('view') === 'movements') {
+            const expand = page.getByRole('button', { name: 'Expand row' });
+            if (await expand.count() > 1) {
+              await expand.nth(1).click();
+              await page.getByRole('button', { name: 'Receive unused return', exact: true }).click();
+              const sample = await captureInventoryDialog(page, out, route, width, themeMode, 'return-unused-material', null);
+              if (sample) inventoryDialogSamples.push(sample);
+            }
+          }
+        }
+        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, dialogSample, scheduleDialogSample, inventoryDialogSamples, scheduleBottomSample, ...metrics });
         console.log(`${route} @ ${width}: ${metrics.counts.tables} table(s), ${metrics.counts.rows} row(s), overflow=${metrics.horizontalPageOverflow}`);
       }
     }
@@ -1310,7 +1578,9 @@ async function main() {
         [row.scheduleScrollRegion?.stickyHeader.tested && !row.scheduleScrollRegion.stickyHeader.sticksToScroller, 'timeline header misses its scroll region'],
         [row.table && row.table.rowHeight.min !== null && row.table.rowHeight.min < ({ default: 48, compact: 36, manual: 36, spacious: 56 }[row.table.density] ?? 48), 'table row below selected density minimum'],
         [row.table?.textBelowMinimum.length > 0, 'table text below selected density minimum'],
-        [row.table?.columns.some((column) => column.cellAlign && column.headerAlign !== column.cellAlign), 'table header/cell alignment differs'],
+        [row.table?.columns.some((column) => column.header && column.cellAlign
+          && ({ start: 'left', end: 'right' }[column.cellAlign] ?? column.cellAlign)
+            !== ({ start: 'left', end: 'right' }[column.headerAlign] ?? column.headerAlign)), 'table header/cell alignment differs'],
         [row.typography.below12px.length > 0, 'sampled text below 12px'],
         [row.typography.contrastBelowAA.length > 0, 'sampled contrast below 4.5:1'],
         [row.recordLinks.some((link) => !link.distinctFromBodyText || (link.contrast !== null && link.contrast < 4.5)), 'clickable record identifier lacks distinct AA text color'],

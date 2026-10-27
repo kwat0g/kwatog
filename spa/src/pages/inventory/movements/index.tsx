@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatDateTime } from '@/lib/formatDate';
+import { formatPeso, formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { productionDateTime } from '@/components/production/scheduleDates';
 import type { ListParams } from '@/types';
 import type { StockMovement } from '@/types/inventory';
@@ -327,7 +328,7 @@ export function StockMovementsTab({
       key: 'created_at',
       header: 'When',
       className: 'min-w-44',
-      cell: (r) => <span className="font-mono">{formatDateTime(r.created_at)}</span>,
+      cell: (r) => <span className="whitespace-nowrap tabular-nums">{formatDateTime(r.created_at)}</span>,
     },
     {
       key: 'type',
@@ -370,7 +371,7 @@ export function StockMovementsTab({
       align: 'right',
       cell: (r) => (
         <NumCell>
-          {r.movement_type === 'delivery' ? '-' : ''}{Number(r.quantity).toFixed(3)} {r.item?.unit_of_measure}
+          {r.movement_type === 'delivery' ? '-' : ''}{formatQuantity(r.quantity)} {r.item?.unit_of_measure}
         </NumCell>
       ),
     },
@@ -379,14 +380,14 @@ export function StockMovementsTab({
       defaultHidden: true,
       header: 'Unit cost',
       align: 'right',
-      cell: (r) => <NumCell>{Number(r.unit_cost).toFixed(4)}</NumCell>,
+      cell: (r) => <NumCell>{formatUnitCost(r.unit_cost)}</NumCell>,
     },
     {
       key: 'total',
       defaultHidden: true,
       header: 'Total cost',
       align: 'right',
-      cell: (r) => <NumCell className="font-medium">{Number(r.total_cost).toFixed(2)}</NumCell>,
+      cell: (r) => <NumCell className="font-medium">{formatPeso(r.total_cost)}</NumCell>,
     },
     { key: 'gl', header: 'GL', defaultHidden: true, cell: glChip },
     {
@@ -445,16 +446,16 @@ export function StockMovementsTab({
   ];
 
   return (
-    <div>
+    <div className="min-h-0 flex flex-1 flex-col gap-3">
       {data && (
-        <div className="px-5 pt-2 text-xs text-muted">
+        <div className="text-xs text-muted">
           {data.meta.total} {data.meta.total === 1 ? 'movement' : 'movements'}
         </div>
       )}
       {pendingReturn && (
         <div
           role="status"
-          className="mx-5 mb-3 rounded-md border border-warning px-3 py-2 text-sm text-warning-fg"
+          className="rounded-md border border-warning px-3 py-2 text-sm text-warning-fg"
         >
           <p>
             A material return for issue <span className="font-mono">{pendingReturn.sourceId}</span>{' '}
@@ -478,6 +479,7 @@ export function StockMovementsTab({
         </div>
       )}
       <FilterBar
+        inset={false}
         filters={filterConfig}
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
@@ -485,34 +487,39 @@ export function StockMovementsTab({
         dateRange={{ fromKey: 'from', toKey: 'to' }}
         onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
       />
-      {isLoading && !data && <SkeletonTable columns={11} rows={10} />}
+      {isLoading && !data && <div className="min-h-0 flex-1 overflow-auto"><SkeletonTable columns={11} rows={10} /></div>}
       {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load movements"
-          action={<Button onClick={() => refetch()}>Retry</Button>}
-        />
+        <div className="min-h-0 flex-1 flex items-center justify-center">
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load movements"
+            action={<Button onClick={() => refetch()}>Retry</Button>}
+          />
+        </div>
       )}
       {data && data.data.length === 0 && (
-        <EmptyState
-          icon="inbox"
-          title={
-            filters.search ||
-            filters.movement_type ||
-            filters.from ||
-            filters.to ||
-            filters.movement_id ||
-            filters.work_order_id
-              ? 'No matching movements'
-              : 'No movements yet'
-          }
-          description="Check the filters or select a wider date range."
-        />
+        <div className="min-h-0 flex-1 flex items-center justify-center">
+          <EmptyState
+            icon="inbox"
+            title={
+              filters.search ||
+              filters.movement_type ||
+              filters.from ||
+              filters.to ||
+              filters.movement_id ||
+              filters.work_order_id
+                ? 'No matching movements'
+                : 'No movements yet'
+            }
+            description="Check the filters or select a wider date range."
+          />
+        </div>
       )}
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
+        <div className="min-h-0 flex-1 flex flex-col">
           <DataTable
             tableKey="stock-movements"
+            fillHeight
             columns={columns}
             renderExpanded={(r) => (
               <div className="p-3 space-y-3 text-sm">
@@ -520,8 +527,8 @@ export function StockMovementsTab({
                   <span>From: {r.from_location?.code ?? '—'}</span>
                   <span>To: {r.to_location?.code ?? '—'}</span>
                   <span>Lot: {r.lot_number ?? 'Not recorded'}</span>
-                  <span>Unit cost: {Number(r.unit_cost).toFixed(4)}</span>
-                  <span>Total cost: {Number(r.total_cost).toFixed(2)}</span>
+                  <span>Unit cost: {formatUnitCost(r.unit_cost)}</span>
+                  <span>Total cost: {formatPeso(r.total_cost)}</span>
                   {glChip(r)}
                 </div>
                 {r.movement_type === 'material_issue' && (

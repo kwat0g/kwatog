@@ -196,6 +196,17 @@
     scrollbar-width: auto;
   }
 
+  .warehouse-row-actions {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .group:hover .warehouse-row-actions,
+  .group:focus-within .warehouse-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   .scroll-edge-frame {
     position: relative;
     min-width: 0;
@@ -237,6 +248,11 @@
   }
 
   @media (max-width: 1024px) {
+    .warehouse-row-actions {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
     .page-shell button,
     .page-shell select:not(.sr-only),
     .page-shell [data-touch-target] {

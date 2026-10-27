@@ -16,15 +16,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
+import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { onFormInvalid } from '@/lib/formErrors';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
 import type { Warehouse, WarehouseLocation, WarehouseZone } from '@/types/inventory';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 import { focusRingInset } from '@/lib/focus';
 
@@ -94,6 +95,44 @@ export default function WarehousePage() {
  const zone = zones.find((z) => z.id === activeZone) ?? zones[0];
  const locations = zone?.locations ?? [];
 
+ const locationColumns: Column<WarehouseLocation>[] = [
+  {
+   key: 'code', header: 'Code', width: 150, minWidth: 128, maxWidth: 220,
+   cell: (location) => <span className="block truncate font-mono" title={location.code}>{location.code}</span>,
+  },
+  { key: 'rack', header: 'Rack', width: 76, minWidth: 72, maxWidth: 112, className: 'hidden sm:table-cell', cell: (location) => location.rack ?? '—' },
+  { key: 'bin', header: 'Bin', width: 64, minWidth: 60, maxWidth: 96, className: 'hidden sm:table-cell', cell: (location) => location.bin ?? '—' },
+  {
+   key: 'status', header: 'Status', width: 100, minWidth: 92, maxWidth: 136,
+   cell: (location) => (
+    <div className="flex flex-wrap gap-1.5">
+     <Chip variant={location.is_active ? 'success' : 'neutral'}>{location.is_active ? 'Active' : 'Inactive'}</Chip>
+     {location.is_blocked && <Chip variant="warning">Blocked</Chip>}
+    </div>
+   ),
+  },
+  {
+   key: 'actions', header: '', width: 96, minWidth: 92, maxWidth: 112, align: 'right',
+   resizable: false, togglable: false,
+   cell: (location) => canManage && (
+    <div className="warehouse-row-actions flex justify-end gap-0.5">
+     <IconBtn label={`Edit ${location.code}`} onClick={() => setLocModal({ mode: 'edit', existing: location })}>
+      <LuPencil size={12} />
+     </IconBtn>
+     {scope === 'only' ? (
+      <IconBtn label={`Restore ${location.code}`} onClick={() => setConfirmRestore({ kind: 'location', id: location.id, code: location.code })}>
+       <LuArchiveRestore size={12} />
+      </IconBtn>
+     ) : (
+      <IconBtn label={`Delete ${location.code}`} danger onClick={() => setConfirmDelete({ kind: 'location', id: location.id, code: location.code })}>
+       <LuTrash2 size={12} />
+      </IconBtn>
+     )}
+    </div>
+   ),
+  },
+ ];
+
  const invalidate = () => qc.invalidateQueries({ queryKey: ['inventory', 'warehouse'] });
 
  const delWh = useMutation({
@@ -129,8 +168,9 @@ export default function WarehousePage() {
  });
 
  return (
- <div>
+ <PageShell viewport className="flex flex-col gap-3 max-xl:overflow-y-auto">
  <PageHeader
+ inset={false}
  title="Warehouse structure"
  subtitle={data ? `${data.length} ${data.length === 1 ? 'warehouse' : 'warehouses'}` : undefined}
  actions={
@@ -147,34 +187,38 @@ export default function WarehousePage() {
  }
  />
 
- <div className="px-5 py-4 space-y-4">
+ <div className="min-h-0 flex-1 flex flex-col gap-3">
  <div className="flex justify-end">
  <ArchiveFilter value={scope} onChange={setScope} />
  </div>
- {isLoading && !data && <SkeletonTree />}
+ {isLoading && !data && <div className="min-h-0 flex-1 overflow-auto"><SkeletonTree /></div>}
  {isError && (
- <EmptyState
- icon="alert-circle"
- title="Failed to load warehouse"
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
- />
+ <div className="min-h-0 flex-1 flex items-center justify-center">
+  <EmptyState
+  icon="alert-circle"
+  title="Failed to load warehouse"
+  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+  />
+ </div>
  )}
  {data && data.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No warehouses configured"
- description={canManage ? 'Add your first warehouse to start managing stock locations.' : 'Nothing here yet.'}
- action={canManage ? (
- <Button variant="primary" onClick={() => setWhModal({ mode: 'create', existing: null })}>
- New warehouse
- </Button>
- ) : undefined}
- />
+ <div className="min-h-0 flex-1 flex items-center justify-center">
+  <EmptyState
+  icon="inbox"
+  title="No warehouses configured"
+  description={canManage ? 'Add your first warehouse to start managing stock locations.' : 'Nothing here yet.'}
+  action={canManage ? (
+  <Button variant="primary" onClick={() => setWhModal({ mode: 'create', existing: null })}>
+  New warehouse
+  </Button>
+  ) : undefined}
+  />
+ </div>
  )}
  {data && data.length > 0 && wh && (
- <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+ <div className="min-h-0 flex-1 grid grid-cols-1 gap-4 max-xl:flex-none xl:grid-cols-12 xl:grid-rows-1">
  {/* Warehouses column */}
- <Panel title="Warehouses" className="col-span-3">
+ <Panel title="Warehouses" className="min-w-0 min-h-0 flex flex-col xl:col-span-3" bodyClassName="min-h-0 flex-1 flex flex-col overflow-auto">
  <ul className="text-sm">
  {data.map((w) => (
  <li key={w.id} className="group">
@@ -188,7 +232,7 @@ export default function WarehousePage() {
  <div className="text-2xs text-muted">{w.name}</div>
  </button>
  {canManage && (
- <div className="hidden group-hover:flex pr-1 gap-0.5">
+ <div className="warehouse-row-actions flex justify-end gap-0.5 pr-1">
  <IconBtn label={`Edit ${w.name}`} onClick={() => setWhModal({ mode: 'edit', existing: w })}>
  <LuPencil size={12} />
  </IconBtn>
@@ -212,7 +256,8 @@ export default function WarehousePage() {
  {/* Zones column */}
  <Panel
  title={`Zones — ${wh.name}`}
- className="col-span-4"
+ className="min-w-0 min-h-0 flex flex-col xl:col-span-3"
+ bodyClassName="min-h-0 flex-1 flex flex-col overflow-auto"
  actions={canManage ? (
  <Button size="sm" variant="secondary" icon={<LuPlus size={12} />} onClick={() => setZoneModal({ mode: 'create', existing: null })}>
  Zone
@@ -236,7 +281,7 @@ export default function WarehousePage() {
  <Chip variant="neutral">{z.zone_type_label ?? z.zone_type}</Chip>
  </button>
  {canManage && (
- <div className="hidden group-hover:flex pr-1 gap-0.5">
+ <div className="warehouse-row-actions flex justify-end gap-0.5 pr-1">
  <IconBtn label={`Edit ${z.name}`} onClick={() => setZoneModal({ mode: 'edit', existing: z })}>
  <LuPencil size={12} />
  </IconBtn>
@@ -261,7 +306,8 @@ export default function WarehousePage() {
  {/* Locations column */}
  <Panel
  title={`Locations — ${zone?.name ?? '—'}`}
- className="col-span-5"
+ className="min-w-0 min-h-0 flex flex-col xl:col-span-6"
+ bodyClassName="min-h-0 flex-1 flex flex-col overflow-hidden"
  actions={canManage && zone ? (
  <Button size="sm" variant="secondary" icon={<LuPlus size={12} />} onClick={() => setLocModal({ mode: 'create', existing: null })}>
  Location
@@ -271,50 +317,13 @@ export default function WarehousePage() {
  {!zone || locations.length === 0 ? (
  <div className="text-sm text-muted">No locations yet.</div>
  ) : (
- <table className={tableCls}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Code</Th>
- <Th>Rack</Th>
- <Th>Bin</Th>
-  <Th>Status</Th>
- <Th />
- </tr>
- </thead>
- <tbody>
- {locations.map((l) => (
- <tr key={l.id} className={cn(trCls, 'group')}>
- <Td mono>{l.code}</Td>
- <Td>{l.rack ?? <span className="text-muted">—</span>}</Td>
- <Td>{l.bin ?? <span className="text-muted">—</span>}</Td>
- <Td>
-  <div className="flex gap-1.5">
-  <Chip variant={l.is_active ? 'success' : 'neutral'}>{l.is_active ? 'active' : 'inactive'}</Chip>
-  {l.is_blocked && <Chip variant="warning">blocked</Chip>}
-  </div>
- </Td>
- <Td align="right" mono>
- {canManage && (
- <div className="hidden group-hover:flex justify-end gap-0.5">
- <IconBtn label={`Edit ${l.code}`} onClick={() => setLocModal({ mode: 'edit', existing: l })}>
- <LuPencil size={12} />
- </IconBtn>
- {scope === 'only' ? (
- <IconBtn label={`Restore ${l.code}`} onClick={() => setConfirmRestore({ kind: 'location', id: l.id, code: l.code })}>
- <LuArchiveRestore size={12} />
- </IconBtn>
- ) : (
- <IconBtn label={`Delete ${l.code}`} danger onClick={() => setConfirmDelete({ kind: 'location', id: l.id, code: l.code })}>
- <LuTrash2 size={12} />
- </IconBtn>
- )}
- </div>
- )}
- </Td>
- </tr>
- ))}
- </tbody>
- </table>
+ <DataTable
+  tableKey="warehouse-locations"
+  fillHeight
+  columns={locationColumns}
+  data={locations}
+  fixedColumnLayout
+ />
  )}
  </Panel>
  </div>
@@ -418,7 +427,7 @@ export default function WarehousePage() {
  variant="primary"
  pending={restoreWh.isPending || restoreZone.isPending || restoreLoc.isPending}
  />
- </div>
+ </PageShell>
  );
 }
 
