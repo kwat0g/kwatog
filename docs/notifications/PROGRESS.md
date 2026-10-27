@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, #363, #364, #366, #485, and #487 merged to `main`. PR #487 promotes the training links from stacked PR #365. PR #367 updates budget-transfer badge/list parity. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
+**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, #363, #364, #366, #367, #485, and #487 merged to `main`. PR #487 promotes the training links from stacked PR #365. PR #369 aligns the AP overdue badge with its list and date semantics. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
 
 ## Phase status
 
@@ -11,10 +11,10 @@
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; partial targeted recipient and badge/list comparisons are recorded below. Full role/scope proof remains open. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
 | 3. Backend foundation | In progress | Units 1–3 and documented fixes through #364, #485, and #487 are merged to `main`. PRs #353, #354, and #357 add badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients; #363 scopes AR dunning; #364 addresses payroll recipients and links; #487 promotes training links from stacked PR #365; #485 handles generic approval recipient collections. Global authorization coverage, signal registry, and remaining event families remain open. |
-| 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. PR #367 adds the Budget Transfers item and actionable badge link. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
-| 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Budget-transfer badge/list parity is addressed in PR #367; remaining dispatch sites and sidebar signals remain open. |
+| 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. PR #367 adds the Budget Transfers item; PR #369 confirms the AP overdue badge links to its existing filtered list. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
+| 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Budget-transfer and AP overdue badge/list parity are addressed in PRs #367 and #369; remaining dispatch sites and sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted tests exist for merged PRs and results are recorded below; full role, channel, and badge parity remain incomplete. SPA sidebar tests passed after integration for #353 (**28**), #354 (**29**), and #357 (**30**); #358 `record-output.test.tsx` passed **5**. PR #365's feature-head tests passed **11 API tests / 39 assertions** and **2 SPA tests**. PR #366's targeted tests passed **1 API test / 7 assertions** and **3 SPA tests**. PR #367 targeted API tests passed **22 tests / 235 assertions** and sidebar tests passed **49** on the original feature head; no post-rebase rerun. No post-merge API tests ran locally because PHP is unavailable. Full GitHub workflows were not awaited under the user's CI priority. Tests did not use the user's application database. Full suite, browser QA, all-role/channel coverage, and broad badge parity remain open. |
+| 7. Verification | Partial | Targeted tests exist for merged PRs and results are recorded below; full role, channel, and badge parity remain incomplete. SPA sidebar tests passed after integration for #353 (**28**), #354 (**29**), and #357 (**30**); #358 `record-output.test.tsx` passed **5**. PR #365's feature-head tests passed **11 API tests / 39 assertions** and **2 SPA tests**. PR #366's targeted tests passed **1 API test / 7 assertions** and **3 SPA tests**. PR #367 targeted API tests passed **22 tests / 235 assertions** and sidebar tests passed **49** on the original feature head; no post-rebase rerun. PR #369's original API parity test passed in `BadgeControllerTest.php` (**15 tests / 175 assertions**) and sidebar tests passed (**29**) before rebase; the due-today row-status assertion was added afterward and remains unverified. PHP is unavailable locally. Full GitHub workflows were not awaited under the user's CI priority. Tests did not use the user's application database. Full suite, browser QA, all-role/channel coverage, and broad badge parity remain open. |
 
 ## Phase 3 PR stack
 
@@ -50,8 +50,9 @@
 | F-26. AR dunning audience and links | `notifications/fix-ar-dunning-review-audience` | [#363](https://github.com/kwat0g/kwatog/pull/363) | merged as `8cfe7abb` |
 | F-27. Payroll recipient scope and deep links | `notifications/fix-payroll-notice-audience` | [#364](https://github.com/kwat0g/kwatog/pull/364) | merged as `658e3be4` |
 | F-07. Training-expiry deep links | `notifications/fix-training-expiry-links` | [#365](https://github.com/kwat0g/kwatog/pull/365), promotion [#487](https://github.com/kwat0g/kwatog/pull/487) | promoted to `main` as `0d8f00d0` |
-| F-10. Shared alert unread/list parity | `notifications/fix-alert-count-parity` | [#366](https://github.com/kwat0g/kwatog/pull/366) | open against `main` |
-| F-05/F-09. Budget-transfer badge/list parity | `notifications/fix-budget-transfer-badge-parity` | [#367](https://github.com/kwat0g/kwatog/pull/367) | rebased on `main` |
+| F-10. Shared alert unread/list parity | `notifications/fix-alert-count-parity` | [#366](https://github.com/kwat0g/kwatog/pull/366) | merged as `49649075` |
+| F-05/F-09. Budget-transfer badge/list parity | `notifications/fix-budget-transfer-badge-parity` | [#367](https://github.com/kwat0g/kwatog/pull/367) | merged as `5364a1b0` |
+| F-09/F-30. AP overdue badge and row-status parity | `notifications/fix-ap-bills-badge-parity` | [#369](https://github.com/kwat0g/kwatog/pull/369) | rebased on `main` |
 | F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
 ## Coverage ledger
@@ -209,11 +210,18 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - `AlertsHardeningTest` parity test: **1 passed / 7 assertions**. `pages/alerts/index.test.tsx`: **3 passed**. PHP syntax, ESLint, and `git diff --check` passed on the feature head. The old full API job timed out and the old SPA job stopped at dependency audit before typecheck/tests; current full workflows were not awaited.
 - No sidebar item or current SPA caller uses `/alerts/unread-count`; this is a page-level count action. Whether read state should become personal remains a business question.
 
-## Separate finding fix: F-05/F-09 budget-transfer badge/list parity (PR [#367](https://github.com/kwat0g/kwatog/pull/367))
+## Separate finding fix: F-05/F-09 budget-transfer badge/list parity (PR [#367](https://github.com/kwat0g/kwatog/pull/367), merged as `5364a1b0`)
 
 - Adds Finance > Budget Transfers, gated by `budgeting.view` or `budgeting.approve`. A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; approval-only users see only transfers they can approve. `BudgetTransfer::scopeAwaitingApprovalFor()` powers both badge and list and follows direct/delegated maker-checker eligibility. The Phase 2 combined budget signal remains incomplete.
 - On the original feature head, `BudgetTransferTest.php` plus `BadgeControllerTest.php`: **22 passed / 235 assertions**. `Sidebar.behavior.test.tsx` plus `Sidebar.permissions.test.tsx`: **49 passed**. These targeted results were recorded before rebase; they were not rerun afterward.
 - Existing GitHub workflow blockers: API stops at a duplicate `PdfRenderService::ensureDompdfDirs()` declaration before PHPUnit; SPA stops at `npm audit` findings in `@vitest/mocker`, `undici`, and `zod`. CI was not awaited under the user's priority. Browser visual QA, full suite, and parity across every eligible role remain open.
+
+## Separate finding fix: F-09/F-30 AP overdue badge and row-status parity (PR [#369](https://github.com/kwat0g/kwatog/pull/369))
+
+- `Bill::scopeOverdue()` is shared by the `overdue_bills` badge and `/bills?overdue=1` filter. It includes only unpaid/partial bills with due date before app `today()` (default `Asia/Manila`) and excludes due-today, paid, draft, and cancelled rows. Sidebar opens `/accounting/bills?overdue=1`.
+- `Bill::isOverdue()` previously called `isPast()` on a date cast at midnight, labeling due-today bills overdue. It now uses the same unpaid/partial and strict-date condition. This field is returned in internal and supplier/customer bill resources.
+- Before rebase, `BadgeControllerTest.php` passed **15 tests / 175 assertions** and `Sidebar.behavior.test.tsx` passed **29**. The due-today row-status assertion was added after those runs; it was not rerun locally because PHP is unavailable.
+- CI was not awaited under the user's priority. Browser visual QA and full-suite verification remain open.
 
 ## Separate finding fix: F-29 generic approval recipient collection (PR [#485](https://github.com/kwat0g/kwatog/pull/485))
 

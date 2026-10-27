@@ -1016,7 +1016,7 @@ class BadgeControllerTest extends TestCase
                 'balance' => 900,
                 'due_date' => today()->subDay(),
             ]);
-            Bill::factory()->create(['due_date' => today()]);
+            $dueTodayBill = Bill::factory()->create(['due_date' => today()]);
             Bill::factory()->create(['status' => 'paid', 'due_date' => today()->subDay()]);
             Bill::factory()->create(['status' => 'draft', 'due_date' => today()->subDay()]);
             Bill::factory()->create(['status' => 'cancelled', 'due_date' => today()->subDay()]);
@@ -1033,6 +1033,13 @@ class BadgeControllerTest extends TestCase
             $this->assertSame($badgeCount, $overdueList->json('meta.total'));
             $this->assertSame(['partial', 'unpaid'], collect($overdueList->json('data'))->pluck('status')->sort()->values()->all());
             $this->assertSame([true, true], collect($overdueList->json('data'))->pluck('is_overdue')->all());
+
+            $unpaidList = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/bills?status=unpaid')
+                ->assertOk();
+            $dueTodayRow = collect($unpaidList->json('data'))->firstWhere('id', $dueTodayBill->hash_id);
+            $this->assertNotNull($dueTodayRow);
+            $this->assertFalse($dueTodayRow['is_overdue']);
         } finally {
             Carbon::setTestNow();
         }
