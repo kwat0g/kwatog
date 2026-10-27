@@ -41,6 +41,7 @@ use App\Modules\Production\Models\WorkOrderCrew;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -1361,5 +1362,81 @@ class NotificationServiceSubjectAccessTest extends TestCase
         $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($assignedWorker, $order));
         app(SettingsService::class)->set('modules.inventory', false, 'modules');
         $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($picker, $partRequest));
+    }
+
+    public function test_rfq_subject_follows_the_existing_record_visibility_policy(): void
+    {
+        app(SettingsService::class)->set('modules.purchasing', true, 'modules');
+        $permission = Permission::firstOrCreate(['slug' => 'purchasing.rfq.view'], ['name' => 'View supplier RFQs', 'module' => 'purchasing']);
+        $role = Role::firstOrCreate(['slug' => 'notification_rfq_viewer'], ['name' => 'Notification RFQ Viewer']);
+        $role->permissions()->sync([$permission->id]);
+        $viewer = User::factory()->withRole($role->slug)->create(['is_active' => true]);
+        $requester = User::factory()->create(['is_active' => true]);
+        $outsider = User::factory()->create(['is_active' => true]);
+        $purchaseRequest = PurchaseRequest::factory()->create(['requested_by' => $requester->id]);
+        $rfq = RequestForQuote::factory()->create([
+            'purchase_request_id' => $purchaseRequest->id,
+            'created_by' => $viewer->id,
+        ]);
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.rfq_subject_access',
+                'subject_type' => RequestForQuote::class,
+                'subject_id' => $rfq->id,
+                'user_ids' => [$outsider->id],
+            ],
+        );
+
+        app(NotificationService::class)->sendForSubject($rfq, [$viewer, $requester, $outsider], 'test.rfq_subject_access', [
+            'title' => 'RFQ update',
+            'link_to' => '/purchasing/rfqs/'.$rfq->hash_id,
+        ], emailEnabled: false);
+
+        foreach ([$viewer, $requester] as $recipient) {
+            $this->assertDatabaseHas('notifications', ['notifiable_id' => $recipient->id, 'type' => 'test.rfq_subject_access']);
+            Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $recipient->id);
+        }
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $outsider->id, 'type' => 'test.rfq_subject_access']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $outsider->id);
+        $this->assertTrue(NotificationSubjectAccessRegistry::supports(RequestForQuote::class));
+    }
+
+    public function test_supplier_performance_subject_requires_the_detail_route_and_permission(): void
+    {
+        app(SettingsService::class)->set('modules.purchasing', true, 'modules');
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'purchasing.suppliers.performance.view'],
+            ['name' => 'View supplier performance', 'module' => 'purchasing'],
+        );
+        $role = Role::firstOrCreate(['slug' => 'notification_supplier_score_viewer'], ['name' => 'Notification Supplier Score Viewer']);
+        $role->permissions()->sync([$permission->id]);
+        $viewer = User::factory()->withRole($role->slug)->create(['is_active' => true]);
+        $withoutPermission = User::factory()->create(['is_active' => true]);
+        $vendor = Vendor::factory()->create();
+        $link = '/purchasing/suppliers/'.$vendor->hash_id.'/performance';
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.supplier_performance_subject_access',
+                'subject_type' => Vendor::class,
+                'subject_id' => $vendor->id,
+                'user_ids' => [$withoutPermission->id],
+            ],
+        );
+
+        app(NotificationService::class)->sendForSubject($vendor, [$viewer, $withoutPermission], 'test.supplier_performance_subject_access', [
+            'title' => 'Supplier score changed',
+            'link_to' => $link,
+        ], emailEnabled: false);
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.supplier_performance_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => 'test.supplier_performance_subject_access']);
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($viewer, $vendor, '/purchasing/suppliers'));
+        $this->assertTrue(NotificationSubjectAccessRegistry::supports(Vendor::class));
     }
 }

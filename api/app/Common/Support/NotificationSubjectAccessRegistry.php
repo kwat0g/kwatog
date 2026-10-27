@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Attendance\Models\Attendance;
@@ -44,6 +45,8 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Models\RequestForQuote;
+use App\Modules\Purchasing\Policies\RequestForQuoteAccessPolicy;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
@@ -62,7 +65,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, RequestForQuote::class, Vendor::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -171,6 +174,15 @@ final class NotificationSubjectAccessRegistry
                 && ($user->hasPermission('purchasing.view') || $user->hasPermission('purchasing.po.approve'))
                 && $subject instanceof PurchaseOrder
                 && app(PurchaseOrderAccessPolicy::class)->canView($user, $subject),
+            RequestForQuote::class => app(SettingsService::class)->get('modules.purchasing', false) === true
+                && $user->is_active
+                && $subject instanceof RequestForQuote
+                && app(RequestForQuoteAccessPolicy::class)->canSee($user, $subject),
+            Vendor::class => app(SettingsService::class)->get('modules.purchasing', false) === true
+                && $user->is_active
+                && $user->hasPermission('purchasing.suppliers.performance.view')
+                && $subject instanceof Vendor
+                && $linkTo === '/purchasing/suppliers/'.$subject->hash_id.'/performance',
             default => ApprovalTypeRegistry::forClass($class) !== null
                 && ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $subject->getKey()),
         };
