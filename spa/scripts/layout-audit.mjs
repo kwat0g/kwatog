@@ -143,7 +143,7 @@ function localUser(role, themeMode) {
     name: `Layout Audit ${role}`,
     email: ROLE_EMAILS[role],
     role: { id: `layout-audit-${role}`, slug: slugs[role], name: slugs[role] },
-    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'inventory.warehouse.manage', 'inventory.issue.create', 'inventory.grn.create', 'inventory.mrb.view', 'inventory.mrb.manage', 'quality.inspections.view', 'quality.inspections.manage', 'quality.ncr.view', 'accounting.journal.view', 'accounting.journal.post', 'accounting.bills.create', 'return_management.manage', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
+    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.picking.view', 'inventory.items.manage', 'inventory.warehouse.manage', 'inventory.issue.create', 'inventory.grn.create', 'inventory.mrb.view', 'inventory.mrb.manage', 'quality.inspections.view', 'quality.inspections.manage', 'quality.ncr.view', 'accounting.journal.view', 'accounting.journal.post', 'accounting.bills.create', 'return_management.manage', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
     delegated_approvals: [],
     features: ['inventory', 'production', 'notifications', 'search', 'b2b_portals'],
     employee: { id: 'layout-audit-employee', employee_no: 'LAYOUT-AUDIT' },
@@ -180,6 +180,70 @@ function sampleAdjustments(count) {
     can_withdraw: false,
   }));
 }
+
+function sampleHandoverTasks(count, status = 'pending') {
+  return Array.from({ length: count }, (_, index) => {
+    const rowStatus = status || (index % 3 === 1 ? 'handed_over' : index % 3 === 2 ? 'needs_review' : 'pending');
+    return {
+      id: `layout-handover-${index + 1}`,
+      work_order_id: `layout-handover-wo-${index + 1}`,
+      material_issue_id: `layout-handover-slip-${index + 1}`,
+      maintenance_work_order_id: null,
+      label: index === 1
+        ? 'WO-REFERENCE-202610-000000000002 · MATERIAL-ISSUE-REFERENCE-000000000002'
+        : `WO-LAYOUT-${String(index + 1).padStart(6, '0')} · MAT-${String(index + 1).padStart(6, '0')}`,
+      status: rowStatus,
+      total_lines: index === 2 ? 123456 : 4 + (index % 13),
+      handed_over_lines: rowStatus === 'handed_over' ? 4 : 0,
+      pending_lines: rowStatus === 'pending' ? 4 + (index % 13) : 0,
+      latest_issue_at: `2026-10-${String((index % 28) + 1).padStart(2, '0')}T09:14:00+08:00`,
+    };
+  });
+}
+
+function sampleHandoverDetail(count, index = 0) {
+  const task = sampleHandoverTasks(index + 1, '')[index];
+  return {
+    ...task,
+    sources: Array.from({ length: count }, (_, sourceIndex) => {
+      const returned = sourceIndex % 5 === 1;
+      const handedOver = sourceIndex % 5 === 2;
+      return {
+        request_id: `layout-request-${sourceIndex + 1}`,
+        requested_quantity: sourceIndex === 0 ? '123456789.125' : '25000.000',
+        movement_id: `layout-movement-${index + 1}-${sourceIndex + 1}`,
+        item: {
+          id: `layout-item-${sourceIndex + 1}`,
+          code: sourceIndex === 0 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(sourceIndex + 1).padStart(6, '0')}`,
+          name: sourceIndex === 0
+            ? 'Long material description used to check wrapping, readable secondary text and quantity alignment across narrow and ultra-wide screens'
+            : `Material component ${sourceIndex + 1}`,
+          unit_of_measure: 'kg',
+        },
+        location: { id: 'layout-location-1', code: 'WH-RAW-MATERIAL-REFERENCE-000000000001' },
+        lot_number: sourceIndex === 0 ? 'LOT-REFERENCE-202610-000000000000001' : `LOT-${String(sourceIndex + 1).padStart(6, '0')}`,
+        issued_quantity: sourceIndex === 0 ? '123456789.125' : '25000.000',
+        returned_quantity: returned ? '25000.000' : '0.000',
+        remaining_quantity: returned ? '0.000' : '25000.000',
+        eligible: !handedOver && !returned && task.status === 'pending',
+        handover: handedOver ? {
+          recipient_name: 'A very long production recipient name for dropdown and secondary text width checks',
+          quantity: '25000.000',
+          handed_over_at: '2026-10-27T09:14:00+08:00',
+          recorded_by: 'Layout Audit Warehouse Staff',
+        } : null,
+      };
+    }),
+    recipients: [
+      { value: 'layout-employee-1', label: 'A very long production employee name used for dropdown layout checks' },
+      { value: 'layout-employee-2', label: 'Employee 2' },
+    ],
+    default_recipient_id: 'layout-employee-1',
+  };
+}
+
+assert.equal(sampleHandoverTasks(3).length, 3);
+assert.equal(sampleHandoverDetail(10).sources.length, 10);
 
 const sampleItem = {
   id: 'layout-item-001',
@@ -918,6 +982,35 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
       data: sampleMaterialIssues(rowCount),
       meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
     };
+    else if (pathname.endsWith('/inventory/material-handovers/sources')) {
+      const query = new URL(route.request().url()).searchParams;
+      const selector = query.get('work_order_id') ?? query.get('material_issue_id') ?? query.get('maintenance_work_order_id') ?? '';
+      const index = Math.max(0, Number(selector.match(/-(\d+)$/)?.[1] ?? 1) - 1);
+      const data = sampleHandoverDetail(rowCount, index);
+      if (query.has('maintenance_work_order_id')) {
+        data.maintenance_work_order_id = selector;
+        data.work_order_id = null;
+        data.material_issue_id = null;
+        data.label = `Maintenance work order ${selector}`;
+      }
+      json = { data };
+    }
+    else if (pathname.endsWith('/inventory/material-handovers')) {
+      const query = new URL(route.request().url()).searchParams;
+      const status = query.get('status') ?? '';
+      let data = sampleHandoverTasks(rowCount, status);
+      const workOrderId = query.get('work_order_id');
+      const maintenanceWorkOrderId = query.get('maintenance_work_order_id');
+      if (workOrderId) data = data.filter((task) => task.work_order_id === workOrderId);
+      if (maintenanceWorkOrderId) data = data.slice(0, 1).map((task) => ({
+        ...task,
+        work_order_id: null,
+        material_issue_id: null,
+        maintenance_work_order_id: maintenanceWorkOrderId,
+        label: `Maintenance work order ${maintenanceWorkOrderId}`,
+      }));
+      json = { data, meta: { current_page: 1, last_page: 1, per_page: Math.max(1, data.length), total: data.length, from: data.length ? 1 : 0, to: data.length } };
+    }
     else if (/\/inventory\/transfer-orders\/[^/]+$/.test(pathname)) json = { data: sampleTransferOrder(0) };
     else if (pathname.endsWith('/inventory/transfer-orders')) json = {
       data: sampleTransferOrders(rowCount),
@@ -1788,6 +1881,18 @@ async function main() {
           if (await expand.count()) {
             await expand.click();
             await page.waitForTimeout(100);
+          }
+        }
+        if (route.startsWith('/inventory/picking') && process.argv.includes('--picking-all-statuses')) {
+          await page.getByLabel('Status', { exact: true }).selectOption('');
+          await page.waitForTimeout(350);
+        }
+        if (route.startsWith('/inventory/picking') && process.argv.includes('--picking-expand-first-row')) {
+          const expand = page.getByRole('button', { name: 'Expand row' }).first();
+          if (await expand.count()) {
+            await expand.click();
+            await page.locator('[aria-label^="Handover details for"]').first().waitFor({ state: 'visible', timeout: 10_000 });
+            await page.waitForTimeout(250);
           }
         }
         await page.waitForTimeout(350);

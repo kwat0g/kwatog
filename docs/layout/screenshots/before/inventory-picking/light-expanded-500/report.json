@@ -1,0 +1,1585 @@
+{
+  "generatedAt": "2026-10-27T16:36:15.750Z",
+  "baseUrl": "http://127.0.0.1:5175",
+  "role": "warehouse",
+  "theme": "light",
+  "fixtureRowsRequested": 500,
+  "widths": [
+    1440
+  ],
+  "routes": [
+    "/inventory/picking"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/inventory/picking",
+      "role": "warehouse",
+      "width": 1440,
+      "score": 4,
+      "issues": [
+        "nested vertical scroll"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "route": "/inventory/picking",
+      "role": "warehouse",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/before/inventory-picking/light-expanded-500/inventory-picking-1440.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [
+        "docs/layout/screenshots/before/inventory-picking/light-expanded-500/inventory-picking-1440-long-top.png",
+        "docs/layout/screenshots/before/inventory-picking/light-expanded-500/inventory-picking-1440-long-middle.png",
+        "docs/layout/screenshots/before/inventory-picking/light-expanded-500/inventory-picking-1440-long-bottom.png"
+      ],
+      "longTransferListScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": null,
+      "inventoryDialogSamples": [],
+      "scheduleBottomSample": null,
+      "url": "/inventory/picking",
+      "title": "Material Handover · Warehouse · ERP",
+      "h1": "Material Handover",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 508,
+        "links": 0,
+        "inputs": 305,
+        "tables": 1,
+        "rows": 500,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 29537.171875,
+        "width": 1200,
+        "height": 29489.171875
+      },
+      "mainContent": {
+        "textLength": 159383,
+        "textSample": "Material Handover 500 pending handover tasks Pending handover Resolved Needs review Status: All 1 active filter Clear all Showing 500 of 500 results, page 1 Col",
+        "documentTables": 1,
+        "mainTables": 1
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": 20,
+        "toolbar": 20,
+        "table": 20,
+        "pagination": 20
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1420,
+          "top": 48,
+          "bottom": 137,
+          "width": 1200,
+          "height": 89
+        },
+        "filters": {
+          "left": 260,
+          "right": 1420,
+          "top": 137,
+          "bottom": 194,
+          "width": 1200,
+          "height": 57
+        },
+        "toolbar": {
+          "left": 260,
+          "right": 1420,
+          "top": 210,
+          "bottom": 246,
+          "width": 1160,
+          "height": 36
+        },
+        "table": {
+          "left": 260,
+          "right": 1420,
+          "top": 262,
+          "bottom": 29469.171875,
+          "width": 1160,
+          "height": 29207.171875
+        },
+        "pagination": {
+          "left": 260,
+          "right": 1420,
+          "top": 29485.171875,
+          "bottom": 29521.171875,
+          "width": 1160,
+          "height": 36
+        }
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "Material Handover",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 48,
+            "bottom": 137,
+            "width": 1200,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "flex min-w-0 flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-default",
+          "heading": "",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 137,
+            "bottom": 194,
+            "width": 1200,
+            "height": 57
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "12px",
+            "right": "20px",
+            "bottom": "12px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 2,
+          "tag": "div",
+          "className": "px-5 py-4 space-y-4 min-w-0",
+          "heading": "WO-LAYOUT-000001 · MAT-000001 · Issued materials",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 194,
+            "bottom": 29537.171875,
+            "width": 1200,
+            "height": 29343.171875
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "sections": [],
+      "edgeAlignment": {
+        "header": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "toolbar": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "table": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "pagination": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        }
+      },
+      "transferFlowAlignment": null,
+      "verticalGaps": {
+        "headerToFilters": 0,
+        "filtersToToolbar": 16,
+        "toolbarToTable": 16,
+        "tableToPagination": 16
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-60",
+          "left": 0,
+          "right": 240,
+          "width": 240,
+          "scrollWidth": 239,
+          "clientWidth": 239,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 97,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "sr-only",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 227,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 227,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "input",
+          "className": "flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none px-3 text-md",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "clip",
+          "overflowY": "clip",
+          "scrollWidth": 489,
+          "clientWidth": 349,
+          "scrollHeight": 42,
+          "clientHeight": 42,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 489,
+          "maxClientWidth": 349,
+          "maxScrollHeight": 42,
+          "maxClientHeight": 42
+        }
+      ],
+      "verticalScrollContainers": [
+        {
+          "tag": "div",
+          "className": "max-h-96 overflow-y-auto overscroll-contain divide-y divide-default border-y border-default",
+          "horizontal": false,
+          "intentionalHorizontal": false,
+          "vertical": true,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "auto",
+          "overflowY": "auto",
+          "scrollWidth": 1094,
+          "clientWidth": 1094,
+          "scrollHeight": 63268,
+          "clientHeight": 382,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 1094,
+          "maxClientWidth": 1094,
+          "maxScrollHeight": 63268,
+          "maxClientHeight": 382
+        }
+      ],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": true,
+      "scheduleScrollRegion": null,
+      "table": {
+        "density": "compact",
+        "scrollAffordance": {
+          "needed": false,
+          "left": false,
+          "right": false,
+          "keyboardFocusable": false,
+          "labelled": false
+        },
+        "textBelowMinimum": [],
+        "headerHeight": 52.5,
+        "rowHeight": {
+          "min": 57,
+          "max": 652.17,
+          "distinct": [
+            57,
+            652.17
+          ]
+        },
+        "cellPadding": {
+          "top": "8px",
+          "right": "12px",
+          "bottom": "8px",
+          "left": "12px"
+        },
+        "columns": [
+          {
+            "header": "",
+            "width": 44,
+            "share": 0.038,
+            "headerAlign": "left",
+            "cellAlign": "start",
+            "sticky": true
+          },
+          {
+            "header": "WO / Slip",
+            "width": 508,
+            "share": 0.438,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Material lines",
+            "width": 113,
+            "share": 0.098,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Handover status",
+            "width": 219,
+            "share": 0.189,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Latest issue",
+            "width": 147,
+            "share": 0.127,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Review",
+            "width": 128,
+            "share": 0.11,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          }
+        ],
+        "stickyHeader": true,
+        "stickyProbe": {
+          "cssSticky": true,
+          "tested": false,
+          "sticksToScroller": null,
+          "topAfterScroll": null,
+          "scrollerTopAfterScroll": null
+        },
+        "semantics": {
+          "columnHeaders": 6,
+          "scopedColumnHeaders": 6,
+          "sortableHeaders": 0,
+          "keyboardFocusableRows": 500
+        },
+        "truncation": []
+      },
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Material Handover",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Material Handover"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "500 pending handover tasks",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "500 pending handover tasks"
+            ]
+          },
+          {
+            "tag": "svg",
+            "className": "",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": null,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "text-xs text-muted font-mono tabular-nums",
+            "text": "1 active filter",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "1 active filter"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "h-8 px-2 text-xs text-muted hover:text-primary rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
+            "text": "Clear all",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Clear all"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-default px-3 text-label text-primary hover:bg-elevated transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
+            "text": "Columns",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Columns"
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "flex items-center gap-2 text-label text-muted",
+            "text": "DensityComfortableCompactSpacious",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "DensityComfortableCompactSpacious",
+              "Rows2550100"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "px-3 py-2 w-7 text-left text-table-header text-muted font-semibold h-row-compact sticky top-0 z-20",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.44,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "th",
+            "className": "relative px-3 py-2 text-table-header text-muted font-semibold select-none h-row-compact text-left",
+            "text": "WO / Slip",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.44,
+            "count": 4,
+            "examples": [
+              "WO / Slip",
+              "Handover status",
+              "Latest issue"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "relative px-3 py-2 text-table-header text-muted font-semibold select-none h-row-compact text-right",
+            "text": "Material lines",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Material lines"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 w-7 align-middle",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 15.61,
+            "count": 251,
+            "examples": []
+          },
+          {
+            "tag": "button",
+            "className": "h-5 w-5 inline-flex items-center justify-center rounded text-muted hover:bg-subtle hover:text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "color(srgb 0.960784 0.945098 0.913725)",
+            "contrast": 15.2,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 text-left",
+            "text": "WO-LAYOUT-000001 · MAT-000001",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 15.61,
+            "count": 1004,
+            "examples": [
+              "WO-LAYOUT-000001 · MAT-000001",
+              "Pending handover · 4 lines",
+              "Oct 1, 2026 · 9:14 AM"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 text-right",
+            "text": "4",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 15.61,
+            "count": 251,
+            "examples": [
+              "4",
+              "5",
+              "7"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-4 py-3",
+            "text": "WO-LAYOUT-000001 · MAT-000001 · Issued materials4 pending · 0 handed over · 100 ",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 15.2,
+            "count": 1,
+            "examples": [
+              "WO-LAYOUT-000001 · MAT-000001 · Issued materials4 pending · 0 handed over · 100 "
+            ]
+          },
+          {
+            "tag": "h2",
+            "className": "text-sm font-medium",
+            "text": "WO-LAYOUT-000001 · MAT-000001 · Issued materials",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 15.2,
+            "count": 1,
+            "examples": [
+              "WO-LAYOUT-000001 · MAT-000001 · Issued materials"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "text-xs text-muted",
+            "text": "4 pending · 0 handed over · 100 fully returned",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.3,
+            "count": 1,
+            "examples": [
+              "4 pending · 0 handed over · 100 fully returned"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-xs text-muted",
+            "text": "Review requested parts or issued locations, lots and remaining quantities. Selec",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.3,
+            "count": 101,
+            "examples": [
+              "Review requested parts or issued locations, lots and remaining quantities. Selec",
+              "Received by A very long production recipient name for dropdown and secondary tex"
+            ]
+          },
+          {
+            "tag": "p",
+            "className": "text-sm text-warning-fg",
+            "text": "Select a batch of up to 100 lines. No lines were selected automatically.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.478431 0.32549 0.0784314)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.06,
+            "count": 1,
+            "examples": [
+              "Select a batch of up to 100 lines. No lines were selected automatically."
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "inline-flex min-h-6 min-w-6 max-xl:min-h-11 max-xl:min-w-11 items-center justify-center gap-2 cursor-pointer text-sm",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 15.2,
+            "count": 300,
+            "examples": []
+          },
+          {
+            "tag": "p",
+            "className": "text-sm text-secondary break-words",
+            "text": "Long material description used to check wrapping, readable secondary text and qu",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 8.75,
+            "count": 500,
+            "examples": [
+              "Long material description used to check wrapping, readable secondary text and qu",
+              "Material component 2",
+              "Material component 3"
+            ]
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Issued from",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.3,
+            "count": 2500,
+            "examples": [
+              "Issued from",
+              "Lot",
+              "Issued"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium leading-tight whitespace-nowrap transition-colors duration-fast bg-subtle text-muted",
+            "text": "Fully returned",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.960784 0.945098 0.913725)",
+            "contrast": 5.3,
+            "count": 100,
+            "examples": [
+              "Fully returned"
+            ]
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Received by",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.3,
+            "count": 1,
+            "examples": [
+              "Received by"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-l border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.94902 0.929412 0.894118)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "button",
+            "className": "flex h-full items-center",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "p",
+            "className": "text-sm",
+            "text": "Confirm the selected materials were received by this worker.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 15.2,
+            "count": 1,
+            "examples": [
+              "Confirm the selected materials were received by this worker."
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Confirm handover (0 lines)",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "contrast": 4.83,
+            "count": 1,
+            "examples": [
+              "Confirm handover (0 lines)"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "h-5 w-5 inline-flex items-center justify-center rounded text-muted hover:bg-subtle hover:text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.44,
+            "count": 250,
+            "examples": []
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 w-7 align-middle",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 249,
+            "examples": []
+          },
+          {
+            "tag": "button",
+            "className": "h-5 w-5 inline-flex items-center justify-center rounded text-muted hover:bg-subtle hover:text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 249,
+            "examples": []
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 text-left",
+            "text": "WO-LAYOUT-000003 · MAT-000003",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 996,
+            "examples": [
+              "WO-LAYOUT-000003 · MAT-000003",
+              "Pending handover · 6 lines",
+              "Oct 3, 2026 · 9:14 AM"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 text-right",
+            "text": "123456",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 249,
+            "examples": [
+              "123456",
+              "8",
+              "10"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-sans tabular-nums",
+            "text": "1–500 of 500",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "1–500 of 500"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 4,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "text-caption font-sans tabular-nums px-2 text-muted",
+            "text": "Page 1 of 1",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Page 1 of 1"
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|21px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|400|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|600|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|20px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|16.25px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none",
+          "\"Public Sans Variable\", system-ui, sans-serif|13|400|18px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "1 active filter",
+            "count": 2,
+            "examples": [
+              "1 active filter",
+              "4 pending · 0 handed over · 100 fully returned"
+            ]
+          },
+          {
+            "tag": "button",
+            "size": 12,
+            "text": "Clear all",
+            "count": 1,
+            "examples": [
+              "Clear all"
+            ]
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Review requested parts or issued locations, lots and remaining quantities. Selec",
+            "count": 101,
+            "examples": [
+              "Review requested parts or issued locations, lots and remaining quantities. Selec",
+              "Received by A very long production recipient name for dropdown and secondary tex"
+            ]
+          },
+          {
+            "tag": "dt",
+            "size": 12,
+            "text": "Issued from",
+            "count": 2500,
+            "examples": [
+              "Issued from",
+              "Lot",
+              "Issued"
+            ]
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Clear all",
+          "width": 65,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)",
+          "count": 1,
+          "examples": [
+            "Clear all"
+          ],
+          "minWidth": 65,
+          "maxWidth": 65,
+          "minHeight": 32,
+          "maxHeight": 32
+        },
+        {
+          "label": "Customize columns",
+          "width": 105,
+          "height": 36,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Customize columns"
+          ],
+          "minWidth": 105,
+          "maxWidth": 105,
+          "minHeight": 36,
+          "maxHeight": 36
+        },
+        {
+          "label": "Collapse row",
+          "width": 20,
+          "height": 20,
+          "background": "color(srgb 0.960784 0.945098 0.913725)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Collapse row"
+          ],
+          "minWidth": 20,
+          "maxWidth": 20,
+          "minHeight": 20,
+          "maxHeight": 20
+        },
+        {
+          "label": "Show Received by",
+          "width": 16,
+          "height": 42,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)",
+          "count": 500,
+          "examples": [
+            "Show Received by",
+            "Expand row"
+          ],
+          "minWidth": 16,
+          "maxWidth": 20,
+          "minHeight": 20,
+          "maxHeight": 42
+        },
+        {
+          "label": "Confirm handover (0 lines)",
+          "width": 205,
+          "height": 32,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Confirm handover (0 lines)"
+          ],
+          "minWidth": 205,
+          "maxWidth": 205,
+          "minHeight": 32,
+          "maxHeight": 32
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 4,
+          "examples": [
+            "First page",
+            "Previous page",
+            "Next page"
+          ],
+          "minWidth": 28,
+          "maxWidth": 28,
+          "minHeight": 28,
+          "maxHeight": 28
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "color(srgb 0.992157 0.988235 0.980392)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "color(srgb 0.992157 0.988235 0.980392)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Clear all",
+          "width": 65,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)",
+          "count": 1,
+          "examples": [
+            "Clear all"
+          ],
+          "minWidth": 65,
+          "maxWidth": 65,
+          "minHeight": 32,
+          "maxHeight": 32
+        },
+        {
+          "label": "Customize columns",
+          "width": 105,
+          "height": 36,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Customize columns"
+          ],
+          "minWidth": 105,
+          "maxWidth": 105,
+          "minHeight": 36,
+          "maxHeight": 36
+        },
+        {
+          "label": "Collapse row",
+          "width": 20,
+          "height": 20,
+          "background": "color(srgb 0.960784 0.945098 0.913725)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Collapse row"
+          ],
+          "minWidth": 20,
+          "maxWidth": 20,
+          "minHeight": 20,
+          "maxHeight": 20
+        },
+        {
+          "label": "Show Received by",
+          "width": 16,
+          "height": 42,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)",
+          "count": 500,
+          "examples": [
+            "Show Received by",
+            "Expand row"
+          ],
+          "minWidth": 16,
+          "maxWidth": 20,
+          "minHeight": 20,
+          "maxHeight": 42
+        },
+        {
+          "label": "Confirm handover (0 lines)",
+          "width": 205,
+          "height": 32,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Confirm handover (0 lines)"
+          ],
+          "minWidth": 205,
+          "maxWidth": 205,
+          "minHeight": 32,
+          "maxHeight": 32
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 4,
+          "examples": [
+            "First page",
+            "Previous page",
+            "Next page"
+          ],
+          "minWidth": 28,
+          "maxWidth": 28,
+          "minHeight": 28,
+          "maxHeight": 28
+        }
+      ],
+      "controls": [
+        {
+          "label": "Search WO, slip, material code or name…",
+          "width": 220,
+          "height": 30,
+          "count": 8,
+          "examples": [
+            "Search WO, slip, material code or name…",
+            "Status",
+            "Clear all"
+          ],
+          "minWidth": 65,
+          "maxWidth": 349,
+          "minHeight": 30,
+          "maxHeight": 42
+        },
+        {
+          "label": "WO / Slip column width",
+          "width": 12,
+          "height": 32,
+          "count": 809,
+          "examples": [
+            "WO / Slip column width",
+            "Material lines column width",
+            "Handover status column width"
+          ],
+          "minWidth": 12,
+          "maxWidth": 28,
+          "minHeight": 20,
+          "maxHeight": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Search WO, slip, material code or name…",
+          "width": 220,
+          "height": 30,
+          "count": 8,
+          "examples": [
+            "Search WO, slip, material code or name…",
+            "Status",
+            "Clear all"
+          ],
+          "minWidth": 65,
+          "maxWidth": 349,
+          "minHeight": 30,
+          "maxHeight": 42
+        },
+        {
+          "label": "WO / Slip column width",
+          "width": 12,
+          "height": 32,
+          "count": 809,
+          "examples": [
+            "WO / Slip column width",
+            "Material lines column width",
+            "Handover status column width"
+          ],
+          "minWidth": 12,
+          "maxWidth": 28,
+          "minHeight": 20,
+          "maxHeight": 32
+        }
+      ],
+      "scrollContextCount": 2
+    }
+  ]
+}
