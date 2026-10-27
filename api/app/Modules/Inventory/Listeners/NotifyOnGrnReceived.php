@@ -30,7 +30,7 @@ class NotifyOnGrnReceived implements ShouldQueue
 
             $ref = $grn->purchaseOrder?->po_number ?? $grn->grn_number;
 
-            $this->notifications->send($audience, 'inventory.grn_received', [
+            $this->notifications->sendForSubject($grn, $audience, 'inventory.grn_received', [
                 'title' => "GRN Received — {$grn->grn_number}",
                 'message' => "Goods received against {$ref}.",
                 'link_to' => "/inventory/grn/{$grn->hash_id}",

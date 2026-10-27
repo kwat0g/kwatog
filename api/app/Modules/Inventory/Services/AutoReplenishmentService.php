@@ -181,12 +181,12 @@ class AutoReplenishmentService
                 ->orWhereHas('permissions', fn ($permissions) => $permissions->whereIn('slug', ['inventory.items.manage', 'purchasing.pr.create'])))
             ->get()->filter(fn ($user) => $user->hasPermission('inventory.view')
                 && ($user->hasPermission('inventory.items.manage') || $user->hasPermission('purchasing.pr.create')));
-        app(NotificationService::class)->sendInApp($audience, 'inventory.replenishment_blocked', [
+        app(NotificationService::class)->sendForSubject($item, $audience, 'inventory.replenishment_blocked', [
             'title' => "Replenishment blocked — {$item->code}",
             'message' => $message.' Inventory master data or Purchasing must review this item.',
             'link_to' => '/inventory/items/'.$item->hash_id,
             'entity_type' => 'item', 'entity_id' => $item->hash_id,
-        ], 'replenishment-blocked:'.$alert->id.':'.$reason);
+        ], 'replenishment-blocked:'.$alert->id.':'.$reason, emailEnabled: false);
     }
 
     private function clearBlocked(Item $item): void
