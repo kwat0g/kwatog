@@ -6,6 +6,7 @@ namespace Tests\Feature\Quality;
 
 use App\Console\Commands\SweepMissingOutgoingQc;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -199,9 +200,16 @@ class SweepMissingOutgoingQcTest extends TestCase
 
     public function test_escalation_falls_back_to_system_admin_when_configured_roles_cannot_view_work_orders(): void
     {
-        app(SettingsService::class)->set('quality.outgoing_qc.notification_roles', ['qc_inspector']);
+        $role = Role::firstOrCreate(['slug' => 'notification_limited_qc'], ['name' => 'Notification Limited QC']);
+        $workOrderView = Permission::firstOrCreate(
+            ['slug' => 'production.work_orders.view'],
+            ['name' => 'View work orders', 'module' => 'production'],
+        );
+        $role->permissions()->sync([$workOrderView->id]);
+        app(SettingsService::class)->set('quality.outgoing_qc.notification_roles', [$role->slug]);
         InspectionSpec::query()->where('product_id', $this->product->id)->update(['is_active' => false]);
         $this->completedWoWithOutput();
+        $limited = User::factory()->withRole($role->slug)->create(['is_active' => true]);
         $admin = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
             'is_active' => true,
@@ -212,6 +220,10 @@ class SweepMissingOutgoingQcTest extends TestCase
         $this->assertDatabaseHas('notifications', [
             'type' => 'chain.outgoing_qc_missing',
             'notifiable_id' => $admin->id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $limited->id,
         ]);
         $this->assertDatabaseMissing('notifications', [
             'type' => 'chain.outgoing_qc_missing',

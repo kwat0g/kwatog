@@ -8,6 +8,7 @@ use App\Common\Events\UserNotificationCreated;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\Invoice;
@@ -15,11 +16,14 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderCrew;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -528,5 +532,62 @@ class NotificationServiceSubjectAccessTest extends TestCase
             ->count());
         Mail::assertNothingQueued();
         Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $viewer->id);
+    }
+
+    public function test_work_order_subject_allows_internal_viewers_and_assigned_history_only(): void
+    {
+        app(SettingsService::class)->set('modules.production', true, 'modules');
+        $permissions = collect(['production.view', 'production.work_orders.view'])->map(fn (string $slug) => Permission::firstOrCreate(
+            ['slug' => $slug], ['name' => $slug, 'module' => 'production'],
+        ));
+        $role = Role::firstOrCreate(['slug' => 'notification_work_order_viewer'], ['name' => 'Notification Work Order Viewer']);
+        $role->permissions()->sync($permissions->pluck('id'));
+        $viewer = User::factory()->withRole($role->slug)->create();
+        $department = Department::firstOrCreate(['code' => 'PROD'], ['name' => 'Production', 'is_active' => true]);
+        $employee = Employee::factory()->create(['department_id' => $department->id, 'status' => 'active']);
+        $worker = User::factory()->withRole('employee')->create(['employee_id' => $employee->id, 'is_active' => true]);
+        $unassigned = User::factory()->withRole('employee')->create(['is_active' => true]);
+        $wo = WorkOrder::factory()->create();
+        $crew = WorkOrderCrew::query()->create([
+            'work_order_id' => $wo->id,
+            'recorder_employee_id' => $employee->id,
+            'assigned_by' => $viewer->id,
+            'reason' => 'Notification access test',
+            'assigned_at' => now()->subDay(),
+            'ended_at' => now(),
+        ]);
+        $crew->members()->create(['employee_id' => $employee->id, 'employee_snapshot' => ['name' => 'Production worker']]);
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.work_order_subject_access',
+                'subject_type' => WorkOrder::class,
+                'subject_id' => $wo->id,
+                'user_ids' => [$unassigned->id],
+            ],
+        );
+        app(NotificationService::class)->sendForSubject($wo, [$viewer, $worker, $unassigned], 'test.work_order_subject_access', [
+            'title' => 'Work order update',
+            'message' => 'Work order changed.',
+            'link_to' => '/production/work-orders/'.$wo->hash_id,
+        ], emailEnabled: false);
+
+        foreach ([$viewer, $worker] as $recipient) {
+            $this->assertDatabaseHas('notifications', [
+                'notifiable_id' => $recipient->id,
+                'type' => 'test.work_order_subject_access',
+            ]);
+        }
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $unassigned->id,
+            'type' => 'test.work_order_subject_access',
+        ]);
+        $this->assertTrue(NotificationSubjectAccessRegistry::userCanViewRecord($worker, $wo));
+
+        app(SettingsService::class)->set('modules.production', false, 'modules');
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($viewer, $wo));
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($worker, $wo));
     }
 }
