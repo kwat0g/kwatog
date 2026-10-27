@@ -110,7 +110,13 @@ export const hrRoutes = (
  <Route element={<ModuleGuard module="attendance" />}>
  <Route
  path="/hr/attendance"
- element={<PermissionGuard anyOf={['attendance.edit', 'attendance.import', 'attendance.ot.approve']}><AttendancePage /></PermissionGuard>}
+ element={
+  <PermissionGuard permission="attendance.view">
+   <PermissionGuard anyOf={['attendance.edit', 'attendance.import', 'attendance.ot.approve']}>
+    <AttendancePage />
+   </PermissionGuard>
+  </PermissionGuard>
+ }
  />
  <Route
  path="/hr/attendance/import"

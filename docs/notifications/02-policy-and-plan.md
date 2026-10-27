@@ -355,7 +355,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/hr/profile-update-requests` | — | any: hr.employees.view, hr.profile_updates.finance_review | hr.profile_update.awaiting_my_action |
 | `/hr/employees` | `profile_requests` | any: hr.employees.view, hr.salary_adjustments.view | hr.employee.contract_or_regularization_due (only if reliable date/state exists) |
 | `/hr/departments` | — | `hr.departments.view` | — |
-| `/hr/attendance` | — | any: attendance.edit, attendance.import, attendance.ot.approve | hr.attendance.missing_timeout |
+| `/hr/attendance` | — | `attendance.view` and any: `attendance.edit`, `attendance.import`, `attendance.ot.approve` | hr.attendance.missing_timeout |
 | `/hr/attendance/overtime` | `overtime` | `attendance.ot.approve` | hr.overtime.awaiting_my_approval |
 | `/hr/leaves` | `leaves` | any: leave.approve_dept, leave.approve_hr, leave.types.manage | hr.leave.awaiting_my_approval |
 | `/payroll/periods` | `payroll` | `payroll.periods.view` | payroll.awaiting_my_action; payroll.run_or_disbursement_failed; payroll.payslip_email_failed |
