@@ -161,6 +161,7 @@ function badgeDestination(path: string, key: string): string {
     shipments: 'status=mid_pipe',
     pending_so: 'signal=awaiting_confirmation',
     overtime: 'signal=awaiting_my_approval',
+    ncrs: 'signal=open',
   };
   const destinations: Record<string, string> = {
     effectiveness_due: '/quality/ncrs/effectiveness',

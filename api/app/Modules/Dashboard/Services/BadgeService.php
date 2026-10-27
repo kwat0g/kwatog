@@ -350,9 +350,7 @@ class BadgeService
                 'permissions' => ['quality.ncr.view'],
                 'label'       => 'NCRs',
                 'description' => 'Open non-conformance reports',
-                'counter'     => fn (): int => NonConformanceReport::query()
-                    ->whereNotIn('status', ['closed', 'cancelled'])
-                    ->count(),
+                'counter'     => fn (): int => NonConformanceReport::query()->open()->count(),
             ],
 
             'calibration_overdue' => [

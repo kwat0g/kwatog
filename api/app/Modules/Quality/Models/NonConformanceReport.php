@@ -75,6 +75,11 @@ class NonConformanceReport extends Model
         'rework_finished_at' => 'datetime',
     ];
 
+    public function scopeOpen(Builder $query): Builder
+    {
+        return $query->whereIn('status', [NcrStatus::Open->value, NcrStatus::InProgress->value]);
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
