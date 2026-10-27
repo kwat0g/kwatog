@@ -1,0 +1,1261 @@
+{
+  "generatedAt": "2026-10-27T09:06:46.414Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "production",
+  "theme": "dark",
+  "fixtureRowsRequested": 1,
+  "widths": [
+    1440
+  ],
+  "routes": [
+    "/production/routings"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/production/routings",
+      "role": "production",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/production/routings",
+      "role": "production",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/after/production-routings/states/dark/rows-1/production-routings-1440.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "url": "/production/routings",
+      "title": "Routings · Production · ERP",
+      "h1": "Routings",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 6,
+        "links": 0,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 900,
+        "width": 1200,
+        "height": 852
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 32,
+      "sidebarClearanceByBlock": {
+        "header": 32,
+        "filters": 32,
+        "toolbar": 32,
+        "table": 32,
+        "pagination": 32
+      },
+      "blocks": {
+        "header": {
+          "left": 272,
+          "right": 1408,
+          "top": 48,
+          "bottom": 137,
+          "width": 1136,
+          "height": 89
+        },
+        "filters": {
+          "left": 272,
+          "right": 1408,
+          "top": 153,
+          "bottom": 210,
+          "width": 1136,
+          "height": 57
+        },
+        "toolbar": {
+          "left": 272,
+          "right": 1408,
+          "top": 226,
+          "bottom": 262,
+          "width": 1136,
+          "height": 36
+        },
+        "table": {
+          "left": 272,
+          "right": 1408,
+          "top": 278,
+          "bottom": 848,
+          "width": 1136,
+          "height": 570
+        },
+        "pagination": {
+          "left": 272,
+          "right": 1408,
+          "top": 864,
+          "bottom": 900,
+          "width": 1136,
+          "height": 36
+        }
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas",
+          "heading": "Routings",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 48,
+            "bottom": 137,
+            "width": 1136,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "0px",
+            "bottom": "16px",
+            "left": "0px"
+          },
+          "gapAfter": 16,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "flex min-w-0 flex-wrap items-center justify-between gap-2 py-3 border-b border-default",
+          "heading": "",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 153,
+            "bottom": 210,
+            "width": 1136,
+            "height": 57
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "12px",
+            "right": "0px",
+            "bottom": "12px",
+            "left": "0px"
+          },
+          "gapAfter": 16,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 2,
+          "tag": "div",
+          "className": "flex flex-col min-h-0 flex-1",
+          "heading": "",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 226,
+            "bottom": 900,
+            "width": 1136,
+            "height": 674
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "toolbar": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "table": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "pagination": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        }
+      },
+      "verticalGaps": {
+        "headerToFilters": 16,
+        "filtersToToolbar": 16,
+        "toolbarToTable": 16,
+        "tableToPagination": 16
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 1440,
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-60",
+          "left": 0,
+          "right": 240,
+          "width": 240,
+          "scrollWidth": 239,
+          "clientWidth": 239,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "div",
+          "className": "page-shell page-shell--viewport flex flex-col gap-4",
+          "left": 240,
+          "right": 1440,
+          "width": 1200,
+          "scrollWidth": 1200,
+          "clientWidth": 1200,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        }
+      ],
+      "elementsPastViewport": [],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 101,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "sr-only",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 188,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 188,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": false,
+      "doubleVerticalScroll": false,
+      "table": {
+        "density": "compact",
+        "scrollAffordance": {
+          "needed": false,
+          "left": false,
+          "right": false,
+          "keyboardFocusable": false,
+          "labelled": false
+        },
+        "textBelowMinimum": [],
+        "headerHeight": 36,
+        "rowHeight": {
+          "min": 53.19,
+          "max": 53.19,
+          "distinct": [
+            53.19
+          ]
+        },
+        "cellPadding": {
+          "top": "8px",
+          "right": "12px",
+          "bottom": "8px",
+          "left": "12px"
+        },
+        "columns": [
+          {
+            "header": "Product",
+            "width": 272,
+            "share": 0.243,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Version",
+            "width": 132,
+            "share": 0.118,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Status",
+            "width": 132,
+            "share": 0.118,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Total cycle time",
+            "width": 176,
+            "share": 0.157,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Operations",
+            "width": 174,
+            "share": 0.155,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "",
+            "width": 233,
+            "share": 0.208,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          }
+        ],
+        "stickyHeader": true,
+        "stickyProbe": {
+          "cssSticky": true,
+          "tested": false,
+          "sticksToScroller": null,
+          "topAfterScroll": null,
+          "scrollerTopAfterScroll": null
+        },
+        "semantics": {
+          "columnHeaders": 6,
+          "scopedColumnHeaders": 6,
+          "sortableHeaders": 0,
+          "keyboardFocusableRows": 1
+        },
+        "truncation": []
+      },
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Routings",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Routings"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "1 routing",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "1 routing"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "New routing",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+            "background": "color(srgb 0.85098 0.470588 0.282353)",
+            "contrast": 5.89,
+            "count": 1,
+            "examples": [
+              "New routing"
+            ]
+          },
+          {
+            "tag": "svg",
+            "className": "",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": null,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
+          },
+          {
+            "tag": "label",
+            "className": "flex items-center gap-2 text-label text-muted",
+            "text": "DensityComfortableCompactSpacious",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 2,
+            "examples": [
+              "DensityComfortableCompactSpacious",
+              "Rows2550100"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "relative px-3 py-2 text-table-header text-muted font-semibold select-none h-row-compact text-left",
+            "text": "Product",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56,
+            "count": 3,
+            "examples": [
+              "Product",
+              "Status"
+            ]
+          },
+          {
+            "tag": "th",
+            "className": "relative px-3 py-2 text-table-header text-muted font-semibold select-none h-row-compact text-right",
+            "text": "Version",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56,
+            "count": 3,
+            "examples": [
+              "Version",
+              "Total cycle time",
+              "Operations"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 text-left",
+            "text": "PART-00001Layout test product 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 3,
+            "examples": [
+              "PART-00001Layout test product 1",
+              "Active",
+              "Duplicate"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-muted text-caption",
+            "text": "Layout test product 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Layout test product 1"
+            ]
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-2 text-right",
+            "text": "v1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 3,
+            "examples": [
+              "v1",
+              "15.3 min",
+              "1"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors",
+            "text": "Duplicate",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Duplicate"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-sans tabular-nums",
+            "text": "1–1 of 1",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "1–1 of 1"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31,
+            "count": 4,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "text-caption font-sans tabular-nums px-2 text-muted",
+            "text": "Page 1 of 1",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Page 1 of 1"
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|600|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|20px|normal|none",
+          "\"Public Sans Variable\", system-ui, sans-serif|13|450|18px|normal|none"
+        ],
+        "below13px": [],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "New routing",
+          "width": 122,
+          "height": 28,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "New routing"
+          ]
+        },
+        {
+          "label": "Duplicate routing",
+          "width": 106,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Duplicate routing"
+          ]
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "New routing",
+          "width": 122,
+          "height": 28,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "New routing"
+          ]
+        },
+        {
+          "label": "Duplicate routing",
+          "width": 106,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Duplicate routing"
+          ]
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
+        }
+      ],
+      "controls": [
+        {
+          "label": "New routing",
+          "width": 122,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "New routing"
+          ]
+        },
+        {
+          "label": "Search product part number or name…",
+          "width": 220,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Search product part number or name…"
+          ]
+        },
+        {
+          "label": "Status",
+          "width": 158,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Status"
+          ]
+        },
+        {
+          "label": "Density",
+          "width": 130,
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "Density"
+          ]
+        },
+        {
+          "label": "Product column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Product column width"
+          ]
+        },
+        {
+          "label": "Version column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Version column width"
+          ]
+        },
+        {
+          "label": "Status column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Status column width"
+          ]
+        },
+        {
+          "label": "Total cycle time column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Total cycle time column width"
+          ]
+        },
+        {
+          "label": "Operations column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Operations column width"
+          ]
+        },
+        {
+          "label": " column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            " column width"
+          ]
+        },
+        {
+          "label": "Duplicate routing",
+          "width": 106,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Duplicate routing"
+          ]
+        },
+        {
+          "label": "2550100",
+          "width": 68,
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "2550100"
+          ]
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "New routing",
+          "width": 122,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "New routing"
+          ]
+        },
+        {
+          "label": "Search product part number or name…",
+          "width": 220,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Search product part number or name…"
+          ]
+        },
+        {
+          "label": "Status",
+          "width": 158,
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Status"
+          ]
+        },
+        {
+          "label": "Density",
+          "width": 130,
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "Density"
+          ]
+        },
+        {
+          "label": "Product column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Product column width"
+          ]
+        },
+        {
+          "label": "Version column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Version column width"
+          ]
+        },
+        {
+          "label": "Status column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Status column width"
+          ]
+        },
+        {
+          "label": "Total cycle time column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Total cycle time column width"
+          ]
+        },
+        {
+          "label": "Operations column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "Operations column width"
+          ]
+        },
+        {
+          "label": " column width",
+          "width": 12,
+          "height": 32,
+          "count": 1,
+          "examples": [
+            " column width"
+          ]
+        },
+        {
+          "label": "Duplicate routing",
+          "width": 106,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Duplicate routing"
+          ]
+        },
+        {
+          "label": "2550100",
+          "width": 68,
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "2550100"
+          ]
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
+        }
+      ],
+      "scrollContextCount": 0
+    }
+  ]
+}

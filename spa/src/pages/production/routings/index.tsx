@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
 import type { ProductRouting } from '@/types/production/routing';
 
@@ -67,8 +68,8 @@ export default function RoutingsListPage() {
  cell: (r) => r.product
  ? (
  <span className="">
- <div className="font-mono text-xs text-accent">{r.product.part_number}</div>
- <div className="text-muted text-xs">{r.product.name}</div>
+ <div className="font-mono text-sm text-accent">{r.product.part_number}</div>
+ <div className="text-muted text-caption">{r.product.name}</div>
  </span>
  )
  : <span className="text-muted">—</span> },
@@ -83,8 +84,8 @@ export default function RoutingsListPage() {
  </Chip>
  ) },
  {
- key: 'cycle', header: 'Total cycle time', align: 'right',
- cell: (r) => <NumCell>{Number(r.total_cycle_time).toFixed(1)} min</NumCell> },
+ key: 'cycle', header: 'Total cycle time', align: 'right', width: 176, minWidth: 176,
+ cell: (r) => <NumCell className="whitespace-nowrap">{Number(r.total_cycle_time).toFixed(1)} min</NumCell> },
  {
  key: 'ops', header: 'Operations', align: 'right',
  cell: (r) => <NumCell>{r.operations?.length ?? 0}</NumCell> },
@@ -112,8 +113,9 @@ export default function RoutingsListPage() {
  ];
 
  return (
- <div>
+ <PageShell viewport className="flex flex-col gap-4">
  <PageHeader
+ inset={false}
  title="Routings"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'routing' : 'routings'}` : undefined}
  actions={
@@ -130,13 +132,14 @@ export default function RoutingsListPage() {
  }
  />
  <FilterBar
+ inset={false}
  values={filters}
  filters={statusFilters}
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
  searchPlaceholder="Search product part number or name…"
  />
- {isLoading && !data && <div className="px-5 py-4"><SkeletonTable columns={6} rows={8} /></div>}
+ {isLoading && !data && <div className="min-h-0 flex-1"><SkeletonTable columns={6} rows={8} /></div>}
  {isError && (
  <EmptyState
  icon="alert-circle"
@@ -173,8 +176,8 @@ export default function RoutingsListPage() {
  )
  )}
  {data && data.data.length > 0 && (
- <div className="px-5 py-4">
  <DataTable
+ fillHeight
  onRowClick={(r) => navigate(`/production/routings/${r.id}`)}
  columns={columns}
  data={data.data}
@@ -182,8 +185,7 @@ export default function RoutingsListPage() {
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  />
- </div>
  )}
- </div>
+ </PageShell>
  );
 }

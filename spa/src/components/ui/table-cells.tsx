@@ -2,8 +2,8 @@
 /**
  * Table cell primitives — the one source of truth for table typography.
  *
- * DESIGN-SYSTEM.md → "Data table": 32px rows, 0 10px cell padding, header
- * 10px uppercase tracking-wider muted 500, numbers always mono + tabular.
+ * Compact shared table typography: 14px body text, 13px headers, and tabular
+ * figures for explicitly marked numeric, date, and identifier cells.
  *
  * Import these instead of retyping the class strings. Hand-typed headers had
  * drifted into six variants (missing height, `px-4 py-2`, no uppercase,
@@ -24,13 +24,13 @@ const alignCls: Record<Align, string> = {
 /** Header cell classes. Use when you can't use `<Th>` (e.g. inside a map). */
 export const thCls = (align: Align = 'left'): string =>
   cn(
-    'h-row-compact px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none',
+    'h-row-compact px-2.5 text-caption uppercase tracking-wide text-muted font-medium select-none',
     alignCls[align],
   );
 
 /** Body cell classes. `mono` for any numeric / ID / date content. */
 export const tdCls = (align: Align = 'left', mono = false): string =>
-  cn('px-2.5 py-1 align-middle', alignCls[align], mono && 'font-mono tabular-nums');
+  cn('px-2.5 py-1 align-middle text-sm', alignCls[align], mono && 'font-mono tabular-nums');
 
 /**
  * Row classes — hairline separator, hover highlight, selected outline.
@@ -54,7 +54,7 @@ export const theadTrCls = 'border-b border-default';
 export const totalsTrCls = 'h-row-compact border-t-2 border-t-strong font-medium';
 
 /** Table element classes. */
-export const tableCls = 'w-full border-collapse text-xs';
+export const tableCls = 'w-full border-collapse text-sm';
 
 interface ThProps extends Omit<ThHTMLAttributes<HTMLTableCellElement>, 'align'> {
   align?: Align;
