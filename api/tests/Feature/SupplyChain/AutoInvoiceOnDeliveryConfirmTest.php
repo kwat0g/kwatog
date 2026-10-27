@@ -236,10 +236,18 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         );
         app(NotifyFinanceOnDeliveryConfirmed::class)->handle(new DeliveryConfirmed($confirmed));
         $financeNotice = DB::table('notifications')
-            ->where('type', 'chain.delivery_confirmed')
+            ->where('type', 'invoice.auto_failed')
             ->where('notifiable_id', $arClerk->id)
             ->first();
         $this->assertNotNull($financeNotice);
+        $this->assertSame(1, DB::table('notifications')
+            ->where('type', 'invoice.auto_failed')
+            ->where('notifiable_id', $arClerk->id)
+            ->count());
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.delivery_confirmed',
+            'notifiable_id' => $arClerk->id,
+        ]);
         $financeData = json_decode($financeNotice->data, true);
         $this->assertSame("/supply-chain/deliveries/{$confirmed->hash_id}", $financeData['link_to']);
         $this->assertSame('delivery', $financeData['entity_type']);

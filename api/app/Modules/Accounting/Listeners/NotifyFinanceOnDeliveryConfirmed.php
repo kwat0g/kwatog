@@ -49,7 +49,13 @@ class NotifyFinanceOnDeliveryConfirmed implements ShouldQueue
             if ($invoice) {
                 $this->notifications->sendForSubject($invoice, $financeUsers, 'chain.delivery_confirmed', $data);
             } else {
-                $this->notifications->sendForSubject($event->delivery, $financeUsers, 'chain.delivery_confirmed', $data);
+                $this->notifications->sendForSubject($event->delivery, $financeUsers, 'invoice.auto_failed', [
+                    'title' => "Auto-invoice failed: {$event->delivery->delivery_number}",
+                    'message' => "No draft invoice was created for {$event->delivery->delivery_number}. Open the delivery to continue manually.",
+                    'link_to' => "/supply-chain/deliveries/{$event->delivery->hash_id}",
+                    'entity_type' => 'delivery',
+                    'entity_id' => $event->delivery->hash_id,
+                ], "invoice-auto-failed:{$event->delivery->id}");
             }
         } catch (\Throwable $e) {
             Log::warning('NotifyFinanceOnDeliveryConfirmed failed', ['error' => $e->getMessage()]);
