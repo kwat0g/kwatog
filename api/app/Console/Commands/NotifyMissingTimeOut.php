@@ -56,14 +56,15 @@ class NotifyMissingTimeOut extends Command
         }
 
         $label = $yesterday->format('M j, Y');
+        $linkTo = '/hr/attendance?missing_time_out=1';
         $failed = 0;
         $sent = 0;
 
         try {
-            $notifications->send($hr, 'attendance.missing_time_out', [
+            $notifications->sendForSubject($open->first(), $hr, 'attendance.missing_time_out', [
                 'title' => 'Missing time-out',
                 'message' => "{$count} employee(s) have no time out for {$label}.",
-                'link_to' => '/hr/attendance?missing_time_out=1',
+                'link_to' => $linkTo,
                 'entity_type' => 'attendance',
             ], 'attendance.missing_time_out:'.$yesterday->toDateString());
             $sent++;
@@ -95,10 +96,10 @@ class NotifyMissingTimeOut extends Command
 
             foreach ($heads as $head) {
                 try {
-                    $notifications->send($head, 'attendance.missing_time_out', [
+                    $notifications->sendForSubject($rows->first(), $head, 'attendance.missing_time_out', [
                         'title' => 'Missing time-out',
                         'message' => "{$rows->count()} employee(s) in {$department} have no time out for {$label}.",
-                        'link_to' => '/hr/attendance?missing_time_out=1',
+                        'link_to' => $linkTo,
                         'entity_type' => 'attendance',
                     ], 'attendance.missing_time_out:'.$yesterday->toDateString().':'.$head->id);
                     $sent++;
