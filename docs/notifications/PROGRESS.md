@@ -1,6 +1,6 @@
 # Notification and badge remediation progress
 
-**Active unit:** Maintenance due-signal audit. PM and general work-order overdue signals remain deferred: interval-generation, dashboard, work-order, and DSS queries do not share one definition, and the schedule list has no matching filter. Docs record the evidence; no badge code changed. No database was touched.
+**Active unit:** Inventory pending-GRN badge audience. The count keeps matching the `pending_qc` list, but is now limited to users who can open and receive GRNs; QC inspectors use their separate inspection queue. No database was touched.
 
 **Updated:** 2026-10-27
 **Latest additional merges:** PR #499 (`88c4e514`) tracks F-76; PR #500 (`ed7e7c4a`) adds the Quality overdue NCR sidebar signal; PR #501 (`758ebd33`) unifies NCR SLA calculations; PR #502 (`644579f9`) excludes inspection result authors from review notices and Action Center; PR #503 (`e63ea410`) adds Quality inspection review signals; PR #504 (`0d302598`) defers unmodeled GRN putaway; PR #506 (`d13ee692`) defers PM schedule signals pending interval and list parity.
@@ -988,6 +988,12 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - `maintenance_work_orders` has no general due-date column, and its status enum has no waiting-parts state. No corrective deadline or rule for pausing an SLA during parts waits was found.
 - F-79 defers a general `maintenance.work_order.overdue` signal until its due-date source, audience, and parts-pause policy are defined. Current `maintenance_wo` and `maintenance_wo_unassigned` badge/list scopes are already shared.
 - Docs-only. No tests, database operations, or application changes.
+
+## Inventory pending-GRN badge audience
+
+- `pending_grn` still counts `GoodsReceiptNote::pendingQc()` and matches `/inventory/grn?status=pending_qc`, but now requires both `inventory.view` and `inventory.grn.create`. View-only QC users retain the separate Quality inspection signal.
+- The existing receiving-role parity test remains; a negative assertion verifies a QC inspector with inventory view and inspection-management access receives no receiving badge. Tests were not run against the shared database.
+- No database operation performed.
 
 ## Resume instruction
 
