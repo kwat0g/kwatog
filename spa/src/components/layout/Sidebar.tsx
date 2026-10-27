@@ -128,6 +128,7 @@ const BADGE_SEVERITY_PRIORITY: Record<BadgeSeverity, number> = {
 function badgeDestination(path: string, key: string): string {
   const filters: Record<string, string> = {
     purchase_requests: 'signal=awaiting_my_approval',
+    overdue_purchase_orders: 'signal=receipt_overdue',
     pending_budgets: 'signal=awaiting_my_approval',
     pending_transfers: 'status=pending&actionable=1',
     pending_grn: 'status=pending_qc',
@@ -412,6 +413,7 @@ export const SECTIONS: NavSection[] = [
         icon: OrderIcon,
         feature: 'purchasing',
         permission: 'purchasing.view',
+        badgeKey: 'overdue_purchase_orders',
       },
       {
         to: '/purchasing/purchase-requests',

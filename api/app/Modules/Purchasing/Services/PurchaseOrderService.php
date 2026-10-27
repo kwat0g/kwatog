@@ -109,6 +109,9 @@ class PurchaseOrderService
                 [now()->toDateString()],
             )->whereIn('status', PurchaseOrderStatus::open());
         }
+        if (($filters['signal'] ?? null) === 'receipt_overdue') {
+            $q->receiptOverdue();
+        }
         if (! empty($filters['from'])) {
             $q->whereDate('date', '>=', $filters['from']);
         }

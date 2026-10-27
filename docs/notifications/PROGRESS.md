@@ -899,11 +899,18 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Original-head focused B2B failure tests passed **2 / 24 assertions**; `QueueLaneAssignmentTest.php --filter test_every_queued_mailable_lands_on_the_mail_lane` passed **1 / 29 assertions**. No rebase tests ran against shared `ogami_test`; `git diff --check` only. No database was touched.
 - The original-head `PortalPasswordResetTest.php` run had **13 passes and 2 failures**: an untrusted display-name Markdown link issue is separate PR #471; an invitation MailFake assertion also failed on parent #469 and remains unverified after rebase. API CI inherits F-22 and stops before PHPUnit. User waived CI.
 
-## Separate finding fix: F-75 portal email Markdown link injection (PR #471, draft)
+## Separate finding fix: F-75 portal email Markdown link injection (PR #471, merged as `2e822a68`)
 
 - Customer and supplier reset/invitation display names are sanitized into the public `HtmlString` property before Laravel exposes mailable properties to Markdown. Link destinations are removed; visible labels remain. Templates continue reading `safeRecipientName`.
 - Original feature-head `PortalPasswordResetTest.php` filters passed **4 / 33 assertions** with a temporary local workaround for an inherited duplicate PDF helper declaration. Rebased adaptation has not been tested. No tests were run in this continuation; no database was touched. `git diff --check` remains the only requested verification.
-- The separate PR keeps the mail rendering fix isolated from the merged recipient-access gate. Queue serialization and rendered HTML after this rebase remain unverified.
+- The separate PR keeps the mail rendering fix isolated from the merged recipient-access gate. Queue serialization and rendered HTML after rebase remain unverified.
+
+## Phase 4 Purchase Order receipt overdue badge signal (PR #472)
+
+- Adds `overdue_purchase_orders` under Purchasing. Badge and `signal=receipt_overdue` list filter share `PurchaseOrder::scopeReceiptOverdue()` and `PurchaseOrderAccessPolicy::visibleTo()`.
+- Definition: receivable PO status, expected receipt date before today in Asia/Manila, and at least one line with accepted quantity below ordered quantity after the domain's three-decimal base-UOM conversion. Supplier-declined, draft, pending-approval, received, closed, cancelled, due-today, fully accepted, and sub-precision remainder cases are excluded.
+- Original PR-head tests reported `PurchaseOrderReceiptOverdueSignalTest.php`: **2 / 11 assertions** and `Sidebar.behavior.test.tsx`: **43 passed**. Rebased tests were not run; no database was touched. `git diff --check` is the only verification for this rebase.
+- The test compares the badge count and filtered-list total and proves a user cannot see another buyer's PO. Full role parity, browser QA, and performance remain open.
 
 ## Resume instruction
 

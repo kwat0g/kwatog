@@ -226,6 +226,42 @@ class PurchaseOrder extends Model
         return $q->whereIn('status', PurchaseOrderStatus::open());
     }
 
+    public function scopeReceiptOverdue(Builder $query): Builder
+    {
+        return $query->whereIn('status', PurchaseOrderStatus::receivable())
+            ->whereDate('purchase_orders.expected_delivery_date', '<', now('Asia/Manila')->toDateString())
+            ->whereExists(function ($lines): void {
+                $lines->selectRaw('1')
+                    ->from('purchase_order_items as overdue_lines')
+                    ->leftJoin('items as overdue_items', 'overdue_items.id', '=', 'overdue_lines.item_id')
+                    ->whereColumn('overdue_lines.purchase_order_id', 'purchase_orders.id')
+                    // Match quantity_remaining's three-decimal precision.
+                    ->whereRaw(<<<'SQL'
+                        TRUNC((
+                            CASE
+                                WHEN overdue_lines.item_id IS NULL
+                                  OR overdue_items.id IS NULL
+                                  OR overdue_lines.unit IS NULL
+                                  OR BTRIM(overdue_lines.unit) = ''
+                                THEN overdue_lines.quantity
+                                WHEN overdue_items.unit_of_measure IS NULL THEN NULL
+                                WHEN UPPER(BTRIM(overdue_lines.unit)) = UPPER(BTRIM(overdue_items.unit_of_measure))
+                                THEN overdue_lines.quantity
+                                ELSE overdue_lines.quantity * (
+                                    SELECT item_uom_conversions.factor
+                                    FROM item_uom_conversions
+                                    INNER JOIN uoms AS from_uom ON from_uom.id = item_uom_conversions.from_uom_id
+                                    INNER JOIN uoms AS base_uom ON base_uom.id = item_uom_conversions.to_uom_id
+                                    WHERE item_uom_conversions.item_id = overdue_lines.item_id
+                                      AND UPPER(BTRIM(from_uom.code)) = UPPER(BTRIM(overdue_lines.unit))
+                                      AND UPPER(BTRIM(base_uom.code)) = UPPER(BTRIM(overdue_items.unit_of_measure))
+                                )
+                            END
+                        ), 3) > COALESCE(overdue_lines.quantity_accepted, 0)
+                        SQL);
+            });
+    }
+
     public function getQuantityReceivedPercentAttribute(): float
     {
         $lines = $this->relationLoaded('items') ? $this->items : $this->items()->with('item')->get();
