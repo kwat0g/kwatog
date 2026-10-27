@@ -51,8 +51,8 @@ class InspectionController
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        return InspectionResource::collection($this->service->list($request->query()))
-            ->additional(['meta' => ['status_counts' => $this->service->statusCounts($request->query())]]);
+        return InspectionResource::collection($this->service->list($request->query(), $request->user()))
+            ->additional(['meta' => ['status_counts' => $this->service->statusCounts($request->query(), $request->user())]]);
     }
 
     public function options(): JsonResponse

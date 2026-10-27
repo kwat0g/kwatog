@@ -680,6 +680,25 @@ it('opens the to-inspect queue when inspections has a positive badge', () => {
   );
 });
 
+it('opens the current-user review queue when inspection reviews have a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_inspections'
+      ? { count: 4, severity: 'warning', label: 'Inspections to complete', description: 'Inspections awaiting completion' }
+      : key === 'inspection_reviews'
+        ? { count: 2, severity: 'danger', label: 'Inspection reviews', description: 'Inspections awaiting your review' }
+        : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/quality/inspections']}>
+      <Sidebar roleSlug="qc_inspector" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Quality Inspections/ })).toHaveAttribute(
+    'href',
+    '/quality/inspections?status=awaiting_review&signal=awaiting_my_review',
+  );
+});
+
 it('opens the assigned complaint queue when complaints has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'open_complaints'

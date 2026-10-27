@@ -134,6 +134,7 @@ function badgeDestination(path: string, key: string): string {
     pending_transfers: 'status=pending&actionable=1',
     pending_grn: 'status=pending_qc',
     pending_inspections: 'work_queue=to_inspect',
+    inspection_reviews: 'status=awaiting_review&signal=awaiting_my_review',
     mrb_holds: 'status=held',
     training_expiry: 'signal=expired',
     training_upcoming: 'signal=upcoming',
@@ -602,7 +603,7 @@ export const SECTIONS: NavSection[] = [
         icon: InspectionIcon,
         feature: 'quality',
         permission: 'quality.inspections.view',
-        badgeKey: 'pending_inspections',
+        badgeKeys: ['inspection_reviews', 'pending_inspections'],
       },
       {
         to: '/quality/ncrs',
