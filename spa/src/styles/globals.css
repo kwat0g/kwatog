@@ -258,6 +258,7 @@
     .page-shell [data-touch-target] select {
       min-height: var(--touch-target-min);
     }
+
   }
 
   .undo-toast-countdown {

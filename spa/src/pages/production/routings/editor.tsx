@@ -17,7 +17,7 @@
  * Uses React Hook Form with useFieldArray for the operations list.
  * Follows the BOM create page pattern for dynamic sub-item rows.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -37,6 +37,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonForm } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
+import { FormGrid } from '@/components/layout/ContentLayouts';
 import { productsApi } from '@/api/crm/products';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
@@ -133,6 +135,28 @@ export default function RoutingEditorPage() {
 
  const { fields, append, remove } = useFieldArray({ control, name: 'operations' });
  const selectedProductId = watch('product_id');
+ const operationScrollerRef = useRef<HTMLDivElement>(null);
+ const [operationScrollEdges, setOperationScrollEdges] = useState({ left: false, right: false });
+
+ useEffect(() => {
+ const scroller = operationScrollerRef.current;
+ if (!scroller) return;
+ const update = () => {
+ const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+ const next = { left: scroller.scrollLeft > 1, right: maxScroll - scroller.scrollLeft > 1 };
+ setOperationScrollEdges((current) => current.left === next.left && current.right === next.right ? current : next);
+ };
+ update();
+ scroller.addEventListener('scroll', update, { passive: true });
+ const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+ observer?.observe(scroller);
+ const table = scroller.querySelector('table');
+ if (table) observer?.observe(table);
+ return () => {
+ scroller.removeEventListener('scroll', update);
+ observer?.disconnect();
+ };
+ }, [fields.length, readOnly]);
 
  // ── Lookups ──────────────────────────────────────────────
  // Master data is paginated server-side, so the selects search rather than
@@ -265,21 +289,23 @@ export default function RoutingEditorPage() {
  // ── Loading / error for edit mode ────────────────────────
  if (isEdit && existing.isLoading) {
  return (
- <div>
+ <PageShell variant="grid">
  <PageHeader
+ inset={false}
  title="Loading routing..."
  backTo="/production/routings"
  backLabel="Routings"
  />
  <SkeletonForm />
- </div>
+ </PageShell>
  );
  }
 
  if (isEdit && existing.isError) {
  return (
- <div>
+ <PageShell variant="grid">
  <PageHeader
+ inset={false}
  title="Routing"
  backTo="/production/routings"
  backLabel="Routings"
@@ -289,7 +315,7 @@ export default function RoutingEditorPage() {
  title="Failed to load routing"
  action={<Button variant="secondary" onClick={() => existing.refetch()}>Retry</Button>}
  />
- </div>
+ </PageShell>
  );
  }
 
@@ -308,8 +334,9 @@ export default function RoutingEditorPage() {
  : 'Saving publishes a new version; this one is kept as history.';
 
  return (
- <div>
+ <PageShell variant="grid">
  <PageHeader
+ inset={false}
  title={pageTitle}
  subtitle={pageSubtitle}
  backTo="/production/routings"
@@ -350,12 +377,13 @@ export default function RoutingEditorPage() {
 
  <form
  onSubmit={handleSubmit((v) => saveMut.mutate(v), onFormInvalid<FormValues>())}
- className="min-w-0 w-full px-5 py-4"
+ className="min-w-0 w-full"
+ data-touch-target
  >
  {/* Product + notes */}
  <fieldset className="mb-8" disabled={readOnly}>
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Product</legend>
- <div className="grid grid-cols-2 gap-3">
+ <FormGrid columns={2}>
  <div className="space-y-2">
  {isEdit ? (
  <>
@@ -394,11 +422,11 @@ export default function RoutingEditorPage() {
  maxLength={1000}
  placeholder="Optional routing notes..."
  />
- </div>
+ </FormGrid>
  </fieldset>
 
  {/* Operations table */}
- <fieldset className="mb-8" disabled={readOnly}>
+ <fieldset className="mb-8 min-w-0" disabled={readOnly}>
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Operations</legend>
  {!readOnly && machines.isError && (
  <p className="mb-2 text-xs text-danger-fg">
@@ -418,22 +446,24 @@ export default function RoutingEditorPage() {
  </p>
  )}
  {/* Twelve columns do not fit a 375px viewport; scroll rather than clip. */}
- <div className="border border-default rounded-md overflow-x-auto">
- <table className={cn(tableCls, 'min-w-[62rem]')}>
+ <div className="table-scroll-frame min-w-0" data-more-left={operationScrollEdges.left} data-more-right={operationScrollEdges.right}>
+ <div ref={operationScrollerRef} data-layout="table-scroller" role="region" aria-label="Routing operation table" tabIndex={0}
+ className="table-scroll-container contain-layout w-full min-w-0 rounded-md border border-default overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">
+ <table className={cn(tableCls, 'min-w-max table-fixed')}>
  <thead>
  <tr className={theadTrCls}>
- <Th className="w-10">#</Th>
- <Th>Operation</Th>
- <Th>Work center</Th>
- <Th>Machine</Th>
- <Th>Mold</Th>
- <Th align="right">Setup (min)</Th>
- <Th align="right">Cycle (min)</Th>
- <Th align="right">Labor / hr</Th>
- <Th align="right">Machine / hr</Th>
- <Th align="right">Overhead / hr</Th>
- <Th align="center">QC</Th>
- {!readOnly && <Th className="w-8" />}
+ <Th align="right" className="w-12">#</Th>
+ <Th className="w-48">Operation</Th>
+ <Th className="w-32">Work center</Th>
+ <Th className="w-32">Machine</Th>
+ <Th className="w-32">Mold</Th>
+ <Th align="right" className="w-28">Setup (min)</Th>
+ <Th align="right" className="w-28">Cycle (min)</Th>
+ <Th align="right" className="w-28">Labor / hr</Th>
+ <Th align="right" className="w-28">Machine / hr</Th>
+ <Th align="right" className="w-28">Overhead / hr</Th>
+ <Th align="center" className="w-16">QC</Th>
+ {!readOnly && <Th align="right" className="w-12" />}
  </tr>
  </thead>
  {fields.map((field, i) => (
@@ -442,7 +472,7 @@ export default function RoutingEditorPage() {
  // too narrow to type 500 characters into.
  <tbody key={field.id}>
  <tr className={cn(trCls, 'align-top')}>
- <Td>
+ <Td align="right">
  <div className="flex items-center gap-1 text-muted">
  <LuGripVertical size={12} className="shrink-0" aria-hidden />
  <Input
@@ -469,7 +499,7 @@ export default function RoutingEditorPage() {
  </Td>
  <Td>
  {readOnly ? (
- <span className="font-mono text-xs">{existing.data?.operations[i]?.machine?.machine_code ?? '—'}</span>
+ <span className="font-mono text-sm">{existing.data?.operations[i]?.machine?.machine_code ?? '—'}</span>
  ) : (
  <Select aria-label={`Machine for operation ${i + 1}`} searchable
  {...register(`operations.${i}.machine_id` as const)}
@@ -484,7 +514,7 @@ export default function RoutingEditorPage() {
  </Td>
  <Td>
  {readOnly ? (
- <span className="font-mono text-xs">{existing.data?.operations[i]?.mold?.mold_code ?? '—'}</span>
+ <span className="font-mono text-sm">{existing.data?.operations[i]?.mold?.mold_code ?? '—'}</span>
  ) : (
  <>
  <Select aria-label={`Mold for operation ${i + 1}`} searchable
@@ -497,15 +527,15 @@ export default function RoutingEditorPage() {
  ))}
  </Select>
  {!selectedProductId && (
- <p className="mt-1 text-2xs text-muted">Select a product first.</p>
+ <p className="mt-1 text-caption text-muted">Select a product first.</p>
  )}
  {selectedProductId && molds.isSuccess && molds.data.data.length === 0 && (
- <p className="mt-1 text-2xs text-muted">No usable mold for this product.</p>
+ <p className="mt-1 text-caption text-muted">No usable mold for this product.</p>
  )}
  </>
  )}
  </Td>
- <Td>
+ <Td align="right">
  <Input
  {...register(`operations.${i}.setup_time_minutes` as const)}
  error={errors.operations?.[i]?.setup_time_minutes?.message}
@@ -513,7 +543,7 @@ export default function RoutingEditorPage() {
  className="font-mono text-right"
  />
  </Td>
- <Td>
+ <Td align="right">
  <Input
  {...register(`operations.${i}.cycle_time_minutes` as const)}
  error={errors.operations?.[i]?.cycle_time_minutes?.message}
@@ -521,7 +551,7 @@ export default function RoutingEditorPage() {
  className="font-mono text-right"
  />
  </Td>
- <Td>
+ <Td align="right">
  <Input
  {...register(`operations.${i}.labor_rate_per_hour` as const)}
  error={errors.operations?.[i]?.labor_rate_per_hour?.message}
@@ -529,7 +559,7 @@ export default function RoutingEditorPage() {
  className="font-mono text-right"
  />
  </Td>
- <Td>
+ <Td align="right">
  <Input
  {...register(`operations.${i}.machine_rate_per_hour` as const)}
  error={errors.operations?.[i]?.machine_rate_per_hour?.message}
@@ -537,7 +567,7 @@ export default function RoutingEditorPage() {
  className="font-mono text-right"
  />
  </Td>
- <Td>
+ <Td align="right">
  <Input
  {...register(`operations.${i}.overhead_rate_per_hour` as const)}
  error={errors.operations?.[i]?.overhead_rate_per_hour?.message}
@@ -546,7 +576,7 @@ export default function RoutingEditorPage() {
  />
  </Td>
  <Td align="center">
- <div className="flex items-center justify-center h-8">
+ <div className="flex items-center justify-center min-h-8">
  <Checkbox {...register(`operations.${i}.qc_required` as const)} />
  </div>
  </Td>
@@ -582,6 +612,7 @@ export default function RoutingEditorPage() {
  </tbody>
  ))}
  </table>
+ </div>
  </div>
 
  {!readOnly && (
@@ -639,6 +670,6 @@ export default function RoutingEditorPage() {
  description="New work orders will be generated from this version and the product's BOM will be re-costed from its rates. The version currently active becomes history."
  confirmLabel="Make active"
  />
- </div>
+ </PageShell>
  );
 }

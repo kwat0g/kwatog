@@ -132,7 +132,7 @@ function localUser(role, themeMode) {
     name: `Layout Audit ${role}`,
     email: ROLE_EMAILS[role],
     role: { id: `layout-audit-${role}`, slug: slugs[role], name: slugs[role] },
-    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.work_orders.view', 'production.wo.create', 'production.wo.record'],
+    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
     delegated_approvals: [],
     features: ['inventory', 'production', 'notifications', 'search', 'b2b_portals'],
     employee: { id: 'layout-audit-employee', employee_no: 'LAYOUT-AUDIT' },
@@ -234,6 +234,42 @@ function sampleWorkOrders(count) {
   }));
 }
 
+const sampleRouting = {
+  id: 'layout-routing-001',
+  product: { id: 'layout-product-1', part_number: 'PART-001', name: 'Layout test product' },
+  version: 12, is_active: false, total_cycle_time: '123456.75',
+  notes: 'Long routing notes for measuring readable form line lengths across desktop and mobile layouts.',
+  operations: [{
+    id: 'layout-operation-001', sequence: 10, operation_name: 'Injection molding', work_center: 'Molding cell A',
+    machine: { id: 'layout-machine-1', machine_code: 'MC-01', name: 'Layout press' },
+    mold: { id: 'layout-mold-1', mold_code: 'MOLD-01', name: 'Layout mold' },
+    setup_time_minutes: '15.00', cycle_time_minutes: '123456.75', labor_rate_per_hour: '125.5000',
+    machine_rate_per_hour: '123456.7890', overhead_rate_per_hour: '9876.5432',
+    description: 'Verify resin temperature and inspect first article before running the complete production batch.',
+    qc_required: true,
+  }],
+  created_at: '2026-10-01T09:14:00+08:00', updated_at: '2026-10-25T16:20:00+08:00',
+};
+
+function sampleRoutings(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...sampleRouting,
+    id: index === 0 ? sampleRouting.id : `layout-routing-${String(index + 1).padStart(6, '0')}`,
+    version: index === 2 ? 123456 : index + 1,
+    is_active: index % 3 !== 2,
+    total_cycle_time: index === 2 ? '123456789.75' : `${15.25 + index}`,
+    product: {
+      ...sampleRouting.product,
+      part_number: index === 1 ? 'PART-REFERENCE-000000000000000000000000000001' : `PART-${String(index + 1).padStart(5, '0')}`,
+      name: index === 1
+        ? 'Long product name for routing layout checks that should not widen every table column'
+        : `Layout test product ${index + 1}`,
+    },
+  }));
+}
+
+for (const count of [0, 1, 10, 50, 500]) assert.equal(sampleRoutings(count).length, count);
+
 assert.equal(sampleWorkOrders(0).length, 0);
 assert.equal(sampleWorkOrders(1)[0].id, sampleWorkOrder.id);
 assert.equal(sampleWorkOrders(500).length, 500);
@@ -278,6 +314,24 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
     };
     else if (pathname.endsWith(`/inventory/items/${sampleItem.id}`)) json = { data: sampleItem };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}`)) json = { data: sampleWorkOrder };
+    else if (pathname.endsWith(`/production/routings/${sampleRouting.id}`)) json = { data: sampleRouting };
+    else if (pathname.endsWith('/production/routings')) json = {
+      data: sampleRoutings(rowCount),
+      meta: { current_page: 1, last_page: 1, per_page: Math.max(rowCount, 25), total: rowCount,
+        from: rowCount ? 1 : 0, to: rowCount },
+    };
+    else if (pathname.endsWith('/crm/products')) json = {
+      data: [{ ...sampleWorkOrder.product, unit_of_measure: 'piece', include_forecast_in_mrp: false, image_url: null }],
+      meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+    };
+    else if (pathname.endsWith('/mrp/machines')) json = {
+      data: [{ id: 'layout-machine-1', machine_code: 'MC-01', name: 'Layout press' }],
+      meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+    };
+    else if (pathname.endsWith('/mrp/molds')) json = {
+      data: [{ id: 'layout-mold-1', mold_code: 'MOLD-01', name: 'Layout mold' }],
+      meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+    };
     else if (pathname.endsWith('/production/work-orders/form-options')) json = {
       data: {
         products: [{ ...sampleWorkOrder.product, stock_production: { eligible: true, blockers: [] } }],
@@ -550,7 +604,10 @@ async function measure(page) {
     const controls = [...(main?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"],[role="separator"]') ?? [])]
       .filter((control) => control.getAttribute('aria-hidden') !== 'true' && control.tabIndex !== -1)
       .map((control) => {
-        const box = control.getBoundingClientRect();
+        const target = control instanceof HTMLInputElement && control.type === 'checkbox'
+          ? control.closest('label') ?? control
+          : control;
+        const box = target.getBoundingClientRect();
         return {
           label: control.getAttribute('aria-label') || control.getAttribute('name') || control.textContent?.trim() || control.tagName.toLowerCase(),
           width: Math.round(box.width),
@@ -586,14 +643,53 @@ async function measure(page) {
     });
     const yGap = (a, b) => a && b ? Math.round((b.top - a.bottom) * 100) / 100 : null;
     const tableRows = rows.filter((row) => !row.querySelector('td[colspan]'));
-    const tableDensity = table?.closest('[data-layout="data-table"]')?.getAttribute('data-density') ?? 'default';
-    const tableTextMinimum = tableDensity === 'compact' ? 13 : 14;
+    const tableOwner = table?.closest('[data-layout="data-table"]');
+    const tableDensity = tableOwner?.getAttribute('data-density') ?? (table ? 'manual' : 'default');
+    const tableTextMinimum = tableDensity === 'compact' || tableDensity === 'manual' ? 13 : 14;
     const firstRow = tableRows[0];
     const lastRow = tableRows.at(-1);
     const doc = document.documentElement;
+    const originalHorizontalScroll = doc.scrollLeft;
+    doc.scrollLeft = doc.scrollWidth;
+    const horizontalPageMaxScroll = doc.scrollLeft;
+    doc.scrollLeft = originalHorizontalScroll;
     const pageVerticalScroll = doc.scrollHeight > innerHeight + 1;
     const internalVerticalScroll = overflow.filter((item) => item.vertical && item.insideMain);
     const sidebarVerticalScroll = overflow.some((item) => item.vertical && item.insideSidebar);
+    const layoutContext = [...document.querySelectorAll('html, body, #root, .app-shell, .app-content, .app-main, .route-transition, main, [data-layout="page-shell"], aside[aria-label="Sidebar"]')]
+      .map((element) => {
+        const box = element.getBoundingClientRect();
+        const css = getComputedStyle(element);
+        return {
+          tag: element.tagName.toLowerCase(),
+          className: typeof element.className === 'string' ? element.className : '',
+          left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width),
+          scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, scrollLeft: element.scrollLeft,
+          overflowX: css.overflowX,
+        };
+      });
+    const elementsPastViewport = [...document.body.querySelectorAll('*')]
+      .map((element) => ({ element, box: element.getBoundingClientRect(), css: getComputedStyle(element) }))
+      .filter(({ element, box, css }) => {
+        if (box.right <= innerWidth + 1 || element.closest('.sr-only') || css.position === 'fixed') return false;
+        return true;
+      })
+      .sort((a, b) => b.box.right - a.box.right)
+      .slice(0, 12)
+      .map(({ element, box, css }) => ({
+        tag: element.tagName.toLowerCase(),
+        className: typeof element.className === 'string' ? element.className : '',
+        left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width),
+        overflowX: css.overflowX,
+        insideHorizontalScroll: Boolean(element.closest('[data-layout="table-scroller"]')
+          ?? element.closest('.overflow-x-auto, .overflow-x-scroll')),
+      }));
+    const rootPseudoElements = ['::before', '::after'].map((pseudo) => {
+      const css = getComputedStyle(document.documentElement, pseudo);
+      return { pseudo, content: css.content, position: css.position, left: css.left, right: css.right, width: css.width };
+    });
+    const uncontainedElementsPastViewport = elementsPastViewport
+      .filter(({ insideHorizontalScroll }) => !insideHorizontalScroll);
     const actualTableBottom = tableCard?.getBoundingClientRect().bottom;
     const stickyHeaderCss = Boolean(thead && getComputedStyle(thead).position === 'sticky')
       || ths.some((th) => getComputedStyle(th).position === 'sticky');
@@ -653,6 +749,11 @@ async function measure(page) {
           ? Math.round((pageBlocks.pagination.top - actualTableBottom) * 100) / 100 : null,
       },
       horizontalPageOverflow: doc.scrollWidth > doc.clientWidth,
+      horizontalPageMaxScroll,
+      layoutContext,
+      elementsPastViewport,
+      uncontainedElementsPastViewport,
+      rootPseudoElements,
       horizontalOverflow: overflow.filter((item) => item.horizontal),
       verticalScrollContainers: overflow.filter((item) => item.vertical),
       sidebarVerticalScroll,
@@ -660,6 +761,13 @@ async function measure(page) {
       doubleVerticalScroll: pageVerticalScroll && internalVerticalScroll.length > 0,
       table: table ? {
         density: tableDensity,
+        scrollAffordance: tableCard ? {
+          needed: tableCard.scrollWidth > tableCard.clientWidth + 1,
+          left: tableCard.closest('.table-scroll-frame')?.getAttribute('data-more-left') === 'true',
+          right: tableCard.closest('.table-scroll-frame')?.getAttribute('data-more-right') === 'true',
+          keyboardFocusable: tableCard.tabIndex >= 0,
+          labelled: Boolean(tableCard.getAttribute('aria-label')),
+        } : null,
         textBelowMinimum: typography.filter((item) =>
           (item.tag === 'th' && item.size < 13) || (item.tag === 'td' && item.size < tableTextMinimum))
           .map((item) => ({ tag: item.tag, size: item.size, text: item.text })),
@@ -833,6 +941,13 @@ async function main() {
         }
         await page.waitForFunction((theme) => document.documentElement.getAttribute('data-theme') === theme, themeMode, { timeout: 10_000 });
         await page.waitForFunction(() => !document.querySelector('main .animate-shimmer'), null, { timeout: 15_000 });
+        if (local && route === '/production/routings/create') {
+          await page.waitForFunction(
+            () => document.querySelector('select[name="product_id"] option[value="layout-product-1"]'),
+            null,
+            { timeout: 5_000 },
+          );
+        }
         await page.waitForTimeout(350);
         const screenshot = path.join(out, `${slug(route)}-${width}.png`);
         const resizeSample = process.argv.includes('--resize-sample')
@@ -856,7 +971,26 @@ async function main() {
         const longTableScreenshots = rowCount >= 300 && !tableSamples && metrics.counts.tables > 0 && width === 1440
           ? await captureLongTableSamples(page, out, route, width)
           : [];
-        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, ...metrics });
+        let dialogSample = null;
+        if (process.argv.includes('--dialog-sample') && width === 1440
+          && route === '/production/routings/layout-routing-001') {
+          await page.getByRole('button', { name: 'Make active', exact: true }).first().click();
+          const dialog = page.getByRole('dialog');
+          await dialog.waitFor({ state: 'visible' });
+          const dialogScreenshot = path.join(out, `${slug(route)}-${width}-confirm-dialog.png`);
+          await page.screenshot({ path: dialogScreenshot });
+          const dialogMetrics = compactMetricSamples(await measure(page));
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({ state: 'detached' });
+          dialogSample = {
+            screenshot: path.relative(ROOT, dialogScreenshot),
+            visible: dialogMetrics.counts.dialogs === 1,
+            dismissedWithEscape: true,
+            buttons: dialogMetrics.buttons,
+          };
+          assert.equal(dialogSample.visible, true, 'confirm dialog must render before screenshot');
+        }
+        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, dialogSample, ...metrics });
         console.log(`${route} @ ${width}: ${metrics.counts.tables} table(s), ${metrics.counts.rows} row(s), overflow=${metrics.horizontalPageOverflow}`);
       }
     }
@@ -872,6 +1006,7 @@ async function main() {
     if (row.horizontalPageOverflow) issues.push('horizontal page overflow');
     if (row.doubleVerticalScroll) issues.push('nested vertical scroll');
     if (row.table?.stickyProbe.tested && !row.table.stickyProbe.sticksToScroller) issues.push('sticky header scrolls out of table scroller');
+    if (row.table?.scrollAffordance?.needed && (!row.table.scrollAffordance.right || !row.table.scrollAffordance.keyboardFocusable || !row.table.scrollAffordance.labelled)) issues.push('horizontally scrolling table lacks a visible keyboard-accessible affordance');
     const contrastFailures = row.typography.contrastBelowAA.reduce((sum, sample) => sum + sample.count, 0);
     if (contrastFailures) issues.push(`${contrastFailures} sampled text items below 4.5:1`);
     if (row.recordLinks.some((link) => !link.distinctFromBodyText || (link.contrast !== null && link.contrast < 4.5))) issues.push('clickable record identifier lacks distinct AA text color');
@@ -922,7 +1057,8 @@ async function main() {
         [row.horizontalPageOverflow, 'horizontal page overflow'],
         [row.doubleVerticalScroll, 'double vertical scroll'],
         [row.table?.stickyProbe.tested && !row.table.stickyProbe.sticksToScroller, 'sticky header misses table scroller'],
-        [row.table && row.table.rowHeight.min !== null && row.table.rowHeight.min < ({ default: 48, compact: 36, spacious: 56 }[row.table.density] ?? 48), 'table row below selected density minimum'],
+        [row.table?.scrollAffordance?.needed && (!row.table.scrollAffordance.right || !row.table.scrollAffordance.keyboardFocusable || !row.table.scrollAffordance.labelled), 'horizontally scrolling table lacks a visible keyboard-accessible affordance'],
+        [row.table && row.table.rowHeight.min !== null && row.table.rowHeight.min < ({ default: 48, compact: 36, manual: 36, spacious: 56 }[row.table.density] ?? 48), 'table row below selected density minimum'],
         [row.table?.textBelowMinimum.length > 0, 'table text below selected density minimum'],
         [row.table?.columns.some((column) => column.cellAlign && column.headerAlign !== column.cellAlign), 'table header/cell alignment differs'],
         [row.typography.below12px.length > 0, 'sampled text below 12px'],
