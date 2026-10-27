@@ -548,7 +548,8 @@ class BadgeService
 
             // Warehouse > Receiving — goods receipts waiting on QC acceptance.
             'pending_grn' => [
-                'permissions' => ['inventory.view'],
+                'permissions' => ['inventory.grn.create'],
+                'required_permissions' => ['inventory.view'],
                 'label'       => 'Receiving (GRN)',
                 'description' => 'Goods receipts awaiting QC',
                 'counter'     => fn (): int => GoodsReceiptNote::query()->pendingQc()->count(),

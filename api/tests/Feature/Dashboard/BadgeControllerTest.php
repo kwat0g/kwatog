@@ -940,6 +940,18 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(2, $list->json('meta.total'));
         $this->assertSame($list->json('meta.total'), $badge);
         $this->assertSame(['pending_qc', 'pending_qc'], $list->json('data.*.status'));
+
+        $qcUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->assertTrue($qcUser->hasPermission('inventory.view'));
+        $this->assertTrue($qcUser->hasPermission('quality.inspections.manage'));
+        $this->assertFalse($qcUser->hasPermission('inventory.grn.create'));
+        $qcBadges = $this->actingAs($qcUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('pending_grn', $qcBadges);
     }
 
     public function test_inspection_review_badge_matches_the_current_users_review_list(): void
