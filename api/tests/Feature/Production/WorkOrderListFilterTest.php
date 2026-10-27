@@ -83,6 +83,41 @@ class WorkOrderListFilterTest extends TestCase
         $response->assertStatus(422)->assertJsonValidationErrors('status');
     }
 
+    public function test_invalid_signal_is_rejected(): void
+    {
+        $response = $this->actingAs($this->user)->getJson(
+            '/api/v1/production/work-orders?signal=unknown',
+        );
+
+        $response->assertStatus(422)->assertJsonValidationErrors('signal');
+    }
+
+    public function test_due_soon_signal_accepts_the_registered_filter(): void
+    {
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::Planned->value,
+            'planned_end' => now()->addDay(),
+        ]);
+
+        $this->actingAs($this->user)->getJson('/api/v1/production/work-orders?signal=due_soon')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_release_signal_returns_only_planned_work_orders(): void
+    {
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create(['status' => $status->value]);
+        }
+        WorkOrder::factory()->create(['status' => WorkOrderStatus::Planned->value])->delete();
+
+        $response = $this->actingAs($this->user)->getJson('/api/v1/production/work-orders?signal=release');
+
+        $response->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.status', WorkOrderStatus::Planned->value);
+    }
+
     public function test_no_status_filter_returns_all_rows(): void
     {
         WorkOrder::factory()->count(3)->create();

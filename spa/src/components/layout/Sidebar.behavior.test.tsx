@@ -66,6 +66,72 @@ it('opens the awaiting-approval filter when purchase requests has a positive bad
   );
 });
 
+it('opens the overdue filter when Production Work Orders has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'work_orders'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Overdue',
+          description: 'Overdue production work orders',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/production/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+});
+
+it('shows the due-soon Work Orders filter alongside overdue', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'work_orders_awaiting_confirmation') {
+      return { count: 3, severity: 'warning', label: 'Awaiting confirmation', description: 'Planned production work orders awaiting confirmation' };
+    }
+    if (key === 'work_orders') {
+      return { count: 2, severity: 'danger', label: 'Overdue', description: 'Overdue production work orders' };
+    }
+    if (key === 'work_orders_due_soon') {
+      return { count: 4, severity: 'warning', label: 'Due soon', description: 'Production work orders due soon' };
+    }
+    if (key === 'work_orders_paused') {
+      return { count: 1, severity: 'warning', label: 'Paused', description: 'Production work orders awaiting resume or cancellation' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/production/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Production Work Orders signals/ }));
+  expect(screen.getByRole('link', { name: 'Planned production work orders awaiting confirmation: 3' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=release',
+  );
+  expect(screen.getByRole('link', { name: 'Overdue production work orders: 2' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+  expect(screen.getByRole('link', { name: 'Production work orders due soon: 4' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=due_soon',
+  );
+  expect(screen.getByRole('link', { name: 'Production work orders awaiting resume or cancellation: 1' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=paused',
+  );
+});
+
 it('opens the pending-QC filter when GRN has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'pending_grn'

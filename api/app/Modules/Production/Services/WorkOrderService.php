@@ -126,6 +126,16 @@ class WorkOrderService
 
         TrashedFilter::apply($q, $filters);
 
+        if (($filters['signal'] ?? '') === 'overdue') {
+            $q->overdue();
+        } elseif (($filters['signal'] ?? '') === 'due_soon') {
+            $q->dueSoon((int) $this->settings->get('production.work_orders.due_soon_days', 3));
+        } elseif (($filters['signal'] ?? '') === 'paused') {
+            $q->paused();
+        } elseif (($filters['signal'] ?? '') === 'release') {
+            $q->awaitingConfirmation();
+        }
+
         if (! empty($filters['production_purpose']) && in_array($filters['production_purpose'], ['stock', 'order', 'internal'], true)) {
             $q->where('production_purpose', $filters['production_purpose']);
         }

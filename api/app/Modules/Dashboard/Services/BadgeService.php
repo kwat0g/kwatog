@@ -86,6 +86,8 @@ class BadgeService
         'training_upcoming' => 'hr',
         'open_postings' => 'recruitment',
         'work_orders' => 'production',
+        'work_orders_due_soon' => 'production',
+        'work_orders_paused' => 'production',
         'deliveries' => 'supply_chain',
         'pending_so' => 'crm',
         'inquiries' => 'crm',
@@ -162,7 +164,8 @@ class BadgeService
             if ($feature !== null && $this->settings->get("modules.{$feature}", true) !== true) {
                 continue;
             }
-            if (! $this->userHasAny($user, $def['permissions'])) {
+            if (! $this->userHasAny($user, $def['permissions'])
+                || ! $this->userHasAll($user, $def['required_permissions'] ?? [])) {
                 continue;
             }
             try {
@@ -191,6 +194,7 @@ class BadgeService
     /**
      * @return array<string, array{
      *   permissions: array<int, string>,
+     *   required_permissions?: array<int, string>,
      *   label: string,
      *   description: string,
      *   counter: Closure
@@ -391,16 +395,34 @@ class BadgeService
                     ->count(),
             ],
 
-            // Production > Work orders — overdue (planned_end passed, not done).
+            // Production > Work orders — active work orders past their due time.
+            'work_orders_awaiting_confirmation' => [
+                'permissions' => ['production.work_orders.view'],
+                'required_permissions' => ['production.view', 'production.wo.confirm'],
+                'label'       => 'Awaiting confirmation',
+                'description' => 'Planned production work orders awaiting confirmation',
+                'counter'     => fn (): int => WorkOrder::query()->awaitingConfirmation()->count(),
+            ],
             'work_orders' => [
                 'permissions' => ['production.work_orders.view'],
-                'label'       => 'Work Orders',
+                'label'       => 'Overdue',
                 'description' => 'Overdue production work orders',
-                'counter'     => fn (): int => WorkOrder::query()
-                    ->whereIn('status', ['confirmed', 'in_progress'])
-                    ->whereNotNull('planned_end')
-                    ->where('planned_end', '<', now())
-                    ->count(),
+                'counter'     => fn (): int => WorkOrder::query()->overdue()->count(),
+            ],
+            'work_orders_due_soon' => [
+                'permissions' => ['production.work_orders.view'],
+                'label'       => 'Due soon',
+                'description' => 'Production work orders due within the configured window',
+                'counter'     => fn (): int => WorkOrder::query()->dueSoon(
+                    (int) $this->settings->get('production.work_orders.due_soon_days', 3),
+                )->count(),
+            ],
+            'work_orders_paused' => [
+                'permissions' => ['production.work_orders.view'],
+                'required_permissions' => ['production.view', 'production.work_orders.lifecycle'],
+                'label'       => 'Paused',
+                'description' => 'Production work orders awaiting resume or cancellation',
+                'counter'     => fn (): int => WorkOrder::query()->paused()->count(),
             ],
 
             // Supply chain > Deliveries in transit needing an update.
@@ -582,6 +604,17 @@ class BadgeService
             }
         }
         return false;
+    }
+
+    /** @param array<int, string> $permissions */
+    private function userHasAll(User $user, array $permissions): bool
+    {
+        foreach ($permissions as $slug) {
+            if (! $user->hasPermission($slug)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function severity(int $count, int $danger, int $warning): string
