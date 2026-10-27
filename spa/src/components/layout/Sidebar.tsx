@@ -146,6 +146,7 @@ function badgeDestination(path: string, key: string): string {
     work_orders_due_soon: 'signal=due_soon',
     work_orders_paused: 'signal=paused',
     leaves: 'signal=awaiting_my_approval',
+    missing_time_out: 'missing_time_out=1',
     maintenance_wo: 'queue=open',
     maintenance_wo_unassigned: 'queue=unassigned',
     low_stock: 'signal=low_stock',
@@ -766,6 +767,7 @@ export const SECTIONS: NavSection[] = [
         feature: 'attendance',
         permission: 'attendance.view',
         anyPermissions: ['attendance.edit', 'attendance.import', 'attendance.ot.approve'],
+        badgeKey: 'missing_time_out',
       },
       {
         to: '/hr/attendance/overtime',

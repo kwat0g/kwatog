@@ -77,6 +77,26 @@ it('opens Overtime on the actionable approval queue', () => {
   );
 });
 
+it('opens Attendance on the missing-time-out list filter', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'missing_time_out'
+    ? {
+      count: 2,
+      severity: 'warning',
+      label: 'Missing time-outs',
+      description: 'Past attendance records with a time in but no time out',
+    }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/attendance']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Attendance & DTR/ })).toHaveAttribute(
+    'href',
+    '/hr/attendance?missing_time_out=1',
+  );
+});
+
 it('opens Supplier Listings on the pending-review queue', () => {
   badgeMock.getBadge.mockImplementation((key) => key === 'supplier_listings_pending'
     ? { count: 2, severity: 'warning', label: 'Pending review', description: 'Supplier listings awaiting review' }

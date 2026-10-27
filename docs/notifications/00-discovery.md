@@ -272,15 +272,15 @@ The `ShouldBroadcast` inventory includes: `UserNotificationCreated`, `Permission
 
 ## Sidebar and navigation discovery
 
-The Phase 0 capture of the internal ERP sidebar is `spa/src/components/layout/Sidebar.tsx`, permission/feature gated by frontend metadata. It recorded 73 internal destinations; 22 carried a badge key. Current code has 74 destinations and 24 badge keys: PR #342 attaches `inquiries`, and PR #367 adds Budget Transfers. Supplier/customer portals define 19 destinations total. Employee self-service has a six-item conditional mobile bottom navigation; factory floor has two tabs; maintenance mobile has one tab. The three compact shells do not render badge counters. Later implementation deltas are listed below the baseline inventory.
+The Phase 0 capture of the internal ERP sidebar is `spa/src/components/layout/Sidebar.tsx`, permission/feature gated by frontend metadata. It recorded 73 internal destinations; 22 carried a badge key. Current code has 74 destinations and 25 badge-bearing items: PR #342 attaches `inquiries`, PR #367 adds Budget Transfers, and the missing-time-out badge attaches to Attendance. Supplier/customer portals define 19 destinations total. Employee self-service has a six-item conditional mobile bottom navigation; factory floor has two tabs; maintenance mobile has one tab. The three compact shells do not render badge counters. Later implementation deltas are listed below the baseline inventory.
 
-`BadgeService` is the backend badge source, registered at `GET /dashboards/badges`. It defined 29 count keys at capture; 22 were wired to internal sidebar items. Current code wires 24. Counts are cached per user (default 30 seconds; setting-bounded), use one closure/query per active key, and trigger global version invalidation plus an empty `BadgesChanged` private-channel ping for observed model writes. SPA polling is 60 seconds and pauses in background. StockLevel changes are intentionally not observed; low-stock relies on TTL/poll.
+`BadgeService` is the backend badge source, registered at `GET /dashboards/badges`. It defined 29 count keys at capture; 22 were wired to internal sidebar items. Current code wires 25. Counts are cached per user (default 30 seconds; setting-bounded), use one closure/query per active key, and trigger global version invalidation plus an empty `BadgesChanged` private-channel ping for observed model writes. SPA polling is 60 seconds and pauses in background. StockLevel changes are intentionally not observed; low-stock relies on TTL/poll.
 
 Current visual behavior: one numeric badge per nav item; counts over 99 render as `99+`; no signal chips/popovers. Collapsed item badges remain visible. Collapsed module groups sum child counts and show the highest current severity; the summary is in a title/ARIA label. Mobile uses the same one-badge rendering. There is no signal legend or global system-notice strip in the main shell; alerts, Action Center, and DSS have separate screens.
 
 The Phase 0 internal destination/badge-key inventory is below, followed by its implementation delta. `—` means no badge key.
 
-**Phase 0 internal item count:** 73; **current count:** 74; **baseline items with badge keys:** 22; **current items with badge keys:** 24.
+**Phase 0 internal item count:** 73; **current count:** 74; **baseline items with badge keys:** 22; **current items with badge keys:** 25.
 
 | Path | Label | Permission gate | Feature gate | Badge key |
 | --- | --- | --- | --- | --- |
@@ -340,7 +340,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/hr/profile-update-requests` | `Bank Account Changes` | any: hr.employees.view, hr.profile_updates.finance_review | `hr` | — |
 | `/hr/employees` | `Employees` | any: hr.employees.view, hr.salary_adjustments.view | `hr` | `profile_requests` |
 | `/hr/departments` | `Departments` | `hr.departments.view` | `hr` | — |
-| `/hr/attendance` | `Attendance & DTR` | `attendance.view` AND any: `attendance.edit`, `attendance.import`, `attendance.ot.approve` | `attendance` | — |
+| `/hr/attendance` | `Attendance & DTR` | `attendance.view` AND any: `attendance.edit`, `attendance.import`, `attendance.ot.approve` | `attendance` | `missing_time_out` |
 | `/hr/attendance/overtime` | `Overtime` | `attendance.ot.approve` | `attendance` | `overtime` |
 | `/hr/leaves` | `Leave Management` | any: leave.approve_dept, leave.approve_hr, leave.types.manage | `leave` | `leaves` |
 | `/payroll/periods` | `Payroll Processing` | `payroll.periods.view` | `payroll` | `payroll` |
@@ -395,7 +395,7 @@ The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirm
 
 ### Badge definitions at the discovery baseline
 
-The discovery snapshot contained 32 backend keys. Current `BadgeService` defines 48 keys; the 16 later keys are listed after this baseline table.
+The discovery snapshot contained 32 backend keys. Current `BadgeService` defines 49 keys; the 17 later keys are listed after this baseline table.
 
 | Key | Count definition captured at discovery |
 | --- | --- |
@@ -452,6 +452,7 @@ The discovery snapshot contained 32 backend keys. Current `BadgeService` defines
 | `unpaid_bills` | Open bills with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
 | `due_soon_bills` | Unpaid/partial bills with positive balance due today through three calendar days ahead, inclusive. |
 | `vehicles_maintenance` | Non-archived fleet vehicles with `VehicleStatus::Maintenance`; status is filtered by the same `status=maintenance` query on the Fleet page. |
+| `missing_time_out` | Attendance rows with time in, no time out, and date before Manila today; the list query applies the same HR/company or department row scope and excludes archived rows. Employee self-service is excluded pending F-84 policy review. |
 
 ## Candidate signal data discovery
 

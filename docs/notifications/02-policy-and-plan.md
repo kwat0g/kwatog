@@ -59,7 +59,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `'approval_escalation'` | Current approval step / current submitter outcome; source scope required | send | `api/app/Common/Services/ApprovalEscalationService.php:137`, `api/app/Common/Services/ApprovalEscalationService.php:313` |
 | `'approval_reminder'` | Current approval step / current submitter outcome; source scope required | send | `api/app/Common/Services/ApprovalEscalationService.php:86` |
 | `'ar.dunning.escalation'` | Assigned finance owner/current reviewer with Invoice access; external customer/vendor event remains party-bound | sendForSubject | `api/app/Modules/Accounting/Services/ArDunningService.php:193` |
-| `'attendance.missing_time_out'` | Employee, current approver, assignee, or scoped HR; sensitive HR/payroll rules apply | send | `api/app/Console/Commands/NotifyMissingTimeOut.php:63`, `api/app/Console/Commands/NotifyMissingTimeOut.php:98` |
+| `'attendance.missing_time_out'` | Current source notifies active HR Officers with `attendance.view` plus `attendance.edit` or `attendance.import`, and active Department Heads in the affected department with `attendance.view` plus `attendance.ot.approve`; no employee notice exists. Proposed default: preserve this scoped audience until HR approves employee-facing copy and an actionable destination. | send | `api/app/Console/Commands/NotifyMissingTimeOut.php:63`, `api/app/Console/Commands/NotifyMissingTimeOut.php:98` |
 | `'attendance.ot_submitted'` | Employee, current approver, assignee, or scoped HR; sensitive HR/payroll rules apply | send | `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeSubmitted.php:38` |
 | `'auto_ncr_created'` | Assigned inspector/NCR owner/current quality reviewer with plant/lot scope | send | `api/app/Modules/Quality/Services/NcrService.php:407` |
 | `'auto_po_pending'` | Current approval step / current submitter outcome; source scope required | send | `api/app/Modules/Purchasing/Services/AutoPurchaseOrderService.php:209` |
@@ -262,7 +262,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `hr.leave.requester_outcome` | Leave outcome / info | Own leave requests with status `rejected` in self-service history. The current enum has no `returned` status; show an outcome badge only for recent/unseen records if the same list filter supports it. | A: requesting employee | `/self-service/leave?signal=requester_outcome`; off by default unless user enables outcome badges |
 | `hr.overtime.awaiting_my_approval` | Overtime / action-required | Pending requests the current overtime approver can decide; reuse the decision/list scope and exclude the current employee's own request plus requests submitted by a delegator when authority comes only from delegation. | A/S: direct `attendance.ot.approve` or active delegate with the list's read permission; all-record actors or the current user's department scope | `/hr/attendance/overtime?signal=awaiting_my_approval` |
 | `hr.attendance.exception` | Attendance exception / action-required | Deferred: current attendance enum has recorded states (`present`, `absent`, `late`, `halfday`, `on_leave`, `holiday`, `rest_day`) but no unresolved exception/correction state. Do not count historical absence/late rows as actions without HR rule. | Disabled pending HR definition | No verified exception filter |
-| `hr.attendance.missing_timeout` | Missing time-out / action-required | Attendance row with non-null `time_in`, null `time_out`, and date before Manila today; exclude archived rows. Mirror `AttendanceService` employee/department/full-HR visibility rules. | A/S: employee self, department approver, or HR list scope | `/hr/attendance?missing_time_out=1&from={notice_date}&to={notice_date}` |
+| `hr.attendance.missing_timeout` | Missing time-out / action-required | Attendance row with non-null `time_in`, null `time_out`, and date before Manila today; exclude archived rows. Share `AttendanceService` filter and employee/department/full-HR row visibility with the list. | S: users who can open the back-office Attendance list (`attendance.view` plus `attendance.edit`, `attendance.import`, or `attendance.ot.approve`); same list row scope | `/hr/attendance?missing_time_out=1` |
 | `hr.profile_update.awaiting_my_action` | Profile change / action-required | Pending profile update assigned to current finance/HR reviewer; use existing department scope and exact review stage. | A/S | `/hr/profile-update-requests?signal=awaiting_my_action` |
 | `hr.training.expired` | Expired / warning | Latest completed/expired certification for an active employee and training has status `expired`; exclude it when a newer completed/expired row exists for that employee and training. Resolve latest by `completed_at`, then row ID. Apply the same employee self/department/company scope as the record view. | A/S | `/hr/employee-trainings?signal=expired` |
 | `hr.training.expiring_soon` | Expiring / warning | Latest completed certification expiring from today through +30 days, or scheduled training from today through +14 days; use `Asia/Manila` date boundaries and exclude cancelled, expired, inactive-employee, and superseded certification rows. | A/S: employee + scoped HR | `/hr/employee-trainings?signal=upcoming` |
@@ -355,7 +355,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/hr/profile-update-requests` | — | any: hr.employees.view, hr.profile_updates.finance_review | hr.profile_update.awaiting_my_action |
 | `/hr/employees` | `profile_requests` | any: hr.employees.view, hr.salary_adjustments.view | hr.employee.contract_or_regularization_due (only if reliable date/state exists) |
 | `/hr/departments` | — | `hr.departments.view` | — |
-| `/hr/attendance` | — | `attendance.view` and any: `attendance.edit`, `attendance.import`, `attendance.ot.approve` | hr.attendance.missing_timeout |
+| `/hr/attendance` | `missing_time_out` | `attendance.view` and any: `attendance.edit`, `attendance.import`, `attendance.ot.approve` | hr.attendance.missing_timeout |
 | `/hr/attendance/overtime` | `overtime` | `attendance.ot.approve` | hr.overtime.awaiting_my_approval |
 | `/hr/leaves` | `leaves` | any: leave.approve_dept, leave.approve_hr, leave.types.manage | hr.leave.awaiting_my_approval |
 | `/payroll/periods` | `payroll` | `payroll.periods.view` | payroll.awaiting_my_action; payroll.run_or_disbursement_failed; payroll.payslip_email_failed |
@@ -410,7 +410,7 @@ Portal audience always means active contact bound to that route's customer/vendo
 | --- | --- | --- |
 | Employee self-service `/self-service` | — (unified hub deferred to Phase 6) | A: current employee only |
 | Employee self-service `/self-service/work-orders` | production.crew.assigned; production.output_pending | A: assigned employee only |
-| Employee self-service `/self-service/dtr` | — (DTR is history; no unresolved exception state verified) | A: current employee only |
+| Employee self-service `/self-service/dtr` | — (read-only DTR; missing-timeout action/filter is unsupported; see F-84) | A: current employee only |
 | Employee self-service `/self-service/leave` | hr.leave.requester_outcome | A: own leave records |
 | Employee self-service `/self-service/payslips` | payroll.payslip_ready; payroll.payslip_email_failed | A: own finalized payslip only |
 | Employee self-service `/self-service/me` | — | No cross-record count |
@@ -466,6 +466,7 @@ Portal audience always means active contact bound to that route's customer/vendo
 12. **Quality escalation:** Confirm NCR/CAPA SLA windows, rejected-lot audience, and customer complaint visibility. Default: assigned owner/current reviewer; customer sees only approved external updates.
 13. **Threshold ownership:** Who may edit signal thresholds and mandatory categories? Default: admin settings permission with audit log and signal-owner approval.
 14. **HR regularization:** Is `employees.date_regularized` the authoritative upcoming due date, or should the system derive it from hire date and the configured probation period? Default: no badge until dashboard, employee list, and self-service use one approved rule.
+15. **Missing time-out notices:** Should an employee receive an in-app notice about their own missing time-out, and what action should the notice request? Default: keep current HR/department-head notices; no employee notice or self-service badge until HR approves copy and an actionable destination (F-84).
 
 ## Review record
 
