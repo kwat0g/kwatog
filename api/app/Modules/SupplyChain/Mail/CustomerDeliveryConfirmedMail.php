@@ -125,6 +125,7 @@ class CustomerDeliveryConfirmedMail extends QueuedMailable
                 'entity_id' => $this->delivery->hash_id,
                 'reason' => 'The customer email was unreachable or the email provider rejected the message.',
             ],
+            $this->delivery,
         );
     }
 }

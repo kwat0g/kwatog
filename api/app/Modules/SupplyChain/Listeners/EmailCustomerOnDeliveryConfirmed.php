@@ -42,6 +42,7 @@ class EmailCustomerOnDeliveryConfirmed implements ShouldQueue
                 $feature,
                 "Delivery {$snapshot['delivery_number']} was confirmed, but the customer has no usable email address. Review the delivery and contact the customer through an approved channel.",
                 $context,
+                $delivery,
             );
 
             return;
@@ -62,6 +63,7 @@ class EmailCustomerOnDeliveryConfirmed implements ShouldQueue
                 $feature,
                 "The confirmation email for delivery {$snapshot['delivery_number']} could not be accepted by the email provider. Contact the customer through an approved channel.",
                 $context,
+                $delivery,
             );
             Log::warning('Customer delivery email enqueue failed', [
                 'delivery_id' => $delivery->id,
