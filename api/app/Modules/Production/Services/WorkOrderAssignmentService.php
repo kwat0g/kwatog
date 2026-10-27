@@ -611,6 +611,14 @@ class WorkOrderAssignmentService
         return $issues;
     }
 
+    public function staffingNoticeDedupeKey(int $slotId, ?int $crewId, array $issues, ?string $fallback = null): string
+    {
+        sort($issues);
+        $reason = $issues === [] ? (string) $fallback : implode('|', $issues);
+
+        return 'wo-crew-review-'.$slotId.'-'.($crewId ?? 'none').'-'.sha1($reason);
+    }
+
     public function notifyStaffingChange(int $employeeId, string $changeKey, ?string $context = null): void
     {
         $crews = WorkOrderCrew::whereNull('ended_at')->whereHas('members', fn ($query) => $query->where('employee_id', $employeeId))
@@ -624,12 +632,13 @@ class WorkOrderAssignmentService
             if ($issues === [] && $context === null) {
                 continue;
             }
+            $slot = $this->schedule($crew->workOrder, $crew->rework_ncr_id);
             app(NotificationService::class)->sendForSubject($crew->workOrder, $owners, 'production.assignment.review', [
                 'title' => 'Crew needs review: '.$crew->workOrder->wo_number,
                 'message' => $issues === [] ? $context : implode(' ', $issues).' Review workers before starting new operations.',
                 'link_to' => '/production/work-orders/'.$crew->workOrder->hash_id,
                 'entity_type' => 'work_order', 'entity_id' => $crew->workOrder->hash_id,
-            ], 'wo-staffing-'.$crew->id.'-'.$changeKey, emailEnabled: false);
+            ], $this->staffingNoticeDedupeKey($slot?->id ?? 0, $crew->id, $issues, $context ?? $changeKey), emailEnabled: false);
         }
     }
 
