@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PR #391 aligns the HR Profile Requests badge with a user's actionable review queue and merged as `ffb34fdd`. Its original-head API parity tests passed **9 tests / 69 assertions**; post-rebase SPA tests passed **3 profile-page tests** and **40 Sidebar behavior tests**. API tests were not rerun against shared `ogami_test`. PR #392 adds Maintenance Work Order open/unassigned badge/list parity; original-head API parity passed **1 test / 16 assertions**. After rebase, Sidebar behavior passed **41 tests**, Maintenance Work Orders passed **1 test**, targeted ESLint/PHP syntax checks, and `git diff --check`; API tests were not rerun against shared `ogami_test`. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PR #391 aligns the HR Profile Requests badge with a user's actionable review queue and merged as `ffb34fdd`. PR #392 adds Maintenance Work Order open/unassigned badge/list parity and merged as `fb904737`. Their original-head API parity tests passed **9 tests / 69 assertions** and **1 test / 16 assertions**. Post-rebase SPA tests passed **3 profile-page tests**, **40 Sidebar tests** for #391, **41 Sidebar tests**, and **1 Maintenance page test** for #392; API tests were not rerun against shared `ogami_test`. PR #393 fixes overtime API route permissions; its original-head regression passed **1 test / 8 assertions**. After rebase, PHP syntax checks and `git diff --check` passed; API tests were not rerun against shared `ogami_test`. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -40,7 +40,8 @@
 | F-40. Work Order route/RBAC gate alignment | `notifications/fix-production-badge-route-permissions` | [#389](https://github.com/kwat0g/kwatog/pull/389) | merged as `723cc8f1` |
 | F-41. Production assignment-alert access | `notifications/fix-production-alert-access` | [#390](https://github.com/kwat0g/kwatog/pull/390) | merged as `e6fc83c6`; original-head API test passed; post-rebase API test not run against shared DB |
 | F-01. Profile Update actionable queue | `notifications/fix-profile-request-badge` | [#391](https://github.com/kwat0g/kwatog/pull/391) | merged as `ffb34fdd`; original-head API and post-rebase SPA tests passed; post-rebase API test not run against shared DB |
-| F-09. Maintenance Work Order badge/list parity | `notifications/maintenance-work-order-signals` | [#392](https://github.com/kwat0g/kwatog/pull/392) | rebased; post-rebase Sidebar 41 and page 1 tests, ESLint, PHP syntax, and diff checks passed; API test not run against shared DB |
+| F-09. Maintenance Work Order badge/list parity | `notifications/maintenance-work-order-signals` | [#392](https://github.com/kwat0g/kwatog/pull/392) | merged as `fb904737`; original-head API and post-rebase SPA/syntax checks passed; post-rebase API test not run against shared DB |
+| F-42. Overtime route permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | rebased; original-head API test passed; post-rebase syntax/diff checks passed; API test not run against shared DB |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -395,6 +396,13 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - The existing list grants company-wide visibility to `maintenance.view` users and has no site column/filter. This follows current route/list scope; site-restricted counts remain a known gap.
 - The policy catalog had proposed `signal=unassigned`; API and SPA use `queue=unassigned`, and the sidebar links to that real filter. The open badge also links to the `queue=open` filter.
 - Original-head `MaintenanceWorkOrderBadgeParityTest`: **1 test / 16 assertions**; Sidebar behavior and Maintenance Work Order page tests: **39 passed**. After rebase, `Sidebar.behavior.test.tsx`: **41 passed**, Maintenance Work Order page: **1 passed**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`.
+
+## Separate finding fix: F-42 Overtime route permission parity (PR [#393](https://github.com/kwat0g/kwatog/pull/393))
+
+- The SPA lets approvers open the overtime list and request creators open the create page. The API had limited the list and options endpoints to `attendance.view`, returning 403 to approver-only and creator-only users.
+- The list now accepts `attendance.view` or `attendance.ot.approve`; options accept any of `attendance.view`, `attendance.ot.approve`, or `attendance.ot.create`. `OvertimeService::list()` continues applying the existing `OvertimeDecisionPolicy::visibleTo()` row scope.
+- `OvertimeListRoutePermissionTest` passed **1 test / 8 assertions** on the original feature head. It verifies approver access, creator options access, creator-only list denial, and unprivileged list/options denial. Post-rebase API test was not run against shared `ogami_test`.
+- PHP 8.3 syntax checks passed for `Attendance/routes.php` and the feature test; `git diff --check` passed.
 
 ## Outstanding proof / risks
 
