@@ -4,21 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
-use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\CurrencyDisplayService;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\SupplierInvoice;
-use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
-use App\Modules\B2B\Mail\SupplierInvoiceStatusMail;
-use App\Modules\Accounting\Services\BillService;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
+use App\Modules\B2B\Listeners\EmailSupplierOnInvoiceSubmitted;
+use App\Modules\B2B\Mail\SupplierInvoiceStatusMail;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Policies\SupplierPoCapabilities;
-use App\Modules\B2B\Services\SupplierInvoiceService;
-use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -27,9 +27,11 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -291,7 +293,7 @@ class SupplierInvoiceSubmissionTest extends TestCase
         self::assertSame('SUP-INV-42', $mail->snapshot['invoice_number']);
         self::assertSame('125.50', $mail->snapshot['gross_total']);
         self::assertSame('Original <img src=x onerror=alert(1)> [Billing](https://evil.example) Contact', $mail->snapshot['supplier_name']);
-        self::assertSame(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.50'), $mail->snapshot['display_total']);
+        self::assertSame(app(CurrencyDisplayService::class)->format('125.50'), $mail->snapshot['display_total']);
         self::assertSame('snapshot-supplier@example.test', $mail->snapshot['recipient_email']);
         self::assertSame('[Ogami Philippines] Supplier invoice received: SUP-INV-42', $mail->envelope()->subject);
         $html = $mail->render();
@@ -306,6 +308,49 @@ class SupplierInvoiceSubmissionTest extends TestCase
         self::assertStringContainsString('/portal/supplier/invoices/', $html);
         self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
         $mail->assertSeeInText('receipt only');
+    }
+
+    public function test_supplier_invoice_email_failure_targets_only_the_bill_creator(): void
+    {
+        $owner = User::factory()->withRole('finance_officer')->create();
+        $otherFinanceUser = User::factory()->withRole('finance_officer')->create();
+        $this->assertTrue($owner->hasPermission('accounting.bills.view'));
+        $this->assertTrue($otherFinanceUser->hasPermission('accounting.bills.view'));
+        $vendor = Vendor::factory()->create(['email' => 'not-an-email']);
+        $bill = Bill::factory()->create([
+            'vendor_id' => $vendor->id,
+            'created_by' => $owner->id,
+            'bill_number' => 'BILL-NOTICE-OWNER',
+        ]);
+        $event = new SupplierInvoiceSubmitted($bill);
+
+        app(EmailSupplierOnInvoiceSubmitted::class)->handle($event);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $owner->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $otherFinanceUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $notificationData = json_decode((string) DB::table('notifications')
+            ->where('notifiable_id', $owner->id)
+            ->where('type', 'email.delivery_failed')
+            ->value('data'), true);
+        $this->assertSame(Bill::class, $notificationData['subject_type']);
+        $this->assertSame((string) $bill->id, $notificationData['subject_id']);
+
+        (new SupplierInvoiceStatusMail($event->snapshot))->failed(new RuntimeException('Test delivery failure.'));
+
+        $this->assertSame(2, DB::table('notifications')
+            ->where('notifiable_id', $owner->id)
+            ->where('type', 'email.delivery_failed')
+            ->count());
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $otherFinanceUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 
     public function test_pre_cutover_posted_unpaid_bill_can_be_reconciled_once(): void

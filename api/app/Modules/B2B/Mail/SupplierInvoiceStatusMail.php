@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Mail;
 
-use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Common\Services\EmailBrandingService;
 use App\Common\Mail\QueuedMailable;
+use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Accounting\Models\Bill;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 
 class SupplierInvoiceStatusMail extends QueuedMailable
 {
     /**
-     * @param array<string, mixed> $snapshot
-     * @param list<int> $fallbackUserIds
+     * @param  array<string, mixed>  $snapshot
+     * @param  list<int>  $fallbackUserIds  Retained for queued mail compatibility; failures resolve the current bill creator.
      */
     public function __construct(
         public readonly array $snapshot,
@@ -60,8 +62,18 @@ class SupplierInvoiceStatusMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
-        app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
-            $this->fallbackUserIds,
+        $bill = Bill::query()->whereHash((string) ($this->snapshot['bill_hash_id'] ?? ''))->first();
+        $creator = $bill?->creator()->where('is_active', true)->first();
+        if (! $bill || ! $creator) {
+            Log::warning('Supplier invoice email fallback skipped: bill or active creator is unavailable.', [
+                'bill_hash_id' => $this->snapshot['bill_hash_id'] ?? null,
+            ]);
+
+            return;
+        }
+
+        app(EmailDeliveryFailureNotifier::class)->notify(
+            $creator,
             'Supplier invoice email',
             'The confirmation email for supplier invoice '.$this->snapshot['invoice_number'].' could not be delivered. Review the submission and use the supplier portal or an approved channel.',
             [
@@ -70,6 +82,7 @@ class SupplierInvoiceStatusMail extends QueuedMailable
                 'entity_id' => $this->snapshot['bill_hash_id'],
                 'reason' => 'The supplier email was unreachable or the email provider rejected the message.',
             ],
+            $bill,
         );
     }
 

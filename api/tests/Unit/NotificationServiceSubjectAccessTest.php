@@ -8,6 +8,7 @@ use App\Common\Events\UserNotificationCreated;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Permission;
@@ -207,6 +208,43 @@ class NotificationServiceSubjectAccessTest extends TestCase
             'type' => 'test.disabled_invoice_subject',
         ]);
         Event::assertNotDispatched(UserNotificationCreated::class);
+    }
+
+    public function test_bill_subject_requires_the_bill_detail_permission(): void
+    {
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'accounting.bills.view'],
+            ['name' => 'View bills', 'module' => 'accounting'],
+        );
+        $role = Role::firstOrCreate(
+            ['slug' => 'notification_bill_viewer'],
+            ['name' => 'Notification Bill Viewer'],
+        );
+        $role->permissions()->attach($permission->id);
+        $viewer = User::factory()->withRole($role->slug)->create();
+        $withoutPermission = User::factory()->create();
+        $bill = Bill::factory()->create(['created_by' => $viewer->id]);
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.bill_subject_access',
+                'subject_type' => Bill::class,
+                'subject_id' => $bill->id,
+                'user_ids' => [$withoutPermission->id],
+            ],
+        );
+
+        app(NotificationService::class)->sendForSubject($bill, [$viewer, $withoutPermission], 'test.bill_subject_access', [
+            'title' => 'Bill update',
+            'message' => 'The bill changed.',
+        ], emailEnabled: false);
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.bill_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => 'test.bill_subject_access']);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $viewer->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
     }
 
     public function test_budget_subject_allows_only_viewers_and_distinct_approvers(): void
