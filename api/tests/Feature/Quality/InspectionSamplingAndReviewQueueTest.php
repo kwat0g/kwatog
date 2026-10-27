@@ -99,7 +99,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
         $this->assertSame(3, (int) Inspection::query()->where('entity_id', $wo->id)->where('stage', 'in_process')->value('sample_size'));
     }
 
-    private function awaitingReviewOutgoing(User $maker): Inspection
+    private function awaitingReviewOutgoing(User $maker, ?User $priorAuthor = null): Inspection
     {
         $inspection = Inspection::query()->create([
             'inspection_number' => 'QC-T-'.substr(uniqid(), -6),
@@ -119,6 +119,9 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
             'inspection_id' => $inspection->id, 'sample_index' => 1, 'parameter_name' => 'Visual',
             'parameter_type' => 'visual', 'is_critical' => true, 'is_pass' => true,
         ]);
+        if ($priorAuthor) {
+            $inspection->resultAuthors()->create(['user_id' => $priorAuthor->id]);
+        }
 
         return app(InspectionService::class)->complete($inspection->fresh(['measurements']), $maker);
     }
@@ -127,6 +130,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
     {
         $maker = $this->userWithRole('qc_inspector');
         $checker = $this->userWithRole('production_manager');
+        $priorAuthor = $this->userWithRole('production_manager');
         $revokedChecker = $this->userWithRole('production_manager');
         DB::table('user_permission_overrides')->insert([
             'user_id' => $revokedChecker->id,
@@ -140,7 +144,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
         $revokedChecker->flushPermissionsCache();
         $outsider = $this->userWithRole('warehouse_staff');
 
-        $inspection = $this->awaitingReviewOutgoing($maker);
+        $inspection = $this->awaitingReviewOutgoing($maker, $priorAuthor);
 
         $this->assertSame(InspectionStatus::AwaitingReview, $inspection->status);
         $notified = fn (User $u): bool => DB::table('notifications')
@@ -148,6 +152,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
         $this->assertTrue($notified($checker));
         $this->assertFalse($notified($revokedChecker));
         $this->assertFalse($notified($maker));
+        $this->assertFalse($notified($priorAuthor));
         $this->assertFalse($notified($outsider));
         $this->assertSame(
             "/quality/inspections/{$inspection->hash_id}",
@@ -159,7 +164,8 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
     {
         $maker = $this->userWithRole('qc_inspector');
         $checker = $this->userWithRole('production_manager');
-        $inspection = $this->awaitingReviewOutgoing($maker);
+        $priorAuthor = $this->userWithRole('production_manager');
+        $inspection = $this->awaitingReviewOutgoing($maker, $priorAuthor);
         $key = 'quality:inspection-review:'.$inspection->hash_id;
         $keys = fn (User $u): array => array_column(
             $this->actingAs($u)->getJson('/api/v1/dashboards/action-center')->assertOk()->json('data.items') ?? [],
@@ -168,6 +174,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
 
         $this->assertContains($key, $keys($checker));
         $this->assertNotContains($key, $keys($maker), 'the maker never sees their own result as review work');
+        $this->assertNotContains($key, $keys($priorAuthor), 'a result author cannot review work they contributed to');
 
         $this->actingAs($checker)
             ->patchJson('/api/v1/dashboards/action-center/tasks', ['item_ids' => [$key], 'action' => 'claim'])
