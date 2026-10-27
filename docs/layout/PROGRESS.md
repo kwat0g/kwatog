@@ -151,6 +151,7 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 - Before/after screenshots cover Light and Dark at seven widths. Synthetic item, unknown, and error states cover 375/1440px; item detail also covers 2560px. The work-order dropdown uses 25 synthetic records at 375/1440/2560px in both themes. The 34 strict after captures report zero alignment, clearance, overflow, double-scroll, sampled contrast, or touch-target failures. The route has no table, tabs, modal, drawer, or separate print page.
 - Verification: scanner tests pass 2/2; changed-file ESLint, layout discipline, audit-script syntax, Impeccable layout detector, `git diff --check`, and `npx vite build` pass. `npx tsc -b --pretty false` reports only existing errors in `src/api/inventory/stock.ts` (duplicate `id`) and `src/pages/leaves/index.test.tsx` (missing `PaginationMeta.from/to`); scanner files have no reported type errors. Synthetic warehouse-staff fixture and local API mocks only; no application database used.
 - Evidence: F-017 in `FINDINGS.md`; screenshots and machine reports under [`screenshots/before/inventory-scanner/`](screenshots/before/inventory-scanner/) and [`screenshots/after/inventory-scanner/`](screenshots/after/inventory-scanner/). Other roles, Floor theme, axe, keyboard/screen-reader walkthrough, and runtime performance remain unchecked. No table-specific 0/1/10/50/500-row checks apply.
+- Tracking: PR [#512](https://github.com/kwat0g/kwatog/pull/512) contains this route unit.
 
 ## Next action
 
