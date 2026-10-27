@@ -99,4 +99,6 @@
 
 | F-70 | Low; fixed in PR #459 | `RfqBiddingTest::test_non_owner_cannot_trigger_lazy_rfq_closure_through_detail_get` chained `getJson()` from the `void` result of `actingAsFresh()`, so the intended access assertion did not execute. | The fixture helper returns `void`; the test now calls it separately before making the request. Original-head `RfqBiddingTest.php` passed 21 / 260 assertions; no post-rebase test was run. | Keep authentication setup and HTTP requests as separate statements when the helper returns `void`. |
 
+| F-71 | Low; tracked separately in PR #462 | The price agreement immutability test's user fixture lacks `crm.price_agreements.manage`, so its request is denied with 403 before reaching the immutability validation expected as 422. | The route permission check is working; the test fixture does not meet its precondition. PR #462 updates the fixture only and remains separate from notification delivery changes. Its original-head lifecycle file passed 7 / 57 assertions; no post-rebase test was run. | Grant the fixture the route's required permission, then retain the 422 assertion for immutable agreement terms. |
+
 Findings track discrete defects alongside broader notification/badge work; fixing one finding does not establish global recipient or badge parity. No claim of a confirmed cross-user leak is made without runtime evidence.
