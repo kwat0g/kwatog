@@ -217,10 +217,12 @@ function Body({
   renderKind,
   unit,
   value,
+  label,
 }: {
   renderKind: string;
   unit: MetricUnit;
   value: MetricRenderableValue;
+  label: string;
 }) {
   const hero = headline(renderKind, value);
 
@@ -261,7 +263,7 @@ function Body({
             </span>
           </div>
         )}
-        <SparkLine data={points.map((point) => point.value)} height={36} width={220} />
+        <SparkLine data={points.map((point) => point.value)} label={`${label} trend`} height={36} width={220} />
         <div className="flex justify-between text-2xs text-subtle">
           <span>{points[0]?.label}</span>
           <span>{points[points.length - 1]?.label}</span>
@@ -385,7 +387,7 @@ export function MetricPanel({
         />
       ) : (
         <div className="space-y-3">
-          <Body renderKind={definition.render_kind} unit={definition.unit} value={value} />
+          <Body renderKind={definition.render_kind} unit={definition.unit} value={value} label={heading} />
 
           {/* The definition travels with the number, so "explain this figure"
               needs no second request — and a caveat is stated on the tile

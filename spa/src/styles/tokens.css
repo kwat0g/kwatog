@@ -6,6 +6,34 @@
  */
 
 :root {
+  color-scheme: light;
+  /* ─── Layout scale ─── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --page-gutter: 16px;
+  --topbar-height: 48px;
+
+  /* ─── Type scale ─── */
+  --font-size-page-title: 28px;
+  --font-size-section-title: 20px;
+  --font-size-subsection: 16px;
+  --font-size-body: 14px;
+  --font-size-body-small: 14px;
+  --font-size-caption: 13px;
+  --font-size-label: 14px;
+  --font-size-table-header: 14px;
+  --font-size-table-cell: 14px;
+  --font-size-code: 14px;
+  --font-weight-body: 400;
+
   /* ─── Canvas ─── */
   --bg-canvas: #fdfcfa;
   --bg-surface: #f7f4ef;
@@ -90,6 +118,26 @@
   --chart-7: #68188b;
   --chart-8: #642b47;
 
+  /* Person identity tints; each base repeats a CVD-tested chart hue. */
+  --avatar-1: #643e2b;
+  --avatar-1-bg: #e6e0db;
+  --avatar-1-fg: #1f1b16;
+  --avatar-2: #568137;
+  --avatar-2-bg: #e4eadd;
+  --avatar-2-fg: #1f1b16;
+  --avatar-3: #358d64;
+  --avatar-3-bg: #dfebe4;
+  --avatar-3-fg: #1f1b16;
+  --avatar-4: #1d6a87;
+  --avatar-4-bg: #dbe6e9;
+  --avatar-4-fg: #1f1b16;
+  --avatar-5: #2a25b1;
+  --avatar-5-bg: #dddcef;
+  --avatar-5-fg: #1f1b16;
+  --avatar-6: #642b47;
+  --avatar-6-bg: #e6dddf;
+  --avatar-6-fg: #1f1b16;
+
   /* ─── Focus ring ─── */
   --ring: #b4542a;
   --ring-offset: #fdfcfa;
@@ -111,9 +159,11 @@
   --radius-full: 9999px;
 
   /* ─── Density — office. [data-theme='floor'] overrides all three. ─── */
-  --row-height: 32px;
+  --row-height: 48px;
+  --row-height-compact: 36px;
+  --row-height-spacious: 56px;
   --hit-min: 28px;
-  --font-size-body: 13px;
+  --font-size-body: 14px;
 
   /* ─── Motion ─── */
   --duration-fast: 150ms;
@@ -154,6 +204,14 @@
   --plant-map-accent: #b4542a;
 }
 
+@media (min-width: 640px) {
+  :root { --page-gutter: 24px; }
+}
+
+@media (min-width: 1440px) {
+  :root { --page-gutter: 32px; }
+}
+
 /*
  * Dark — espresso, not black. Semantic -bg values are OPAQUE, pre-composited
  * at ~18% of the hue over canvas. Alpha would defeat the contrast gate in
@@ -161,6 +219,8 @@
  * against an unknown backdrop.
  */
 [data-theme='dark'] {
+  color-scheme: dark;
+  --font-weight-body: 450;
   --bg-canvas: #17140f;
   --bg-surface: #1f1b16;
   --bg-elevated: #2a251e;
@@ -217,6 +277,25 @@
   --chart-7: #a162bc;
   --chart-8: #bc628f;
 
+  --avatar-1: #bc8062;
+  --avatar-1-bg: #423127;
+  --avatar-1-fg: #f5f1ea;
+  --avatar-2: #abe085;
+  --avatar-2-bg: #3e462e;
+  --avatar-2-fg: #f5f1ea;
+  --avatar-3: #74dcac;
+  --avatar-3-bg: #324537;
+  --avatar-3-fg: #f5f1ea;
+  --avatar-4: #81c2da;
+  --avatar-4-bg: #354041;
+  --avatar-4-fg: #f5f1ea;
+  --avatar-5: #5256e0;
+  --avatar-5-bg: #2a2842;
+  --avatar-5-fg: #f5f1ea;
+  --avatar-6: #bc628f;
+  --avatar-6-bg: #422b31;
+  --avatar-6-fg: #f5f1ea;
+
   --ring: #d97848;
   --ring-offset: #17140f;
 
@@ -234,6 +313,7 @@
  * floor route, and inheriting the light values is correct if it somehow did.
  */
 [data-theme='floor'] {
+  color-scheme: dark;
   --bg-canvas: #0d0b08;
   --bg-surface: #17140f;
   --bg-elevated: #241f19;
@@ -295,6 +375,25 @@
   --chart-6: #6c70e5;
   --chart-7: #ae77c5;
   --chart-8: #c5779e;
+
+  --avatar-1: #c59177;
+  --avatar-1-bg: #3d3026;
+  --avatar-1-fg: #fffdf8;
+  --avatar-2: #bbea9a;
+  --avatar-2-bg: #3b432e;
+  --avatar-2-fg: #fffdf8;
+  --avatar-3: #9cdebf;
+  --avatar-3-bg: #344036;
+  --avatar-3-fg: #fffdf8;
+  --avatar-4: #9dd3e7;
+  --avatar-4-bg: #343e3f;
+  --avatar-4-fg: #fffdf8;
+  --avatar-5: #6c70e5;
+  --avatar-5-bg: #2a283e;
+  --avatar-5-fg: #fffdf8;
+  --avatar-6: #c5779e;
+  --avatar-6-bg: #3d2a2e;
+  --avatar-6-fg: #fffdf8;
 
   --ring: #ff8a4c;
   --ring-offset: #0d0b08;

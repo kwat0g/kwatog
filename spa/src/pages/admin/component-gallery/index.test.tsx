@@ -36,6 +36,7 @@ const BASELINE_SECTIONS = [
   'forms',
   'feedback',
   'panels',
+  'charts',
   'controls',
   'tables',
   'records',
@@ -61,6 +62,7 @@ describe('component gallery', () => {
       'Form fields',
       'Feedback & empty states',
       'Panels & KPI cards',
+      'Charts',
       'Selection controls',
       'Tables',
       'Record patterns',
@@ -94,6 +96,17 @@ describe('component gallery', () => {
     const budgetStatus = screen.getByRole('radiogroup', { name: 'Budget status' });
     expect(within(budgetStatus).getAllByRole('radio')).toHaveLength(6);
     expect(SOURCE).toContain('max-w-[22rem]');
+  });
+
+  it('catalogues labelled state and compact chain cues', () => {
+    const { container } = renderPage();
+    expect(screen.getByText('StatusDot — labelled semantic states')).toBeVisible();
+    expect(screen.getByRole('list', { name: 'Sales order chain' })).toBeVisible();
+    expect(screen.getByText('FilterBar — active filters')).toBeVisible();
+    const controls = screen.getByRole('region', { name: 'Selection controls' });
+    expect(within(controls).getByRole('combobox', { name: 'Department' })).toBeVisible();
+    expect(screen.getByRole('img', { name: 'On-time delivery: 5 points, rising from 91 to 96.' })).toBeInTheDocument();
+    expect(container.querySelector('table[aria-busy="true"]')).toBeInTheDocument();
   });
 
   it('stays deterministic — no clock, no randomness, no fetch', () => {

@@ -429,6 +429,7 @@ export default function PurchasingDashboard() {
  <EmptyState icon="inbox" title="No POs" description="No purchase order data available." />
  ) : (
  <DonutBreakdown
+ label="PO Status Distribution"
  data={poStatusChartData}
  centerLabel="Total POs"
  centerValue={String(poStatusChartData.reduce((sum, i) => sum + i.value, 0))}
@@ -440,8 +441,9 @@ export default function PurchasingDashboard() {
  <EmptyState icon="inbox" title="No PRs" description="No pending purchase requests." />
  ) : (
  <BarComparison
+ label="PR Pipeline by Urgency"
  data={prStatusChartData}
- bars={[{ dataKey: 'count', color: 'var(--warning)', label: 'PRs' }]}
+ bars={[{ dataKey: 'count', label: 'PRs' }]}
  xKey="label"
  height={180}
  />

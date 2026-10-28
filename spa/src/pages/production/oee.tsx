@@ -42,6 +42,8 @@ import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { cn } from '@/lib/cn';
 import { localIsoDate } from '@/lib/formatDate';
+import { ChartFigure } from '@/components/charts/ChartFigure';
+import { chartColor } from '@/lib/chartPalette';
 
 type Preset = 'today' | 'week' | 'month' | 'custom';
 
@@ -135,6 +137,15 @@ export default function OeeReportPage() {
   const downtimeLabels = new Map(
     downtimeCategories.map((category) => [category.value, category.label]),
   );
+  const trendChartData = (data?.trend ?? []).map((point) => ({
+    date: point.date,
+    oee: point.oee == null ? null : point.oee * 100,
+  }));
+  const trendChartRows = trendChartData.map((point) => [
+    formatDate(point.date),
+    point.oee == null ? '—' : `${point.oee.toFixed(1)}%`,
+    ...(data?.benchmark_pct == null ? [] : [`${data.benchmark_pct}%`]),
+  ]);
 
   return (
     <div>
@@ -216,7 +227,7 @@ export default function OeeReportPage() {
       {data && (
         <div className="px-5 py-4 space-y-4">
           {/* KPI cards + OEE gauge */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-4 lg:items-center gap-3">
             <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard
                 label="Overall OEE"
@@ -240,9 +251,6 @@ export default function OeeReportPage() {
             <Panel className="flex items-center justify-center py-4">
               <OeeGaugeChart
                 oee={data.overall.oee}
-                availability={data.overall.availability}
-                performance={data.overall.performance}
-                quality={data.overall.quality}
                 displayPolicy={data.display_policy}
               />
             </Panel>
@@ -261,24 +269,26 @@ export default function OeeReportPage() {
                     Window too large — trend down-sampling not yet implemented for &gt; 92 days.
                   </p>
                 ) : (
+                  <ChartFigure
+                    label={`Daily OEE percentage trend${data.benchmark_pct == null ? '' : ` with ${data.benchmark_pct}% benchmark`}`}
+                    columns={data.benchmark_pct == null ? ['Date', 'OEE'] : ['Date', 'OEE', 'Benchmark']}
+                    rows={trendChartRows}
+                  >
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
-                        data={data.trend.map((t) => ({
-                          date: t.date,
-                          oee: t.oee == null ? null : t.oee * 100,
-                        }))}
+                        data={trendChartData}
                         margin={{ top: 8, right: 16, bottom: 8, left: 0 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                         <XAxis
                           dataKey="date"
-                          tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                          tick={{ fontSize: 10, fill: 'var(--text-muted)', className: 'tabular-nums' }}
                           tickFormatter={(v: string) => v.slice(5)}
                         />
                         <YAxis
                           domain={[0, 100]}
-                          tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                          tick={{ fontSize: 10, fill: 'var(--text-muted)', className: 'tabular-nums' }}
                           tickFormatter={(v: number) => `${v}%`}
                         />
                         <RTooltip
@@ -295,19 +305,22 @@ export default function OeeReportPage() {
                             y={data.benchmark_pct}
                             stroke="var(--success)"
                             strokeDasharray="4 4"
+                            label={{ value: 'Benchmark', position: 'insideTopRight', fill: 'var(--success)', fontSize: 10 }}
                           />
                         )}
                         <Line
                           type="monotone"
                           dataKey="oee"
-                          stroke="var(--accent)"
+                          stroke={chartColor(0)}
                           strokeWidth={2}
                           dot={false}
                           activeDot={{ r: 4 }}
+                          isAnimationActive={false}
                         />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
+                  </ChartFigure>
                 )}
               </Panel>
             </div>

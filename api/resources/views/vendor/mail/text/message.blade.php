@@ -22,7 +22,7 @@
 @if ($brand['email'])
 {{ $brand['email'] }}
 @endif
-@if ($brand['footer_disclaimer'])
+@if ($brand['footer_disclaimer'] ?? null)
 {{ $brand['footer_disclaimer'] }}
 @endif
 Automated message.

@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 /**
@@ -31,12 +31,14 @@ interface TabsProps<T extends string> {
 }
 
 export function Tabs<T extends string>({ items, value, onChange, label, trailing, className }: TabsProps<T>) {
+ const refs = useRef<Array<HTMLButtonElement | null>>([]);
  const move = (from: number, delta: number) => {
  const enabled = items.map((t, i) => (t.disabled ? -1 : i)).filter((i) => i >= 0);
  if (enabled.length === 0) return;
  const pos = enabled.indexOf(from);
  const next = enabled[(pos + delta + enabled.length) % enabled.length];
  onChange(items[next].key);
+ refs.current[next]?.focus();
  };
 
  return (
@@ -47,6 +49,7 @@ export function Tabs<T extends string>({ items, value, onChange, label, trailing
  return (
  <button
  key={tab.key}
+ ref={(element) => { refs.current[i] = element; }}
  type="button"
  role="tab"
  aria-selected={isActive}

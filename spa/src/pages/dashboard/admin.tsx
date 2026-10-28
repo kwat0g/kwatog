@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
+import { StatusDot } from '@/components/ui/StatusDot';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { ADMIN_KPIS } from '@/lib/dashboardKpis';
@@ -66,6 +67,16 @@ export default function AdminDashboard() {
   >
    {({ kpis, panels }) => (
    <>
+    {(panels.queue_health || panels.open_alerts) && (
+     <section aria-labelledby="admin-needs-attention" className="space-y-2">
+      <h2 id="admin-needs-attention" className="m-0 text-section font-medium">Needs attention</h2>
+      <PanelRow>
+       {panels.queue_health && <QueueHealthPanel data={panels.queue_health} />}
+       {panels.open_alerts && <OpenAlertsPanel data={panels.open_alerts} />}
+      </PanelRow>
+     </section>
+    )}
+
     {/* KPI compute lives here only, now the standalone scorecard page is gone.
         Route-guarded on dashboard.admin.view; the panel double-checks so the
         button never renders for a role that reached this shell without it. */}
@@ -95,12 +106,6 @@ export default function AdminDashboard() {
 
  {/* Row 3 — Auth events */}
  {panels.auth_events && <AuthEventsPanel data={panels.auth_events} />}
-
- {/* Row 4 — Queue health + Open alerts */}
- <PanelRow>
- {panels.queue_health && <QueueHealthPanel data={panels.queue_health} />}
- {panels.open_alerts && <OpenAlertsPanel data={panels.open_alerts} />}
- </PanelRow>
 
  {/* Row 5 — Audit trail */}
  {panels.recent_audit && <AuditTrailPanel events={panels.recent_audit} />}
@@ -191,7 +196,7 @@ function ActiveSessionsPanel({
  <Panel
  title="Active Sessions"
  meta={`${data.total} session${data.total !== 1 ? 's' : ''} · ${data.unique_users} user${data.unique_users !== 1 ? 's' : ''}`}
- actions={<Link className="text-xs text-link hover:underline" to="/admin/users">Manage users →</Link>}
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/users">Manage users</Link>}
  >
  {data.sessions.length === 0 ? (
  <EmptyState size="compact" icon="monitor" title="Nobody signed in" description={`No active sessions in the last ${data.active_window_minutes ?? 'configured'} minutes.`} />
@@ -230,14 +235,14 @@ function AccountSecurityPanel({
  { label: 'Active', value: data.active, color: 'text-success-fg' },
  { label: 'Inactive / disabled', value: data.inactive, color: data.inactive > 0 ? 'text-warning-fg' : '' },
  { label: 'Currently locked', value: data.locked, color: data.locked > 0 ? 'text-danger-fg' : '' },
- { label: 'At risk (≥3 failures)', value: data.at_risk, color: data.at_risk > 0 ? 'text-warning-fg' : '' },
+ { label: 'At risk (3 or more failures)', value: data.at_risk, color: data.at_risk > 0 ? 'text-warning-fg' : '' },
  { label: 'Must change password', value: data.must_change_password, color: data.must_change_password > 0 ? 'text-warning-fg' : '' },
  ];
 
  return (
  <Panel
  title="Account Security"
- actions={<Link className="text-xs text-link hover:underline" to="/admin/users">All accounts →</Link>}
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/users">All accounts</Link>}
  >
  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-3">
  {stats.map((s) => (
@@ -301,7 +306,7 @@ function AuthEventsPanel({
  <Panel
  title={`Authentication Events · Last ${windowHours}h`}
  meta={`${totalAttempts} total attempts`}
- actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">View audit log →</Link>}
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">View audit log</Link>}
  >
  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
  {/* Left: status breakdown + sparkline */}
@@ -330,6 +335,7 @@ function AuthEventsPanel({
  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Successful / hour</div>
  <SparkLine
  data={data.success_trend_24h}
+ label="Successful sign-ins per hour"
  color="var(--success)"
  height={32}
  width={160}
@@ -377,9 +383,9 @@ function QueueHealthPanel({
  title="Queue Health"
  meta={
  data.healthy ? (
- <span className="text-success-fg text-xs font-medium">● Healthy</span>
+ <StatusDot label="Healthy" variant="success" />
  ) : (
- <span className="text-danger-fg text-xs font-medium">● Issues detected</span>
+ <StatusDot label="Issues detected" variant="danger" />
  )
  }
  >
@@ -437,7 +443,7 @@ function OpenAlertsPanel({
  <Panel
  title="Open System Alerts"
  meta={data.total > 0 ? `${data.total} open` : undefined}
- actions={<Link className="text-xs text-link hover:underline" to="/alerts">All alerts →</Link>}
+ actions={<Link className="text-xs text-link hover:underline" to="/alerts">All alerts</Link>}
  >
  {data.total > 0 && (
  <div className="flex gap-3 mb-3">
@@ -492,7 +498,7 @@ function AuditTrailPanel({ events }: { events: AdminAuditEvent[] }) {
  return (
  <Panel
  title="Recent Audit Trail"
- actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">Full log →</Link>}
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">Full log</Link>}
  >
  {events.length === 0 ? (
  <EmptyState size="compact" icon="file-text" title="No audit events" description="Recent record changes will appear here." />

@@ -199,17 +199,13 @@ export function KpiStrip({ codes, className, linkByCode, compact }: KpiStripProp
             <div className="flex flex-col items-end gap-1 shrink-0 mt-0.5">
               {snap && <TrendIcon trend={snap.trend} status={snap.status} />}
               {sparkPoints.length >= 2 && (
-                <span
-                  role="img"
-                  aria-label={`${sparkPoints.length}-month trend for ${item.definition.name}`}
-                >
-                  <SparkLine
-                    data={sparkPoints}
-                    color={SPARK_COLOR[snap?.status ?? ''] ?? 'var(--accent)'}
-                    height={compact ? 28 : 36}
-                    width={compact ? 64 : 72}
-                  />
-                </span>
+                <SparkLine
+                  data={sparkPoints}
+                  label={`${item.definition.name}, monthly trend`}
+                  color={SPARK_COLOR[snap?.status ?? ''] ?? 'var(--accent)'}
+                  height={compact ? 28 : 36}
+                  width={compact ? 64 : 72}
+                />
               )}
             </div>
           </Link>

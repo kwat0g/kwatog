@@ -74,3 +74,14 @@ describe('Topbar notification access', () => {
     expect(screen.getByTestId('notification-bell')).toBeInTheDocument();
   });
 });
+
+describe('Topbar company identity', () => {
+  it('reveals the full legal name when the brand link receives keyboard focus', async () => {
+    renderTopbar();
+
+    const brandLink = await screen.findByRole('link', { name: 'Philippine Ogami Corporation' });
+    fireEvent.focus(brandLink);
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Philippine Ogami Corporation');
+  });
+});

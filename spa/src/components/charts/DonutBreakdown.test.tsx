@@ -7,7 +7,7 @@ describe('DonutBreakdown', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     try {
-      render(<DonutBreakdown data={[
+      render(<DonutBreakdown label="Zones" data={[
         { name: 'Zone l8', value: 100, color: 'red' },
         { name: 'Zone l8', value: 100, color: 'blue' },
       ]} />);

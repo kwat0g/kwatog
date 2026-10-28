@@ -18,6 +18,7 @@ import { useTablePrefsStore, type TableDensity } from '@/stores/tablePrefsStore'
 import { DataTableToolbar } from './DataTableToolbar';
 import { DataTablePagination } from './DataTablePagination';
 import { EmptyState } from './EmptyState';
+import { SkeletonBlock } from './Skeleton';
 import type { PaginationMeta } from '@/types';
 
 // ─── Public types ──────────────────────────────────────────────
@@ -32,6 +33,8 @@ export interface Column<T> {
   sortable?: boolean;
   /** Right-align numeric cells. */
   align?: ColumnAlign;
+  /** Emphasize the page's key identifying column. */
+  primary?: boolean;
   /** Tailwind width class (e.g. `w-32`, `min-w-[160px]`). */
   className?: string;
   /** Hide by default; user can show via "Customize columns". */
@@ -59,10 +62,14 @@ export interface DataTableProps<T> {
   onPageChange?: (page: number) => void;
   /** Supply to render a rows-per-page control in the pagination footer. */
   onPageSizeChange?: (perPage: number) => void;
+  /** Show layout-matched skeleton rows while the first page is loading. */
+  loading?: boolean;
   onSort?: (sort: string, direction: 'asc' | 'desc') => void;
   currentSort?: string;
   currentDirection?: 'asc' | 'desc';
   onRowClick?: (row: T) => void;
+  /** Actions remain visible to keyboard and touch users; pointer hover only reveals them visually. */
+  rowActions?: (row: T) => ReactNode;
   selectable?: boolean;
   bulkActions?: BulkAction<T>[];
   density?: TableDensity;
@@ -92,6 +99,10 @@ export interface DataTableProps<T> {
   rowContextMenu?: (row: T) => RowContextMenuItem[];
   /** Sticky `<thead>` while vertically scrolling the table container. Default true. */
   stickyHeader?: boolean;
+  /** Let the table body fill remaining page height and keep its header/footer visible. */
+  fillHeight?: boolean;
+  /** Use explicit column widths instead of content-driven table expansion. */
+  fixedColumnLayout?: boolean;
   /**
    * Render a "Customize columns" button next to the density toggle so the user
    * can hide columns marked `togglable !== false`. Default true when `tableKey`
@@ -109,12 +120,15 @@ export interface DataTableProps<T> {
 // ─── Density mapping ───────────────────────────────────────────
 
 const rowHeight: Record<TableDensity, string> = {
-  compact: 'h-7',
-  // `h-row` is `--row-height`: 32px in the office palettes, 48px on the shop
-  // floor. compact/spacious stay fixed — they are explicit operator choices,
-  // and only the default should follow the palette's density.
+  compact: 'h-row-compact',
   default: 'h-row',
-  spacious: 'h-10',
+  spacious: 'h-row-spacious',
+};
+
+const cellPadding: Record<TableDensity, string> = {
+  compact: 'px-3 py-2',
+  default: 'px-3 py-3',
+  spacious: 'px-3 py-4',
 };
 
 const alignClass: Record<ColumnAlign, string> = {
@@ -131,10 +145,12 @@ export function DataTable<T>({
   meta,
   onPageChange,
   onPageSizeChange,
+  loading = false,
   onSort,
   currentSort,
   currentDirection,
   onRowClick,
+  rowActions,
   selectable,
   bulkActions,
   density: densityProp,
@@ -147,6 +163,8 @@ export function DataTable<T>({
   expandOnRowClick = false,
   rowContextMenu,
   stickyHeader = true,
+  fillHeight = false,
+  fixedColumnLayout = false,
   enableColumnVisibilityToggle,
   emptyState,
 }: DataTableProps<T>) {
@@ -162,6 +180,28 @@ export function DataTable<T>({
     y: number;
     items: RowContextMenuItem[];
   } | null>(null);
+  const tableScrollerRef = useRef<HTMLDivElement>(null);
+  const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const scroller = tableScrollerRef.current;
+    if (!scroller) return;
+    const update = () => {
+      const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+      const next = { left: scroller.scrollLeft > 1, right: maxScroll - scroller.scrollLeft > 1 };
+      setScrollEdges((current) => current.left === next.left && current.right === next.right ? current : next);
+    };
+    update();
+    scroller.addEventListener('scroll', update, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(scroller);
+    const table = scroller.querySelector('table');
+    if (table) observer?.observe(table);
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      observer?.disconnect();
+    };
+  }, []);
 
   // ─── Persistent prefs ─────────────────────────────────────
   const prefs = useTablePrefsStore((s) => (tableKey ? s.byTable[tableKey] : undefined));
@@ -310,7 +350,7 @@ export function DataTable<T>({
   const pinnedTHClass = 'sticky bg-canvas z-20';
   const pinnedTDClass = 'sticky bg-canvas';
 
-  const totalCols = visibleColumns.length + (selectable ? 1 : 0) + (renderExpanded ? 1 : 0);
+  const totalCols = visibleColumns.length + (selectable ? 1 : 0) + (renderExpanded ? 1 : 0) + (rowActions ? 1 : 0);
   const rowExpands = Boolean(renderExpanded && expandOnRowClick && !onRowClick);
   const rowInteractive = Boolean(onRowClick || selectable || rowExpands);
 
@@ -386,7 +426,11 @@ export function DataTable<T>({
   );
 
   return (
-    <div className={cn('flex flex-col', className)}>
+    <div
+      data-layout="data-table"
+      data-density={density}
+      className={cn('flex flex-col', fillHeight && 'min-h-0 flex-1', className)}
+    >
       {/* Screen reader announcement for result count changes */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {meta
@@ -429,15 +473,35 @@ export function DataTable<T>({
         toggleColumnVisibility={toggleColumnVisibility}
       />
 
-      <div className="overflow-x-auto rounded-md border border-default">
-        <table className="w-full border-collapse text-xs">
+      <div
+        className={cn('table-scroll-frame min-w-0', fillHeight && 'min-h-0 flex-1')}
+        data-more-left={scrollEdges.left}
+        data-more-right={scrollEdges.right}
+      >
+        <div
+          ref={tableScrollerRef}
+          data-layout="table-scroller"
+          role={scrollEdges.left || scrollEdges.right ? 'region' : undefined}
+          aria-label={scrollEdges.left || scrollEdges.right ? 'Scrollable table with more columns' : undefined}
+          tabIndex={scrollEdges.left || scrollEdges.right ? 0 : undefined}
+          className={cn(
+            'rounded-md border border-default',
+            fillHeight ? 'table-scroll-container min-h-0 h-full overflow-auto' : 'overflow-x-auto',
+          )}
+        >
+        <table
+          data-layout="table"
+          aria-busy={loading}
+          className={cn('w-full border-collapse text-table-cell', fixedColumnLayout && 'table-fixed')}
+        >
           <thead className={cn(stickyHeader && 'sticky top-0 z-10 bg-[var(--bg-thead)]')}>
             <tr className="border-b border-default bg-[var(--bg-thead)]">
               {selectable && (
                 <th
                   scope="col"
                   className={cn(
-                    'px-2.5 w-8 text-left text-2xs uppercase tracking-wider text-muted font-medium',
+                    cellPadding[density],
+                    'w-8 text-left text-table-header text-muted font-semibold',
                     rowHeight.default,
                     stickyHeader && 'sticky top-0 z-20',
                   )}
@@ -453,7 +517,8 @@ export function DataTable<T>({
                 <th
                   scope="col"
                   className={cn(
-                    'px-1.5 w-7 text-left text-2xs uppercase tracking-wider text-muted font-medium',
+                    cellPadding[density],
+                    'w-7 text-left text-table-header text-muted font-semibold',
                     rowHeight.default,
                     stickyHeader && 'sticky top-0 z-20',
                   )}
@@ -470,7 +535,8 @@ export function DataTable<T>({
                     aria-sort={ariaSortFor(col)}
                     style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
                     className={cn(
-                      'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none',
+                      cellPadding[density],
+                      'text-table-header text-muted font-semibold select-none',
                       rowHeight.default,
                       alignClass[col.align ?? 'left'],
                       isPinned && pinnedTHClass,
@@ -501,10 +567,26 @@ export function DataTable<T>({
                   </th>
                 );
               })}
+              {rowActions && (
+                <th scope="col" aria-label="Row actions" className={cn(cellPadding[density], 'w-28', rowHeight.default)} />
+              )}
             </tr>
           </thead>
           <tbody ref={tbodyRef} onKeyDown={onRowKeyDown}>
-            {data.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 5 }, (_, index) => (
+                <tr key={`skeleton-${index}`} aria-hidden="true" className={cn('border-b border-subtle', rowHeight[density])}>
+                  {selectable && <td className={cn(cellPadding[density], 'align-middle')}><SkeletonBlock className="h-3 w-3 rounded-sm" /></td>}
+                  {renderExpanded && <td className={cn(cellPadding[density], 'w-7')} />}
+                  {orderedColumns.map((column, columnIndex) => (
+                    <td key={column.key} className={cn(cellPadding[density], column.className)}>
+                      <SkeletonBlock className={cn('h-2.5 rounded-sm', columnIndex === 0 ? 'w-3/5' : 'w-2/3')} />
+                    </td>
+                  ))}
+                  {rowActions && <td className={cn(cellPadding[density], 'w-28')}><SkeletonBlock className="ml-auto h-6 w-14" /></td>}
+                </tr>
+              ))
+            ) : data.length === 0 ? (
               <tr>
                 <td colSpan={totalCols} className="bg-canvas p-0">
                   {emptyState ?? (
@@ -527,7 +609,7 @@ export function DataTable<T>({
                     <tr
                       tabIndex={rowInteractive ? 0 : undefined}
                       className={cn(
-                        'border-b border-subtle transition-colors duration-fast relative group',
+                        'border-b border-subtle transition-colors duration-fast motion-reduce:transition-none relative group',
                         rowInteractive && 'cursor-pointer active:scale-[0.998]',
                         rowInteractive &&
                           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
@@ -558,7 +640,7 @@ export function DataTable<T>({
                       }
                     >
                       {selectable && (
-                        <td className="px-2.5 align-middle">
+                        <td className={cn(cellPadding[density], 'align-middle')}>
                           <Checkbox
                             checked={isSelected}
                             onChange={() => toggleOne(rid)}
@@ -567,7 +649,7 @@ export function DataTable<T>({
                         </td>
                       )}
                       {renderExpanded && (
-                        <td className="px-1.5 w-7 align-middle">
+                        <td className={cn(cellPadding[density], 'w-7 align-middle')}>
                           <button
                             type="button"
                             aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
@@ -595,10 +677,11 @@ export function DataTable<T>({
                             key={col.key}
                             style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
                             className={cn(
-                              'px-2.5 align-middle',
+                              cellPadding[density],
                               alignClass[col.align ?? 'left'],
                               isPinned && pinnedTDClass,
                               isPinned && 'border-r border-default',
+                              col.primary && 'font-medium text-primary',
                               col.className,
                             )}
                           >
@@ -606,6 +689,13 @@ export function DataTable<T>({
                           </td>
                         );
                       })}
+                      {rowActions && (
+                        <td className={cn(cellPadding[density], 'w-28 text-right')}>
+                          <div className="row-hover-actions inline-flex items-center justify-end gap-1">
+                            {rowActions(row)}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                     {renderExpanded && isExpanded && (
                       <tr className="bg-subtle border-b border-subtle">
@@ -620,6 +710,7 @@ export function DataTable<T>({
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {meta && onPageChange && (
@@ -644,9 +735,9 @@ export function DataTable<T>({
 
 // ─── Cell helpers ──────────────────────────────────────────────
 
-/** Format a number cell with mono + tabular-nums and right-align (use in `align: 'right'`). */
+/** Format a numeric cell with tabular figures; align its column to the right. */
 export function NumCell({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn('font-mono tabular-nums', className)}>{children}</span>;
+  return <span className={cn('font-sans tabular-nums', className)}>{children}</span>;
 }
 
 /** Two-line cell for a primary value + muted subtitle. */
@@ -654,7 +745,7 @@ export function StackedCell({ primary, secondary }: { primary: ReactNode; second
   return (
     <div>
       <div className="font-medium leading-tight">{primary}</div>
-      {secondary && <div className="text-xs text-muted leading-tight">{secondary}</div>}
+      {secondary && <div className="text-caption text-muted leading-tight">{secondary}</div>}
     </div>
   );
 }

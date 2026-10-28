@@ -54,6 +54,7 @@ const CHART_SERIES = [
 ] as const;
 const CHART_MIN_DELTA_E = 20;
 const CHART_MIN_DELTA_E_CVD = 10;
+const AVATAR_TINTS = Array.from({ length: 6 }, (_, index) => index + 1);
 
 /**
  * Saturated fills that carry ink directly, and the component that does it.
@@ -116,6 +117,18 @@ describe.each(['light', 'dark', 'floor'] as const)('%s palette', (theme) => {
 
   it('--accent-fg is legible on --accent', () => {
     expect(contrastRatio(t['--accent-fg'], t['--accent'])).toBeGreaterThanOrEqual(limits.essential);
+  });
+
+  describe('avatar identity tints', () => {
+    it.each(AVATAR_TINTS)('avatar %i initials clear the text bar on their tint', (index) => {
+      expect(contrastRatio(t[`--avatar-${index}-fg`], t[`--avatar-${index}-bg`]))
+        .toBeGreaterThanOrEqual(limits.essential);
+    });
+
+    it.each(AVATAR_TINTS)('avatar %i mark clears the non-text bar on canvas', (index) => {
+      expect(contrastRatio(t[`--avatar-${index}`], t['--bg-canvas']))
+        .toBeGreaterThanOrEqual(limits.mark);
+    });
   });
 
   it.each(INK_ON_FILL)('--accent-fg is legible on %s (%s)', (fill) => {

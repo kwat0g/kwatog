@@ -156,27 +156,17 @@ class UserPermissionOverrideService
             return $override;
         });
 
-        $permissionName = $permission->name;
-        DB::afterCommit(function () use ($user, $permissionName, $oldType, $type, $wasExisting, $wasTrashed): void {
-            $effect = $type === PermissionOverrideType::Grant ? 'allow access to' : 'block access to';
+        DB::afterCommit(function () use ($user, $permissionSlug, $oldType, $type, $wasExisting, $wasTrashed): void {
             $title = ! $wasExisting
-                ? 'Access rule added'
-                : ($wasTrashed ? 'Access rule restored' : 'Access rule updated');
-            if (! $wasExisting) {
-                $message = "A rule to {$effect} \"{$permissionName}\" was added.";
-            } elseif ($wasTrashed) {
-                $message = "Your previous rule to {$effect} \"{$permissionName}\" is active again.";
-            } elseif ($oldType === $type) {
-                $message = "Your rule to {$effect} \"{$permissionName}\" was updated.";
-            } else {
-                $oldEffect = $oldType === PermissionOverrideType::Grant ? 'allowing access' : 'blocking access';
-                $newEffect = $type === PermissionOverrideType::Grant ? 'allowing access' : 'blocking access';
-                $message = "Your override for \"{$permissionName}\" changed from {$oldEffect} to {$newEffect}.";
-            }
+                ? 'Permission Override Applied'
+                : ($wasTrashed ? 'Permission Override Restored' : 'Permission Override Updated');
+            $message = $wasExisting && $oldType !== null
+                ? "Your override for \"{$permissionSlug}\" has been changed from \"{$oldType->value}\" to \"{$type->value}\"."
+                : "A new permission override \"{$type->value}\" has been applied for \"{$permissionSlug}\".";
 
             $this->notifications->send($user, 'permission.override', [
                 'title' => $title,
-                'message' => $message.' If this was unexpected, contact your system administrator.',
+                'message' => $message,
             ]);
         });
 
@@ -187,7 +177,7 @@ class UserPermissionOverrideService
     {
         $this->assertSystemAdmin($actor);
 
-        /** @var array{user: User, permissionName: string}|null $removed */
+        /** @var array{user: User, permissionSlug: string, oldType: PermissionOverrideType, reason: string}|null $removed */
         $removed = DB::transaction(function () use ($override, $actor): ?array {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($override->user_id);
             $locked = UserPermissionOverride::withTrashed()
@@ -221,7 +211,9 @@ class UserPermissionOverrideService
 
             return [
                 'user' => $lockedUser,
-                'permissionName' => $locked->permission->name,
+                'permissionSlug' => $permissionSlug,
+                'oldType' => $oldType,
+                'reason' => $reason,
             ];
         });
 
@@ -231,8 +223,8 @@ class UserPermissionOverrideService
 
         DB::afterCommit(function () use ($removed): void {
             $this->notifications->send($removed['user'], 'permission.override', [
-                'title' => 'Access override removed',
-                'message' => "The override for \"{$removed['permissionName']}\" was removed. Your role's default access now applies. If this was unexpected, contact your system administrator.",
+                'title' => 'Permission Override Removed',
+                'message' => "Your override for \"{$removed['permissionSlug']}\" has been removed.",
             ]);
         });
     }
@@ -241,7 +233,7 @@ class UserPermissionOverrideService
     {
         $this->assertSystemAdmin($actor);
 
-        /** @var array{permissionName: string, newType: PermissionOverrideType}|null $restored */
+        /** @var array{permissionSlug: string, newType: PermissionOverrideType, reason: string}|null $restored */
         $restored = DB::transaction(function () use ($user, $override, $actor): ?array {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
             $locked = UserPermissionOverride::withTrashed()
@@ -282,8 +274,9 @@ class UserPermissionOverrideService
             ));
 
             return [
-                'permissionName' => $locked->permission->name,
+                'permissionSlug' => $permissionSlug,
                 'newType' => $newType,
+                'reason' => $reason,
             ];
         });
 
@@ -292,10 +285,9 @@ class UserPermissionOverrideService
         }
 
         DB::afterCommit(function () use ($user, $restored): void {
-            $effect = $restored['newType'] === PermissionOverrideType::Grant ? 'allow access to' : 'block access to';
             $this->notifications->send($user, 'permission.override', [
-                'title' => 'Access rule restored',
-                'message' => "Your previous rule to {$effect} \"{$restored['permissionName']}\" is active again. If this was unexpected, contact your system administrator.",
+                'title' => 'Permission Override Restored',
+                'message' => "Your \"{$restored['newType']->value}\" override for \"{$restored['permissionSlug']}\" has been restored.",
             ]);
         });
     }

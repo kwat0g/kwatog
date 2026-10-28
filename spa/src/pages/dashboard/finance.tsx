@@ -126,8 +126,9 @@ export default function FinanceDashboardPage() {
  <PanelRow>
  <Panel title="AR Aging Distribution">
  <BarComparison
+ label="AR Aging Distribution"
  data={arAgingChartData}
- bars={[{ dataKey: 'amount', color: 'var(--info)', label: 'Amount' }]}
+ bars={[{ dataKey: 'amount', label: 'Amount' }]}
  xKey="label"
  height={180}
  formatValue={(v) => formatPeso(String(v))}
@@ -135,8 +136,9 @@ export default function FinanceDashboardPage() {
  </Panel>
  <Panel title="AP Aging Distribution">
  <BarComparison
+ label="AP Aging Distribution"
  data={apAgingChartData}
- bars={[{ dataKey: 'amount', color: 'var(--warning)', label: 'Amount' }]}
+ bars={[{ dataKey: 'amount', label: 'Amount' }]}
  xKey="label"
  height={180}
  formatValue={(v) => formatPeso(String(v))}
@@ -434,7 +436,7 @@ function ApDuePanel({
  {items.map((it) => (
  <li key={it.id} className="py-1.5 flex items-center justify-between gap-2">
  <Link to={`/accounting/bills/${it.id}`} className="truncate hover:underline">
- <span className="font-mono text-xs text-muted">{it.bill_number}</span>{' '}
+ <span className="font-mono text-xs text-link">{it.bill_number}</span>{' '}
  {it.vendor_name}
  </Link>
  <span className="shrink-0 flex items-center gap-2">
@@ -517,7 +519,7 @@ function RecentJesPanel({
  {entries.slice(0, 6).map((je) => (
  <li key={je.id} className="py-1.5 flex items-center justify-between gap-2">
  <Link to={`/accounting/journal-entries/${je.id}`} className="truncate hover:underline">
- <span className="font-mono text-xs text-muted">{je.entry_number}</span>{' '}
+ <span className="font-mono text-xs text-link">{je.entry_number}</span>{' '}
  {je.description}
  </Link>
  <span className="shrink-0 flex items-center gap-2">

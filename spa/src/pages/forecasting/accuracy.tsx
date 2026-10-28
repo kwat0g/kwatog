@@ -30,6 +30,7 @@ import { forecastingApi } from '@/api/forecasting';
 import type { ProductAccuracy } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { chartColor } from '@/lib/chartPalette';
+import { ChartFigure } from '@/components/charts/ChartFigure';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -71,6 +72,12 @@ export default function ForecastAccuracyPage() {
  variance: m.variance,
  ape: m.ape,
  }));
+ const chartRows = chartData.map((row) => [
+  row.label,
+  row.forecast,
+  row.actual,
+  row.variance,
+ ]);
 
  // Sorted product table data
  const sortedProducts = [...(productsQ.data ?? [])].sort((a, b) => {
@@ -182,27 +189,32 @@ export default function ForecastAccuracyPage() {
  />
  ) : (
  <div className="p-4">
+ <ChartFigure
+  label={`Monthly forecast, actual, and variance for ${year}`}
+  columns={['Month', 'Forecast quantity', 'Actual quantity', 'Variance']}
+  rows={chartRows}
+ >
  <ResponsiveContainer width="100%" height={340}>
- <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+ <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
  <CartesianGrid vertical={false} stroke="var(--border-subtle)" />
  <XAxis
  dataKey="label"
- tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
  axisLine={{ stroke: 'var(--border-default)' }}
  tickLine={false}
  minTickGap={12}
  />
  <YAxis
  yAxisId="demand"
- tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
  axisLine={false}
  tickLine={false}
- width={42}
+ width={48}
  />
  <YAxis
  yAxisId="variance"
  orientation="right"
- tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
  axisLine={false}
  tickLine={false}
  width={42}
@@ -226,6 +238,7 @@ export default function ForecastAccuracyPage() {
  fill={chartColor(2)}
  fillOpacity={0.45}
  barSize={20}
+ isAnimationActive={false}
  />
  <Line
  yAxisId="demand"
@@ -235,6 +248,7 @@ export default function ForecastAccuracyPage() {
  stroke={chartColor(0)}
  strokeWidth={2}
  dot={{ r: 3, fill: chartColor(0) }}
+ isAnimationActive={false}
  />
  <Line
  yAxisId="demand"
@@ -244,9 +258,11 @@ export default function ForecastAccuracyPage() {
  stroke={chartColor(3)}
  strokeWidth={2}
  dot={{ r: 3, fill: chartColor(3) }}
+ isAnimationActive={false}
  />
  </ComposedChart>
  </ResponsiveContainer>
+ </ChartFigure>
  </div>
  )}
  </Panel>

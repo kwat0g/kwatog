@@ -1,0 +1,3606 @@
+{
+  "generatedAt": "2026-10-26T11:13:07.928Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "admin",
+  "theme": "dark",
+  "fixtureRowsRequested": 4,
+  "widths": [
+    1280,
+    1440,
+    1920
+  ],
+  "routes": [
+    "/dashboard"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "rankedIssues": [
+    {
+      "route": "/dashboard",
+      "role": "admin",
+      "width": 1280,
+      "score": 0,
+      "issues": []
+    },
+    {
+      "route": "/dashboard",
+      "role": "admin",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    },
+    {
+      "route": "/dashboard",
+      "role": "admin",
+      "width": 1920,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/dashboard",
+      "role": "admin",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/ui-polish/screenshots/after/pilot-dashboard/dark/dashboard-1280.png",
+      "tableSampleScreenshots": [],
+      "url": "/dashboard/admin",
+      "title": "System Administrator · Dashboard · ERP",
+      "h1": "System AdministratorUpdated just now",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 5,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1280,
+        "top": 48,
+        "bottom": 1407.4375,
+        "width": 1040,
+        "height": 1359.4375
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1260,
+          "top": 48,
+          "bottom": 137,
+          "width": 1040,
+          "height": 89
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "System AdministratorUpdated just now",
+          "bounds": {
+            "left": 260,
+            "right": 1260,
+            "top": 48,
+            "bottom": 137,
+            "width": 1040,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "px-5 py-4 space-y-3",
+          "heading": "Needs attention",
+          "bounds": {
+            "left": 260,
+            "right": 1260,
+            "top": 137,
+            "bottom": 1407.4375,
+            "width": 1040,
+            "height": 1270.4375
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "System AdministratorUpdated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center text-2xs text-muted ml-2 align-middle",
+            "text": "Updated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Platform health, security events, and account monitoring.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h2",
+            "className": "m-0 text-section font-medium",
+            "text": "Needs attention",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Queue Health",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "Issues detected",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-0.5",
+            "text": "Pending",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-0.5",
+            "text": "Failed",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1",
+            "text": "Recent failures",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted shrink-0 ml-2 font-mono tabular-nums",
+            "text": "2026-10-26T07:45:00+08:00",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "p",
+            "className": "text-2xs text-muted truncate mt-0.5",
+            "text": "Export delivery timed out",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Open System Alerts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "2 open",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted truncate",
+            "text": "2 jobs failed and require review.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted truncate",
+            "text": "17 failed attempts in the last 24 hours.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Compute KPIs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "October 2026",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Compute KPIs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "p",
+            "className": "text-2xs text-muted mt-2",
+            "text": "Recomputes every KPI snapshot for the selected month. Strips refresh on next loa",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Active sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Locked accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Failed logins · 24h",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "attempts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Failed jobs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "jobs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Active Sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "24 sessions · 19 users",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "HR Officer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Chrome · Windows",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Sales Officer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Edge · Windows",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Account Security",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Total accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Inactive / disabled",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Currently locked",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "At risk (3 or more failures)",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Must change password",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1 pt-2 border-t border-subtle",
+            "text": "Locked now",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate block",
+            "text": "nina@example.test",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Authentication Events · Last 24h",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "145 total attempts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-2",
+            "text": "By status",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted truncate mr-2",
+            "text": "success",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted truncate mr-2",
+            "text": "failure",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1",
+            "text": "Successful / hour",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-2",
+            "text": "Recent failures",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium leading-tight whitespace-nowrap transition-colors duration-fast bg-subtle text-muted shrink-0",
+            "text": "Failed",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.133333 0.113725 0.0901961)",
+            "contrast": 6.41
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs font-mono tabular-nums text-muted shrink-0",
+            "text": "10.20.0.30",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Recent Audit Trail",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "font-mono text-2xs uppercase shrink-0 mt-0.5 min-w-20 text-muted",
+            "text": "updated permissions",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Dante Reyes · 10.20.0.21",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|0.6px|uppercase",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|16.25px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|450|16.8px|normal|uppercase"
+        ],
+        "below13px": [
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Updated just now"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Pending"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Failed"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Recent failures"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "2026-10-26T07:45:00+08:00"
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Export delivery timed out"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "2 jobs failed and require review."
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "17 failed attempts in the last 24 hours."
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Recomputes every KPI snapshot for the selected month. Strips refresh on next loa"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "HR Officer"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Chrome · Windows"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Sales Officer"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Edge · Windows"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Total accounts"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Active"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Inactive / disabled"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Currently locked"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "At risk (3 or more failures)"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Must change password"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Locked now"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "nina@example.test"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "By status"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Successful / hour"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Recent failures"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "10.20.0.30"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "updated permissions"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Dante Reyes · 10.20.0.21"
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Month",
+          "width": 117,
+          "height": 30
+        },
+        {
+          "label": "Year",
+          "width": 78,
+          "height": 30
+        },
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Month",
+          "width": 117,
+          "height": 30
+        },
+        {
+          "label": "Year",
+          "width": 78,
+          "height": 30
+        },
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32
+        }
+      ],
+      "scrollContextCount": 1
+    },
+    {
+      "route": "/dashboard",
+      "role": "admin",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/ui-polish/screenshots/after/pilot-dashboard/dark/dashboard-1440.png",
+      "tableSampleScreenshots": [],
+      "url": "/dashboard/admin",
+      "title": "System Administrator · Dashboard · ERP",
+      "h1": "System AdministratorUpdated just now",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 5,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 1408.890625,
+        "width": 1200,
+        "height": 1360.890625
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1420,
+          "top": 48,
+          "bottom": 137,
+          "width": 1200,
+          "height": 89
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "System AdministratorUpdated just now",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 48,
+            "bottom": 137,
+            "width": 1200,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "px-5 py-4 space-y-3",
+          "heading": "Needs attention",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 137,
+            "bottom": 1408.890625,
+            "width": 1200,
+            "height": 1271.890625
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "System AdministratorUpdated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center text-2xs text-muted ml-2 align-middle",
+            "text": "Updated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Platform health, security events, and account monitoring.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h2",
+            "className": "m-0 text-section font-medium",
+            "text": "Needs attention",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Queue Health",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "Issues detected",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-0.5",
+            "text": "Pending",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-0.5",
+            "text": "Failed",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1",
+            "text": "Recent failures",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted shrink-0 ml-2 font-mono tabular-nums",
+            "text": "2026-10-26T07:45:00+08:00",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "p",
+            "className": "text-2xs text-muted truncate mt-0.5",
+            "text": "Export delivery timed out",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Open System Alerts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "2 open",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted truncate",
+            "text": "2 jobs failed and require review.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted truncate",
+            "text": "17 failed attempts in the last 24 hours.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Compute KPIs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "October 2026",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Compute KPIs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "p",
+            "className": "text-2xs text-muted mt-2",
+            "text": "Recomputes every KPI snapshot for the selected month. Strips refresh on next loa",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Active sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Locked accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Failed logins · 24h",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "attempts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Failed jobs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "jobs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Active Sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "24 sessions · 19 users",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "HR Officer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Chrome · Windows",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Sales Officer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Edge · Windows",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Account Security",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Total accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Inactive / disabled",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Currently locked",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "At risk (3 or more failures)",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Must change password",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1 pt-2 border-t border-subtle",
+            "text": "Locked now",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate block",
+            "text": "nina@example.test",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Authentication Events · Last 24h",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "145 total attempts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-2",
+            "text": "By status",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted truncate mr-2",
+            "text": "success",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted truncate mr-2",
+            "text": "failure",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1",
+            "text": "Successful / hour",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-2",
+            "text": "Recent failures",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium leading-tight whitespace-nowrap transition-colors duration-fast bg-subtle text-muted shrink-0",
+            "text": "Failed",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.133333 0.113725 0.0901961)",
+            "contrast": 6.41
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs font-mono tabular-nums text-muted shrink-0",
+            "text": "10.20.0.30",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Recent Audit Trail",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "font-mono text-2xs uppercase shrink-0 mt-0.5 min-w-20 text-muted",
+            "text": "updated permissions",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Dante Reyes · 10.20.0.21",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|0.6px|uppercase",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|16.25px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|450|16.8px|normal|uppercase"
+        ],
+        "below13px": [
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Updated just now"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Pending"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Failed"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Recent failures"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "2026-10-26T07:45:00+08:00"
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Export delivery timed out"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "2 jobs failed and require review."
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "17 failed attempts in the last 24 hours."
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Recomputes every KPI snapshot for the selected month. Strips refresh on next loa"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "HR Officer"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Chrome · Windows"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Sales Officer"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Edge · Windows"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Total accounts"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Active"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Inactive / disabled"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Currently locked"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "At risk (3 or more failures)"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Must change password"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Locked now"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "nina@example.test"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "By status"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Successful / hour"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Recent failures"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "10.20.0.30"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "updated permissions"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Dante Reyes · 10.20.0.21"
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Month",
+          "width": 117,
+          "height": 30
+        },
+        {
+          "label": "Year",
+          "width": 78,
+          "height": 30
+        },
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Month",
+          "width": 117,
+          "height": 30
+        },
+        {
+          "label": "Year",
+          "width": 78,
+          "height": 30
+        },
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32
+        }
+      ],
+      "scrollContextCount": 1
+    },
+    {
+      "route": "/dashboard",
+      "role": "admin",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/ui-polish/screenshots/after/pilot-dashboard/dark/dashboard-1920.png",
+      "tableSampleScreenshots": [],
+      "url": "/dashboard/admin",
+      "title": "System Administrator · Dashboard · ERP",
+      "h1": "System AdministratorUpdated just now",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1920,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 5,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1920,
+        "top": 48,
+        "bottom": 1408.890625,
+        "width": 1680,
+        "height": 1360.890625
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1900,
+          "top": 48,
+          "bottom": 137,
+          "width": 1680,
+          "height": 89
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "System AdministratorUpdated just now",
+          "bounds": {
+            "left": 260,
+            "right": 1900,
+            "top": 48,
+            "bottom": 137,
+            "width": 1680,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "px-5 py-4 space-y-3",
+          "heading": "Needs attention",
+          "bounds": {
+            "left": 260,
+            "right": 1900,
+            "top": 137,
+            "bottom": 1408.890625,
+            "width": 1680,
+            "height": 1271.890625
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "System AdministratorUpdated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center text-2xs text-muted ml-2 align-middle",
+            "text": "Updated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Platform health, security events, and account monitoring.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h2",
+            "className": "m-0 text-section font-medium",
+            "text": "Needs attention",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Queue Health",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "Issues detected",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-0.5",
+            "text": "Pending",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-0.5",
+            "text": "Failed",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1",
+            "text": "Recent failures",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted shrink-0 ml-2 font-mono tabular-nums",
+            "text": "2026-10-26T07:45:00+08:00",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "p",
+            "className": "text-2xs text-muted truncate mt-0.5",
+            "text": "Export delivery timed out",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Open System Alerts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "2 open",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted truncate",
+            "text": "2 jobs failed and require review.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted truncate",
+            "text": "17 failed attempts in the last 24 hours.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Compute KPIs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "October 2026",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Compute KPIs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "p",
+            "className": "text-2xs text-muted mt-2",
+            "text": "Recomputes every KPI snapshot for the selected month. Strips refresh on next loa",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Active sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Locked accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Failed logins · 24h",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "attempts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Failed jobs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "jobs",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Active Sessions",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "24 sessions · 19 users",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "HR Officer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Chrome · Windows",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Sales Officer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Edge · Windows",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Account Security",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Total accounts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Inactive / disabled",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Currently locked",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "At risk (3 or more failures)",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate mr-2",
+            "text": "Must change password",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1 pt-2 border-t border-subtle",
+            "text": "Locked now",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted truncate block",
+            "text": "nina@example.test",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Authentication Events · Last 24h",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "145 total attempts",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-2",
+            "text": "By status",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted truncate mr-2",
+            "text": "success",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted truncate mr-2",
+            "text": "failure",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-1",
+            "text": "Successful / hour",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted mb-2",
+            "text": "Recent failures",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center px-1.5 py-0.5 rounded text-caption font-medium leading-tight whitespace-nowrap transition-colors duration-fast bg-subtle text-muted shrink-0",
+            "text": "Failed",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.133333 0.113725 0.0901961)",
+            "contrast": 6.41
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs font-mono tabular-nums text-muted shrink-0",
+            "text": "10.20.0.30",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Recent Audit Trail",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "font-mono text-2xs uppercase shrink-0 mt-0.5 min-w-20 text-muted",
+            "text": "updated permissions",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Dante Reyes · 10.20.0.21",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|0.6px|uppercase",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|16.25px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|450|16.8px|normal|uppercase"
+        ],
+        "below13px": [
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Updated just now"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Pending"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Failed"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Recent failures"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "2026-10-26T07:45:00+08:00"
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Export delivery timed out"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "2 jobs failed and require review."
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "17 failed attempts in the last 24 hours."
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Recomputes every KPI snapshot for the selected month. Strips refresh on next loa"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "HR Officer"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Chrome · Windows"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Sales Officer"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Edge · Windows"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Total accounts"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Active"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Inactive / disabled"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Currently locked"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "At risk (3 or more failures)"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Must change password"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Locked now"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "nina@example.test"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "By status"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Successful / hour"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Recent failures"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "10.20.0.30"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "updated permissions"
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Dante Reyes · 10.20.0.21"
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Month",
+          "width": 117,
+          "height": 30
+        },
+        {
+          "label": "Year",
+          "width": 78,
+          "height": 30
+        },
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Month",
+          "width": 117,
+          "height": 30
+        },
+        {
+          "label": "Year",
+          "width": 78,
+          "height": 30
+        },
+        {
+          "label": "Compute KPIs",
+          "width": 149,
+          "height": 32
+        }
+      ],
+      "scrollContextCount": 1
+    }
+  ]
+}

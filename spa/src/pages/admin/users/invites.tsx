@@ -149,7 +149,7 @@ export default function PortalInvitesPage() {
                     {row.employee ? (
                       <Link to={`/hr/employees/${row.employee.id}`} className="hover:text-primary">
                         <div>{row.employee.full_name}</div>
-                        <div className="font-mono text-xs text-muted">{row.employee.employee_no}</div>
+                        <div className="font-mono text-xs text-link">{row.employee.employee_no}</div>
                       </Link>
                     ) : '—'}
                   </td>

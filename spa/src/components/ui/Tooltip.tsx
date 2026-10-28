@@ -7,9 +7,10 @@ interface TooltipProps {
  children: ReactNode;
  side?: 'top' | 'right' | 'bottom' | 'left';
  className?: string;
+ triggerClassName?: string;
 }
 
-export function Tooltip({ content, children, side = 'top', className }: TooltipProps) {
+export function Tooltip({ content, children, side = 'top', className, triggerClassName }: TooltipProps) {
  const [open, setOpen] = useState(false);
  const triggerRef = useRef<HTMLSpanElement>(null);
  const tooltipRef = useRef<HTMLSpanElement>(null);
@@ -63,7 +64,7 @@ export function Tooltip({ content, children, side = 'top', className }: TooltipP
  return (
   <span
    ref={triggerRef}
-   className="relative inline-flex"
+   className={cn('relative inline-flex', triggerClassName)}
    onMouseEnter={() => setOpen(true)}
    onMouseLeave={() => setOpen(false)}
    onFocus={() => setOpen(true)}

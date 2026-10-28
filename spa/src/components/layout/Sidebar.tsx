@@ -134,6 +134,9 @@ const SECTION_PRIORITY: Record<string, number> = {
   Administration: 120,
 };
 
+// shortcut: 18 characters approximates current clipped labels; revisit if sidebar width changes.
+const NAV_TOOLTIP_MIN_LENGTH = 18;
+
 /** Role context changes reading order only; permission gates remain authoritative. */
 const ROLE_SECTION_ORDER: Record<string, string[]> = {
   system_admin: ['Administration'],
@@ -1138,6 +1141,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
             item={target === item.to ? item : { ...item, to: target }}
             active={isActive(item.to)}
             collapsed={compact}
+            showLabelTooltip={!mobile}
             badgeOverride={entry?.count}
             badgeVariant={entry?.severity}
             badgeDescription={entry?.description}
@@ -1176,50 +1180,57 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         .map((badge) => `${badge.description}: ${badge.count}`)
         .join(' · ');
       const id = moduleContentId(section.label, mobile);
+      const sectionToggle = !compact ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          aria-label={sectionBadgeCount > 0 ? `${section.label}: ${sectionBadgeSummary}` : undefined}
+          disabled={hoverExpanded || active}
+          onClick={() => toggleModule(section.label)}
+          className={cn(
+            'flex min-h-11 w-full items-center gap-2 rounded-md px-4 py-1.5 text-left text-sm font-normal transition-colors duration-fast md:min-h-9',
+            focusRingInset,
+            active
+              ? 'font-medium text-primary'
+              : 'text-secondary hover:bg-elevated hover:text-primary',
+          )}
+        >
+          <span
+            title={section.description ?? section.label}
+            className="min-w-0 flex-1 truncate"
+          >
+            {section.label}
+          </span>
+          {!open && sectionBadgeCount > 0 && (
+            <span aria-hidden title={sectionBadgeSummary} className="shrink-0">
+              <Badge variant={sectionBadgeVariant}>
+                {sectionBadgeCount > 99 ? '99+' : sectionBadgeCount}
+              </Badge>
+            </span>
+          )}
+          <LuChevronDown
+            size={14}
+            aria-hidden
+            className={cn(
+              'shrink-0 text-muted transition-transform duration-fast',
+              !open && '-rotate-90',
+            )}
+          />
+        </button>
+      ) : null;
       return (
         <div key={section.label} data-module={section.label} className="mb-2">
-          {!compact && (
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-controls={id}
-              aria-label={
-                !open && sectionBadgeCount > 0
-                  ? `${section.label}: ${sectionBadgeSummary}`
-                  : undefined
-              }
-              disabled={hoverExpanded || active}
-              onClick={() => toggleModule(section.label)}
-              className={cn(
-                'flex min-h-11 w-full items-center gap-2 rounded-md px-4 py-1.5 text-left text-sm font-normal transition-colors duration-fast md:min-h-9',
-                focusRingInset,
-                active
-                  ? 'font-medium text-primary'
-                  : 'text-secondary hover:bg-elevated hover:text-primary',
-              )}
-            >
-              <span
-                title={section.description ?? section.label}
-                className="min-w-0 flex-1 truncate"
+          {sectionToggle && (
+            !mobile && section.label.length >= NAV_TOOLTIP_MIN_LENGTH ? (
+              <Tooltip
+                content={[section.label, section.description].filter(Boolean).join(' — ')}
+                side="right"
+                triggerClassName="block w-full"
               >
-                {section.label}
-              </span>
-              {!open && sectionBadgeCount > 0 && (
-                <span aria-hidden title={sectionBadgeSummary} className="shrink-0">
-                  <Badge variant={sectionBadgeVariant}>
-                    {sectionBadgeCount > 99 ? '99+' : sectionBadgeCount}
-                  </Badge>
-                </span>
-              )}
-              <LuChevronDown
-                size={14}
-                aria-hidden
-                className={cn(
-                  'shrink-0 text-muted transition-transform duration-fast',
-                  !open && '-rotate-90',
-                )}
-              />
-            </button>
+                {sectionToggle}
+              </Tooltip>
+            ) : sectionToggle
           )}
           <ul
             id={id}
@@ -1353,6 +1364,7 @@ const NavLink = memo(function NavLink({
   item,
   active,
   collapsed,
+  showLabelTooltip,
   badgeOverride,
   badgeVariant,
   badgeDescription,
@@ -1360,6 +1372,7 @@ const NavLink = memo(function NavLink({
   item: NavItem;
   active: boolean;
   collapsed?: boolean;
+  showLabelTooltip?: boolean;
   badgeOverride?: number;
   badgeVariant?: BadgeSeverity | 'accent';
   /** What the badge count represents (server-provided, e.g. "Overdue bills payable"). */
@@ -1368,9 +1381,11 @@ const NavLink = memo(function NavLink({
   const Icon = item.icon;
   const badgeValue = badgeOverride ?? item.badge;
   const hasBadge = badgeValue != null && badgeValue > 0;
-  const collapsedLabel = hasBadge
-    ? `${item.label}, ${badgeDescription ?? 'badge count'}: ${badgeValue}`
-    : item.label;
+  const tooltipLabel = [
+    item.label,
+    item.description,
+    hasBadge ? `${badgeDescription ?? item.label}: ${badgeValue}` : null,
+  ].filter(Boolean).join(' · ');
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
@@ -1386,8 +1401,10 @@ const NavLink = memo(function NavLink({
     <Link
       ref={linkRef}
       to={item.to}
-      aria-label={collapsed ? collapsedLabel : undefined}
-      title={collapsed ? collapsedLabel : item.description}
+      aria-label={collapsed ? tooltipLabel : undefined}
+      title={collapsed || (showLabelTooltip && item.label.length >= NAV_TOOLTIP_MIN_LENGTH)
+        ? tooltipLabel
+        : item.description}
       aria-current={active ? 'page' : undefined}
       className={cn(
         focusRingInset,
@@ -1434,8 +1451,12 @@ const NavLink = memo(function NavLink({
     </Link>
   );
 
-  return collapsed ? (
-    <Tooltip content={item.description ?? collapsedLabel} side="right">
+  return collapsed || (showLabelTooltip && item.label.length >= NAV_TOOLTIP_MIN_LENGTH) ? (
+    <Tooltip
+      content={tooltipLabel}
+      side={collapsed ? 'right' : 'top'}
+      triggerClassName="block w-full"
+    >
       {link}
     </Tooltip>
   ) : (

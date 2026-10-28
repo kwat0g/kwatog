@@ -17,8 +17,10 @@ hairline borders. Shadows exist only for true overlays — menu, modal, toast �
 are warm-tinted, never neutral black.
 
 **Information density over whitespace.** Real ERPs show more data per screen than
-web apps. Tight rows, packed columns, monospace numbers, inline status. Base body
-size is 13px and office table rows are 32px; these are spec, not preference.
+web apps. Tight rows, packed columns, monospace numbers, inline status. The token
+file currently sets 14px body text, 48px default table rows, 36px compact rows,
+and 56px spacious rows in office palettes. Floor uses 15px body text, 48px rows,
+and 44px minimum hit targets. These values come from `tokens.css`, not this prose.
 
 **Serif for display, sans for interface.** Instrument Serif carries page titles and
 gives the product its voice. It ships at weight 400 only — never apply a weight
@@ -28,8 +30,8 @@ class to it, or the browser synthesises a bold and it looks smeared.
 
 Defined in `spa/src/styles/tokens.css`, mapped into Tailwind by
 `spa/tailwind.config.ts`. Components name **roles** (`bg-accent`, `text-danger`,
-`border-default`), never colours. This indirection is what let 355 pages restyle
-during the Atelier rebrand without being edited.
+`border-default`), never colours. This indirection lets shared palette changes
+reach route surfaces without editing each page.
 
 Three palettes, not four:
 
@@ -89,9 +91,9 @@ user-selectable. See `stores/themeStore.ts` (`pushOverride` / `popOverride`).
   --ring-offset: #fdfcfa;
 
   /* Density — floor overrides all three */
-  --row-height: 32px;
+  --row-height: 48px;
   --hit-min: 28px;
-  --font-size-body: 13px;
+  --font-size-body: 14px;
 }
 ```
 
@@ -193,9 +195,9 @@ import { chartColor } from '@/lib/chartPalette';
 // One colour per series, in palette order.
 {stages.map((stage, i) => <Cell key={stage.name} fill={chartColor(i)} />)}
 
-// BarComparison and DonutBreakdown default to this when no colour is passed,
-// so a new chart has no reason to name one.
-<DonutBreakdown data={stages} />
+// BarComparison always uses palette order. DonutBreakdown only accepts a
+// semantic colour when each slice actually means a state.
+<DonutBreakdown label="Inspection queue by stage" data={stages} />
 ```
 
 The palette is **red-green safe by measurement, not by convention**. The gate
@@ -215,6 +217,33 @@ deficiency collapses hue, so hue alone would leave a legend of near-identical
 swatches. Still, colour is never the only carrier — every chart here draws a
 legend or a direct label.
 
+### Chart wrappers
+
+`AreaTrend`, `BarComparison`, `DonutBreakdown`, and `DowntimeParetoChart` require
+a descriptive `label`. `ChartFigure` exposes each visualization as a named
+image and provides a screen-reader table alternative with the same values.
+Visible legends and category axes remain the first scan path. `BarComparison`
+assigns series colours in palette order; semantic tokens are reserved for
+state-driven donut slices. Numeric chart text uses tabular figures. Recharts
+animation stays off, and charts use no gradients or 3D effects. `OeeGaugeChart`
+keeps its value and A × P × Q breakdown in ordinary text beside the gauge.
+
+### Identity and category
+
+`--avatar-1..6`, `--avatar-n-bg`, and `--avatar-n-fg` provide six deterministic
+identity tints in all palettes. `Avatar` hashes a stable ID (or normalized name)
+to choose one, uses a photo when available, and falls back to initials. The
+initials remain the person cue; tint only helps scan a dense list. The tint mark
+clears the palette's non-text contrast bar on canvas, and its foreground clears
+the text bar on its paired background.
+
+Department and category tags map to the existing `--chart-1..8` roles. `Tag`
+uses a square body and a leading edge mark; `Chip` keeps rounded corners and
+semantic `-bg`/`-fg` pairs for state. Every tag carries its category name, so
+colour is never the only cue and chart hues cannot imply approval or failure.
+The palette gate checks all category marks against canvas and keeps series
+separated under simulated deuteranopia and protanopia.
+
 ### Out of scope: `--landing-*`
 
 The landing page keeps its own namespace and has **not** been re-authored in
@@ -233,6 +262,8 @@ and asserts every text/background pair on every palette. It runs as part of
 | `--text-subtle` (decorative — placeholders, disabled captions) | AA-large 3:1 | AA 4.5:1 |
 | Semantic marks on canvas (chips, bars, icon strokes — WCAG 1.4.11) | 3:1 | 4.5:1 |
 | `--chart-1..8` on canvas, **plus** pairwise ΔE (see above) | 3:1 | 4.5:1 |
+| `--avatar-n` identity marks on canvas | 3:1 | 4.5:1 |
+| `--avatar-n-fg` on paired `--avatar-n-bg` | AA 4.5:1 | AAA 7:1 |
 
 **Never lower a threshold to make the gate pass.** Darken or lighten the token.
 
@@ -254,15 +285,22 @@ silently — the browser falls back and nothing errors.
 
 | Name | Size | Line height | Usage |
 |---|---|---|---|
-| `text-2xs` | 10px | 1.4 | Column headers (uppercase, tracked), muted labels |
-| `text-xs` | 11px | 1.4 | Chip text, badges, meta |
-| `text-sm` | 12px | 1.4 | Table cells, secondary text |
-| `text-base` | 13px | 1.5 | Body, form inputs, navigation |
-| `text-md` | 14px | 1.4 | Card titles, section headers |
-| `text-lg` | 16px | 1.3 | Panel titles |
+| `text-2xs` | 12px | 1.4 | Compact labels and metadata |
+| `text-xs` | 12px | 1.4 | Chips, badges, metadata |
+| `text-sm` | 13px | 1.4 | Secondary text |
+| `text-base` | 14px | 1.5 | Body text |
+| `text-md` | 14px | 1.4 | Inputs and interface controls |
+| `text-lg` | 16px | 1.3 | Larger interface text |
 | `text-xl` | 20px | 1.25 | — |
-| `text-2xl` | 26px | 1.15 | **Page titles** (`font-display`) |
+| `text-2xl` | 26px | 1.15 | Large display text |
 | `text-3xl` | 32px | 1.1 | Large display |
+
+The token-backed roles are `text-page-title` 28px/36px,
+`text-section-title` 20px/28px, `text-subsection` 16px/24px,
+`text-body-small` 14px/19px, `text-caption` 13px/18px, `text-label` 14px/18px,
+`text-table-header` 14px/18px, `text-table-cell` 14px/20px, and `text-code`
+14px/18px. These roles are defined in `tokens.css` and mapped in
+`tailwind.config.ts`.
 
 `xl` and `2xl` are larger than the pre-Atelier scale (18px / 22px). Instrument
 Serif has a small x-height next to Public Sans and read undersized at the old
@@ -273,7 +311,7 @@ values.
 `components/layout/PageHeader.tsx` renders the `h1` on essentially every page:
 
 ```tsx
-<h1 className="font-display text-2xl text-primary break-words">
+<h1 className="font-display text-page-title text-primary break-words">
 ```
 
 No weight class — the family is 400-only. Subtitles, breadcrumbs and actions stay
@@ -350,14 +388,14 @@ Neutral-black shadows on a warm canvas read as dirt.
 ## DENSITY TOKENS
 
 ```
-h-row        → var(--row-height)   32px office · 48px floor
+h-row        → var(--row-height)   48px office · 48px floor
 min-h-hit    → var(--hit-min)      28px office · 44px floor
 min-w-hit    → var(--hit-min)
 ```
 
-Components read these unconditionally instead of branching on theme. `DataTable`'s
-`compact` and `spacious` densities stay fixed — those are explicit operator
-choices the palette should not override.
+Components read these unconditionally instead of branching on theme. The
+`DataTable` default density reads `h-row`; Compact is 36px and Spacious is 56px.
+Those explicit operator choices are currently expressed by `h-9` and `h-14`.
 
 ## ANIMATIONS
 
@@ -369,7 +407,8 @@ choices the palette should not override.
 ```
 
 **Allowed:** button press `scale(0.98)`, dropdown fade + slide, modal fade +
-slide-up, skeleton shimmer, progress fill, status colour transition, toast slide-in.
+slide-up, skeleton shimmer, progress fill, status colour transition, toast slide-in,
+row hover-action reveal, sliding tab/selection underline, and slide-in side panels.
 
 **Never:** card hover lift, KPI count-up, bouncy easing, page-load fade, row
 entrance animations.
@@ -406,8 +445,8 @@ All animations respect `prefers-reduced-motion: reduce`.
 **Expanded (240px)** on ≥1280px or when the user expands it:
 
 - Hairline right border, padding 12px 0
-- Section label: 10px uppercase, tracking 0.08em, `--text-subtle`, padding 6px 16px
-- Nav item: 13px, 6px/16px padding, `--text-secondary`
+- Section label: 12px uppercase, `--text-muted`, 4px bottom and 16px horizontal padding
+- Nav item: 13px, 6px/16px padding, `--text-secondary`; 36px desktop minimum height and 44px mobile minimum height
 - Active: `--text-primary`, `--bg-elevated`, 2px left border `--accent`, weight 500
 - Hover: `--bg-elevated`
 
@@ -451,8 +490,8 @@ still where most of its use happens.
 
 ### Button
 
-Variants: `primary`, `secondary` (default), `danger`, `ghost`. Sizes: sm 28px,
-md 32px, lg 36px.
+Variants: `primary`, `secondary` (default), `danger`, `ghost`. Sizes: xs 24px,
+sm 28px, md 32px, lg 36px, touch at least 44px.
 
 ```tsx
 // Primary — clay filled
@@ -465,8 +504,9 @@ Radius `md`, press `scale(0.98)`, focus ring always visible when tabbed.
 
 ### Input
 
-32px tall, 0 12px padding, hairline border, clay focus ring, label above at 11px
-muted, error below at 11px `text-danger`.
+The default field is 32px tall with 12px horizontal padding, a hairline border,
+and a clay focus ring. Labels use the 14px `text-label` role; helper and error
+messages use the 13px `text-caption` role.
 
 ### Status chip
 
@@ -493,24 +533,84 @@ const chipVariants = {
 | rejected, failed, breakdown, overdue, urgent, material_short | danger |
 | cancelled, inactive, closed | neutral |
 
+### Avatar and category tag
+
+Avatars use `h-row-compact` at the standard list size and carry an accessible
+name. Use a stable person ID for tint assignment; photos take precedence.
+Department/category `Tag` is square with a category-colored leading edge and a
+visible label. Never use semantic status colors for grouping.
+
+### Status tabs
+
+Use a tablist for mutually exclusive list states, with a count on every tab.
+Keep zero counts visible at lower emphasis. Arrow keys, Home, and End move
+selection; the clay underline marks the active state. URL state stays shareable.
+
+Local section `Tabs` move focus and selection together on arrow keys, skipping
+disabled tabs. Keep one selected tab in the tab order and connect its content
+with `role="tabpanel"`.
+
+### Filter bar
+
+Use the shared `FilterBar` for list filters. Filter pickers are searchable
+comboboxes with keyboard selection; active values stay visible as removable
+`Field: Value` chips, with `Clear all`, overflow handling, and an announced
+result count when the page has one. Blank choices include their field name
+(`Pay type: All types`). Keep query and filter values owned by the route so
+URL-backed lists remain shareable. Date ranges use native date inputs for
+expected calendar and keyboard behavior.
+
+### Status dot
+
+`StatusDot` pairs a small semantic mark with a visible text label. Use it for a
+single state summary where a full `Chip` would add too much weight. Keep the
+label; never make hue the only way to identify state.
+
+### Progress mini
+
+Use only when a real value has a real target (for example, stock versus reorder
+point). Keep text values beside the flat bar; semantic fill indicates whether
+the target is met. Do not use it as decoration or as a substitute for chain
+stage state.
+
+### Side panel
+
+Use for permission-aware quick preview from a list. It reuses Modal's focus trap,
+Escape close, and scroll lock, and must expose a full-record action. The preview
+ID belongs in a deep link; every action remains available to keyboard and touch
+users.
+
 ### Data table
 
-- Row height: `h-row` — **32px** office, 48px floor. `compact` 28px, `spacious` 40px stay fixed
-- Header: `h-row`, 10px uppercase tracked muted, `--bg-thead`
+- Row height: `h-row` — **48px** in office and floor. `compact` is 36px;
+  `spacious` is 56px.
+- Header: sticky `--bg-thead` with a bottom border; header text uses
+  `text-table-header`, muted ink, and semibold weight. It is not uppercase by
+  default.
 - Sticky header: `--bg-thead` **plus a bottom border** — there is no blur to separate it
-- Cell padding: 0 10px
+- Cell padding: 12px horizontal; vertical padding is 8px compact, 12px default,
+  and 16px spacious.
 - Row separator: hairline `--border-subtle`; hover `--bg-row-hover`
 - Zebra: `--bg-zebra-even`
 - Numbers: `font-mono tabular-nums`, right-aligned
 - Selected row outline: `outline-accent` (**not** a landing token)
+- The page's identifying column may use primary ink and medium weight. Keep
+  numeric cells tabular and right-aligned.
+- Optional row actions reveal on pointer hover and keyboard focus. Touch users
+  see them without hover; the controls remain in the tab order.
+- Set `loading` for first-page fetches to retain the header and draw five
+  skeleton rows at the active density; the table announces `aria-busy` until
+  data arrives.
 
 Table tokens (`--bg-thead`, `--bg-zebra-*`, `--bg-row-hover`) are not mapped as
 Tailwind colours — consume them as `bg-[var(--bg-thead)]`.
 
 ### Metric / KPI card
 
-Padding 14–16px, `--bg-surface`, hairline border, label 10px uppercase muted,
-value 26px mono medium, delta 11px mono in `--success` / `--danger`.
+Padding 16px, `--bg-surface`, hairline border, label 13px muted, value scales
+from 16px to 26px with the card width, and delta/helper text uses the 13px
+caption role. Delta colour communicates direction according to its declared
+polarity.
 
 26px is the design size, not a fixed one: the figure is sized against **its own
 card** (`@container` + `clamp(1rem, 12cqw, 1.625rem)`), because a two-up grid at
@@ -519,10 +619,17 @@ follows the card, so the same component is correct in a 4-up dashboard and a
 two-up phone layout. Every digit stays visible — it wraps inside the card rather
 than truncating or widening the page (F-009).
 
+### SparkLine
+
+Use only for a real time series, beside its metric name and time context. Keep
+the stroke flat and unfilled. `SparkLine` requires a label and exposes a text
+alternative with point count, first and latest values, and overall direction;
+the visual line has no separate legend.
+
 ### Panel
 
-Hairline border, header 12px/16px padding with bottom border, title 14px medium,
-right-side meta 11px muted.
+Hairline border, header 12px/16px padding with bottom border, title 16px medium,
+right-side metadata follows its local component role.
 
 Both flex links in that header carry `min-w-0`, so a wide `meta` control (a status
 filter with a lot of options) wraps or scrolls inside the slot instead of growing
@@ -578,9 +685,9 @@ scroll lock. It previously had none of the focus trapping the dialog had.
 
 `/admin/component-gallery` (Administration → Component Gallery) renders every
 shared primitive with all of its states: button variants and sizes, input states,
-chips, panels, KPI cards, selection controls, tables, the record patterns, and
-interactive overlays. It fetches nothing and uses literal fixtures only, which is
-what makes it photographable.
+chips, panels, KPI cards, selection controls, active filters, compact trends,
+tables, the record patterns, and interactive overlays. It fetches nothing and
+uses literal fixtures only, which is what makes it photographable.
 
 It is also the subject of the visual baseline gate:
 
@@ -611,60 +718,49 @@ current position.
 - Active: 9px clay dot, label `text-primary` bold
 - Pending: 9px grey dot, label `text-subtle`
 - Connector: 1px, moss when done, grey when pending
-- Labels 11px medium, 10px mono date beneath
+- Labels use `text-xs` (12px); dates use `text-2xs` (12px) in mono.
+- Reserve `min-h-row` below the dots so absolutely positioned labels cannot overlap the next section.
+
+### StageDots — compact chain position
+
+Use in a chain-document row or summary only when the data includes actual stage
+states. Each dot has an accessible stage name and state; the current stage uses
+`aria-current="step"`. Completed, active, pending, rejected, and skipped states
+also differ by mark treatment, so meaning does not depend on color. Keep the full
+`ChainHeader` on detail pages. A short visible summary names the current stage,
+rejection, next pending stage, or completion state.
 
 ### StageBreakdown — vertical stage counts
 
-Dashboards. Label + count on one line, 4px progress bar beneath on `--bg-subtle`,
-fill coloured by stage status, 10px between rows.
+Dashboards. The chain version uses a label and count above a 4px progress bar,
+with a 10px gap between stages. A second `ui/StageBreakdown` implementation
+exists and differs in container and text styling; consolidate only after callers
+are inventoried.
 
 ### LinkedRecords — related records
 
-Right panel of detail pages, grouped by type. `--bg-surface`, hairline left border,
-group label 10px uppercase muted, record ID 12px mono clickable, meta 11px muted,
-chip inline, 12px between groups.
+Right panel of detail pages, grouped by type. Group labels use 12px uppercase
+subtle ink, record IDs use 13px mono, metadata uses 12px, and status chips remain
+inline.
 
 ### ActivityStream — chronological events
 
-Under LinkedRecords. 6px semantic dot + content, text 11px primary, time 10px mono
-muted, 6px vertical padding per item.
+Under LinkedRecords. A 6px semantic dot precedes 12px event text; timestamps use
+12px mono muted text, with 6px vertical padding per item.
 
 ---
 
 ## PAGE PATTERNS
 
-### List page
-
-```
-Sidebar | Page Header (serif title + actions + filter bar)
-        | Data Table (dense, paginated, sortable)
-        | Pagination footer
-```
-
-### Detail page
-
-```
-Sidebar | Page Header — serif title + status chip + actions
-        |               ChainHeader
-        | ─────────────────────────────────────────
-        | Main (2/3)              | Right panel (1/3)
-        |   Metrics row           |   LinkedRecords
-        |   Tabs + content        |   ActivityStream
-```
-
-### Dashboard
-
-```
-Rail | DashboardShell
-     | PageHeader (title + subtitle + actions + time-clock action)
-     | Optional KpiStrip header slot
-     | Widget grid or page-specific dashboard panels
-```
+Page layout recipes cover list, detail, dashboard, form, report, settings/admin, and floor/PWA
+surfaces. They compose shared components; Phase 5 migrates route modules to these recipes. See
+[`docs/ui-polish/03-patterns.md`](ui-polish/03-patterns.md) for composition order, component maps,
+state rules, and adoption limits.
 
 `DashboardShell` owns loading, error, empty, stale-data, and responsive layout states. Role dashboards
-use the permission-filtered widget layout; dedicated dashboards compose their own panels. The shared
-shell has no range selector or page-level export action; pages add controls only when their data
-source supports them.
+use the permission-filtered widget layout; dedicated dashboards compose their own panels. A range
+selector appears only when the query supports it. The shell has no page-level export action because a
+multi-panel dashboard has no single honest dataset by default.
 
 **Per-widget export (F-017).** Each layout widget and each `MetricPanel` carries a CSV
 affordance in its header, beside `Open →`. It exports the payload the tile is
@@ -703,17 +799,19 @@ shape, and inventing one would produce files nobody trusts.
    `npm run audit:tokens` fails the build on a hex literal or raw Tailwind palette
    class anywhere in `src/` (landing excepted). It runs in CI on every PR.
 2. **Name roles, not colours.** `bg-accent`, not `bg-orange-600`. This is why the
-   Atelier rebrand touched ~20 files instead of 355.
+   Atelier palette changes belong in shared tokens and components, not one-off
+   page-level colour values.
 3. **No `dark:` variants.** A token already differs per palette; a `dark:` override
    fights it and breaks the floor palette, which is neither light nor dark.
-4. **Read density from tokens.** `h-row` / `min-h-hit`, not `h-8` / `min-h-[44px]`.
+4. **Read density from tokens.** `h-row`, `min-h-row`, and `min-h-hit`, not `h-8` / `min-h-[44px]`.
 5. **Adding a semantic colour** means adding all three of `--x`, `--x-bg`, `--x-fg`
    to **all three** palettes, plus a Tailwind mapping. The contrast gate will tell
    you if the pairing fails.
 6. **Base components first.** Button, Input, Chip, DataTable, Panel, StatCard,
-   ChainHeader before any module page.
+   ChainHeader, Avatar, AvatarGroup, Tag, StatusDot, StageDots, StatusTabs, and
+   ProgressMini before module-specific styling.
 7. **Chart colour is a category, not a judgement.** Use `chartColor(i)` /
    `--chart-1..8` for series identity; reserve semantic tokens for meaning.
    Adding a series means retuning all eight in three palettes and letting the
    contrast/CVD gate tell you whether it still works.
-7. **If a value isn't here, use the closest one.** Don't invent tokens.
+8. **If a value isn't here, use the closest one.** Don't invent tokens.

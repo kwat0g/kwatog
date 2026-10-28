@@ -1,0 +1,427 @@
+{
+  "generatedAt": "2026-10-25T22:53:15.340Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "hr",
+  "theme": "dark",
+  "fixtureRowsRequested": 0,
+  "widths": [
+    1440
+  ],
+  "routes": [
+    "/dashboard"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "rankedIssues": [
+    {
+      "route": "/dashboard",
+      "role": "hr",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/dashboard",
+      "role": "hr",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/ui-polish/evidence/dashboard-dark-1440/dashboard-1440.png",
+      "tableSampleScreenshots": [],
+      "url": "/dashboard/default",
+      "title": "Welcome, Layout Audit hr · Dashboard · ERP",
+      "h1": "Welcome, Layout Audit hrUpdated just now",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 2,
+        "links": 0,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 900,
+        "width": 1200,
+        "height": 852
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1420,
+          "top": 48,
+          "bottom": 137,
+          "width": 1200,
+          "height": 89
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "Welcome, Layout Audit hrUpdated just now",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 48,
+            "bottom": 137,
+            "width": 1200,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "px-5 py-4 space-y-3",
+          "heading": "No widgets configured",
+          "bounds": {
+            "left": 260,
+            "right": 1420,
+            "top": 137,
+            "bottom": 403.78125,
+            "width": 1200,
+            "height": 266.78125
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "relative flex items-center justify-center mb-2",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 42,
+          "clientWidth": 32,
+          "scrollHeight": 42,
+          "clientHeight": 32
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": false,
+      "doubleVerticalScroll": false,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words outline-none",
+            "text": "Welcome, Layout Audit hrUpdated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "inline-flex items-center text-2xs text-muted ml-2 align-middle",
+            "text": "Updated just now",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "hr_officer priorities are shown from the data and permissions available to this ",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Customize",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors min-h-11 sm:min-h-0",
+            "text": "Time in",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+            "background": "color(srgb 0.85098 0.470588 0.282353)",
+            "contrast": 5.89
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "No widgets configured",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "relative rounded-full bg-elevated flex items-center justify-center text-muted w-8 h-8",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.164706 0.145098 0.117647)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h3",
+            "className": "font-medium text-primary mb-1 text-sm",
+            "text": "Nothing on your dashboard yet",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "p",
+            "className": "text-muted max-w-md text-xs mb-2",
+            "text": "Your role has no default widgets. Ask an administrator to set them up, or use th",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Updated just now"
+          },
+          {
+            "tag": "p",
+            "size": 12,
+            "text": "Your role has no default widgets. Ask an administrator to set them up, or use th"
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Customize dashboard",
+          "width": 111,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Time in",
+          "width": 103,
+          "height": 32,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Customize dashboard",
+          "width": 111,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Time in",
+          "width": 103,
+          "height": 32,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Customize dashboard",
+          "width": 111,
+          "height": 28
+        },
+        {
+          "label": "Time in",
+          "width": 103,
+          "height": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Customize dashboard",
+          "width": 111,
+          "height": 28
+        },
+        {
+          "label": "Time in",
+          "width": 103,
+          "height": 32
+        }
+      ],
+      "scrollContextCount": 0
+    }
+  ]
+}

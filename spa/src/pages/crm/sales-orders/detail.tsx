@@ -364,7 +364,7 @@ export default function SalesOrderDetailPage() {
               {mrpFailed && can('mrp.plans.run') && (
                 <Button
                   size="sm"
-                  variant="primary"
+                  variant="secondary"
                   loading={retryMrp.isPending}
                   disabled={chain.isFetching || isLoading}
                   onClick={() => retryMrp.mutate()}
@@ -435,7 +435,7 @@ export default function SalesOrderDetailPage() {
                 title="Delivery schedule"
                 actions={
                   data.capabilities?.can_propose_delivery ? (
-                    <Button onClick={() => setDeliveryProposalOpen(!deliveryProposalOpen)}>
+                    <Button variant="primary" onClick={() => setDeliveryProposalOpen(!deliveryProposalOpen)}>
                       Propose delivery date
                     </Button>
                   ) : undefined

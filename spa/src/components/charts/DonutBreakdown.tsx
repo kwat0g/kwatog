@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { chartColor } from '@/lib/chartPalette';
+import { ChartFigure } from './ChartFigure';
 
 interface DonutEntry {
   name: string;
@@ -14,6 +15,7 @@ interface DonutEntry {
 }
 
 interface DonutBreakdownProps {
+ label: string;
  data: DonutEntry[];
  height?: number;
  innerRadius?: number;
@@ -22,6 +24,7 @@ interface DonutBreakdownProps {
 }
 
 export function DonutBreakdown({
+ label,
  data,
  height = 180,
  innerRadius = 50,
@@ -29,6 +32,7 @@ export function DonutBreakdown({
  centerValue,
 }: DonutBreakdownProps) {
  return (
+ <ChartFigure label={label} columns={['Category', 'Value']} rows={data.map((entry) => [entry.name, entry.value])}>
  <div className="relative">
  <ResponsiveContainer width="100%" height={height}>
  <PieChart>
@@ -41,6 +45,7 @@ export function DonutBreakdown({
  innerRadius={innerRadius}
  outerRadius={innerRadius + 25}
  paddingAngle={2}
+        isAnimationActive={false}
         >
           {data.map((entry, i) => (
             <Cell key={i} fill={entry.color ?? chartColor(i)} />
@@ -75,5 +80,6 @@ export function DonutBreakdown({
  ))}
  </div>
  </div>
+ </ChartFigure>
  );
 }

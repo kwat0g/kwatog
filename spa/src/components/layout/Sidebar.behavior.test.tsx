@@ -125,6 +125,21 @@ it('opens the to-inspect queue when inspections has a positive badge', () => {
   );
 });
 
+it('shows the full module label on keyboard focus when the sidebar truncates it', () => {
+  render(
+    <MemoryRouter>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+
+  const section = screen.getByRole('button', { name: 'Production Planning (MRP)' });
+  fireEvent.focus(section);
+
+  expect(screen.getByRole('tooltip')).toHaveTextContent(
+    'Production Planning (MRP) — Material requirements planning',
+  );
+});
+
 it('opens the open-complaints filter when complaints has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'open_complaints'

@@ -22,7 +22,7 @@ export interface SegmentedOption<T extends string> {
  disabled?: boolean;
 }
 
-type Size = 'sm' | 'md' | 'touch';
+type Size = 'sm' | 'md' | 'touch' | 'adaptive';
 
 interface SegmentedControlProps<T extends string> {
  options: Array<SegmentedOption<T>>;
@@ -42,6 +42,7 @@ const sizeClasses: Record<Size, string> = {
  // 44px — the touch-target floor the PWAs use. Deliberately larger than the
  // desktop scale in DESIGN-SYSTEM.md, which assumes a mouse.
  touch: 'min-h-hit px-4 text-base',
+ adaptive: 'min-h-hit px-2 text-caption',
 };
 
 export function SegmentedControl<T extends string>({

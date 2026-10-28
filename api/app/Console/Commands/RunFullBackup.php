@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Common\Services\BackupManifestStore;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Symfony\Component\Process\Process;
@@ -16,7 +17,9 @@ class RunFullBackup extends Command
 {
     protected $signature = 'db:full-backup
         {--dir= : Override the backup directory}
-        {--keep= : Override database and file retention count}';
+        {--keep= : Override database and file retention count}
+        {--manifest-id= : Reuse the admin operation ID for the external manifest}
+        {--manifest-source=scheduled : Manifest source label}';
 
     protected $description = 'Create validated database and private-file backup artifacts';
 
@@ -25,12 +28,15 @@ class RunFullBackup extends Command
         $backupDir = $this->option('dir') ?: config('backup.directory') ?: storage_path('app/backups');
         $databaseKeep = (string) ($this->option('keep') ?: config('backup.keep', 14));
         $filesKeep = (string) ($this->option('keep') ?: config('backup.files_keep', $databaseKeep));
+        $beforeDatabase = $this->artifactNames($backupDir, 'ogami-*.sql.gz');
+        $beforeFiles = $this->artifactNames($backupDir, 'ogami-files-*.tar.gz');
 
         $databaseExit = Artisan::call('db:backup', [
             '--dir' => $backupDir,
             '--keep' => $databaseKeep,
         ]);
-        $this->output->write(Artisan::output());
+        $databaseOutput = Artisan::output();
+        $this->output->write($databaseOutput);
 
         if ($databaseExit !== self::SUCCESS) {
             return self::FAILURE;
@@ -82,7 +88,61 @@ class RunFullBackup extends Command
             return self::FAILURE;
         }
 
+        $databaseFilename = $this->newArtifact(
+            $backupDir,
+            'ogami-*.sql.gz',
+            $beforeDatabase,
+            $databaseOutput,
+            '/^backup written: (.+?) \([^\n]*\)$/m',
+        );
+        $filesFilename = $this->newArtifact(
+            $backupDir,
+            'ogami-files-*.tar.gz',
+            $beforeFiles,
+            $process->getOutput(),
+            '/^files backup written: (.+?) \([^\n]*\)$/m',
+        );
+        if ($databaseFilename === null || $filesFilename === null) {
+            $this->error('db:full-backup — could not identify the new database and private-files archives.');
+            return self::FAILURE;
+        }
+
+        try {
+            app(BackupManifestStore::class)->publish(
+                $databaseFilename,
+                $filesFilename,
+                is_string($this->option('manifest-id')) ? $this->option('manifest-id') : null,
+                (string) $this->option('manifest-source'),
+            );
+            app(BackupManifestStore::class)->pruneMissingArtifacts();
+        } catch (\Throwable $exception) {
+            $this->error('db:full-backup — artifacts completed but their recovery manifest could not be published.');
+            report($exception);
+            return self::FAILURE;
+        }
+
         $this->info('db:full-backup — database and private files backup completed.');
         return self::SUCCESS;
+    }
+
+    /** @param array<int, string> $before */
+    private function newArtifact(string $directory, string $pattern, array $before, string $output, string $linePattern): ?string
+    {
+        if (preg_match($linePattern, $output, $match) === 1) {
+            $filename = basename(trim($match[1]));
+            if (is_file($directory.DIRECTORY_SEPARATOR.$filename)) {
+                return $filename;
+            }
+        }
+
+        $created = array_values(array_diff($this->artifactNames($directory, $pattern), $before));
+
+        return count($created) === 1 ? $created[0] : null;
+    }
+
+    /** @return array<int, string> */
+    private function artifactNames(string $directory, string $pattern): array
+    {
+        return array_values(array_map('basename', glob(rtrim($directory, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$pattern) ?: []));
     }
 }

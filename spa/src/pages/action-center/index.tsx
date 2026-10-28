@@ -25,7 +25,7 @@ import { actionCenterApi } from '@/api/actionCenter';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -220,7 +220,7 @@ export default function ActionCenterPage() {
                         <span className="block text-xs text-muted mt-1 line-clamp-2">{item.description}</span>
                         <span className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1.5 text-2xs text-subtle">
                           {item.reference && <span className="font-mono">{item.reference}</span>}
-                          <span>{item.status_label}</span>
+                          <Chip variant={chipVariantForStatus(item.status)}>{item.status_label}</Chip>
                           {item.assigned_to
                             ? <span>Assigned: {item.assigned_to.name}</span>
                             : item.owner_label && <span>Source owner: {item.owner_label}</span>}

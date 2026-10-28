@@ -38,7 +38,9 @@ interface FilterBarProps {
   * reads as broken rather than absent.
   */
  searchable?: boolean;
+ resultCount?: number;
  className?: string;
+ inset?: boolean;
 }
 
 /** Keystroke-to-request delay: long enough to skip mid-word, short enough to feel live. */
@@ -54,10 +56,13 @@ export function FilterBar({
  dateRange,
  actions,
  className,
+ inset = true,
  searchable = true,
+ resultCount,
 }: FilterBarProps) {
  const external = (values.search as string) ?? '';
  const [searchValue, setSearchValue] = useState<string>(external);
+ const [showAllChips, setShowAllChips] = useState(false);
  const inputRef = useRef<HTMLInputElement>(null);
  const emitted = useRef(external);
 
@@ -107,6 +112,32 @@ export function FilterBar({
  const hasActive = activeFilters.length > 0 || hasActiveDate || searchValue !== '';
  const activeFilterCount = activeFilters.length + (hasActiveDate ? 1 : 0) + (searchValue !== '' ? 1 : 0);
 
+ const filterChips = [
+  ...activeFilters.map((filter) => {
+   const raw = String(values[filter.key]);
+   const option = filter.options.find((item) => String(item.value) === raw);
+   return {
+    key: filter.key,
+    label: `${filter.label}: ${option?.label ?? raw}`,
+    remove: () => onFilter?.(filter.key, undefined),
+   };
+  }),
+  ...(searchValue ? [{ key: 'search', label: `Search: ${searchValue}`, remove: clearSearch }] : []),
+  ...(dateRange
+   ? dateKeys.flatMap((key) => {
+      const value = String(values[key] ?? '');
+      if (!value) return [];
+      return [{
+       key,
+       label: `${dateRange.label ?? 'Date'} ${key === dateRange.fromKey ? 'from' : 'to'}: ${value}`,
+       remove: () => onFilter?.(key, undefined),
+      }];
+     })
+   : []),
+ ];
+ const visibleChips = showAllChips ? filterChips : filterChips.slice(0, 3);
+ const hiddenChipCount = filterChips.length - visibleChips.length;
+
  const clearAll = () => {
  activeFilters.forEach((f) => onFilter?.(f.key, undefined));
  dateKeys.forEach((k) => onFilter?.(k, undefined));
@@ -114,7 +145,7 @@ export function FilterBar({
  };
 
  return (
- <div className={cn('flex items-center gap-2 px-5 py-3 border-b border-default flex-wrap', className)}>
+ <div data-layout="filter-bar" className={cn('flex items-center gap-2 py-3 border-b border-default flex-wrap', inset && 'px-5', className)}>
  {searchable && (
  <form
  onSubmit={submit}
@@ -150,6 +181,8 @@ export function FilterBar({
  key={f.key}
  aria-label={f.label}
  value={String(values[f.key] ?? '')}
+   searchable
+   fieldSize="md"
  onChange={(e) => onFilter?.(f.key, e.target.value || undefined)}
  containerClassName="min-w-[160px]"
  >
@@ -158,8 +191,8 @@ export function FilterBar({
  )}
  {f.options.map((o) => (
  <option key={o.value} value={o.value}>
- {String(o.value) === '' && (o.label === 'All' || o.label === 'Any')
- ? `${f.label}: ${o.label}`
+          {String(o.value) === '' && !o.label.startsWith(`${f.label}:`)
+            ? `${f.label}: ${o.label}`
  : o.label}
  </option>
  ))}
@@ -192,19 +225,46 @@ export function FilterBar({
  )}
 
  {hasActive && (
- <span className="text-xs text-muted font-mono tabular-nums" aria-live="polite" aria-atomic="true">
- {activeFilterCount} active {activeFilterCount === 1 ? 'filter' : 'filters'}
- </span>
+  <div role="group" aria-label="Active filters" className="flex min-w-0 flex-wrap items-center gap-1.5">
+   {visibleChips.map((chip) => (
+    <button
+     key={chip.key}
+     type="button"
+     onClick={chip.remove}
+     aria-label={`Remove ${chip.label}`}
+     className={cn('inline-flex min-h-7 max-w-64 items-center gap-1.5 border border-default bg-subtle px-2 text-caption text-primary hover:border-strong', focusRing)}
+    >
+     <span className="truncate">{chip.label}</span>
+     <LuX size={12} aria-hidden="true" />
+    </button>
+   ))}
+   {hiddenChipCount > 0 && (
+    <button
+     type="button"
+     aria-expanded={showAllChips}
+     onClick={() => setShowAllChips(true)}
+     className={cn('min-h-7 px-1.5 text-caption text-secondary hover:text-primary', focusRing)}
+    >
+     +{hiddenChipCount} more
+    </button>
+   )}
+   <span className="text-caption text-muted" aria-live="polite" aria-atomic="true">
+    {activeFilterCount} active {activeFilterCount === 1 ? 'filter' : 'filters'}
+   </span>
+   <button
+    type="button"
+    onClick={clearAll}
+    className={cn('min-h-7 px-1.5 text-caption text-muted hover:text-primary cursor-pointer', focusRing)}
+   >
+    Clear all
+   </button>
+  </div>
  )}
 
- {hasActive && (
- <button
- type="button"
- onClick={clearAll}
- className={cn('h-8 px-2 text-xs text-muted hover:text-primary rounded-md cursor-pointer', focusRing)}
- >
- Clear all
- </button>
+ {resultCount !== undefined && (
+  <span className="ml-auto text-caption tabular-nums text-muted" aria-live="polite">
+   {resultCount.toLocaleString()} results
+  </span>
  )}
 
  {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}

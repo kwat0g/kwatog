@@ -330,7 +330,7 @@ export default function DowntimeAnalyticsPage() {
  {summaryLoading ? (
  <div className="h-64 animate-pulse rounded bg-elevated" />
  ) : (
- <DowntimeParetoChart data={paretoData} height={264} />
+              <DowntimeParetoChart label="Downtime Pareto by Category" data={paretoData} height={264} />
  )}
  </Panel>
  </div>

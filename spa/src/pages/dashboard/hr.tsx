@@ -123,7 +123,7 @@ export default function HrDashboard() {
         const attendance = panels.attendance_summary;
 
         const departmentDonutData = departments
-          .map((d) => ({ name: d.label, value: d.count, color: 'var(--accent)' }))
+          .map((d) => ({ name: d.label, value: d.count }))
           .slice(0, 6);
 
         const attendanceDonutData = attendance
@@ -190,6 +190,7 @@ export default function HrDashboard() {
                   />
                 ) : (
                   <DonutBreakdown
+                    label="Department Headcount Breakdown"
                     data={departmentDonutData}
                     centerLabel="Departments"
                     centerValue={String(departmentDonutData.length)}
@@ -206,6 +207,7 @@ export default function HrDashboard() {
                   />
                 ) : (
                   <DonutBreakdown
+                    label="Attendance Today Breakdown"
                     data={attendanceDonutData}
                     centerLabel="Total"
                     centerValue={String(attendanceDonutData.reduce((sum, i) => sum + i.value, 0))}

@@ -1,7 +1,8 @@
 import { reportMutationError } from '@/lib/formErrors';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { ChartFigure } from '@/components/charts/ChartFigure';
 import { LuRefreshCw } from '@/lib/icons';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -17,6 +18,7 @@ import { formatDateTime } from '@/lib/formatDate';
 import type { BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { chartColor } from '@/lib/chartPalette';
 import { usePermission } from '@/hooks/usePermission';
 import toast from 'react-hot-toast';
 
@@ -76,6 +78,12 @@ export default function BudgetVsActualPage() {
   const totalVariancePct = totalBudgeted > 0 ? (totalVariance / totalBudgeted) * 100 : 0;
   const isFavorable = totalVariance >= 0;
   const isSyncing = syncRun?.status === 'queued' || syncRun?.status === 'running';
+  const chartRows = chartData.map((row) => [
+    row.name,
+    formatPeso(row.budgeted),
+    formatPeso(row.actual),
+    formatPeso(row.variance),
+  ]);
 
   return (
     <div className="p-5 space-y-6">
@@ -110,7 +118,29 @@ export default function BudgetVsActualPage() {
           <StatCard label="Total Variance" value={`${isFavorable ? '+' : ''}${totalVariancePct.toFixed(1)}%`} />
         </div>
 
-        {chartData.length > 0 && <Panel title="Variance by account" meta="top 10 accounts"><div className="h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}><CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} /><YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={(value: number) => formatCompactCurrency(value, 1_000, 'K')} width={56} /><Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', fontSize: 12 }} formatter={(value: number) => formatPeso(value)} /><Legend wrapperStyle={{ fontSize: 11 }} /><Bar dataKey="budgeted" name="Budgeted" fill="var(--info)" radius={[3, 3, 0, 0]} maxBarSize={32} /><Bar dataKey="actual" name="Actual" radius={[3, 3, 0, 0]} maxBarSize={32}>{chartData.map((entry, index) => <Cell key={index} fill={entry.actual > entry.budgeted ? 'var(--danger)' : 'var(--success)'} />)}</Bar></BarChart></ResponsiveContainer></div></Panel>}
+        {chartData.length > 0 && (
+          <Panel title="Variance by account" meta="top 10 accounts">
+            <ChartFigure
+              label="Budgeted and actual amounts by account, top 10 by absolute variance"
+              columns={['Account', 'Budgeted', 'Actual', 'Variance']}
+              rows={chartRows}
+            >
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)', className: 'tabular-nums' }} />
+                    <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)', className: 'tabular-nums' }} tickFormatter={(value: number) => formatCompactCurrency(value, 1_000_000, 'M')} width={80} />
+                    <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', fontSize: 12 }} formatter={(value: number) => formatPeso(value)} />
+                    <Legend wrapperStyle={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }} />
+                    <Bar dataKey="budgeted" name="Budgeted" fill={chartColor(0)} radius={[3, 3, 0, 0]} maxBarSize={32} isAnimationActive={false} />
+                    <Bar dataKey="actual" name="Actual" fill={chartColor(1)} radius={[3, 3, 0, 0]} maxBarSize={32} isAnimationActive={false} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartFigure>
+          </Panel>
+        )}
 
         <Panel title="Summary by Group"><div className="overflow-x-auto"><table className={tableCls}><thead><tr className={theadTrCls}><Th>Group</Th><Th align="right">Budgeted</Th><Th align="right">Actual</Th><Th align="right">Variance</Th><Th align="right">%</Th></tr></thead><tbody>{Object.entries(grouped).map(([key, group]) => { const variance = group.budgeted - group.actual; const pct = group.budgeted > 0 ? (variance / group.budgeted) * 100 : 0; return <tr key={key} className={trCls}><Td className="font-medium">{key}</Td><Td align="right" mono>{formatCompactCurrency(group.budgeted, 1_000_000, 'M')}</Td><Td align="right" mono>{formatCompactCurrency(group.actual, 1_000_000, 'M')}</Td><Td align="right" mono className={cn(variance < 0 ? 'text-danger-fg' : 'text-success-fg')}>{variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(variance), 1_000_000, 'M')}</Td><Td align="right" mono><span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium', pct < 0 ? 'text-danger-fg bg-danger-bg' : 'text-success-fg bg-success-bg')}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span></Td></tr>; })}</tbody></table></div></Panel>
 

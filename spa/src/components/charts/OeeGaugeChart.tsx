@@ -2,24 +2,21 @@ import { RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 
 interface Props {
  oee: number | null; // 0–1
- availability: number | null; // 0–1
- performance: number | null; // 0–1
- quality: number | null; // 0–1
  displayPolicy?: { world_class_ratio: number; on_track_ratio: number };
 }
 
 const colorFor = (v: number | null, policy?: Props['displayPolicy']) =>
  v == null ? 'var(--text-muted)' : policy ? (v >= policy.world_class_ratio ? 'var(--success)' : v >= policy.on_track_ratio ? 'var(--warning)' : 'var(--danger)') : 'var(--text-muted)';
 
-export function OeeGaugeChart({ oee, availability, performance, quality, displayPolicy }: Props) {
+export function OeeGaugeChart({ oee, displayPolicy }: Props) {
  const oeePct = oee == null ? null : oee * 100;
  return (
- <div className="flex flex-col items-center gap-3">
+ <div className="flex justify-center">
  {/* Half-circle gauge */}
- <div className="relative" style={{ width: 200, height: 108 }}>
+ <div className="relative" style={{ width: 200, height: 132 }}>
  <RadialBarChart
  width={200}
- height={200}
+ height={132}
  cx="50%"
  cy="100%"
  innerRadius="60%"
@@ -34,6 +31,7 @@ export function OeeGaugeChart({ oee, availability, performance, quality, display
  dataKey="value"
  angleAxisId={0}
  cornerRadius={4}
+ isAnimationActive={false}
  />
  </RadialBarChart>
  {/* Center label */}
@@ -43,27 +41,6 @@ export function OeeGaugeChart({ oee, availability, performance, quality, display
  </div>
  </div>
 
- {/* A × P × Q breakdown */}
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-center text-sm w-full">
- <div>
- <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(availability, displayPolicy) }}>
- {availability == null ? '—' : `${(availability * 100).toFixed(1)}%`}
- </div>
- <div className="text-2xs text-muted mt-0.5">Availability</div>
- </div>
- <div>
- <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(performance, displayPolicy) }}>
- {performance == null ? '—' : `${(performance * 100).toFixed(1)}%`}
- </div>
- <div className="text-2xs text-muted mt-0.5">Performance</div>
- </div>
- <div>
- <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(quality, displayPolicy) }}>
- {quality == null ? '—' : `${(quality * 100).toFixed(1)}%`}
- </div>
- <div className="text-2xs text-muted mt-0.5">Quality</div>
- </div>
- </div>
  </div>
  );
 }

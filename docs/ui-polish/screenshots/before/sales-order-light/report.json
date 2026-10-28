@@ -1,0 +1,1318 @@
+{
+  "generatedAt": "2026-10-26T07:53:11.979Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "sales",
+  "theme": "light",
+  "fixtureRowsRequested": 50,
+  "widths": [
+    1280
+  ],
+  "routes": [
+    "/crm/sales-orders/layout-so-001"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "rankedIssues": [
+    {
+      "route": "/crm/sales-orders/layout-so-001",
+      "role": "sales",
+      "width": 1280,
+      "score": 5,
+      "issues": [
+        "block edges differ by >1px"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "route": "/crm/sales-orders/layout-so-001",
+      "role": "sales",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/ui-polish/screenshots/before/sales-order-light/crm-sales-orders-layout-so-001-1280.png",
+      "tableSampleScreenshots": [],
+      "url": "/crm/sales-orders/layout-so-001",
+      "title": "SO-2026-0148 Awaiting QC · Sales & CRM · ERP",
+      "h1": "SO-2026-0148Awaiting QC",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 4,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1280,
+        "top": 48,
+        "bottom": 1018.46875,
+        "width": 1040,
+        "height": 970.46875
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": null,
+        "toolbar": null,
+        "table": 21,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1260,
+          "top": 48,
+          "bottom": 312.28125,
+          "width": 1040,
+          "height": 264.28125
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "left": 261,
+          "right": 920.328125,
+          "top": 760.96875,
+          "bottom": 1001.46875,
+          "width": 659.328125,
+          "height": 240.5
+        },
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "SO-2026-0148Awaiting QC",
+          "bounds": {
+            "left": 260,
+            "right": 1260,
+            "top": 48,
+            "bottom": 312.28125,
+            "width": 1040,
+            "height": 264.28125
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "px-5 py-4 space-y-4",
+          "heading": "Overview",
+          "bounds": {
+            "left": 260,
+            "right": 1260,
+            "top": 312.28125,
+            "bottom": 1018.46875,
+            "width": 1040,
+            "height": 706.1875
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": {
+          "leftDelta": 1,
+          "rightDelta": -339.67,
+          "aligned": false
+        },
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "table": {
+        "density": "default",
+        "textBelowMinimum": [
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "#"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Product"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Qty"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Unit price"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Total"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Delivered"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Delivery"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "01"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "PART-001Injection molded housing"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "100.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "₱1,250.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "₱125,000.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "0.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "2026-10-30"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "Subtotal"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "VAT"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "Total"
+          }
+        ],
+        "headerHeight": 48,
+        "rowHeight": {
+          "min": 48,
+          "max": 48,
+          "distinct": [
+            48
+          ]
+        },
+        "cellPadding": {
+          "top": "4px",
+          "right": "10px",
+          "bottom": "4px",
+          "left": "10px"
+        },
+        "columns": [
+          {
+            "header": "#",
+            "width": 48,
+            "share": 0.073,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Product",
+            "width": 166,
+            "share": 0.252,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Qty",
+            "width": 64,
+            "share": 0.097,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Unit price",
+            "width": 94,
+            "share": 0.142,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Total",
+            "width": 100,
+            "share": 0.152,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Delivered",
+            "width": 94,
+            "share": 0.143,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          },
+          {
+            "header": "Delivery",
+            "width": 93,
+            "share": 0.141,
+            "headerAlign": "right",
+            "cellAlign": "right",
+            "sticky": false
+          }
+        ],
+        "stickyHeader": false,
+        "stickyProbe": {
+          "cssSticky": false,
+          "tested": false,
+          "sticksToScroller": null,
+          "topAfterScroll": null,
+          "scrollerTopAfterScroll": null
+        },
+        "semantics": {
+          "columnHeaders": 7,
+          "scopedColumnHeaders": 7,
+          "sortableHeaders": 0,
+          "keyboardFocusableRows": 0
+        },
+        "truncation": []
+      },
+      "typography": {
+        "samples": [
+          {
+            "tag": "a",
+            "className": "inline-flex items-center gap-1 text-caption text-muted hover:text-primary mb-1",
+            "text": "Sales orders",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "SO-2026-0148Awaiting QC",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Northstar Components Philippines",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
+            "text": "Oct 21, 2026",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
+            "text": "Oct 21, 2026",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
+            "text": "Oct 22, 2026",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "p",
+            "className": "rounded-md border border-default px-3 py-2 text-sm text-primary bg-subtle",
+            "text": "Inspection is in progress.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "color(srgb 0.960784 0.945098 0.913725)",
+            "contrast": 15.2
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Refresh process",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Overview",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "SO number",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Customer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Date",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Required delivery date",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Payment terms",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Delivery terms",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Incoterm",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Created by",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "dt",
+            "className": "text-muted",
+            "text": "Notes",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Line items",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "1 line",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "th",
+            "className": "h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none text-left w-12",
+            "text": "#",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "th",
+            "className": "h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none text-left",
+            "text": "Product",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "th",
+            "className": "h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none text-right",
+            "text": "Qty",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "th",
+            "className": "h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none text-right",
+            "text": "Unit price",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "th",
+            "className": "h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none text-right",
+            "text": "Total",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "th",
+            "className": "h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none text-right",
+            "text": "Delivered",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "th",
+            "className": "h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none text-right",
+            "text": "Delivery",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-left font-mono tabular-nums text-muted",
+            "text": "01",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-left",
+            "text": "PART-001Injection molded housing",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "div",
+            "className": "text-xs text-muted",
+            "text": "Injection molded housing",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums",
+            "text": "100.00",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums",
+            "text": "₱1,250.00",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums font-medium",
+            "text": "₱125,000.00",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums",
+            "text": "0.00",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums",
+            "text": "2026-10-30",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums text-muted text-2xs uppercase",
+            "text": "Subtotal",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.3
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums text-muted text-2xs uppercase",
+            "text": "VAT",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.3
+          },
+          {
+            "tag": "td",
+            "className": "px-2.5 py-1 align-middle text-right font-mono tabular-nums text-muted text-2xs uppercase font-medium",
+            "text": "Total",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.3
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Linked records",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "div",
+            "className": "text-xs text-muted leading-tight",
+            "text": "v2 · 1 WOs · 0 shortages",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "15px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-xs text-muted leading-tight",
+            "text": "PART-001 · 64 / 100",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "15px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-xs text-muted leading-tight",
+            "text": "Outgoing QC",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "15px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Activity",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted",
+            "text": "By Mara Santos",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
+            "text": "Oct 20, 2026 · 9:00 AM",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted",
+            "text": "By Dante Reyes",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
+            "text": "Oct 21, 2026 · 10:15 AM",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted",
+            "text": "By Lina Flores",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs text-muted",
+            "text": "Reason: Production started.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
+            "text": "Oct 22, 2026 · 8:15 AM",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          }
+        ],
+        "combinations": [
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|400|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18.2px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|500|16.8px|0.6px|uppercase",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|500|16.8px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|400|16.8px|normal|uppercase",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|500|16.8px|normal|uppercase",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|15px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Oct 21, 2026"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Oct 21, 2026"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Oct 22, 2026"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "#"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Product"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Qty"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Unit price"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Total"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Delivered"
+          },
+          {
+            "tag": "th",
+            "size": 12,
+            "text": "Delivery"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "01"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "PART-001Injection molded housing"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Injection molded housing"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "100.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "₱1,250.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "₱125,000.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "0.00"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "2026-10-30"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "Subtotal"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "VAT"
+          },
+          {
+            "tag": "td",
+            "size": 12,
+            "text": "Total"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "v2 · 1 WOs · 0 shortages"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "PART-001 · 64 / 100"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Outgoing QC"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "By Mara Santos"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Oct 20, 2026 · 9:00 AM"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "By Dante Reyes"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Oct 21, 2026 · 10:15 AM"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "By Lina Flores"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Reason: Production started."
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Oct 22, 2026 · 8:15 AM"
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Refresh process",
+          "width": 125,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+        }
+      ],
+      "recordLinks": [
+        {
+          "text": "MRP-2026-031",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "WO-2026-041",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        },
+        {
+          "text": "QC-2026-088",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "contrast": 4.83,
+          "distinctFromBodyText": true
+        }
+      ],
+      "dropdowns": [],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Refresh process",
+          "width": 125,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Refresh process",
+          "width": 125,
+          "height": 28
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Refresh process",
+          "width": 125,
+          "height": 28
+        }
+      ],
+      "scrollContextCount": 1
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
+import { Tag } from '@/components/ui/Tag';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -64,20 +65,22 @@ export default function PostingsListPage() {
 
  const columns: Column<JobPosting>[] = [
  {
- key: 'posting_number',
- header: 'Number',
- cell: (r) => <span className="font-mono text-xs tabular-nums">{r.posting_number}</span>,
- },
- {
  key: 'title',
  header: 'Title',
+ primary: true,
+ className: 'min-w-48',
  sortable: true,
- cell: (r) => <span className="font-medium">{r.title}</span>,
+ cell: (r) => <span className="truncate font-medium">{r.title}</span>,
+ },
+ {
+ key: 'posting_number',
+ header: 'Number',
+ cell: (r) => <span className="whitespace-nowrap font-mono text-xs tabular-nums">{r.posting_number}</span>,
  },
  {
  key: 'department',
  header: 'Department',
- cell: (r) => r.department?.name ?? '—',
+ cell: (r) => r.department ? <Tag categoryKey={r.department.id || r.department.name}>{r.department.name}</Tag> : '—',
  },
  {
  key: 'status',

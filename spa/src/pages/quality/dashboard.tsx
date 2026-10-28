@@ -166,7 +166,7 @@ export default function QualityDashboardPage() {
           )}
           {pareto.data && pareto.data.rows.length > 0 && (
             <div>
-              <DowntimeParetoChart data={paretoChartData} height={240} valueLabel="Failed checks" />
+              <DowntimeParetoChart label="Failed Checks by Category" data={paretoChartData} height={240} valueLabel="Failed checks" />
               <div className="mt-3 space-y-1">
                 {pareto.data.rows.map((row) => (
                   <button

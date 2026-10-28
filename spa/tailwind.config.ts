@@ -17,6 +17,18 @@ const config: Config = {
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
+      spacing: {
+        1: 'var(--space-1)',
+        2: 'var(--space-2)',
+        3: 'var(--space-3)',
+        4: 'var(--space-4)',
+        5: 'var(--space-5)',
+        6: 'var(--space-6)',
+        8: 'var(--space-8)',
+        10: 'var(--space-10)',
+        12: 'var(--space-12)',
+        16: 'var(--space-16)',
+      },
       colors: {
         // Canvas
         canvas: 'color-mix(in srgb, var(--bg-canvas) calc(<alpha-value> * 100%), transparent)',
@@ -86,6 +98,26 @@ const config: Config = {
           fg: 'color-mix(in srgb, var(--purple-fg) calc(<alpha-value> * 100%), transparent)',
         },
 
+        avatar: {
+          1: { DEFAULT: 'var(--avatar-1)', bg: 'var(--avatar-1-bg)', fg: 'var(--avatar-1-fg)' },
+          2: { DEFAULT: 'var(--avatar-2)', bg: 'var(--avatar-2-bg)', fg: 'var(--avatar-2-fg)' },
+          3: { DEFAULT: 'var(--avatar-3)', bg: 'var(--avatar-3-bg)', fg: 'var(--avatar-3-fg)' },
+          4: { DEFAULT: 'var(--avatar-4)', bg: 'var(--avatar-4-bg)', fg: 'var(--avatar-4-fg)' },
+          5: { DEFAULT: 'var(--avatar-5)', bg: 'var(--avatar-5-bg)', fg: 'var(--avatar-5-fg)' },
+          6: { DEFAULT: 'var(--avatar-6)', bg: 'var(--avatar-6-bg)', fg: 'var(--avatar-6-fg)' },
+        },
+
+        category: {
+          1: 'var(--chart-1)',
+          2: 'var(--chart-2)',
+          3: 'var(--chart-3)',
+          4: 'var(--chart-4)',
+          5: 'var(--chart-5)',
+          6: 'var(--chart-6)',
+          7: 'var(--chart-7)',
+          8: 'var(--chart-8)',
+        },
+
         // Focus ring
         ring: 'color-mix(in srgb, var(--ring) calc(<alpha-value> * 100%), transparent)',
 
@@ -132,10 +164,19 @@ const config: Config = {
       },
 
       fontSize: {
-        '2xs': ['10px', { lineHeight: '1.4' }],
-        xs: ['11px', { lineHeight: '1.4' }],
-        sm: ['12px', { lineHeight: '1.4' }],
-        base: ['13px', { lineHeight: '1.5' }],
+        'page-title': ['var(--font-size-page-title)', { lineHeight: '36px' }],
+        'section-title': ['var(--font-size-section-title)', { lineHeight: '28px' }],
+        subsection: ['var(--font-size-subsection)', { lineHeight: '24px' }],
+        'body-small': ['var(--font-size-body-small)', { lineHeight: '19px' }],
+        caption: ['var(--font-size-caption)', { lineHeight: '18px' }],
+        label: ['var(--font-size-label)', { lineHeight: '18px' }],
+        'table-header': ['var(--font-size-table-header)', { lineHeight: '18px' }],
+        'table-cell': ['var(--font-size-table-cell)', { lineHeight: '20px' }],
+        code: ['var(--font-size-code)', { lineHeight: '18px' }],
+        '2xs': ['12px', { lineHeight: '1.4' }],
+        xs: ['12px', { lineHeight: '1.4' }],
+        sm: ['13px', { lineHeight: '1.4' }],
+        base: ['14px', { lineHeight: '1.5' }],
         md: ['14px', { lineHeight: '1.4' }],
         lg: ['16px', { lineHeight: '1.3' }],
         xl: ['20px', { lineHeight: '1.25' }],
@@ -151,15 +192,16 @@ const config: Config = {
         full: 'var(--radius-full)',
       },
 
-      // Density tokens. Office palettes declare 32px / 28px; [data-theme='floor']
-      // raises them to 48px / 44px, so a component reads them unconditionally
-      // rather than branching on theme.
+      // Density tokens differ by palette; components read them without branching.
       height: {
         row: 'var(--row-height)',
+        'row-compact': 'var(--row-height-compact)',
+        'row-spacious': 'var(--row-height-spacious)',
       },
 
       minHeight: {
         hit: 'var(--hit-min)',
+        row: 'var(--row-height)',
       },
 
       minWidth: {
@@ -193,6 +235,10 @@ const config: Config = {
         'slide-up': {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'slide-in-right': {
+          '0%': { transform: 'translateX(100%)' },
+          '100%': { transform: 'translateX(0)' },
         },
         // Sprint P3 — soft pulse on the active step of an ApprovalTimeline
         // (and reusable for any "current bottleneck" indicator). 1.5s cycle,
@@ -228,6 +274,7 @@ const config: Config = {
         shimmer: 'shimmer 1.8s ease-in-out infinite',
         'fade-in': 'fade-in var(--duration-slow) var(--ease-default)',
         'slide-up': 'slide-up var(--duration-slow) var(--ease-default)',
+        'slide-in-right': 'slide-in-right var(--duration-normal) var(--ease-default)',
         'approval-pulse': 'approval-pulse 1.5s ease-in-out infinite',
         'slide-right': 'slide-right 200ms var(--ease-default)',
         marquee: 'marquee 36s linear infinite',

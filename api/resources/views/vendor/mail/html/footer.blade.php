@@ -13,7 +13,7 @@
 @if ($brand['phone'] && $brand['email']) <span style="padding: 0 4px;">·</span> @endif
 @if ($brand['email']) <a href="mailto:{{ $brand['email'] }}" style="color: #667085; text-decoration: none;">{{ $brand['email'] }}</a> @endif
 </div>
-@if ($brand['footer_disclaimer'])
+@if ($brand['footer_disclaimer'] ?? null)
 <div style="margin-top: 8px;">{{ $brand['footer_disclaimer'] }}</div>
 @endif
 <div style="margin-top: 12px; color: #6b6259;">This is an automated message.</div>

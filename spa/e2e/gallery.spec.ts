@@ -49,6 +49,7 @@ const SECTIONS = [
   'forms',
   'feedback',
   'panels',
+  'charts',
   'controls',
   'tables',
   'records',

@@ -596,6 +596,7 @@ export default function PpcDashboard() {
  <EmptyState icon="inbox" title="No work orders" description="No work order data available." />
  ) : (
  <DonutBreakdown
+ label="WO Status Distribution"
  data={woStatusChartData}
  centerLabel="Total WOs"
  centerValue={String(woStatusChartData.reduce((sum, i) => sum + i.value, 0))}
@@ -607,8 +608,9 @@ export default function PpcDashboard() {
  <EmptyState icon="cpu" title="No machines" description="No machine data available." />
  ) : (
  <BarComparison
+ label="Machine Status Distribution"
  data={machineUtilChartData}
- bars={[{ dataKey: 'count', color: 'var(--accent)', label: 'Machines' }]}
+ bars={[{ dataKey: 'count', label: 'Machines' }]}
  xKey="label"
  height={180}
  />

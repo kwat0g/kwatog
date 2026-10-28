@@ -40,6 +40,7 @@ import {
   YAxis,
 } from 'recharts';
 import { chartColor } from '@/lib/chartPalette';
+import { ChartFigure } from '@/components/charts/ChartFigure';
 
 const MONTH_NAMES = [
   'Jan',
@@ -243,6 +244,11 @@ export default function DemandForecastingPage() {
     });
     return Array.from(byKey.values()).sort((a, b) => a.key.localeCompare(b.key));
   }, [historicalQ.data, forecastsQ.data]);
+  const chartRows = chartData.map((point) => [
+    point.label,
+    point.actual ?? '—',
+    point.forecast ?? '—',
+  ]);
 
   const openManual = (row: DemandForecast) => {
     setManualRow(row);
@@ -324,23 +330,27 @@ export default function DemandForecastingPage() {
                   description="No confirmed sales orders match the selected scope."
                 />
               ) : (
-                <div role="img" aria-label="Monthly actual demand and forecast comparison">
+                <ChartFigure
+                  label={`Monthly actual demand and forecast${selectedProduct ? ` for ${selectedProduct.part_number} ${selectedProduct.name}` : ''}`}
+                  columns={['Month', 'Actual demand', 'Forecast']}
+                  rows={chartRows}
+                >
                   <ResponsiveContainer width="100%" height={320}>
-                    <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                    <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid vertical={false} stroke="var(--border-subtle)" />
                       <XAxis
                         dataKey="label"
-                        tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                        tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
                         axisLine={{ stroke: 'var(--border-default)' }}
                         tickLine={false}
                         minTickGap={12}
                       />
                       <YAxis
                         allowDecimals={false}
-                        tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                        tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
                         axisLine={false}
                         tickLine={false}
-                        width={42}
+                        width={48}
                       />
                       <RTooltip
                         cursor={{ stroke: 'var(--border-strong)', strokeDasharray: '3 3' }}
@@ -372,6 +382,7 @@ export default function DemandForecastingPage() {
                         strokeWidth={2.5}
                         connectNulls={false}
                         activeDot={{ r: 4 }}
+                        isAnimationActive={false}
                       />
                       <Line
                         type="monotone"
@@ -383,6 +394,7 @@ export default function DemandForecastingPage() {
                         connectNulls={false}
                         dot={{ r: 2, fill: chartColor(1) }}
                         activeDot={{ r: 4 }}
+                        isAnimationActive={false}
                       />
                       <ReferenceLine
                         x={`${MONTH_NAMES[new Date().getMonth()]} ${String(currentYear).slice(2)}`}
@@ -392,7 +404,7 @@ export default function DemandForecastingPage() {
                       />
                     </AreaChart>
                   </ResponsiveContainer>
-                </div>
+                </ChartFigure>
               )}
             </div>
           </Panel>
@@ -483,6 +495,7 @@ export default function DemandForecastingPage() {
                   }
                 />
                 <Button
+                  variant="primary"
                   onClick={() => recomputeM.mutate()}
                   disabled={
                     !productId ||

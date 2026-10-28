@@ -1,0 +1,275 @@
+{
+  "generatedAt": "2026-10-27T08:52:13.175Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "production",
+  "theme": "dark",
+  "fixtureRowsRequested": 1,
+  "widths": [
+    1440
+  ],
+  "routes": [
+    "/production/routings"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "rankedIssues": [
+    {
+      "route": "/production/routings",
+      "role": "production",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/production/routings",
+      "role": "production",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/after/production-routings/states/dark/rows-1/production-routings-1440.png",
+      "tableSampleScreenshots": [],
+      "url": "/production/routings",
+      "title": "Page not found · ERP",
+      "h1": null,
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 1,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 900,
+        "width": 1200,
+        "height": 852
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 0,
+      "sidebarClearanceByBlock": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "flex flex-col items-center justify-center text-center py-8 px-5",
+          "heading": "Page not found",
+          "bounds": {
+            "left": 660,
+            "right": 1020,
+            "top": 145.109375,
+            "bottom": 350.890625,
+            "width": 400,
+            "height": 205.78125
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "32px",
+            "right": "20px",
+            "bottom": "32px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "relative flex items-center justify-center mb-3",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 56,
+          "clientWidth": 40,
+          "scrollHeight": 56,
+          "clientHeight": 40
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": false,
+      "doubleVerticalScroll": false,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "div",
+            "className": "relative rounded-full bg-elevated flex items-center justify-center text-muted w-10 h-10",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "color(srgb 0.164706 0.145098 0.117647)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h3",
+            "className": "font-medium text-primary mb-1 text-md",
+            "text": "Page not found",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "p",
+            "className": "text-muted max-w-md text-sm mb-4",
+            "text": "The page you're looking for doesn't exist or has been moved.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18.2px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Return home",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+            "background": "color(srgb 0.85098 0.470588 0.282353)",
+            "contrast": 5.89
+          }
+        ],
+        "combinations": [
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18.2px|normal|none"
+        ],
+        "below13px": [],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Return home",
+          "width": 119,
+          "height": 32,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Return home",
+          "width": 119,
+          "height": 32,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Return home",
+          "width": 119,
+          "height": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Return home",
+          "width": 119,
+          "height": 32
+        }
+      ],
+      "scrollContextCount": 0
+    }
+  ]
+}

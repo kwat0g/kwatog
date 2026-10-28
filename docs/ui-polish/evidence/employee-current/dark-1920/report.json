@@ -1,0 +1,2335 @@
+{
+  "generatedAt": "2026-10-25T22:51:53.941Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "hr",
+  "theme": "dark",
+  "fixtureRowsRequested": 0,
+  "widths": [
+    1920
+  ],
+  "routes": [
+    "/hr/employees"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "rankedIssues": [
+    {
+      "route": "/hr/employees",
+      "role": "hr",
+      "width": 1920,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/hr/employees",
+      "role": "hr",
+      "theme": "dark",
+      "status": 200,
+      "screenshot": "docs/ui-polish/evidence/employee-current/dark-1920/hr-employees-1920.png",
+      "tableSampleScreenshots": [],
+      "url": "/hr/employees",
+      "title": "Employees · Human Resources · ERP",
+      "h1": "Employees",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "dark",
+      "colorScheme": "dark",
+      "canvasColor": "#17140f",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 450,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1920,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 12,
+        "links": 6,
+        "inputs": 7,
+        "tables": 1,
+        "rows": 8,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1920,
+        "top": 48,
+        "bottom": 1120.5,
+        "width": 1680,
+        "height": 1072.5
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 20,
+      "sidebarClearanceByBlock": {
+        "header": 20,
+        "filters": 20,
+        "toolbar": 20,
+        "table": 20,
+        "pagination": 20
+      },
+      "blocks": {
+        "header": {
+          "left": 260,
+          "right": 1900,
+          "top": 48,
+          "bottom": 137,
+          "width": 1680,
+          "height": 89
+        },
+        "filters": {
+          "left": 260,
+          "right": 1900,
+          "top": 137,
+          "bottom": 194,
+          "width": 1680,
+          "height": 57
+        },
+        "toolbar": {
+          "left": 260,
+          "right": 1900,
+          "top": 480,
+          "bottom": 516,
+          "width": 1640,
+          "height": 36
+        },
+        "table": {
+          "left": 260,
+          "right": 1900,
+          "top": 532,
+          "bottom": 1052.5,
+          "width": 1640,
+          "height": 520.5
+        },
+        "pagination": {
+          "left": 260,
+          "right": 1900,
+          "top": 1068.5,
+          "bottom": 1104.5,
+          "width": 1640,
+          "height": 36
+        }
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "Employees",
+          "bounds": {
+            "left": 260,
+            "right": 1900,
+            "top": 48,
+            "bottom": 137,
+            "width": 1680,
+            "height": 89
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "flex items-center gap-2 py-3 border-b border-default flex-wrap px-5",
+          "heading": "",
+          "bounds": {
+            "left": 260,
+            "right": 1900,
+            "top": 137,
+            "bottom": 194,
+            "width": 1680,
+            "height": 57
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "12px",
+            "right": "20px",
+            "bottom": "12px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 2,
+          "tag": "div",
+          "className": "grid grid-cols-2 lg:grid-cols-3 gap-3 px-5 py-4 border-b border-default bg-canvas",
+          "heading": "",
+          "bounds": {
+            "left": 260,
+            "right": 1900,
+            "top": 194,
+            "bottom": 464,
+            "width": 1680,
+            "height": 270
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 3,
+          "tag": "div",
+          "className": "px-5 py-4",
+          "heading": "",
+          "bounds": {
+            "left": 260,
+            "right": 1900,
+            "top": 464,
+            "bottom": 1120.5,
+            "width": 1680,
+            "height": 656.5
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "toolbar": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "table": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "pagination": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        }
+      },
+      "verticalGaps": {
+        "headerToFilters": 0,
+        "filtersToToolbar": 286,
+        "toolbarToTable": 16,
+        "tableToPagination": 16
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 101,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "sr-only",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 210,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "table": {
+        "density": "default",
+        "textBelowMinimum": [],
+        "headerHeight": 48,
+        "rowHeight": {
+          "min": 58.75,
+          "max": 58.75,
+          "distinct": [
+            58.75
+          ]
+        },
+        "cellPadding": {
+          "top": "12px",
+          "right": "12px",
+          "bottom": "12px",
+          "left": "12px"
+        },
+        "columns": [
+          {
+            "header": "Employee no",
+            "width": 265,
+            "share": 0.162,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Name",
+            "width": 304,
+            "share": 0.186,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Department",
+            "width": 428,
+            "share": 0.261,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Pay type",
+            "width": 240,
+            "share": 0.146,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Hired",
+            "width": 248,
+            "share": 0.152,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          },
+          {
+            "header": "Status",
+            "width": 153,
+            "share": 0.093,
+            "headerAlign": "left",
+            "cellAlign": "left",
+            "sticky": false
+          }
+        ],
+        "stickyHeader": true,
+        "stickyProbe": {
+          "cssSticky": true,
+          "tested": false,
+          "sticksToScroller": null,
+          "topAfterScroll": null,
+          "scrollerTopAfterScroll": null
+        },
+        "semantics": {
+          "columnHeaders": 6,
+          "scopedColumnHeaders": 6,
+          "sortableHeaders": 3,
+          "keyboardFocusableRows": 8
+        },
+        "truncation": []
+      },
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Employees",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "450",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "202 employees",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Export",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Schedule",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Add employee",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+            "background": "color(srgb 0.85098 0.470588 0.282353)",
+            "contrast": 5.89
+          },
+          {
+            "tag": "svg",
+            "className": "",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": null
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "text-xs text-muted font-mono tabular-nums",
+            "text": "1 active filter",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "button",
+            "className": "h-8 px-2 text-xs text-muted hover:text-primary rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
+            "text": "Clear all",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "450",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "all matching employees",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "On Leave",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "all matching employees",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Resigned",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "all matching employees",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Terminated",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "all matching employees",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Suspended",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "all matching employees",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-medium mb-1.5",
+            "text": "Retired",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-1",
+            "text": "all matching employees",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-default px-3 text-label text-primary hover:bg-elevated transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
+            "text": "Columns",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "label",
+            "className": "flex items-center gap-2 text-label text-muted",
+            "text": "DensityComfortableCompactSpacious",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "th",
+            "className": "px-3 py-3 text-table-header text-muted font-semibold select-none h-row text-left",
+            "text": "Employee no",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center gap-1 cursor-pointer rounded-sm hover:text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
+            "text": "Employee no",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "th",
+            "className": "px-3 py-3 text-table-header text-muted font-semibold select-none h-row text-left",
+            "text": "Name",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center gap-1 cursor-pointer rounded-sm hover:text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
+            "text": "Name",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "th",
+            "className": "px-3 py-3 text-table-header text-muted font-semibold select-none h-row text-left",
+            "text": "Department",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "th",
+            "className": "px-3 py-3 text-table-header text-muted font-semibold select-none h-row text-left",
+            "text": "Pay type",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "th",
+            "className": "px-3 py-3 text-table-header text-muted font-semibold select-none h-row text-left",
+            "text": "Hired",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center gap-1 cursor-pointer rounded-sm hover:text-primary transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset",
+            "text": "Hired",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "th",
+            "className": "px-3 py-3 text-table-header text-muted font-semibold select-none h-row text-left",
+            "text": "Status",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "600",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 6.56
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0001",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Kurt DiegasIT Staff",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "IT Staff",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "IT Staff",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Information Technology",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0002",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Jamie ReyesProduction Operator",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "Production Operator",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Production Operator",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Production",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0003",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Marco TomasPlant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "Plant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Plant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Production",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0004",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Rafael CastilloMaintenance Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "Maintenance Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Maintenance Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Maintenance & Engineering",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0005",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Andres MercadoPlant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "Plant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Plant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Production",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0006",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Dalisay FloresWarehouse Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "Warehouse Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Warehouse Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Warehouse & Logistics",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0007",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Elena RiveraPlant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "Plant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Plant Manager",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Production",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "OGM-2026-0008",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Gloria GonzalesWarehouse Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted leading-tight",
+            "text": "Warehouse Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Warehouse Head",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "16.25px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Warehouse & Logistics",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Semi-monthly",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Mar 18, 2024",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "td",
+            "className": "px-3 py-3 text-left",
+            "text": "Active",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "20px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-sans tabular-nums",
+            "text": "1–8 of 202",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "label",
+            "className": "flex items-center gap-2 text-label text-muted",
+            "text": "Rows2550100",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "span",
+            "className": "text-caption font-sans tabular-nums px-2 text-muted",
+            "text": "Page 1 of 1",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.658824 0.623529 0.576471)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 7.04
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "450",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.960784 0.945098 0.917647)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.31
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|450|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|21px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|450|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|600|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|450|20px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|450|16.25px|normal|none",
+          "\"Public Sans Variable\", system-ui, sans-serif|13|450|18px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "1 active filter"
+          },
+          {
+            "tag": "button",
+            "size": 12,
+            "text": "Clear all"
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Export",
+          "width": 88,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Schedule",
+          "width": 106,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Add employee",
+          "width": 134,
+          "height": 28,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+        },
+        {
+          "label": "Clear all",
+          "width": 65,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "Customize columns",
+          "width": 105,
+          "height": 36,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Employee no",
+          "width": 102,
+          "height": 18,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "Name",
+          "width": 55,
+          "height": 18,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "Hired",
+          "width": 53,
+          "height": 18,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "dark",
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "background": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "optionColor": "rgb(245, 241, 234)",
+          "optionBackground": "rgb(23, 20, 15)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Export",
+          "width": 88,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Schedule",
+          "width": 106,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Add employee",
+          "width": 134,
+          "height": 28,
+          "background": "color(srgb 0.85098 0.470588 0.282353)",
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+        },
+        {
+          "label": "Clear all",
+          "width": 65,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "Customize columns",
+          "width": 105,
+          "height": 36,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Employee no",
+          "width": 102,
+          "height": 18,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "Name",
+          "width": 55,
+          "height": 18,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "Hired",
+          "width": 53,
+          "height": 18,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.658824 0.623529 0.576471)"
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.960784 0.945098 0.917647)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Export",
+          "width": 88,
+          "height": 28
+        },
+        {
+          "label": "Schedule",
+          "width": 106,
+          "height": 28
+        },
+        {
+          "label": "Add employee",
+          "width": 134,
+          "height": 28
+        },
+        {
+          "label": "Search name or employee no…",
+          "width": 220,
+          "height": 30
+        },
+        {
+          "label": "Department",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Status",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Type",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Pay type",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Clear all",
+          "width": 65,
+          "height": 32
+        },
+        {
+          "label": "Customize columns",
+          "width": 105,
+          "height": 36
+        },
+        {
+          "label": "Density",
+          "width": 130,
+          "height": 36
+        },
+        {
+          "label": "Employee no",
+          "width": 102,
+          "height": 18
+        },
+        {
+          "label": "Name",
+          "width": 55,
+          "height": 18
+        },
+        {
+          "label": "Hired",
+          "width": 53,
+          "height": 18
+        },
+        {
+          "label": "2550100",
+          "width": 68,
+          "height": 36
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Export",
+          "width": 88,
+          "height": 28
+        },
+        {
+          "label": "Schedule",
+          "width": 106,
+          "height": 28
+        },
+        {
+          "label": "Add employee",
+          "width": 134,
+          "height": 28
+        },
+        {
+          "label": "Search name or employee no…",
+          "width": 220,
+          "height": 30
+        },
+        {
+          "label": "Department",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Status",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Type",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Pay type",
+          "width": 158,
+          "height": 30
+        },
+        {
+          "label": "Clear all",
+          "width": 65,
+          "height": 32
+        },
+        {
+          "label": "Customize columns",
+          "width": 105,
+          "height": 36
+        },
+        {
+          "label": "Density",
+          "width": 130,
+          "height": 36
+        },
+        {
+          "label": "Employee no",
+          "width": 102,
+          "height": 18
+        },
+        {
+          "label": "Name",
+          "width": 55,
+          "height": 18
+        },
+        {
+          "label": "Hired",
+          "width": 53,
+          "height": 18
+        },
+        {
+          "label": "2550100",
+          "width": 68,
+          "height": 36
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "label": "Previous page",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "label": "Next page",
+          "width": 28,
+          "height": 28
+        },
+        {
+          "label": "Last page",
+          "width": 28,
+          "height": 28
+        }
+      ],
+      "scrollContextCount": 1
+    }
+  ]
+}

@@ -8,6 +8,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { chartColor } from '@/lib/chartPalette';
+import { ChartFigure } from './ChartFigure';
 
 export interface ParetoEntry {
   category: string;
@@ -16,6 +18,7 @@ export interface ParetoEntry {
 }
 
 interface Props {
+  label: string;
   data: ParetoEntry[];
   height?: number;
   /**
@@ -33,22 +36,27 @@ function formatMinutes(m: number): string {
   return `${m}m`;
 }
 
-export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
+export function DowntimeParetoChart({ label, data, height = 260, valueLabel }: Props) {
   if (data.length === 0) return null;
 
   const seriesName = valueLabel ?? 'Downtime';
   const formatValue = valueLabel ? String : formatMinutes;
 
-  const label = (cat: string) => cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const formatCategory = (cat: string) => cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
+    <ChartFigure
+      label={label}
+      columns={['Category', seriesName, 'Cumulative %']}
+      rows={data.map((entry) => [formatCategory(entry.category), formatValue(entry.minutes), `${entry.cumulative_pct.toFixed(1)}%`])}
+    >
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ top: 8, right: 40, left: 0, bottom: 40 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
         <XAxis
           dataKey="category"
-          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
-          tickFormatter={label}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
+          tickFormatter={formatCategory}
           angle={-30}
           textAnchor="end"
           interval={0}
@@ -56,7 +64,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
         />
         <YAxis
           yAxisId="left"
-          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
           tickFormatter={formatValue}
           width={56}
         />
@@ -65,7 +73,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
           orientation="right"
           unit="%"
           domain={[0, 100]}
-          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
           width={40}
         />
         <Tooltip
@@ -80,28 +88,31 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
               ? [formatValue(value), seriesName]
               : [`${value.toFixed(1)}%`, 'Cumulative']
           }
-          labelFormatter={label}
+          labelFormatter={formatCategory}
         />
         <Bar
           yAxisId="left"
           dataKey="minutes"
           name={seriesName}
-          fill="var(--danger)"
+          fill={chartColor(0)}
           radius={[3, 3, 0, 0]}
           maxBarSize={48}
+          isAnimationActive={false}
         />
         <Line
           yAxisId="right"
           type="monotone"
           dataKey="cumulative_pct"
           name="Cumulative %"
-          stroke="var(--warning)"
+          stroke={chartColor(1)}
           dot={{ r: 3 }}
           strokeWidth={2}
           activeDot={{ r: 4 }}
+          isAnimationActive={false}
         />
       </ComposedChart>
     </ResponsiveContainer>
+    </ChartFigure>
   );
 }
 

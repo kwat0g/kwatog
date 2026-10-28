@@ -1,0 +1,299 @@
+{
+  "generatedAt": "2026-10-25T22:52:06.682Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "hr",
+  "theme": "light",
+  "fixtureRowsRequested": 0,
+  "widths": [
+    768
+  ],
+  "routes": [
+    "/factory"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "rankedIssues": [
+    {
+      "route": "/factory",
+      "role": "hr",
+      "width": 768,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/factory",
+      "role": "hr",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/ui-polish/evidence/floor-factory-768/factory-768.png",
+      "tableSampleScreenshots": [],
+      "url": "/factory",
+      "title": "Factory Floor · Ogami ERP",
+      "h1": "Active work orders",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "floor",
+      "colorScheme": "dark",
+      "canvasColor": "#0d0b08",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 15,
+        "fontWeight": 400,
+        "lineHeight": "22.5px"
+      },
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "counts": {
+        "buttons": 1,
+        "links": 1,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 64,
+        "right": 704,
+        "top": 77.34375,
+        "bottom": 1024,
+        "width": 672,
+        "height": 946.65625
+      },
+      "sidebar": null,
+      "sidebarClearance": null,
+      "sidebarClearanceByBlock": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 64,
+          "right": 704,
+          "top": 93.34375,
+          "bottom": 308.171875,
+          "width": 640,
+          "height": 214.828125
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "h1",
+          "className": "text-lg font-medium text-primary",
+          "heading": "",
+          "bounds": {
+            "left": 64,
+            "right": 204,
+            "top": 104.9375,
+            "bottom": 125.734375,
+            "width": 140,
+            "height": 20.796875
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "gapAfter": -32.39,
+          "touchesNext": true,
+          "overlapsNext": true,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "button",
+          "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-9 px-5 text-md font-medium bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors min-h-hit text-secondary",
+          "heading": "",
+          "bounds": {
+            "left": 605,
+            "right": 684,
+            "top": 93.34375,
+            "bottom": 137.34375,
+            "width": 119,
+            "height": 44
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "0px",
+            "right": "20px",
+            "bottom": "0px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": false,
+      "doubleVerticalScroll": false,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "text-lg font-medium text-primary",
+            "text": "Active work orders",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "500",
+            "lineHeight": "20.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 1 0.992157 0.972549)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 18.07
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-9 px-5 text-md font-medium bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors min-h-hit text-secondary",
+            "text": "Refresh",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.909804 0.886275 0.847059)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 14.26
+          },
+          {
+            "tag": "div",
+            "className": "mt-0.5 text-xs text-muted",
+            "text": "Layout press (MC-01)",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.721569 0.686275 0.635294)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.07
+          },
+          {
+            "tag": "div",
+            "className": "flex items-baseline justify-between text-xs text-muted mb-1",
+            "text": "Progress50 / 200",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.721569 0.686275 0.635294)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.07
+          },
+          {
+            "tag": "div",
+            "className": "text-right text-xs text-muted mt-0.5 font-mono tabular-nums",
+            "text": "25%",
+            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.721569 0.686275 0.635294)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 9.07
+          }
+        ],
+        "combinations": [
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|500|20.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|normal|none",
+          "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace|12|400|16.8px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Layout press (MC-01)"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Progress50 / 200"
+          },
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "25%"
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Refresh",
+          "width": 119,
+          "height": 44,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.909804 0.886275 0.847059)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [],
+      "buttonTargetsBelow44": [],
+      "controls": [
+        {
+          "label": "Refresh",
+          "width": 119,
+          "height": 44
+        }
+      ],
+      "controlsBelow44": [],
+      "scrollContextCount": 0
+    }
+  ]
+}

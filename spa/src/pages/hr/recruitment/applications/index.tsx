@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { recruitmentApi } from '@/api/recruitment';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
@@ -58,15 +59,22 @@ export default function ApplicationsListPage() {
 
  const columns: Column<JobApplication>[] = [
  {
- key: 'application_number',
- header: 'Number',
- cell: (r) => <span className="font-mono text-xs tabular-nums">{r.application_number}</span>,
- },
- {
  key: 'full_name',
  header: 'Applicant',
+ primary: true,
+ className: 'min-w-48',
  sortable: true,
- cell: (r) => <span className="font-medium">{r.full_name}</span>,
+ cell: (r) => (
+ <div className="flex min-w-0 items-center gap-2.5">
+ <Avatar name={r.full_name} identityKey={r.id} size="sm" />
+ <span className="truncate font-medium">{r.full_name}</span>
+ </div>
+ ),
+ },
+ {
+ key: 'application_number',
+ header: 'Number',
+ cell: (r) => <span className="whitespace-nowrap font-mono text-xs tabular-nums">{r.application_number}</span>,
  },
  {
  key: 'position',

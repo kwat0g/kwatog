@@ -1,0 +1,930 @@
+{
+  "generatedAt": "2026-10-25T22:53:28.788Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "hr",
+  "theme": "light",
+  "fixtureRowsRequested": 0,
+  "widths": [
+    1440
+  ],
+  "routes": [
+    "/inventory/stock-adjustments/create"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "rankedIssues": [
+    {
+      "route": "/inventory/stock-adjustments/create",
+      "role": "hr",
+      "width": 1440,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/inventory/stock-adjustments/create",
+      "role": "hr",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/ui-polish/evidence/stock-adjustment-form-light-1440/inventory-stock-adjustments-create-1440.png",
+      "tableSampleScreenshots": [],
+      "url": "/inventory/stock-adjustments/create",
+      "title": "Stock adjustment · Warehouse · ERP",
+      "h1": "Stock adjustment",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "counts": {
+        "buttons": 6,
+        "links": 1,
+        "inputs": 9,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 240,
+        "right": 1440,
+        "top": 48,
+        "bottom": 930.28125,
+        "width": 1200,
+        "height": 882.28125
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 240,
+        "width": 240
+      },
+      "sidebarClearance": 32,
+      "sidebarClearanceByBlock": {
+        "header": 32,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 272,
+          "right": 1408,
+          "top": 48,
+          "bottom": 159.5,
+          "width": 1136,
+          "height": 111.5
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas",
+          "heading": "Stock adjustment",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 48,
+            "bottom": 159.5,
+            "width": 1136,
+            "height": 111.5
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "0px",
+            "bottom": "16px",
+            "left": "0px"
+          },
+          "gapAfter": 24,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-warning bg-warning-bg text-warning-fg",
+          "heading": "",
+          "bounds": {
+            "left": 284,
+            "right": 1396,
+            "top": 183.5,
+            "bottom": 229.5,
+            "width": 1136,
+            "height": 46
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "8px",
+            "right": "12px",
+            "bottom": "8px",
+            "left": "12px"
+          },
+          "gapAfter": 24,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 2,
+          "tag": "form",
+          "className": "space-y-4",
+          "heading": "Stock and location",
+          "bounds": {
+            "left": 272,
+            "right": 1408,
+            "top": 253.5,
+            "bottom": 930.28125,
+            "width": 1136,
+            "height": 676.78125
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "edgeAlignment": {
+        "header": {
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "a",
+            "className": "inline-flex items-center gap-1 text-caption text-muted hover:text-primary mb-1",
+            "text": "Stock adjustments",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Stock adjustment",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted mt-0.5",
+            "text": "Correct stock at a specific location with a recorded reason.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "p",
+            "className": "text-body-small",
+            "text": "You have an unsaved draft from just now. Sensitive fields are not restored.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "19px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.478431 0.32549 0.0784314)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.92
+          },
+          {
+            "tag": "button",
+            "className": "h-7 px-2.5 rounded-md text-caption font-medium bg-warning-bg text-warning-fg hover:opacity-90 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
+            "text": "Restore",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.478431 0.32549 0.0784314)",
+            "background": "color(srgb 0.968627 0.933333 0.862745)",
+            "contrast": 5.92
+          },
+          {
+            "tag": "button",
+            "className": "h-7 px-2.5 rounded-md text-caption text-warning-fg hover:bg-warning-bg/20 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1",
+            "text": "Discard",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.478431 0.32549 0.0784314)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.92
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Stock and location",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Item*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-l border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.94902 0.929412 0.894118)",
+            "contrast": 5.12
+          },
+          {
+            "tag": "button",
+            "className": "flex h-full items-center",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Location*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "flex items-center px-2 text-caption text-muted bg-elevated border-l border-default",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "color(srgb 0.94902 0.929412 0.894118)",
+            "contrast": 5.12
+          },
+          {
+            "tag": "button",
+            "className": "flex h-full items-center",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12
+          },
+          {
+            "tag": "span",
+            "className": "text-caption text-muted",
+            "text": "Select an item first.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Adjustment details",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Direction*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Quantity*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "text-caption text-muted",
+            "text": "Up to 3 decimal places.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Unit cost",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "input",
+            "className": "flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none text-muted cursor-not-allowed px-3 text-md",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12
+          },
+          {
+            "tag": "span",
+            "className": "text-caption text-muted",
+            "text": "Filled from this location’s cost. Enter a cost when no history exists.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Reason code*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "21px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.12
+          },
+          {
+            "tag": "label",
+            "className": "text-label text-muted font-medium",
+            "text": "Reason (recorded for audit)*",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "text-caption text-muted",
+            "text": "At least 10 characters.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "span",
+            "className": "text-caption font-sans tabular-nums text-muted",
+            "text": "0 / 500",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "Adjustment preview",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "p",
+            "className": "text-muted",
+            "text": "Select an item and location to see stock and adjustment impact.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "p",
+            "className": "text-caption text-muted",
+            "text": "Adjustments above ₱1,000,000.00 require Finance approval.",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
+            "text": "Cancel",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "400",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-8 px-4 text-md bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "Review adjustment",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 14,
+            "weight": "500",
+            "lineHeight": "19.6px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "contrast": 4.83
+          }
+        ],
+        "combinations": [
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|19px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|21px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|400|19.6px|normal|none",
+          "\"Public Sans Variable\", system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|14|500|19.6px|normal|none"
+        ],
+        "below13px": [],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "Restore",
+          "width": 67,
+          "height": 28,
+          "background": "color(srgb 0.968627 0.933333 0.862745)",
+          "color": "color(srgb 0.478431 0.32549 0.0784314)"
+        },
+        {
+          "label": "Discard",
+          "width": 66,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.478431 0.32549 0.0784314)"
+        },
+        {
+          "label": "Show Item",
+          "width": 16,
+          "height": 30,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)"
+        },
+        {
+          "label": "Show Location",
+          "width": 16,
+          "height": 30,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)"
+        },
+        {
+          "label": "Cancel",
+          "width": 80,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+        },
+        {
+          "label": "Review adjustment",
+          "width": 160,
+          "height": 32,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)"
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "combobox",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": null,
+          "optionBackground": null
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        },
+        {
+          "role": "select",
+          "colorScheme": "light",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "background": "rgba(0, 0, 0, 0)",
+          "optionColor": "rgb(31, 27, 22)",
+          "optionBackground": "rgb(253, 252, 250)"
+        }
+      ],
+      "buttonTargetsBelow44": [
+        {
+          "label": "Restore",
+          "width": 67,
+          "height": 28,
+          "background": "color(srgb 0.968627 0.933333 0.862745)",
+          "color": "color(srgb 0.478431 0.32549 0.0784314)"
+        },
+        {
+          "label": "Discard",
+          "width": 66,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.478431 0.32549 0.0784314)"
+        },
+        {
+          "label": "Show Item",
+          "width": 16,
+          "height": 30,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)"
+        },
+        {
+          "label": "Show Location",
+          "width": 16,
+          "height": 30,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.419608 0.384314 0.34902)"
+        },
+        {
+          "label": "Cancel",
+          "width": 80,
+          "height": 32,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+        },
+        {
+          "label": "Review adjustment",
+          "width": 160,
+          "height": 32,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)"
+        }
+      ],
+      "controls": [
+        {
+          "label": "Restore",
+          "width": 67,
+          "height": 28
+        },
+        {
+          "label": "Discard",
+          "width": 66,
+          "height": 28
+        },
+        {
+          "label": "input",
+          "width": 336,
+          "height": 30
+        },
+        {
+          "label": "input",
+          "width": 336,
+          "height": 30
+        },
+        {
+          "label": "direction",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "quantity",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "unit_cost",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "reason_code",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "reason",
+          "width": 758,
+          "height": 77
+        },
+        {
+          "label": "Cancel",
+          "width": 80,
+          "height": 32
+        },
+        {
+          "label": "Review adjustment",
+          "width": 160,
+          "height": 32
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "Restore",
+          "width": 67,
+          "height": 28
+        },
+        {
+          "label": "Discard",
+          "width": 66,
+          "height": 28
+        },
+        {
+          "label": "input",
+          "width": 336,
+          "height": 30
+        },
+        {
+          "label": "input",
+          "width": 336,
+          "height": 30
+        },
+        {
+          "label": "direction",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "quantity",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "unit_cost",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "reason_code",
+          "width": 369,
+          "height": 30
+        },
+        {
+          "label": "Cancel",
+          "width": 80,
+          "height": 32
+        },
+        {
+          "label": "Review adjustment",
+          "width": 160,
+          "height": 32
+        }
+      ],
+      "scrollContextCount": 1
+    }
+  ]
+}

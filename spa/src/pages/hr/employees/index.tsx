@@ -1,6 +1,6 @@
 import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuPlus, LuKeyRound, LuCoins, LuDownload, LuCalendarClock } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -10,12 +10,15 @@ import { employeeAccountsApi } from '@/api/hr/employee-accounts';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
+import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatInt } from '@/lib/formatNumber';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { SidePanel } from '@/components/ui/SidePanel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { StatCard } from '@/components/ui/StatCard';
+import { StatusTabs } from '@/components/ui/StatusTabs';
+import { Tag } from '@/components/ui/Tag';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -23,7 +26,6 @@ import { formatDate } from '@/lib/formatDate';
 import { SalaryAdjustmentsTab } from '@/pages/hr/salary-adjustments';
 import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
-import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { ColumnSelectorModal } from '@/components/exports/ColumnSelectorModal';
 import { ScheduledExportFormModal } from '@/components/exports/ScheduledExportFormModal';
 const DEFAULT_FILTERS: EmployeeListParams = {
@@ -34,60 +36,9 @@ const DEFAULT_FILTERS: EmployeeListParams = {
   status: 'active',
 };
 
-/**
- * The six headcount tiles. `polarity` is declarative: StatCard only colours a
- * `delta`, and these show none today, but resignations and terminations rising
- * is bad news and the tile should never render that in success green if a trend
- * is added later.
- */
-const STATUS_TILES: Array<{
-  status: string;
-  label: string;
-  helper: string;
-  polarity?: 'higher-is-better' | 'lower-is-better';
-  className?: string;
-}> = [
-  {
-    status: 'active',
-    label: 'Active',
-    helper: 'all matching employees',
-    className: 'border-success/30 bg-success-bg/20',
-  },
-  {
-    status: 'on_leave',
-    label: 'On Leave',
-    helper: 'all matching employees',
-    className: 'border-warning/30 bg-warning-bg/20',
-  },
-  {
-    status: 'resigned',
-    label: 'Resigned',
-    helper: 'all matching employees',
-    polarity: 'lower-is-better',
-  },
-  {
-    status: 'terminated',
-    label: 'Terminated',
-    helper: 'all matching employees',
-    polarity: 'lower-is-better',
-    className: 'border-danger/30 bg-danger-bg/20',
-  },
-  {
-    status: 'suspended',
-    label: 'Suspended',
-    helper: 'all matching employees',
-    className: 'border-warning/30 bg-warning-bg/20',
-  },
-  {
-    status: 'retired',
-    label: 'Retired',
-    helper: 'all matching employees',
-    polarity: 'lower-is-better',
-  },
-];
-
 export default function EmployeesListPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { can } = usePermission();
   const queryClient = useQueryClient();
   const [bulkResult, setBulkResult] = useState<BulkProvisionResponse | null>(null);
@@ -106,8 +57,22 @@ export default function EmployeesListPage() {
   // Bound to the URL so dashboard drill-downs (?status=active, ?status=on_leave)
   // arrive pre-filtered and the browser back button restores the previous view.
   const [filters, setFilters] = useUrlFilters<EmployeeListParams>(DEFAULT_FILTERS);
+  const previewId = new URLSearchParams(location.hash.slice(1)).get('preview');
+  const { data: previewEmployee, isLoading: previewLoading, isError: previewError, refetch: refetchPreview } = useQuery({
+    queryKey: ['hr', 'employees', 'preview', previewId],
+    queryFn: () => employeesApi.show(previewId!),
+    enabled: Boolean(previewId && canViewEmployees),
+  });
+  const openPreview = (employeeId: string) =>
+    navigate({ pathname: location.pathname, search: location.search, hash: `preview=${encodeURIComponent(employeeId)}` });
+  const closePreview = () =>
+    navigate({ pathname: location.pathname, search: location.search, hash: '' }, { replace: true });
+
+  // "All" is a tab sentinel. Omit it from requests while preserving the
+  // existing default of Active for first visits and old bookmarks.
+  const listFilters = filters.status === 'all' ? { ...filters, status: undefined } : filters;
   const exportFilters = {
-    status: filters.status,
+    status: filters.status === 'all' ? undefined : filters.status,
     department_id: filters.department_id,
     pay_type: filters.pay_type,
   };
@@ -158,17 +123,12 @@ export default function EmployeesListPage() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['hr', 'employees', filters],
-    queryFn: () => employeesApi.list(filters),
+    queryFn: () => employeesApi.list(listFilters),
     placeholderData: (prev) => prev,
     enabled: canViewEmployees,
   });
 
-  // KPI tiles are server-side aggregates over the WHOLE filtered set. Counting
-  // `data.data` client-side counted the current 25-row page, so an HR officer
-  // at 200+ headcount read "Active 18" — and clicking the tile re-filtered the
-  // entire dataset, so the number changed on arrival. `status` is deliberately
-  // excluded from the key and the request: these tiles navigate TO a status, so
-  // they must keep describing every status once one is selected.
+  // Counts describe the matching dataset across statuses, not just this page.
   const countFilters: Omit<EmployeeListParams, 'status'> = {
     search: filters.search,
     department_id: filters.department_id,
@@ -185,23 +145,32 @@ export default function EmployeesListPage() {
 
   const columns: Column<Employee>[] = [
     {
+      key: 'full_name',
+      header: 'Name',
+      sortable: true,
+      primary: true,
+      className: 'min-w-[220px]',
+      cell: (row) => (
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Avatar src={row.photo_url} name={row.full_name} identityKey={row.id} size="md" />
+          <StackedCell
+            primary={row.full_name}
+            secondary={<span className="text-muted">{row.position?.title ?? '—'}</span>}
+          />
+        </div>
+      ),
+    },
+    {
       key: 'employee_no',
       header: 'Employee no',
       sortable: true,
       cell: (row) => <span className="font-mono">{row.employee_no}</span>,
     },
     {
-      key: 'full_name',
-      header: 'Name',
-      sortable: true,
-      cell: (row) => (
-        <StackedCell
-          primary={row.full_name}
-          secondary={<span className="text-muted">{row.position?.title ?? '—'}</span>}
-        />
-      ),
+      key: 'department',
+      header: 'Department',
+      cell: (row) => row.department ? <Tag categoryKey={row.department.id}>{row.department.name}</Tag> : '—',
     },
-    { key: 'department', header: 'Department', cell: (row) => row.department?.name ?? '—' },
     {
       key: 'pay_type',
       header: 'Pay type',
@@ -232,30 +201,21 @@ export default function EmployeesListPage() {
             key: 'department_id',
             label: 'Department',
             type: 'select' as const,
-            options: [
-              { value: '', label: 'All departments' },
-              ...depts.map((d) => ({ value: d.id, label: d.name })),
-            ],
+            options: depts.map((d) => ({ value: d.id, label: d.name })),
           },
         ]
       : []),
     {
-      key: 'status',
-      label: 'Status',
-      type: 'select',
-      options: [{ value: '', label: 'All statuses' }, ...(employeeOptions?.statuses ?? [])],
-    },
-    {
       key: 'employment_type',
       label: 'Type',
       type: 'select',
-      options: [{ value: '', label: 'All types' }, ...(employeeOptions?.employment_types ?? [])],
+      options: employeeOptions?.employment_types ?? [],
     },
     {
       key: 'pay_type',
       label: 'Pay type',
       type: 'select',
-      options: [{ value: '', label: 'All' }, ...(employeeOptions?.pay_types ?? [])],
+      options: employeeOptions?.pay_types ?? [],
     },
   ];
 
@@ -325,14 +285,30 @@ export default function EmployeesListPage() {
         <SalaryAdjustmentsTab />
       ) : (
         <>
+          <StatusTabs
+            label="Employee status"
+            panelId="employee-results"
+            value={String(filters.status ?? 'active')}
+            onChange={(status) => setFilters((current) => ({ ...current, status, page: 1 }))}
+            items={[
+              { value: 'all', label: 'All', count: statusCounts?.total ?? 0 },
+              ...(employeeOptions?.statuses ?? []).map((status) => ({
+                value: status.value,
+                label: status.label,
+                count: statusCounts?.counts[status.value] ?? 0,
+              })),
+            ]}
+          />
           <FilterBar
             filters={filterConfig}
             values={filters}
             onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
             onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
             searchPlaceholder="Search name or employee no…"
+            resultCount={data?.meta.total}
           />
 
+          <div id="employee-results" role="tabpanel" aria-label="Employees by status" tabIndex={0}>
           {isLoading && !data && <SkeletonTable columns={6} rows={10} />}
 
           {isError && (
@@ -348,24 +324,13 @@ export default function EmployeesListPage() {
             />
           )}
 
-          {data && (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 px-5 py-4 border-b border-default bg-canvas">
-              {STATUS_TILES.map((tile) => (
-                <StatCard
-                  key={tile.status}
-                  label={tile.label}
-                  value={statusCounts ? formatInt(statusCounts.counts[tile.status] ?? 0) : '—'}
-                  helper={statusCounts ? tile.helper : 'Counting…'}
-                  linkTo={`?status=${tile.status}`}
-                  polarity={tile.polarity}
-                  className={tile.className}
-                />
-              ))}
-            </div>
-          )}
-
           {data && data.data.length === 0 && (
-            <ListEmptyState searchTerm={filters.search as string | undefined} />
+            <EmptyState
+              size="compact"
+              icon="users"
+              title="No employees match these filters"
+              description="Change the status or filters to see employees."
+            />
           )}
 
           {data && data.data.length > 0 && (
@@ -373,6 +338,16 @@ export default function EmployeesListPage() {
               <DataTable
                 tableKey="employees"
                 onRowClick={(row) => navigate(`/hr/employees/${row.id}`)}
+                rowActions={(row) => (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Preview ${row.full_name}`}
+                    onClick={() => openPreview(row.id)}
+                  >
+                    Preview
+                  </Button>
+                )}
                 columns={columns}
                 data={data.data}
                 meta={data.meta}
@@ -401,6 +376,7 @@ export default function EmployeesListPage() {
               />
             </div>
           )}
+          </div>
         </>
       )}
 
@@ -464,6 +440,44 @@ export default function EmployeesListPage() {
         module="hr.employees"
         filters={exportFilters}
       />
+      <SidePanel
+        isOpen={Boolean(previewId && canViewEmployees)}
+        onClose={closePreview}
+        title={previewEmployee?.full_name ?? 'Employee preview'}
+      >
+        {previewLoading && <p className="text-sm text-muted">Loading employee…</p>}
+        {previewError && (
+          <EmptyState
+            size="compact"
+            icon="alert-circle"
+            title="Could not load employee"
+            action={<Button variant="secondary" onClick={() => refetchPreview()}>Retry</Button>}
+          />
+        )}
+        {previewEmployee && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              <Avatar src={previewEmployee.photo_url} name={previewEmployee.full_name} identityKey={previewEmployee.id} size="lg" />
+              <div className="min-w-0">
+                <p className="m-0 text-label text-primary">{previewEmployee.position?.title ?? 'Position not set'}</p>
+                <p className="m-0 text-caption text-muted">{previewEmployee.employee_no}</p>
+                <Chip variant={chipVariantForStatus(previewEmployee.status)}>
+                  {statusLabel.get(previewEmployee.status) ?? previewEmployee.status.replace('_', ' ')}
+                </Chip>
+              </div>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-default pt-4 text-caption">
+              <dt className="text-muted">Department</dt><dd className="m-0 text-primary">{previewEmployee.department?.name ?? '—'}</dd>
+              <dt className="text-muted">Pay type</dt><dd className="m-0 text-primary">{previewEmployee.pay_type_label ?? previewEmployee.pay_type}</dd>
+              <dt className="text-muted">Employment type</dt><dd className="m-0 text-primary">{previewEmployee.employment_type_label ?? previewEmployee.employment_type}</dd>
+              <dt className="text-muted">Hired</dt><dd className="m-0 text-primary">{formatDate(previewEmployee.date_hired)}</dd>
+            </dl>
+            <Button variant="primary" className="w-full" onClick={() => navigate(`/hr/employees/${previewEmployee.id}`)}>
+              Open full employee record
+            </Button>
+          </div>
+        )}
+      </SidePanel>
     </div>
   );
 }

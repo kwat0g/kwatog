@@ -35,6 +35,7 @@ import type { SpcCapabilityResult, RunCapabilityData } from '@/types/quality/spc
 import type { InspectionSpecItem } from '@/types/quality';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { ChartFigure } from '@/components/charts/ChartFigure';
 // ─── Cpk rating ────────────────────────────────────
 function cpkRating(cpk: number, thresholds: { launch: number; ongoing: number; action: number }): { label: string; variant: ChipVariant } {
  if (cpk >= thresholds.launch) return { label: 'Excellent', variant: 'success' };
@@ -144,6 +145,11 @@ export default function CapabilityStudyPage() {
  });
 
  const bars = useMemo(() => (result ? buildHistogramBars(result) : []), [result]);
+ const chartRows = bars.map((bar) => [
+  `${bar.binStart.toFixed(4)} to ${bar.binEnd.toFixed(4)}`,
+  bar.count,
+  bar.outsideSpec ? 'Outside specification' : 'Within specification',
+ ]);
  const cpkInfo = result && thresholds ? cpkRating(result.cpk, thresholds) : null;
 
 
@@ -309,18 +315,28 @@ export default function CapabilityStudyPage() {
  meta={`LSL: ${result.lsl} | USL: ${result.usl}`}
  >
  {bars.length > 0 ? (
+ <>
+ <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-muted">
+  <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 bg-accent" />Within limits</span>
+  <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 bg-danger" />Outside limits</span>
+ </div>
+ <ChartFigure
+  label={`Measurement distribution by interval; LSL ${result.lsl}, mean ${result.mean.toFixed(4)}, USL ${result.usl}. Outside-spec bins are identified.`}
+  columns={['Measurement interval', 'Sample count', 'Specification status']}
+  rows={chartRows}
+ >
  <ResponsiveContainer width="100%" height={350}>
  <BarChart data={bars} margin={{ top: 10, right: 20, bottom: 25, left: 10 }}>
  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" opacity={0.5} />
  <XAxis
  dataKey="label"
- tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+ tick={{ fontSize: 10, fill: 'var(--text-muted)', className: 'tabular-nums' }}
  angle={-45}
  textAnchor="end"
  height={50}
  />
  <YAxis
- tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)', className: 'tabular-nums' }}
  allowDecimals={false}
  />
  <RechartsTooltip content={<HistogramTooltip />} />
@@ -350,7 +366,7 @@ export default function CapabilityStudyPage() {
  label={{ value: 'Mean', position: 'top', fontSize: 10, fill: 'var(--accent)' }}
  />
 
- <Bar dataKey="count" radius={[2, 2, 0, 0]}>
+ <Bar dataKey="count" radius={[2, 2, 0, 0]} isAnimationActive={false}>
  {bars.map((bar, index) => (
  <Cell
  key={`cell-${index}`}
@@ -360,6 +376,8 @@ export default function CapabilityStudyPage() {
  </Bar>
  </BarChart>
  </ResponsiveContainer>
+ </ChartFigure>
+ </>
  ) : (
  <p className="text-sm text-muted">No histogram data available.</p>
  )}

@@ -83,7 +83,7 @@ function AppLayoutInner() {
  };
 
  return (
- <div className="min-h-screen bg-canvas text-primary flex flex-col">
+ <div className="app-shell min-h-screen bg-canvas text-primary flex flex-col">
  <a
  href="#main-content"
  className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm"
@@ -112,9 +112,9 @@ function AppLayoutInner() {
  </span>
  }
  />
- <div className="flex flex-1">
+ <div className="app-content flex flex-1">
  <Sidebar permissions={permissions} features={features} roleSlug={user?.role?.slug} />
- <main id="main-content" tabIndex={-1} className="flex-1 min-w-0">
+ <main id="main-content" tabIndex={-1} className="app-main flex-1 min-w-0">
  {/* Route content stays immediate; RouteTransition is a semantic wrapper only. */}
  <RouteTransition>
  {/*

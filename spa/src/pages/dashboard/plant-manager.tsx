@@ -225,6 +225,7 @@ export default function PlantManagerDashboard() {
                     />
                   ) : (
                     <DonutBreakdown
+                      label="Machine Status Breakdown"
                       data={machineStatusData}
                       centerLabel="Machines"
                       centerValue={String(machines.length)}
@@ -252,10 +253,11 @@ export default function PlantManagerDashboard() {
                   />
                 ) : (
                   <BarComparison
+                    label="Top Defects"
                     data={defects
                       .slice(0, 8)
                       .map((d) => ({ label: d.code, count: d.count }))}
-                    bars={[{ dataKey: 'count', color: SEVERITY.critical.chart, label: 'Defects' }]}
+                    bars={[{ dataKey: 'count', label: 'Defects' }]}
                     xKey="label"
                     height={180}
                   />

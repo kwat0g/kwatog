@@ -1,21 +1,25 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LuArrowLeft } from '@/lib/icons';
-import { isValidElement, useEffect, type ReactNode } from 'react';
+import { isValidElement, useEffect, type ReactElement, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { RefreshingIndicator } from './RefreshingIndicator';
 import { Chip } from '@/components/ui/Chip';
 import { MODULE_LABELS } from '@/lib/moduleLabels';
 import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 
-interface PageHeaderProps {
+interface PageHeaderBaseProps {
   title: ReactNode;
+  /** Supporting context; includes live result counts when the page has them. */
   subtitle?: ReactNode;
+  /** Optional freshness context. Rendered with a visible "Updated" label. */
+  lastUpdated?: ReactNode;
   backTo?: string;
   backLabel?: string;
-  actions?: ReactNode;
   /** Optional row below the header (e.g. ChainHeader on detail pages). */
   bottom?: ReactNode;
   className?: string;
+  /** Let a shared PageShell own the horizontal gutter for this header. */
+  inset?: boolean;
   /**
    * Overrides the breadcrumb label for this route's final segment. Defaults to
    * the header's own title text with any status `<Chip>` left out, which is
@@ -30,6 +34,11 @@ interface PageHeaderProps {
    */
   refreshingQueryKey?: readonly unknown[];
 }
+
+type PageHeaderProps = PageHeaderBaseProps & (
+  | { actions?: ReactNode; primaryAction?: never; secondaryActions?: never }
+  | { actions?: never; primaryAction: ReactElement; secondaryActions?: ReactNode }
+);
 
 /**
  * Flatten a `title` node to plain text.
@@ -67,17 +76,22 @@ function textFromNode(node: ReactNode, omitChips = false): string {
 
 const flatten = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
-export function PageHeader({
-  title,
-  subtitle,
-  backTo,
-  backLabel,
-  actions,
-  bottom,
-  className,
-  crumbLabel,
-  refreshingQueryKey,
-}: PageHeaderProps) {
+export function PageHeader(props: PageHeaderProps) {
+  const {
+    title,
+    subtitle,
+    lastUpdated,
+    backTo,
+    backLabel,
+    actions,
+    primaryAction,
+    secondaryActions,
+    bottom,
+    className,
+    inset = true,
+    crumbLabel,
+    refreshingQueryKey,
+  } = props;
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const documentTitle = flatten(textFromNode(title));
@@ -121,22 +135,37 @@ export function PageHeader({
   };
 
   return (
-    <div className={cn('px-5 py-4 border-b border-default bg-canvas', className)}>
+    <div
+      data-layout="page-header"
+      className={cn('py-4 border-b border-default bg-canvas', inset && 'px-5', className)}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {backTo && (
-            <a href={backTo} onClick={handleBackClick} className="inline-flex items-center gap-1 text-xs text-muted hover:text-primary mb-1">
+          <a href={backTo} onClick={handleBackClick} className="inline-flex items-center gap-1 text-caption text-muted hover:text-primary mb-1">
               <LuArrowLeft size={11} />
               {backLabel ?? 'Back'}
             </a>
           )}
- <h1 className="font-display text-2xl text-primary break-words">
+ <h1 className="font-display text-page-title text-primary break-words">
             {title}
             {refreshingQueryKey && <RefreshingIndicator queryKey={refreshingQueryKey} />}
           </h1>
-          {subtitle && <div className="text-xs text-muted mt-0.5">{subtitle}</div>}
+          {(subtitle || lastUpdated) && (
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted">
+              {subtitle && <span>{subtitle}</span>}
+              {lastUpdated && <span>Updated {lastUpdated}</span>}
+            </div>
+          )}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">{actions}</div>}
+        {primaryAction ? (
+          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+            {secondaryActions && <div className="flex flex-wrap items-center gap-1.5">{secondaryActions}</div>}
+            <div className="flex flex-wrap items-center gap-1.5">{primaryAction}</div>
+          </div>
+        ) : actions ? (
+          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">{actions}</div>
+        ) : null}
       </div>
       {bottom && <div className="mt-3">{bottom}</div>}
     </div>

@@ -292,6 +292,7 @@ export default function WarehouseDashboard() {
  <EmptyState icon="inbox" title="No zones" description="No warehouse zone data available." />
  ) : (
  <DonutBreakdown
+ label="Zone Capacity Distribution"
  data={zoneUtilChartData}
  centerLabel="Avg Util"
  centerValue={`${Math.round(

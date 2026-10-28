@@ -40,6 +40,8 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus, type ChipVariant } from '@/components/ui/Chip';
 import { Badge } from '@/components/ui/Badge';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { StageDots } from '@/components/ui/StageDots';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
@@ -52,7 +54,12 @@ import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { FileInput } from '@/components/ui/FileInput';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { StatCard } from '@/components/ui/StatCard';
+import { SparkLine } from '@/components/charts/SparkLine';
+import { AreaTrend } from '@/components/charts/AreaTrend';
+import { BarComparison } from '@/components/charts/BarComparison';
+import { DonutBreakdown } from '@/components/charts/DonutBreakdown';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { FilterBar } from '@/components/ui/FilterBar';
 import { Tabs } from '@/components/ui/Tabs';
 import { TabNavigation } from '@/components/ui/TabNavigation';
 import { SkeletonTable, SkeletonBlock } from '@/components/ui/Skeleton';
@@ -83,6 +90,7 @@ const SECTIONS = [
   { id: 'forms', title: 'Form fields' },
   { id: 'feedback', title: 'Feedback & empty states' },
   { id: 'panels', title: 'Panels & KPI cards' },
+  { id: 'charts', title: 'Charts' },
   { id: 'controls', title: 'Selection controls' },
   { id: 'tables', title: 'Tables' },
   { id: 'records', title: 'Record patterns' },
@@ -347,6 +355,16 @@ export default function ComponentGalleryPage() {
           </div>
         </Demo>
 
+        <Demo name="StatusDot — labelled semantic states">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <StatusDot label="Healthy" variant="success" />
+            <StatusDot label="Needs review" variant="warning" />
+            <StatusDot label="Blocked" variant="danger" />
+            <StatusDot label="In progress" variant="info" />
+            <StatusDot label="Not started" variant="neutral" />
+          </div>
+        </Demo>
+
         <Demo name="CopyButton" hint="Copies a document number without a text selection, and confirms inline.">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-sm text-primary">PO-202604-0015</span>
@@ -569,11 +587,76 @@ export default function ComponentGalleryPage() {
           </div>
         </Demo>
 
+        <Demo name="SparkLine — labelled trend" hint="The compact visual has a matching text alternative for screen readers.">
+          <SparkLine label="On-time delivery" data={[91, 93, 92, 95, 96]} width={220} height={32} />
+        </Demo>
+
         <Demo name="StatCard — longest money value" hint="The F-009 case: this must wrap inside the card, never widen the page.">
           <div className="grid max-w-[22rem] grid-cols-2 gap-3">
             <StatCard label="Receivables" value="₱ 12,345,678.90" helper="Aged 0–30" />
             <StatCard label="Collections" value="₱ 1,234,567.89" helper="This cutoff" />
           </div>
+        </Demo>
+      </Section>
+
+      <Section
+        id="charts"
+        title="Charts"
+        note="Chart marks use the shared palette. Each chart has a direct accessible name and a text table alternative; motion stays off."
+      >
+        <Demo name="DonutBreakdown — category distribution">
+          <DonutBreakdown
+            label="Department headcount"
+            data={[
+              { name: 'Operations', value: 42 },
+              { name: 'Finance', value: 18 },
+              { name: 'People', value: 12 },
+            ]}
+            centerLabel="Employees"
+            centerValue="72"
+          />
+        </Demo>
+        <Demo name="DonutBreakdown — state distribution">
+          <DonutBreakdown
+            label="Attendance by state"
+            data={[
+              { name: 'Present', value: 42, color: 'var(--success)' },
+              { name: 'Late', value: 5, color: 'var(--warning)' },
+              { name: 'Absent', value: 3, color: 'var(--danger)' },
+            ]}
+            centerLabel="Employees"
+            centerValue="50"
+          />
+        </Demo>
+        <Demo name="BarComparison — two labelled series">
+          <BarComparison
+            label="Monthly orders by channel"
+            data={[
+              { month: 'Apr', web: 24, direct: 18 },
+              { month: 'May', web: 31, direct: 22 },
+              { month: 'Jun', web: 28, direct: 26 },
+            ]}
+            bars={[
+              { dataKey: 'web', label: 'Web' },
+              { dataKey: 'direct', label: 'Direct' },
+            ]}
+            xKey="month"
+            height={180}
+          />
+        </Demo>
+        <Demo name="AreaTrend — labelled forecast">
+          <AreaTrend
+            label="Monthly shipped units and forecast"
+            data={[
+              { period: 'Apr', shipped: 120, forecast: 130 },
+              { period: 'May', shipped: 136, forecast: 142 },
+              { period: 'Jun', shipped: 128, forecast: 150 },
+            ]}
+            dataKey="shipped"
+            forecastKey="forecast"
+            xKey="period"
+            height={180}
+          />
         </Demo>
       </Section>
 
@@ -641,6 +724,27 @@ export default function ComponentGalleryPage() {
             ]}
           />
         </Demo>
+
+        <Demo name="FilterBar — active filters" hint="Searchable pickers, removable filter chips, and a live result count.">
+          <FilterBar
+            filters={[
+              { key: 'status', label: 'Status', type: 'select', options: [
+                { value: 'pending', label: 'Pending' },
+                { value: 'approved', label: 'Approved' },
+              ] },
+              { key: 'department', label: 'Department', type: 'select', options: [
+                { value: 'quality', label: 'Quality' },
+                { value: 'production', label: 'Production' },
+              ] },
+            ]}
+            values={{ search: 'seal', status: 'pending', department: 'quality' }}
+            onSearch={() => undefined}
+            onFilter={() => undefined}
+            searchPlaceholder="Search work orders…"
+            resultCount={17}
+            inset={false}
+          />
+        </Demo>
       </Section>
 
       <Section
@@ -651,6 +755,9 @@ export default function ComponentGalleryPage() {
         <Demo name="DataTable">
           <DataTable columns={COLUMNS} data={ROWS} meta={ROWS_META} getRowId={(r) => r.id} />
         </Demo>
+        <Demo name="DataTable — loading rows" hint="Skeleton rows use the active density and keep the real columns in place.">
+          <DataTable columns={COLUMNS} data={[]} loading density="compact" />
+        </Demo>
       </Section>
 
       <Section
@@ -660,6 +767,13 @@ export default function ComponentGalleryPage() {
       >
         <Demo name="ChainHeader">
           <ChainHeader steps={CHAIN_STEPS} />
+        </Demo>
+
+        <Demo name="StageDots — compact chain position">
+          <StageDots
+            label="Sales order chain"
+            steps={CHAIN_STEPS.map(({ key, label, state }) => ({ key, label, state }))}
+          />
         </Demo>
 
         <Demo name="StageBreakdown">

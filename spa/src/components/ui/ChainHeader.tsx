@@ -14,7 +14,7 @@ interface ChainHeaderProps {
 
 export function ChainHeader({ steps, className }: ChainHeaderProps) {
  return (
- <div className={cn("flex w-full items-start", className)}>
+ <div className={cn("flex min-h-row w-full items-start", className)}>
  {steps.map((step, idx) => {
  const isLast = idx === steps.length - 1;
  

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { profileUpdateRequestsApi } from '@/api/hr/profile-update-requests';
@@ -12,7 +12,12 @@ vi.mock('@/api/hr/profile-update-requests', () => ({ profileUpdateRequestsApi: {
 beforeEach(() => {
   vi.clearAllMocks();
   access.permissions = new Set(['hr.profile_updates.finance_review']);
-  vi.mocked(profileUpdateRequestsApi.options).mockResolvedValue({ statuses: [] });
+  vi.mocked(profileUpdateRequestsApi.options).mockResolvedValue({ statuses: [
+    { value: 'pending', label: 'Awaiting HR review' },
+    { value: 'pending_finance', label: 'Awaiting Finance review' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' },
+  ] });
   vi.mocked(profileUpdateRequestsApi.list).mockResolvedValue({
     data: [{
       id: 'request', status: 'pending_finance', requires_finance: true,
@@ -37,9 +42,14 @@ it('opens the Finance queue without linking to employee records or offering HR a
   await screen.findByText('Employee Name');
   expect(profileUpdateRequestsApi.list).toHaveBeenCalledWith({ status: 'pending_finance' });
   expect(screen.getByRole('heading', { name: 'Bank Account Changes' })).toBeVisible();
+  expect(document.querySelector('select[aria-label="Status"] option[value="pending"]')).toBeNull();
   expect(screen.queryByRole('link', { name: 'Employee Name' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Bank', { exact: true })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Expand row' }));
+  expect(await screen.findByText('Bank', { exact: true, selector: 'dd' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'HR Approve' })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Finance Approve' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Finance Approve' }));
+  expect(await screen.findByRole('heading', { name: 'Approve Employee Name?' })).toBeVisible();
 });
 
 it('keeps the HR queue default and employee links for employee reviewers', async () => {
@@ -48,4 +58,7 @@ it('keeps the HR queue default and employee links for employee reviewers', async
   expect(await screen.findByRole('link', { name: 'Employee Name' })).toHaveAttribute('href', '/hr/employees/employee');
   expect(profileUpdateRequestsApi.list).toHaveBeenCalledWith({ status: 'pending' });
   expect(screen.queryByRole('button', { name: 'Finance Approve' })).not.toBeInTheDocument();
+  fireEvent.change(document.querySelector('select[aria-label="Status"]')!, { target: { value: 'approved' } });
+  expect(await screen.findByText('Approved')).toBeVisible();
+  expect(profileUpdateRequestsApi.list).toHaveBeenCalledWith({ status: 'approved' });
 });

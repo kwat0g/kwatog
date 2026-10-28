@@ -228,6 +228,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 5. Validate route links, legacy renderer, responsive/keyboard UI, and performance after implementation.
 6. Discovery had no runtime scenarios. Later targeted payroll, finance, approval, and badge tests are recorded above; browser/e2e, cross-role complete matrices, and full-suite runs remain outstanding.
 
+## Phase 3 Payroll subject access (PR #435, pending merge)
+
+- Registered `PayrollPeriod` against Payroll enablement and `payroll.periods.view`; `PayrollAdjustment` against `payroll.adjustments.view`; and employee-owned `Payroll` rows against `payroll.view` plus matching `employee_id` for the `/self-service/payslips/{hash}` route.
+- Migrated period approval, adjustment approval/outcome, and payslip-ready notices to `sendForSubject()`. The adjustment audience preserves current approve/reject delegation selectors, maker exclusion, and system-admin exclusion; the payslip audience remains the linked employee only.
+- Original-head targeted API tests reported **7 passed / 38 assertions** across subject-access and Payroll notice tests. No rebase tests ran because API tests share `ogami_test`; no database was touched. Original-head syntax and `git diff --check` passed; Pint reports four existing style issues in touched legacy files.
+- The seeded roles grant no operational payroll-adjustment checker. No audience expansion was made; Payroll/HR must identify the authorized checker role.
+
 ## Resume instruction
 
 Continue Phase 3 from `02-policy-and-plan.md`, starting with remaining central-service work. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.

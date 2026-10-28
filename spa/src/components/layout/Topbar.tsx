@@ -38,6 +38,7 @@ export function Topbar({ user, canViewNotifications = false, onLogout, onOpenSho
  queryFn: landingApi.contact,
  staleTime: 300_000,
  });
+ const legalName = contact?.legal_name?.trim();
 
  const handleMenuClick = () => {
  if (window.innerWidth < 768) {
@@ -77,8 +78,14 @@ export function Topbar({ user, canViewNotifications = false, onLogout, onOpenSho
         className="min-h-[44px] min-w-[44px] text-muted hover:text-primary sm:min-h-0 sm:min-w-0"
       />
 
-      <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
-        <BrandLogo invertOnDark alt="Ogami ERP" className="h-7 max-w-[7rem] sm:max-w-none" />
+      <Tooltip
+        content={legalName && legalName.length >= 20 ? legalName : undefined}
+        side="bottom"
+        triggerClassName="min-w-0"
+        className="max-w-[calc(100vw-2rem)] whitespace-normal break-words"
+      >
+        <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
+          <BrandLogo invertOnDark alt="Ogami ERP" className="h-7 max-w-[7rem] sm:max-w-none" />
         {/*
          * From `lg`, not `sm`. At 768 the header's first grid column is 260px,
          * and the name's 160px cap plus the logo left the breadcrumb slot 16px
@@ -86,13 +93,16 @@ export function Topbar({ user, canViewNotifications = false, onLogout, onOpenSho
          * control instead of truncating (F-019). The logo still carries the
          * brand below `lg`.
          */}
-        <span
-          title={contact?.legal_name ?? '—'}
-          className="hidden min-w-0 max-w-40 truncate text-sm font-medium text-primary lg:inline"
-        >
-          {contact?.legal_name ?? '—'}
-        </span>
-      </Link>
+          {legalName && (
+            <span
+              title={legalName}
+              className="hidden min-w-0 max-w-40 truncate text-sm font-medium text-primary lg:inline"
+            >
+              {legalName}
+            </span>
+          )}
+        </Link>
+      </Tooltip>
 
       {/*
        * Breadcrumbs stay in the left group. `overflow-hidden` is what makes the

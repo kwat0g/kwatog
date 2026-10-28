@@ -31,7 +31,7 @@ type Size = 'sm' | 'md' | 'lg' | 'xl';
  * `BottomSheet` is now a thin wrapper that forces `sheet`, so there is one
  * dialog implementation: one focus trap, one scroll lock, one Esc stack.
  */
-type Presentation = 'auto' | 'dialog' | 'sheet';
+type Presentation = 'auto' | 'dialog' | 'sheet' | 'side';
 
 interface ModalProps {
   isOpen: boolean;
@@ -160,6 +160,7 @@ export function Modal({
 
   const isPhone = useIsPhone();
   const sheet = presentation === 'sheet' || (presentation === 'auto' && isPhone);
+  const side = presentation === 'side';
 
   // Focus trap — keeps Tab cycling within the modal.
   useFocusTrap(dialogRef, isOpen);
@@ -216,8 +217,9 @@ export function Modal({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 flex justify-center',
-        sheet ? 'items-end' : 'items-center px-4 sm:px-6',
+        'fixed inset-0 z-50 flex',
+        side ? 'justify-end' : 'justify-center',
+        sheet ? 'items-end' : side ? 'items-stretch' : 'items-center px-4 sm:px-6',
       )}
       role="dialog"
       aria-modal="true"
@@ -236,7 +238,7 @@ export function Modal({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        data-presentation={sheet ? 'sheet' : 'dialog'}
+        data-presentation={side ? 'side' : sheet ? 'sheet' : 'dialog'}
         className={cn(
           'relative w-full bg-canvas border border-default flex flex-col max-h-[90vh] animate-slide-up',
           sheet
@@ -252,7 +254,9 @@ export function Modal({
                 // delete — at the 32px desktop size on a phone.
                 '[&_button]:min-h-11 [&_a]:min-h-11',
               ]
-            : ['rounded-lg', sizes[size]],
+            : side
+              ? 'h-full max-h-full max-w-xl rounded-none border-y-0 border-r-0 animate-slide-in-right'
+              : ['rounded-lg', sizes[size]],
           className,
         )}
       >
@@ -261,7 +265,7 @@ export function Modal({
             <div
               className={cn(
                 'border-b border-default bg-surface shrink-0 flex items-center justify-between',
-                sheet ? 'px-4 py-2.5' : 'px-5 py-4 rounded-t-md',
+                sheet ? 'px-4 py-2.5' : side ? 'px-5 py-4' : 'px-5 py-4 rounded-t-md',
               )}
             >
               {title ? (
@@ -273,13 +277,13 @@ export function Modal({
                 onClick={onClose}
                 type="button"
                 className="min-h-11 min-w-11 inline-flex items-center justify-center text-muted hover:text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-accent rounded-sm"
-                aria-label="Close modal"
+                aria-label={side ? 'Close preview' : 'Close modal'}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
           )}
-          <div className={cn('overflow-y-auto overflow-x-hidden', sheet ? 'p-4' : 'p-5')}>
+          <div className={cn('min-h-0 overflow-y-auto overflow-x-hidden', side && 'flex-1', sheet ? 'p-4' : 'p-5')}>
             {children}
           </div>
         </PresentationContext.Provider>

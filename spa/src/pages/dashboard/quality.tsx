@@ -349,6 +349,7 @@ export default function QcDashboard() {
  <EmptyState icon="check-circle" title="Queue empty" description="No pending inspections." />
  ) : (
  <DonutBreakdown
+ label="Inspection Queue by Stage"
  data={inspectionStageData}
  centerLabel="Total"
  centerValue={String(inspectionStageData.reduce((sum, i) => sum + i.value, 0))}
@@ -360,8 +361,9 @@ export default function QcDashboard() {
  <EmptyState icon="check-circle" title="No defects" description="No defects recorded." />
  ) : (
  <BarComparison
+ label="Top Defects by Count"
  data={(panels?.defect_pareto ?? []).slice(0, 6).map((d) => ({ label: d.code, count: d.count }))}
- bars={[{ dataKey: 'count', color: 'var(--danger)', label: 'Occurrences' }]}
+ bars={[{ dataKey: 'count', label: 'Occurrences' }]}
  xKey="label"
  height={180}
  />

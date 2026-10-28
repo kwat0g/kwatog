@@ -74,7 +74,7 @@ function RichGauge({ value, target, min, max, kind }: WidgetGaugeData) {
  );
 }
 
-function RichTrend({ points, delta, kind, target, status }: WidgetTrendData) {
+function RichTrend({ points, delta, kind, target, status, label }: WidgetTrendData & { label: string }) {
  if (points.length === 0) return <p className="text-xs text-muted">No trend data.</p>;
 
  const latest = points[points.length - 1]?.value ?? 0;
@@ -90,7 +90,7 @@ function RichTrend({ points, delta, kind, target, status }: WidgetTrendData) {
  </span>
  )}
  </div>
- <SparkLine data={points.map((point) => point.value)} height={32} width={160} />
+ <SparkLine data={points.map((point) => point.value)} label={`${label} trend`} height={32} width={160} />
  {/* A scorecard KPI is only readable against its target, so both are shown
      when the provider supplies them. Status carries its own words, never
      colour alone — DESIGN-SYSTEM.md / WCAG 1.4.1. */}
@@ -114,7 +114,7 @@ function renderRichWidget(widget: DashboardLayoutItem): React.ReactNode | null {
   case 'breakdown':
   return <WidgetBreakdown {...(data as WidgetBreakdownData)} />;
   case 'trend':
-  return <RichTrend {...(data as WidgetTrendData)} />;
+  return <RichTrend {...(data as WidgetTrendData)} label={widget.name} />;
   case 'table':
   // The approvals tile carries per-row links and delegation badges, which the
   // generic WidgetTable cannot render — so it gets its own renderer. Read-only:

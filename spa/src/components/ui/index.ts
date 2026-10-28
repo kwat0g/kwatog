@@ -1,8 +1,14 @@
 export { Avatar } from './Avatar';
+export { AvatarGroup, type AvatarPerson } from './AvatarGroup';
 export { Badge } from './Badge';
 export { Button } from './Button';
 export { Checkbox } from './Checkbox';
 export { Chip, chipVariantForStatus, type ChipVariant } from './Chip';
+export { Tag } from './Tag';
+export { StatusTabs, type StatusTabItem } from './StatusTabs';
+export { StatusDot, type StatusDotVariant } from './StatusDot';
+export { StageDots, type StageDotStep } from './StageDots';
+export { ProgressMini } from './ProgressMini';
 export { BottomSheet } from './BottomSheet';
 export { ConfirmDialog, type ConfirmVariant } from './ConfirmDialog';
 export {
@@ -23,6 +29,7 @@ export { Input, type InputProps } from './Input';
 export { LinkButton } from './LinkButton';
 export { MaskedInput, type MaskedInputProps } from './MaskedInput';
 export { Modal, ModalFooter } from './Modal';
+export { SidePanel } from './SidePanel';
 export { Panel } from './Panel';
 export { Radio } from './Radio';
 export { Select, type SelectProps, type FieldSize } from './Select';
