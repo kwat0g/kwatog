@@ -82,6 +82,10 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission_any:crm.sales_orders.confirm,crm.sales_orders.cancel');
 
     /* ─── Sales orders (Task 48) ─── */
+    Route::get('/sales-orders/{salesOrder}/agreements', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'index'])->middleware('permission:crm.sales_orders.view');
+    Route::post('/sales-orders/{salesOrder}/agreements', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'publish'])->middleware(['permission:crm.sales_orders.update', 'throttle:sensitive']);
+    Route::post('/sales-orders/{salesOrder}/agreements/{agreement}/acknowledge', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'acknowledgeExternal'])->middleware(['permission:crm.sales_orders.confirm', 'throttle:sensitive']);
+    Route::get('/sales-orders/{salesOrder}/agreements/{agreement}/file', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'file'])->middleware('permission_any:crm.sales_orders.view,return_management.view');
     Route::get('/sales-orders/{salesOrder}/fulfillment', [\App\Modules\CRM\Controllers\SalesOrderFulfillmentController::class, 'show'])->middleware('permission_any:crm.sales_orders.view,production.wo.confirm,production.schedule.confirm');
     Route::put('/sales-orders/{salesOrder}/fulfillment', [\App\Modules\CRM\Controllers\SalesOrderFulfillmentController::class, 'update'])->middleware('permission_any:production.wo.confirm,production.schedule.confirm');
     Route::get('/sales-orders/options',            [SalesOrderController::class, 'options'])->middleware('permission:crm.sales_orders.view');

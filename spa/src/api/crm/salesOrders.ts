@@ -1,5 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
+import type { OrderAgreements } from '@/types/orderAgreements';
 import type {
  SalesOrder,
  SalesOrderChainStep,
@@ -18,6 +19,10 @@ export interface SalesOrderListParams extends ListParams {
 }
 
 export const salesOrdersApi = {
+ agreements: (id: string) => client.get<ApiSuccess<OrderAgreements>>(`/crm/sales-orders/${id}/agreements`).then((r) => r.data.data),
+ publishAgreement: (id: string, form: FormData) => client.post<ApiSuccess<OrderAgreements>>(`/crm/sales-orders/${id}/agreements`, form).then((r) => r.data.data),
+ recordAgreementAcknowledgment: (id: string, agreementId: string, data: { representative: string; acknowledged_at: string; reference: string }) => client.post<ApiSuccess<OrderAgreements>>(`/crm/sales-orders/${id}/agreements/${agreementId}/acknowledge`, data).then((r) => r.data.data),
+ agreementFile: (id: string, agreementId: string) => client.get<Blob>(`/crm/sales-orders/${id}/agreements/${agreementId}/file`, { responseType: 'blob' }).then((r) => r.data),
  fulfillment: (id: string) => client.get<{ data: import('@/pages/crm/sales-orders/FulfillmentDialog').FulfillmentPreview }>(`/crm/sales-orders/${id}/fulfillment`).then((r) => r.data.data),
  updateFulfillment: (id: string, data: { revision: string; request_key: string; reason: string; lines: Array<{ id: string; policy: string }> }) => client.put(`/crm/sales-orders/${id}/fulfillment`, data).then((r) => r.data.data),
  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string; next_statuses: Array<{ value: string; label: string }> }> } }>('/crm/sales-orders/options').then((r) => r.data.data),

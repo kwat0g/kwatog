@@ -196,6 +196,9 @@ Route::prefix('b2b/customer')->group(function () {
             Route::post('orders/{salesOrder}/delivery-proposals/{response}/respond', [CustomerPortalController::class, 'respondToDeliveryProposal'])->middleware('throttle:sensitive');
             Route::post('orders/{salesOrder}/cancel', [CustomerPortalController::class, 'cancelOrder'])->middleware('throttle:sensitive');
             Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
+            Route::get('orders/{salesOrder}/agreements', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'index']);
+            Route::post('orders/{salesOrder}/agreements/{agreement}/acknowledge', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'acknowledgePortal'])->middleware('throttle:sensitive');
+            Route::get('orders/{salesOrder}/agreements/{agreement}/file', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'file']);
             Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
             // Sales-order negotiation — customer accepts / proposes changes / declines.
             Route::post('orders/{salesOrder}/respond', [CustomerPortalController::class, 'respondToSalesOrder'])->middleware('throttle:sensitive');

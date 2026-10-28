@@ -47,6 +47,21 @@ it('requires starting review before showing agreement or information actions', a
   }
 });
 
+it('shows original order terms read-only in return case detail', async () => {
+  await openCase({ order_agreements: {
+    sales_order_id: 'origin-order', so_number: 'SO-ORIGINAL', can_publish: true,
+    can_record_external: true, can_acknowledge: true,
+    revisions: [{ id: 'rev-1', revision: 1, terms: 'Origin order terms.',
+      snapshot: { customer_id: 'customer-1', payment_terms_days: 30, delivery_terms: null, incoterm: null,
+        subtotal: '100.00', vat_amount: '12.00', total_amount: '112.00', items: [] },
+      published_at: '2026-10-28T10:00:00Z', published_by: 'Sales', file_name: null,
+      acknowledgment: null, is_current: true, is_stale: false }],
+  } });
+  expect(screen.getByText('Origin order terms.')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Agreed terms' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /publish|record external|acknowledge terms/i })).not.toBeInTheDocument();
+});
+
 it('advances available actions only after a successful review response', async () => {
   vi.mocked(returnCasesApi.act).mockResolvedValue({ ...record, status: 'under_review', status_label: 'Under review' });
   await openCase();

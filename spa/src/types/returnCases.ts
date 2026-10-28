@@ -1,3 +1,5 @@
+import type { OrderAgreements } from './orderAgreements';
+
 export type ReturnCaseRealm = 'internal' | 'customer' | 'supplier';
 export type ReturnCaseType = 'customer' | 'supplier';
 export type ReturnCaseStatus =
@@ -105,6 +107,7 @@ export interface ReturnCaseRecord {
   owner: { id: string; name: string } | null;
   source: ReturnCaseSource | null;
   can_revise_agreement?: boolean;
+  order_agreements?: OrderAgreements | null;
   lines?: ReturnCaseLine[];
   events?: ReturnCaseEvent[];
   attachments?: ReturnCaseAttachment[];

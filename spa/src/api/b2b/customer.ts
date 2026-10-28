@@ -23,6 +23,7 @@ import type {
 import type { PriceRequest } from '@/types/pricing';
 import type { ChainStep } from '@/types/chain';
 import type { PaginatedResponse } from '@/types';
+import type { OrderAgreements } from '@/types/orderAgreements';
 import type { BusinessPolicies } from '@/api/businessPolicies';
 
 // Customer portal authentication is the same HTTP-only cookie session used by
@@ -145,6 +146,21 @@ export const customerPortalApi = {
  getOrder: async (id: string) => {
  const { data } = await portalClient.get<{ data: PortalSoDetail }>(`/b2b/customer/orders/${id}`);
  return data.data;
+ },
+
+ agreements: async (id: string) => {
+  const { data } = await portalClient.get<{ data: OrderAgreements }>(`/b2b/customer/orders/${id}/agreements`);
+  return data.data;
+ },
+
+ acknowledgeAgreement: async (id: string, agreementId: string) => {
+  const { data } = await portalClient.post<{ data: OrderAgreements }>(`/b2b/customer/orders/${id}/agreements/${agreementId}/acknowledge`, { acknowledged: true });
+  return data.data;
+ },
+
+ agreementFile: async (id: string, agreementId: string) => {
+  const { data } = await portalClient.get<Blob>(`/b2b/customer/orders/${id}/agreements/${agreementId}/file`, { responseType: 'blob' });
+  return data;
  },
 
   getOrderChain: async (id: string) => {

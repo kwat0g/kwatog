@@ -86,6 +86,11 @@ class SalesOrder extends Model
         return $this->hasMany(SalesOrderItem::class);
     }
 
+    public function agreements(): HasMany
+    {
+        return $this->hasMany(SalesOrderAgreement::class)->orderByDesc('revision');
+    }
+
     /**
      * Sprint 6 audit §3.2: relations consumed by the right-panel
      * LinkedRecords on the detail page.

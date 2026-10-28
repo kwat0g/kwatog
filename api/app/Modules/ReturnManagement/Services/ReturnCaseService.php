@@ -52,7 +52,7 @@ class ReturnCaseService
     public function show(ReturnCase $case): ReturnCase
     {
         return $case->load([
-            'customer', 'vendor', 'owner', 'delivery', 'purchaseOrder', 'goodsReceiptNote',
+            'customer', 'vendor', 'owner', 'delivery.salesOrder.agreements.publisher', 'delivery.salesOrder.agreements.recorder', 'purchaseOrder', 'goodsReceiptNote',
             'lines.product', 'lines.item', 'events', 'attachments.event',
             'returnRequest.items', 'returnRequest.creditNote', 'creditNote',
             'replacementSalesOrder.deliveries.items.salesOrderItem', 'replacementPurchaseOrder', 'replacementDelivery', 'resolutionGoodsReceiptNote',

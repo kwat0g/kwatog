@@ -1,4 +1,5 @@
 import { DeliveryNegotiationHistory } from '@/components/crm/DeliveryNegotiationHistory';
+import { OrderAgreementsPanel } from '@/components/crm/OrderAgreementsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -378,6 +379,7 @@ export default function CustomerOrderDetailPage() {
                   </p>
                 )}
             </Panel>
+            <OrderAgreementsPanel orderId={order.id} realm="customer" />
             {order.notes && (
               <Panel title="Notes">
                 <p className="text-sm whitespace-pre-wrap">{order.notes}</p>

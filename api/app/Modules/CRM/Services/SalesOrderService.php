@@ -673,6 +673,9 @@ class SalesOrderService
             $this->assertCustomerOrderMutation($lockedSo, $customerActor);
 
             $customerId = (int) ($data['customer_id'] ?? $lockedSo->customer_id);
+            if ($customerId !== (int) $lockedSo->customer_id && $lockedSo->agreements()->exists()) {
+                throw new BusinessRuleException('A sales order with published terms cannot be reassigned to another customer.');
+            }
             $orderDate = Carbon::parse($data['date'] ?? $lockedSo->date->toDateString());
             $items = $data['items'];
 
@@ -741,6 +744,7 @@ class SalesOrderService
             if (! $lockedSo->status->isBeforeConfirmation()) {
                 throw new BusinessRuleException('Only unconfirmed sales orders can be confirmed.');
             }
+            app(SalesOrderAgreementService::class)->assertConfirmable($lockedSo);
             if ($lockedSo->hasPendingDeliveryProposal()) {
                 throw new BusinessRuleException('Wait for the customer to accept or decline the proposed delivery date before confirming.');
             }
@@ -1132,6 +1136,9 @@ class SalesOrderService
                 ->findOrFail($so->id);
             if ($lockedSo->status !== SalesOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft sales orders can be deleted.');
+            }
+            if ($lockedSo->agreements()->exists()) {
+                throw new BusinessRuleException('Sales orders with published terms cannot be deleted.');
             }
             $this->assertCustomerOrderMutation($lockedSo, null);
             $lockedSo->delete();

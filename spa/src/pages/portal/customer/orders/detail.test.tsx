@@ -13,6 +13,7 @@ vi.mock('@/api/b2b/customer', () => ({
   customerPortalApi: {
     getOrder: vi.fn(),
     getOrderChain: vi.fn(),
+    agreements: vi.fn().mockResolvedValue({ sales_order_id: 'so-1', so_number: 'SO-1', can_publish: false, can_record_external: false, can_acknowledge: false, revisions: [] }),
     cancelOrder: vi.fn(),
     respondToOrder: vi.fn(),
     respondToDeliveryProposal: vi.fn(),

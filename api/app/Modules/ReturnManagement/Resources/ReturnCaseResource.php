@@ -41,6 +41,10 @@ class ReturnCaseResource extends JsonResource
                 'name' => $this->owner->name,
             ] : null),
             'source' => $this->sourceSummary(),
+            'order_agreements' => $this->whenLoaded('delivery', fn (): ?array => $this->type?->value === 'customer'
+                && $this->delivery?->relationLoaded('salesOrder') && $this->delivery->salesOrder
+                    ? app(\App\Modules\CRM\Services\SalesOrderAgreementService::class)->summary($this->delivery->salesOrder, $request, true)
+                    : null),
 
             'lines' => $this->whenLoaded('lines', fn (): array => $this->lines
                 ->map(fn ($line): array => $this->lineSummary($line))

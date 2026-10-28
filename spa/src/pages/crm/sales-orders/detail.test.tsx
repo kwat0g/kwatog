@@ -9,6 +9,10 @@ import SalesOrderDetailPage from './detail';
 vi.mock('@/api/crm/salesOrders', () => ({
   salesOrdersApi: {
     show: vi.fn(),
+    agreements: vi.fn().mockResolvedValue({ sales_order_id: 'so-1', so_number: 'SO-1', can_publish: false, can_record_external: false, can_acknowledge: false, revisions: [] }),
+    agreementFile: vi.fn(),
+    publishAgreement: vi.fn(),
+    recordAgreementAcknowledgment: vi.fn(),
     chain: vi.fn(),
     confirm: vi.fn(),
     cancel: vi.fn(),

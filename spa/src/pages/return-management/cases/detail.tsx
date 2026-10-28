@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { LuCalendarClock, LuCheck, LuDownload, LuFileText, LuMessageSquare, LuRefreshCw, LuSend, LuX } from '@/lib/icons';
 import { returnCasesApi } from '@/api/returnCases';
+import { OrderAgreementsPanel } from '@/components/crm/OrderAgreementsPanel';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -449,6 +450,12 @@ export default function ReturnCaseDetailPage() {
               </div>}
               {realm === 'internal' && record.resolution_notes && <div className="mt-4 rounded-md bg-subtle p-3"><span className="text-xs font-medium text-muted">Internal resolution notes</span><p className="mt-1 whitespace-pre-wrap text-sm text-secondary">{record.resolution_notes}</p></div>}
             </Panel>
+
+            {record.order_agreements && <OrderAgreementsPanel
+              orderId={record.order_agreements.sales_order_id}
+              realm={realm === 'customer' ? 'customer' : 'internal'}
+              readOnlyData={record.order_agreements}
+            />}
 
             {!isTrace && <Panel title="Quantities" meta="Reported and verified amounts are shown separately">
               <div className="space-y-4 2xl:hidden">
