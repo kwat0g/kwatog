@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { LuCheck, LuX, LuRotateCcw } from '@/lib/icons';
 import { leaveRequestsApi, leaveBalancesApi } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
@@ -16,6 +16,7 @@ import { ApprovalTimeline } from '@/components/chain';
 import { fromLeaveRequest } from '@/lib/approvals';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
+import { leaveStatusVariant } from '@/lib/statusVariants';
 
 import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
 export default function LeaveDetailPage() {
@@ -92,7 +93,7 @@ export default function LeaveDetailPage() {
  title={
  <span className="flex items-center gap-2">
  <span className="font-mono">{req.leave_request_no}</span>
- <Chip variant={chipVariantForStatus(req.status)}>{statusLabel.get(req.status) ?? req.status.replace('_', ' ')}</Chip>
+ <Chip variant={leaveStatusVariant[req.status]}>{statusLabel.get(req.status) ?? req.status.replace('_', ' ')}</Chip>
  </span>
  }
  subtitle={`${req.employee?.full_name} · ${req.leave_type?.code}`}

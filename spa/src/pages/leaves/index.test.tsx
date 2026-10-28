@@ -47,7 +47,8 @@ it('shows row actions only when the backend says current role can approve', asyn
       { ...row, can_approve: false },
       { ...row, id: 'lr-2', leave_request_no: 'LR-202610-0002', can_approve: true },
     ],
-    meta: { current_page: 1, last_page: 1, per_page: 100, total: 2 },
+    meta: { current_page: 1, last_page: 1, per_page: 100, total: 2, from: 1, to: 2 },
+    links: { first: '', last: '', prev: null, next: null },
   });
 
   render(

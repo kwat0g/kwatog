@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Requests\Customer;
 
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdatePortalOrderRequest extends FormRequest
@@ -23,6 +24,7 @@ class UpdatePortalOrderRequest extends FormRequest
         return [
             'quote_signature' => ['sometimes', 'nullable', 'string', 'size:64'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'payment_method' => ['sometimes', 'nullable', 'string', Rule::in(['cash', 'check', 'bank_transfer'])],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'string', 'distinct'],
             'items.*.quantity' => ['required', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],

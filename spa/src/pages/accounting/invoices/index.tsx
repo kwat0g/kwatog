@@ -4,7 +4,7 @@ import { LuPlus, LuPrinter } from '@/lib/icons';
 import { invoicesApi, type InvoiceListParams } from '@/api/accounting/invoices';
 import { bulkPrint } from '@/api/print';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type BulkAction, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -15,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { invoiceStatusVariant } from '@/lib/statusVariants';
 import type { Invoice } from '@/types/accounting';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
@@ -59,7 +60,7 @@ export default function InvoicesPage() {
   const status = r.lifecycle_type === 'prebill' && r.status === 'draft' && !r.prebill_approved_at
    ? 'awaiting prebill approval'
    : r.display_status;
-  return <Chip variant={chipVariantForStatus(status)}>{statusLabels.get(status) ?? status}</Chip>;
+  return <Chip variant={invoiceStatusVariant[status] ?? 'neutral'}>{statusLabels.get(status) ?? status}</Chip>;
  } },
  ];
 
@@ -70,11 +71,10 @@ export default function InvoicesPage() {
  { value: '', label: 'All' },
  ...(invoiceOptions?.statuses ?? []),
  ] },
- { key: 'signal', label: 'Signal', type: 'select', options: [
-  { value: '', label: 'All signals' },
+ { key: 'signal', label: 'Quick filter', type: 'select', options: [
+  { value: '', label: 'All invoices' },
   { value: 'draft', label: 'My drafts' },
   { value: 'unpaid', label: 'Unpaid' },
-  { value: 'overdue', label: 'Overdue' },
   ...(can('accounting.invoices.collect') ? [{ value: 'payment_review', label: 'Payment review' }] : []),
  ] },
  { key: 'overdue', label: 'Overdue', type: 'select', options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }] },
@@ -116,7 +116,7 @@ export default function InvoicesPage() {
     label={statusLabel('overdue')}
     value={data.data.filter(i => i.is_overdue).length}
     helper="in current view"
-    linkTo="?signal=overdue"
+    linkTo="?overdue=1"
     className="border-danger/30 bg-danger-bg/20"
   />
   <StatCard

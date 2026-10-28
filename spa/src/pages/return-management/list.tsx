@@ -13,17 +13,8 @@ import { MetricPanel } from '@/components/dashboard/MetricPanel';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
+import { returnRequestStatusVariant } from '@/lib/statusVariants';
 import type { ReturnRequest } from '@/types/returnManagement';
-
-const STATUS_VARIANT: Record<string, ChipVariant> = {
- draft: 'neutral',
- pending_approval: 'warning',
- approved: 'info',
- received: 'info',
- inspected: 'purple',
- completed: 'success',
- rejected: 'danger',
- cancelled: 'neutral' };
 
 const TYPE_VARIANT: Record<string, ChipVariant> = {
  customer_return: 'info',
@@ -72,7 +63,7 @@ export default function ReturnManagementListPage() {
  key: 'status',
  header: 'Status',
  cell: (r) => (
- <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>
+      <Chip variant={returnRequestStatusVariant[r.status] ?? 'neutral'}>
  {r.status_label || r.status.replace(/_/g, ' ')}
  </Chip>
  ) },

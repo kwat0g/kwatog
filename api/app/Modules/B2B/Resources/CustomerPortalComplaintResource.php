@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Resources;
 
 use App\Modules\CRM\Enums\ComplaintStatus;
+use App\Modules\CRM\Support\WarrantyAdvisory;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -41,6 +42,20 @@ class CustomerPortalComplaintResource extends JsonResource
             'resolved_at'       => optional($this->resolved_at)?->toISOString(),
             'closed_at'         => optional($this->closed_at)?->toISOString(),
             'created_at'        => optional($this->created_at)?->toISOString(),
+            'delivered_item' => $this->whenLoaded('deliveryItem', fn () => $this->deliveryItem ? [
+                'delivery_number' => $this->deliveryItem->delivery?->delivery_number,
+                'delivery_date' => $this->deliveryItem->delivery?->delivered_at?->toDateString(),
+                'part_number' => $this->deliveryItem->salesOrderItem?->product?->part_number,
+                'product_name' => $this->deliveryItem->salesOrderItem?->product?->name,
+                'sales_order_number' => $this->deliveryItem->delivery?->salesOrder?->so_number,
+            ] : null),
+            'warranty_advisory' => $this->whenLoaded('deliveryItem', fn () => $this->deliveryItem
+                ? WarrantyAdvisory::from(
+                    $this->deliveryItem->salesOrderItem?->warranty_terms_snapshot,
+                    $this->deliveryItem->delivery?->delivered_at?->toDateString(),
+                    $this->deliveryItem->delivery?->invoice?->date?->toDateString(),
+                )
+                : null),
         ];
     }
 }

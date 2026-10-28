@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -12,6 +12,7 @@ import { CompanyName } from '@/components/brand/CompanyName';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { purchaseOrderStatusVariant } from '@/lib/statusVariants';
 import type { PortalPoSummary } from '@/types/b2b';
 
 type PurchaseOrderFilters = {
@@ -68,7 +69,7 @@ export default function SupplierPurchaseOrdersPage() {
       header: 'Status',
       sortable: true,
       cell: (r) => (
-        <Chip variant={chipVariantForStatus(r.status)}>
+        <Chip variant={purchaseOrderStatusVariant[r.status]}>
           {r.status_label ?? r.status.replace(/_/g, ' ')}
         </Chip>
       ),

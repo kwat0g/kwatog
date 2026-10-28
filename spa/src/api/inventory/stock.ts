@@ -105,7 +105,6 @@ export interface StockAdjustmentListParams extends Omit<ListParams, 'direction'>
   id?: string;
   status?: 'pending' | 'approved' | 'rejected' | 'withdrawn' | '';
   direction?: 'in' | 'out';
-  id?: string;
 }
 
 export const stockAdjustmentsApi = {

@@ -529,7 +529,7 @@ it('opens held material-review records from the MRB badge', () => {
   );
 });
 
-it('opens the confirmation queue when Sales Orders has a positive badge', () => {
+it('opens all Sales Orders when the confirmation badge is positive', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'pending_so'
       ? {
@@ -547,7 +547,7 @@ it('opens the confirmation queue when Sales Orders has a positive badge', () => 
   );
   expect(screen.getByRole('link', { name: /Sales Orders/ })).toHaveAttribute(
     'href',
-    '/crm/sales-orders?signal=awaiting_confirmation',
+    '/crm/sales-orders',
   );
 });
 
@@ -707,7 +707,7 @@ it('shows AR signals and links each chip to its matching invoice filter', () => 
   fireEvent.click(screen.getByRole('button', { name: /View all Accounts Receivable Invoices signals/ }));
   expect(screen.getByRole('link', { name: 'Open invoices past their due date: 2' })).toHaveAttribute(
     'href',
-    '/accounting/invoices?signal=overdue',
+    '/accounting/invoices?overdue=1',
   );
   expect(screen.getByRole('link', { name: 'Open invoices with an unpaid balance: 5' })).toHaveAttribute(
     'href',

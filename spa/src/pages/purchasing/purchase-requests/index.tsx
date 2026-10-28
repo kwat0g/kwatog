@@ -17,25 +17,14 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
+import { purchaseRequestStatusVariant } from '@/lib/statusVariants';
 import type { ListParams } from '@/types';
 import type {
   PurchaseRequest,
   PurchaseRequestPriority,
-  PurchaseRequestStatus,
 } from '@/types/purchasing';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const statusVariant: Record<
-  PurchaseRequestStatus,
-  'neutral' | 'warning' | 'info' | 'success' | 'danger'
-> = {
-  draft: 'neutral',
-  pending: 'info',
-  approved: 'success',
-  rejected: 'danger',
-  converted: 'neutral',
-  cancelled: 'neutral',
-};
 const priorityVariant: Record<PurchaseRequestPriority, 'neutral' | 'warning' | 'danger'> = {
   normal: 'neutral',
   urgent: 'warning',
@@ -177,7 +166,7 @@ export default function PurchaseRequestsListPage() {
       header: 'Status',
       cell: (r) => (
         <span className="flex items-center gap-1.5">
-          <Chip variant={statusVariant[r.status]}>
+          <Chip variant={purchaseRequestStatusVariant[r.status]}>
             {r.status_label ?? statusLabels.get(r.status) ?? r.status}
           </Chip>
           {r.status === 'approved' && r.po_conversion_status === 'manual_required' && (

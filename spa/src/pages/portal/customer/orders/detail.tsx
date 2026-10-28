@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { salesOrderStatusVariant, workOrderStatusVariant } from '@/lib/statusVariants';
 
 export default function CustomerOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -128,7 +129,7 @@ export default function CustomerOrderDetailPage() {
           order ? (
             <>
               {order.so_number}{' '}
-              <Chip variant={chipVariantForStatus(order.status)}>
+              <Chip variant={salesOrderStatusVariant[order.status]}>
                 {order.status_label ?? order.status.replace(/_/g, ' ')}
               </Chip>
             </>
@@ -266,7 +267,7 @@ export default function CustomerOrderDetailPage() {
           <>
             <KpiGrid count={3}>
               <StatCard
-                label="Total Amount"
+                label="Product total"
                 value={formatPeso(order.total_amount)}
                 helper={
                   order.vat_amount != null
@@ -282,6 +283,16 @@ export default function CustomerOrderDetailPage() {
               />
               <StatCard label="Delivery Terms" value={order.delivery_terms ?? '—'} />
             </KpiGrid>
+
+            <p role="note" className="rounded-md border border-default bg-subtle px-4 py-3 text-sm text-muted">
+              {order.customer_terms_snapshot?.agreement_status === 'expired' || order.customer_terms_snapshot?.agreement_status === 'not_yet_effective'
+                ? 'The saved customer agreement was not in effect on this order date. Sales must confirm freight responsibility and any separate charge. Freight is excluded from this total.'
+                : order.customer_terms_snapshot?.shipping_payer === 'company'
+                  ? 'Ogami is responsible for freight under the saved customer terms. Freight is not part of this product total.'
+                  : order.customer_terms_snapshot?.shipping_payer === 'customer'
+                    ? 'Customer is responsible for freight under the saved terms, but no freight amount is included here. Ask Sales for the separate charge before accepting final charges.'
+                    : 'Freight responsibility and amount are not recorded. This total includes product prices and VAT only; confirm freight with Sales before accepting final charges.'}
+            </p>
 
             <Panel title="Delivery schedule">
               <div className="grid gap-3 sm:grid-cols-2 text-sm">
@@ -581,7 +592,7 @@ export default function CustomerOrderDetailPage() {
                             {wo.planned_start ? formatDate(wo.planned_start) : '—'}
                           </Td>
                           <Td>
-                            <Chip variant={chipVariantForStatus(wo.status)}>
+                            <Chip variant={workOrderStatusVariant[wo.status]}>
                               {wo.status_label ?? wo.status}
                             </Chip>
                           </Td>

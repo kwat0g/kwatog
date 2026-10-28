@@ -88,6 +88,7 @@ export function SubmitPaymentDialog({ invoice, onClose }: { invoice: PortalInvoi
     <form className="space-y-5" onSubmit={handleSubmit(submit)} noValidate>
       <p className="text-sm">{reviewed.invoice_number}</p>
       <Input label="Amount to settle" value={reviewed.balance} readOnly prefix="₱" helper="Full outstanding balance. Finance verifies receipt before updating this invoice." />
+      <p className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">This form records a bank transfer; it does not send money. Contact Ogami Finance for verified receiving account details before transferring.</p>
       <Input label="Sending bank" required maxLength={100} autoComplete="organization" {...register('sending_bank')} error={errors.sending_bank?.message} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label="Reference number" required maxLength={50} {...register('reference_number')} error={errors.reference_number?.message} />

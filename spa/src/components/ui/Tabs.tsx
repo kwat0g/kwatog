@@ -25,12 +25,14 @@ interface TabsProps<T extends string> {
  onChange: (value: T) => void;
  /** Names the strip for assistive tech, e.g. "Employee sections". */
  label: string;
+ /** Stable ID prefix to connect tabs to their externally rendered tab panels. */
+ idPrefix?: string;
  /** Right-aligned controls that belong to the strip, e.g. a currency picker. */
  trailing?: ReactNode;
  className?: string;
 }
 
-export function Tabs<T extends string>({ items, value, onChange, label, trailing, className }: TabsProps<T>) {
+export function Tabs<T extends string>({ items, value, onChange, label, idPrefix, trailing, className }: TabsProps<T>) {
  const refs = useRef<Array<HTMLButtonElement | null>>([]);
  const move = (from: number, delta: number) => {
  const enabled = items.map((t, i) => (t.disabled ? -1 : i)).filter((i) => i >= 0);
@@ -49,6 +51,7 @@ export function Tabs<T extends string>({ items, value, onChange, label, trailing
  return (
  <button
  key={tab.key}
+         id={idPrefix ? `${idPrefix}-tab-${tab.key}` : undefined}
  ref={(element) => { refs.current[i] = element; }}
  type="button"
  role="tab"

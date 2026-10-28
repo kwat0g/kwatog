@@ -17,6 +17,7 @@ use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Enums\PaymentMethod;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
@@ -26,6 +27,7 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
@@ -564,6 +566,11 @@ class SalesOrderService
             $this->assertActiveOrderReferences($customerId, $items);
             $this->assertDeliveryDatesNotBeforeOrder($orderDate, $items);
 
+            $customer = Customer::query()->whereKey($customerId)->firstOrFail();
+            $paymentMethod = $data['payment_method'] ?? null;
+            $this->assertPaymentMethodAllowed($customer, $paymentMethod);
+            $paymentTermsDays = (int) ($data['payment_terms_days'] ?? $customer->payment_terms_days);
+
             $quote = $this->quoteOrder($customerId, $items, null, ($data['submission_source'] ?? 'internal') === 'customer_portal');
             $this->assertQuoteSignature($quote, $data['quote_signature'] ?? null);
             $lines = $quote['items'];
@@ -580,8 +587,15 @@ class SalesOrderService
                 'total_amount' => $total,
                 'status' => ($data['submission_source'] ?? 'internal') === 'customer_portal'
                     ? SalesOrderStatus::AwaitingConfirmation->value : SalesOrderStatus::Draft->value,
-                'payment_terms_days' => $data['payment_terms_days']
-                    ?? (int) Customer::query()->whereKey($customerId)->value('payment_terms_days'),
+                'payment_terms_days' => $paymentTermsDays,
+                'payment_method' => $paymentMethod,
+                'customer_terms_snapshot' => $this->customerTermsSnapshot(
+                    $customer,
+                    $orderDate->toDateString(),
+                    $paymentTermsDays,
+                    $data['delivery_terms'] ?? null,
+                    $data['incoterm'] ?? null,
+                ),
                 'delivery_terms' => $data['delivery_terms'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'incoterm' => $data['incoterm'] ?? null,
@@ -592,7 +606,16 @@ class SalesOrderService
             ]);
 
             // Persist lines.
+            $overrides = CustomerProductWarrantyOverride::query()
+                ->where('customer_id', $customerId)
+                ->whereIn('product_id', array_column($items, 'product_id'))
+                ->get()->keyBy('product_id');
             foreach ($lines as $line) {
+                $line['warranty_terms_snapshot'] = $this->warrantyTermsSnapshot(
+                    $customer,
+                    (int) $line['product_id'],
+                    $overrides->get((int) $line['product_id']),
+                );
                 $so->items()->create($line + ['fulfillment_policy' => 'stock_first']);
             }
 
@@ -673,6 +696,7 @@ class SalesOrderService
             $this->assertCustomerOrderMutation($lockedSo, $customerActor);
 
             $customerId = (int) ($data['customer_id'] ?? $lockedSo->customer_id);
+            $customerChanged = $customerId !== (int) $lockedSo->customer_id;
             if ($customerId !== (int) $lockedSo->customer_id && $lockedSo->agreements()->exists()) {
                 throw new BusinessRuleException('A sales order with published terms cannot be reassigned to another customer.');
             }
@@ -683,6 +707,14 @@ class SalesOrderService
             $this->assertActiveOrderReferences($customerId, $items);
             $this->assertDeliveryDatesNotBeforeOrder($orderDate, $items);
 
+            $customer = Customer::query()->whereKey($customerId)->firstOrFail();
+            $paymentMethod = array_key_exists('payment_method', $data)
+                ? $data['payment_method']
+                : $lockedSo->payment_method;
+            if (array_key_exists('payment_method', $data) || $customerChanged) {
+                $this->assertPaymentMethodAllowed($customer, $paymentMethod);
+            }
+
             $quote = $this->quoteOrder($customerId, $items, $lockedSo, $customerActor !== null);
             $this->assertQuoteSignature($quote, $data['quote_signature'] ?? null);
             $newLines = $quote['items'];
@@ -690,13 +722,19 @@ class SalesOrderService
             $vat = $quote['vat_amount'];
             $total = $quote['total_amount'];
 
-            $lockedSo->update([
+            $termsChanged = $customerChanged || $customerActor !== null;
+            $customerSnapshotChanged = $termsChanged
+                || array_key_exists('payment_terms_days', $data)
+                || array_key_exists('delivery_terms', $data)
+                || array_key_exists('incoterm', $data);
+            $updates = [
                 'customer_id' => $customerId,
                 'date' => $orderDate->toDateString(),
                 'subtotal' => $subtotal,
                 'vat_amount' => $vat,
                 'total_amount' => $total,
                 'payment_terms_days' => $data['payment_terms_days'] ?? $lockedSo->payment_terms_days,
+                'payment_method' => $paymentMethod,
                 'delivery_terms' => array_key_exists('delivery_terms', $data)
                     ? $data['delivery_terms']
                     : $lockedSo->delivery_terms,
@@ -706,19 +744,48 @@ class SalesOrderService
                 'notes' => array_key_exists('notes', $data)
                     ? $data['notes']
                     : $lockedSo->notes,
-            ]);
+            ];
+            if ($customerSnapshotChanged) {
+                $updates['customer_terms_snapshot'] = $this->customerTermsSnapshot(
+                    $customer,
+                    $orderDate->toDateString(),
+                    (int) ($data['payment_terms_days'] ?? $lockedSo->payment_terms_days),
+                    array_key_exists('delivery_terms', $data) ? $data['delivery_terms'] : $lockedSo->delivery_terms,
+                    array_key_exists('incoterm', $data) ? $data['incoterm'] : $lockedSo->incoterm?->value,
+                );
+            }
+            $lockedSo->update($updates);
 
             $lockedSo->supersedeDeliveryProposals();
             if ($customerActor !== null) {
                 $lockedSo->update(['status' => SalesOrderStatus::AwaitingConfirmation]);
             }
             $keepIds = [];
+            $existingItems = $lockedSo->items()->get()->keyBy('id');
+            $overrides = CustomerProductWarrantyOverride::query()
+                ->where('customer_id', $customerId)
+                ->whereIn('product_id', array_column($newLines, 'product_id'))
+                ->get()->keyBy('product_id');
             foreach ($newLines as $line) {
                 $existingId = $line['existing_id'] ?? null;
                 unset($line['existing_id']);
                 if ($existingId !== null) {
+                    if ($termsChanged) {
+                        $existingItems->get($existingId)?->update([
+                            'warranty_terms_snapshot' => $this->warrantyTermsSnapshot(
+                                $customer,
+                                (int) $line['product_id'],
+                                $overrides->get((int) $line['product_id']),
+                            ),
+                        ]);
+                    }
                     $keepIds[] = $existingId;
                 } else {
+                    $line['warranty_terms_snapshot'] = $this->warrantyTermsSnapshot(
+                        $customer,
+                        (int) $line['product_id'],
+                        $overrides->get((int) $line['product_id']),
+                    );
                     $keepIds[] = $lockedSo->items()->create($line + ['fulfillment_policy' => 'stock_first'])->id;
                 }
             }
@@ -726,6 +793,63 @@ class SalesOrderService
 
             return $this->show($lockedSo->fresh());
         });
+    }
+
+    private function assertPaymentMethodAllowed(Customer $customer, ?string $method): void
+    {
+        if ($method === null) {
+            return;
+        }
+
+        if (! in_array($method, PaymentMethod::values(), true) || $method === PaymentMethod::Online->value) {
+            throw ValidationException::withMessages(['payment_method' => ['Choose cash, check, or bank transfer.']]);
+        }
+
+        if (is_array($customer->allowed_payment_methods)
+            && ! in_array($method, $customer->allowed_payment_methods, true)) {
+            throw ValidationException::withMessages(['payment_method' => ['This payment method is not allowed for this customer.']]);
+        }
+    }
+
+    private function customerTermsSnapshot(Customer $customer, string $orderDate, int $paymentTermsDays, ?string $deliveryTerms, ?string $incoterm): array
+    {
+        $startsOn = $customer->agreement_starts_on?->toDateString();
+        $endsOn = $customer->agreement_ends_on?->toDateString();
+        $agreementStatus = $startsOn === null && $endsOn === null ? 'not_recorded'
+            : ($startsOn !== null && $orderDate < $startsOn ? 'not_yet_effective'
+                : ($endsOn !== null && $orderDate > $endsOn ? 'expired' : 'in_effect'));
+
+        return [
+            'agreement_status' => $agreementStatus,
+            'agreement_starts_on' => $startsOn,
+            'agreement_ends_on' => $endsOn,
+            'allowed_payment_methods' => $customer->allowed_payment_methods,
+            'shipping_payer' => $customer->shipping_payer,
+            'payment_terms_days' => $paymentTermsDays,
+            'delivery_terms' => $deliveryTerms,
+            'incoterm' => $incoterm,
+            'warranty_defaults' => $this->warrantyTermsSnapshot($customer, null),
+        ];
+    }
+
+    private function warrantyTermsSnapshot(Customer $customer, ?int $productId, ?CustomerProductWarrantyOverride $override = null): ?array
+    {
+        if ($productId !== null && $override === null) {
+            $override = CustomerProductWarrantyOverride::query()
+                ->where('customer_id', $customer->id)
+                ->where('product_id', $productId)
+                ->first();
+        }
+
+        $terms = [];
+        foreach ([
+            'warranty_duration_days', 'warranty_report_window_days', 'warranty_start_basis',
+            'warranty_covered_issues', 'warranty_remedies',
+        ] as $field) {
+            $terms[$field] = $override?->{$field} ?? $customer->{$field};
+        }
+
+        return count(array_filter($terms, static fn (mixed $value): bool => $value !== null)) > 0 ? $terms : null;
     }
 
     /**

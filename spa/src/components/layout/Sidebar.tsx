@@ -161,10 +161,9 @@ function badgeDestination(path: string, key: string): string {
     due_soon_bills: 'signal=due_soon',
     draft_invoices: 'signal=draft',
     unpaid_invoices: 'signal=unpaid',
-    overdue_invoices: 'signal=overdue',
+    overdue_invoices: 'overdue=1',
     payment_review_invoices: 'signal=payment_review',
     shipments: 'status=mid_pipe',
-    pending_so: 'signal=awaiting_confirmation',
     overtime: 'signal=awaiting_my_approval',
     clearance_pending: 'signal=clearance_pending',
     ncrs: 'signal=open',
@@ -1289,7 +1288,6 @@ export const Sidebar = memo(function Sidebar({ permissions, delegatedApprovals, 
             item={target === item.to ? item : { ...item, to: target }}
             active={isActive(item.to)}
             collapsed={compact}
-            showLabelTooltip={!mobile}
             badgeOverride={entry?.count}
             badgeVariant={entry?.severity}
             badgeDescription={entry?.description}
@@ -1514,7 +1512,6 @@ const NavLink = memo(function NavLink({
   item,
   active,
   collapsed,
-  showLabelTooltip,
   badgeOverride,
   badgeVariant,
   badgeDescription,
@@ -1523,7 +1520,6 @@ const NavLink = memo(function NavLink({
   item: NavItem;
   active: boolean;
   collapsed?: boolean;
-  showLabelTooltip?: boolean;
   badgeOverride?: number;
   badgeVariant?: BadgeSeverity | 'accent';
   /** What the badge count represents (server-provided, e.g. "Overdue bills payable"). */

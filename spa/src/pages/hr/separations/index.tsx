@@ -10,12 +10,10 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import type { Clearance, ClearanceStatus } from '@/types/separations';
+import type { Clearance } from '@/types/separations';
+import { clearanceStatusVariant } from '@/lib/statusVariants';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
-
-const STATUS_CHIP: Record<ClearanceStatus, 'success' | 'warning' | 'info' | 'neutral'> = {
- pending: 'warning', in_progress: 'info', completed: 'info', finalized: 'success', cancelled: 'neutral' };
 
 const DEFAULT_FILTERS: SeparationListParams = {
  page: 1, per_page: 25, status: '', signal: '',
@@ -63,7 +61,7 @@ export default function SeparationsListPage() {
  {
  key: 'final_pay', header: 'Final pay', align: 'right',
  cell: (r) => r.final_pay_amount ? <NumCell>{formatPeso(r.final_pay_amount)}</NumCell> : <span className="text-muted">—</span> },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{labels.get(r.status) ?? r.status}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => <Chip variant={clearanceStatusVariant[r.status]}>{labels.get(r.status) ?? r.status}</Chip> },
  ];
 
  const filterConfig: FilterConfig[] = [

@@ -5,6 +5,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { reportMutationError } from '@/lib/formErrors';
 import { formatDateTime } from '@/lib/formatDate';
+import { recommendationStatusVariant } from '@/lib/statusVariants';
 import { dssApi } from '@/api/dss';
 import type { Recommendation } from '@/types/dss';
 import { Button } from '@/components/ui/Button';
@@ -23,14 +24,6 @@ interface RecommendationDetailsProps {
   backTo?: string;
 }
 
-const statusVariant = (status: Recommendation['status']) =>
-  status === 'open' || status === 'in_progress'
-    ? 'info'
-    : status === 'snoozed'
-      ? 'warning'
-      : status === 'resolved'
-        ? 'success'
-        : 'neutral';
 const verificationLabels: Record<string, string> = {
   still_open: 'Source confirms this condition remains open',
   verified_clear: 'Source confirms this condition has cleared',
@@ -81,7 +74,7 @@ export default function RecommendationDetails({
     </Chip>
   );
   const statusChip = (
-    <Chip variant={statusVariant(recommendation.status)}>
+    <Chip variant={recommendationStatusVariant[recommendation.status]}>
       {recommendationStatusLabel(recommendation.status)}
     </Chip>
   );

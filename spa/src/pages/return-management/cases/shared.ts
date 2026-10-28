@@ -1,4 +1,5 @@
 import type { ReturnCaseRealm } from '@/types/returnCases';
+import { returnCaseStatusVariant } from '@/lib/statusVariants';
 
 export function realmFromPath(pathname: string): ReturnCaseRealm {
   if (pathname.startsWith('/portal/customer/problems')) return 'customer';
@@ -17,16 +18,8 @@ export function newCasePath(realm: ReturnCaseRealm): string {
   return `${casePath(realm)}/new`;
 }
 
-export function caseStatusVariant(status: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
-  switch (status) {
-    case 'resolved': return 'success';
-    case 'under_review':
-    case 'information_needed': return 'warning';
-    case 'action_agreed':
-    case 'in_progress': return 'info';
-    case 'rejected': return 'danger';
-    default: return 'neutral';
-  }
+export function caseStatusVariant(status: string) {
+  return returnCaseStatusVariant[status] ?? 'neutral';
 }
 
 export function toMilli(value: string): bigint | null {

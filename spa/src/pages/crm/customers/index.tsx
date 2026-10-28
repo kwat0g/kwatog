@@ -25,7 +25,6 @@ export default function CrmCustomersListPage() {
  placeholderData: (prev) => prev });
 
  const columns: Column<Customer>[] = [
- { key: 'code', header: 'Code', cell: (r) => <span className="font-mono text-sm">{r.code ?? '—'}</span> },
  {
  key: 'name',
  header: 'Customer',
@@ -100,7 +99,7 @@ export default function CrmCustomersListPage() {
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  searchPlaceholder="Search name or contact…"
  />
- {isLoading && !data && <SkeletonTable columns={8} rows={8} />}
+ {isLoading && !data && <SkeletonTable columns={7} rows={8} />}
  {isError && (
  <EmptyState
  icon="alert-circle"

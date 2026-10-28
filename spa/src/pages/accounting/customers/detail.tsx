@@ -183,6 +183,14 @@ export default function CustomerDetailPage() {
                 {customer.payment_terms_days == null ? '—' : `${customer.payment_terms_days} days`}
               </dd>
             </div>
+            <div>
+              <dt className="text-muted">Allowed payment methods</dt>
+              <dd>{customer.allowed_payment_methods === null
+                ? 'All supported methods'
+                : customer.allowed_payment_methods.length
+                  ? customer.allowed_payment_methods.map((method) => ({ cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer' })[method]).join(', ')
+                  : 'None configured'}</dd>
+            </div>
           </dl>
         </Panel>
         <Panel title="Invoices" className="col-span-2">

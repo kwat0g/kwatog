@@ -165,7 +165,11 @@ function Demo({
 // Literals only. A gallery that reads the clock or the currency store cannot be
 // a visual baseline (the screenshot would move without anybody editing code).
 
-const CHIP_VARIANTS: ChipVariant[] = ['success', 'warning', 'danger', 'info', 'purple', 'neutral'];
+const CHIP_VARIANTS: ChipVariant[] = [
+  'success', 'warning', 'danger', 'info', 'purple', 'neutral',
+  'category-1', 'category-2', 'category-3', 'category-4',
+  'category-5', 'category-6', 'category-7', 'category-8',
+];
 const STATUS_SAMPLES = ['approved', 'pending', 'rejected', 'draft', 'in_progress', 'completed'];
 
 const CHAIN_STEPS: ChainStep[] = [
@@ -345,9 +349,9 @@ export default function ComponentGalleryPage() {
       <Section
         id="status"
         title="Chips & badges"
-        note="Status is never a bare string in the DOM. `chipVariantForStatus` maps an API status to a semantic variant, so a status the map has not been taught renders neutral instead of inventing a colour."
+        note="Status chips use semantic colors for outcomes and distinct category colors for workflow steps. Unknown statuses stay neutral."
       >
-        <Demo name="Chip — semantic variants">
+        <Demo name="Chip — semantic and workflow variants">
           <div className="flex flex-wrap items-center gap-2">
             {CHIP_VARIANTS.map((v) => (
               <Chip key={v} variant={v}>{v}</Chip>

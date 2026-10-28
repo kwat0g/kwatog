@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -10,6 +10,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { deliveryStatusVariant } from '@/lib/statusVariants';
 import type { PortalDeliverySummary } from '@/types/b2b';
 
 type DeliveryFilters = { page: number; per_page: number; status?: string };
@@ -53,7 +54,7 @@ export default function CustomerDeliveriesPage() {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={chipVariantForStatus(r.status)}>
+        <Chip variant={deliveryStatusVariant[r.status]}>
           {r.status_label ?? r.status.replace(/_/g, ' ')}
         </Chip>
       ),

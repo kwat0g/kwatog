@@ -37,6 +37,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { billStatusVariant, grnStatusVariant, purchaseOrderStatusVariant } from '@/lib/statusVariants';
 
 const DECIMAL_RE = /^\d+(\.\d{1,2})?$/;
 
@@ -388,7 +389,7 @@ export default function SupplierPurchaseOrderDetailPage() {
           po ? (
             <>
               {po.po_number}{' '}
-              <Chip variant={chipVariantForStatus(po.status)}>
+              <Chip variant={purchaseOrderStatusVariant[po.status]}>
                 {po.status_label ?? po.status.replace(/_/g, ' ')}
               </Chip>
             </>
@@ -1014,7 +1015,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                             {grn.received_date ? formatDate(grn.received_date) : '—'}
                           </Td>
                           <Td>
-                            <Chip variant={chipVariantForStatus(grn.status)}>
+                            <Chip variant={grnStatusVariant[grn.status] ?? 'neutral'}>
                               {grn.status_label ?? grn.status.replace(/_/g, ' ')}
                             </Chip>
                           </Td>
@@ -1070,7 +1071,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                             {bill.due_date ? formatDate(bill.due_date) : '—'}
                           </Td>
                           <Td>
-                            <Chip variant={chipVariantForStatus(bill.status)}>
+                            <Chip variant={billStatusVariant[bill.status] ?? 'neutral'}>
                               {bill.status_label ?? bill.status}
                             </Chip>
                           </Td>

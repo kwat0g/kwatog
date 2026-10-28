@@ -11,11 +11,14 @@ use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Enums\ComplaintNcrHandoffStatus;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
@@ -453,6 +456,85 @@ class CustomerPortalServiceTest extends TestCase
             'customer_id' => $customer->id,
             'sales_order_id' => $order->id,
         ]);
+    }
+
+    public function test_customer_complaint_can_link_delivered_item_and_returns_advisory_warranty_dates(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $product = Product::factory()->create();
+        $order = SalesOrder::factory()->create(['customer_id' => $customer->id, 'status' => 'delivered']);
+        $orderLine = SalesOrderItem::factory()->create([
+            'sales_order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => '2.00',
+            'warranty_terms_snapshot' => [
+                'warranty_start_basis' => 'delivery',
+                'warranty_duration_days' => 15,
+                'warranty_report_window_days' => 7,
+            ],
+        ]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DL-'.substr(uniqid(), -8),
+            'sales_order_id' => $order->id,
+            'status' => 'confirmed',
+            'scheduled_date' => '2026-10-20',
+            'delivered_at' => '2026-10-20 09:00:00',
+            'confirmed_at' => '2026-10-20 10:00:00',
+            'created_by' => User::factory()->create()->id,
+        ]);
+        $deliveryItem = DeliveryItem::create([
+            'delivery_id' => $delivery->id,
+            'sales_order_item_id' => $orderLine->id,
+            'quantity' => '2.000',
+            'unit_price' => '10.00',
+        ]);
+
+        $this->actAs($user)->postJson('/api/v1/b2b/customer/complaints', [
+            'delivery_item_id' => $deliveryItem->hash_id,
+            'severity' => 'critical',
+            'description' => 'Part arrived damaged',
+            'affected_quantity' => 1,
+        ])->assertCreated()
+            ->assertJsonPath('data.delivered_item.delivery_number', $delivery->delivery_number)
+            ->assertJsonPath('data.delivered_item.sales_order_number', $order->so_number)
+            ->assertJsonPath('data.warranty_advisory.status', 'advisory')
+            ->assertJsonPath('data.warranty_advisory.report_by', '2026-10-27')
+            ->assertJsonPath('data.warranty_advisory.warranty_through', '2026-11-04');
+
+        $this->assertDatabaseHas('customer_complaints', [
+            'customer_id' => $customer->id,
+            'sales_order_id' => $order->id,
+            'product_id' => $product->id,
+            'delivery_item_id' => $deliveryItem->id,
+        ]);
+
+        $otherCustomer = Customer::factory()->create();
+        $otherOrder = SalesOrder::factory()->create(['customer_id' => $otherCustomer->id]);
+        $otherOrderLine = SalesOrderItem::factory()->create([
+            'sales_order_id' => $otherOrder->id,
+            'product_id' => Product::factory()->create()->id,
+        ]);
+        $otherDelivery = Delivery::create([
+            'delivery_number' => 'DL-'.substr(uniqid(), -8),
+            'sales_order_id' => $otherOrder->id,
+            'status' => 'confirmed',
+            'scheduled_date' => '2026-10-20',
+            'delivered_at' => '2026-10-20 09:00:00',
+            'created_by' => User::factory()->create()->id,
+        ]);
+        $otherDeliveryItem = DeliveryItem::create([
+            'delivery_id' => $otherDelivery->id,
+            'sales_order_item_id' => $otherOrderLine->id,
+            'quantity' => '1.000',
+            'unit_price' => '10.00',
+        ]);
+        $this->postJson('/api/v1/b2b/customer/complaints', [
+            'delivery_item_id' => $otherDeliveryItem->hash_id,
+            'severity' => 'critical',
+            'description' => 'Foreign part must not be linkable',
+            'affected_quantity' => 1,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['delivery_item_id']);
     }
 
     /**

@@ -18,8 +18,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { EightDReportData, PortalComplaint } from '@/types/b2b';
+import type { PortalReturnSourceLine } from '@/types/b2b';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { CompanyName } from '@/components/brand/CompanyName';
+import { complaintStatusVariant } from '@/lib/statusVariants';
 
 type ComplaintFilters = {
   page: number;
@@ -36,6 +38,7 @@ export default function CustomerComplaintsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [orderId, setOrderId] = useState('');
+  const [deliveryItemId, setDeliveryItemId] = useState('');
   const [severity, setSeverity] = useState('');
   const [description, setDescription] = useState('');
   const [affectedQty, setAffectedQty] = useState('');
@@ -46,6 +49,15 @@ export default function CustomerComplaintsPage() {
     queryKey: ['portal', 'customer', 'complaint-options'],
     queryFn: () => customerPortalApi.complaintOptions(),
   });
+  const { data: deliverySources } = useQuery({
+    queryKey: ['portal', 'customer', 'return-source-options'],
+    queryFn: () => customerPortalApi.returnSourceOptions(),
+    enabled: showForm,
+  });
+  const deliveredItems = (deliverySources?.customer.deliveries ?? []).flatMap((delivery) =>
+    delivery.lines.map((line: PortalReturnSourceLine) => ({ ...line, orderId: delivery.sales_order_id, deliveryLabel: delivery.label })),
+  );
+  const selectedDeliveredItem = deliveredItems.find((line) => line.id === deliveryItemId);
 
   // Order provenance for the complaint form. The backend already validates that
   // the id decodes, belongs to THIS customer and is not cancelled
@@ -83,6 +95,7 @@ export default function CustomerComplaintsPage() {
     mutationFn: () =>
       customerPortalApi.createComplaint({
         order_id: orderId || undefined,
+        delivery_item_id: deliveryItemId || undefined,
         severity,
         description,
         affected_quantity: parseInt(affectedQty, 10),
@@ -94,6 +107,7 @@ export default function CustomerComplaintsPage() {
       setSeverity('');
       setAffectedQty('');
       setOrderId('');
+      setDeliveryItemId('');
       queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'complaints'] });
     },
     // Surface the server's own rule text — "The order ID is invalid or does not
@@ -135,6 +149,14 @@ export default function CustomerComplaintsPage() {
       ),
     },
     {
+      key: 'delivered_item',
+      header: 'Delivered item',
+      cell: (r) => r.delivered_item ? <span className="block text-xs">
+        <span className="block font-medium">{[r.delivered_item.part_number, r.delivered_item.product_name].filter(Boolean).join(' · ') || 'Delivered item'}</span>
+        <span className="text-muted">{r.delivered_item.delivery_number}{r.delivered_item.delivery_date ? ` · ${formatDate(r.delivered_item.delivery_date)}` : ''}</span>
+      </span> : <span className="text-muted">—</span>,
+    },
+    {
       key: 'description',
       header: 'Description',
       className: 'max-w-md',
@@ -156,9 +178,7 @@ export default function CustomerComplaintsPage() {
       header: 'Status',
       cell: (r) => (
         <Chip
-          variant={
-            r.status === 'closed' ? 'success' : r.status === 'resolved' ? 'info' : 'warning'
-          }
+          variant={complaintStatusVariant[r.status]}
         >
           {r.status_label ?? r.status}
         </Chip>
@@ -240,12 +260,14 @@ export default function CustomerComplaintsPage() {
               }}
               className="flex flex-col gap-3"
             >
+              <p className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">Link a delivered item for a warranty date estimate. Estimates guide review only; your report is never automatically rejected.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Select
                   label="Related order"
-                  helper="Optional. Linking the order carries your complaint through to the quality investigation."
+                  helper={selectedDeliveredItem ? 'Set from the delivered item.' : 'Optional. Link an order if the issue affects a full order.'}
                   value={orderId}
                   onChange={(e) => setOrderId(e.target.value)}
+                  disabled={!!selectedDeliveredItem}
                 >
                   <option value="">— Not order specific —</option>
                   {linkableOrders.map((order) => (
@@ -254,6 +276,21 @@ export default function CustomerComplaintsPage() {
                       {order.date ? ` · ${order.date}` : ''}
                     </option>
                   ))}
+                </Select>
+                <Select
+                  label="Delivered item"
+                  helper="Optional. Select the specific delivery to calculate an advisory warranty window."
+                  value={deliveryItemId}
+                  onChange={(e) => {
+                    const selected = deliveredItems.find((line) => line.id === e.target.value);
+                    setDeliveryItemId(e.target.value);
+                    if (selected?.orderId) setOrderId(selected.orderId);
+                  }}
+                >
+                  <option value="">— No specific delivery —</option>
+                  {deliveredItems.map((line) => <option key={line.id} value={line.id}>
+                    {line.deliveryLabel} · {line.label}{line.delivery_date ? ` · ${formatDate(line.delivery_date)}` : ''}
+                  </option>)}
                 </Select>
                 <Select
                   label="Severity"
@@ -268,6 +305,11 @@ export default function CustomerComplaintsPage() {
                   ))}
                 </Select>
               </div>
+              {selectedDeliveredItem && <p className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">
+                {selectedDeliveredItem.warranty_advisory?.status === 'advisory'
+                  ? <>Report-by estimate: <strong>{formatDate(selectedDeliveredItem.warranty_advisory.report_by!)}</strong>. Warranty period through <strong>{formatDate(selectedDeliveredItem.warranty_advisory.warranty_through!)}</strong>. Dates follow the saved {selectedDeliveredItem.warranty_advisory.start_basis} date and guide staff review only.</>
+                  : 'Warranty dates are unavailable for this item. Submit the report; staff will review the delivery and applicable terms.'}
+              </p>}
               <Textarea
                 label="Description"
                 value={description}

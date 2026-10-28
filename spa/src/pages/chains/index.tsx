@@ -27,7 +27,7 @@ import { formatPeso, formatInt } from '@/lib/formatNumber';
 import { formatDateIso } from '@/lib/formatDate';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { Input } from '@/components/ui/Input';
@@ -37,25 +37,11 @@ import { focusRingInset } from '@/lib/focus';
 import { Button } from '@/components/ui/Button';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
-import type { SalesOrderStatus } from '@/types/crm';
 import type { ChainBottleneckRow } from '@/types/chain';
+import { salesOrderStatusVariant } from '@/lib/statusVariants';
 import { cn } from '@/lib/cn';
 
 import { useDebounce } from '@/hooks/useDebounce';
-const SO_STATUS_VARIANT: Record<SalesOrderStatus, ChipVariant> = {
-  draft: 'neutral',
-  awaiting_confirmation: 'info',
-  delivery_negotiation: 'warning',
-  confirmed: 'info',
-  in_production: 'info',
-  partially_delivered: 'warning',
-  delivered: 'success',
-  invoiced: 'success',
-  paid: 'success',
-  closed: 'success',
-  cancelled: 'danger',
-} as Record<SalesOrderStatus, ChipVariant>;
-
 const peso = (v: string | number) => formatPeso(v);
 
 /** Map a bottleneck row to the right destination page. */
@@ -197,7 +183,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
                 <span className="flex-1 truncate text-sm text-secondary">
                   {so.customer?.name ?? '—'}
                 </span>
-                <Chip variant={SO_STATUS_VARIANT[so.status] ?? 'neutral'}>{so.status_label}</Chip>
+                <Chip variant={salesOrderStatusVariant[so.status] ?? 'neutral'}>{so.status_label}</Chip>
                 <span className="hidden font-mono text-xs tabular-nums text-muted sm:inline">
                   {peso(so.total_amount)}
                 </span>
@@ -327,7 +313,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="font-mono text-lg font-medium text-primary">{so.so_number}</span>
-          <Chip variant={SO_STATUS_VARIANT[so.status] ?? 'neutral'}>{so.status_label}</Chip>
+          <Chip variant={salesOrderStatusVariant[so.status] ?? 'neutral'}>{so.status_label}</Chip>
         </div>
         <Button variant="secondary" size="md" icon={<LuSearch size={13} />} onClick={onClear}>
           Track another

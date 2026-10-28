@@ -52,6 +52,16 @@ class CustomerResource extends JsonResource
             'delivery_address'   => $this->delivery_address,
             'delivery_contact_person' => $this->delivery_contact_person,
             'delivery_contact_phone'  => $this->delivery_contact_phone,
+            'allowed_payment_methods' => $this->allowed_payment_methods,
+            'shipping_payer'          => $this->shipping_payer,
+            'agreement_starts_on'     => $this->agreement_starts_on?->toDateString(),
+            'agreement_ends_on'       => $this->agreement_ends_on?->toDateString(),
+            'agreement_status'        => $this->agreementStatus(),
+            'warranty_duration_days'  => $this->warranty_duration_days,
+            'warranty_report_window_days' => $this->warranty_report_window_days,
+            'warranty_start_basis'    => $this->warranty_start_basis,
+            'warranty_covered_issues' => $this->warranty_covered_issues,
+            'warranty_remedies'       => $this->warranty_remedies,
             'tin'                => $canSeeTin ? $this->tin : $this->maskTin($this->tin),
             'credit_limit'       => $this->credit_limit ? (string) $this->credit_limit : null,
             'credit_used'        => $creditUsedRaw !== null ? Money::round2($creditUsed) : null,
@@ -73,5 +83,15 @@ class CustomerResource extends JsonResource
         $len = mb_strlen($tin);
         if ($len <= 4) return str_repeat('•', $len);
         return str_repeat('•', $len - 4) . mb_substr($tin, -4);
+    }
+
+    private function agreementStatus(): string
+    {
+        $startsOn = $this->agreement_starts_on?->toDateString();
+        $endsOn = $this->agreement_ends_on?->toDateString();
+        if ($startsOn === null && $endsOn === null) return 'not_recorded';
+        if ($startsOn !== null && today()->toDateString() < $startsOn) return 'not_yet_effective';
+        if ($endsOn !== null && today()->toDateString() > $endsOn) return 'expired';
+        return 'in_effect';
     }
 }

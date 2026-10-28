@@ -5,7 +5,7 @@ import { LuPlus, LuCheck, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { adjustmentsApi, type AdjustmentListParams } from '@/api/payroll/adjustments';
 import { Button } from '@/components/ui/Button';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -18,23 +18,10 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
+import { payrollAdjustmentStatusVariant } from '@/lib/statusVariants';
 import type { PayrollAdjustment } from '@/types/payroll';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-const statusVariant = (s: string | null | undefined): ChipVariant => {
-  switch (s) {
-    case 'approved':
-      return 'success';
-    case 'applied':
-      return 'success';
-    case 'pending':
-      return 'warning';
-    case 'rejected':
-      return 'danger';
-    default:
-      return 'neutral';
-  }
-};
 
 export default function PayrollAdjustmentsPage() {
   const navigate = useNavigate();
@@ -152,7 +139,7 @@ export default function PayrollAdjustmentsPage() {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={statusVariant(r.status)}>{labels.get(r.status) ?? r.status_label}</Chip>
+        <Chip variant={payrollAdjustmentStatusVariant[r.status]}>{labels.get(r.status) ?? r.status_label}</Chip>
       ),
     },
     {

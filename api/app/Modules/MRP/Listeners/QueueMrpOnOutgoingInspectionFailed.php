@@ -25,7 +25,7 @@ class QueueMrpOnOutgoingInspectionFailed
         }
 
         $workOrder = WorkOrderOutput::query()->with('workOrder')->find($inspection->work_order_output_id)?->workOrder;
-        if (! $workOrder?->coversSalesOrderLine()) {
+        if (! $workOrder?->coversSalesOrderLine() || $inspection->usesFullPieceCapture()) {
             return;
         }
 

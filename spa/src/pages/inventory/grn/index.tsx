@@ -16,15 +16,8 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-import type { GoodsReceiptNote, GrnStatus } from '@/types/inventory';
-
-const variant: Record<GrnStatus, 'neutral' | 'warning' | 'success' | 'info' | 'danger'> = {
-  draft: 'neutral',
-  pending_qc: 'warning',
-  accepted: 'success',
-  partial_accepted: 'info',
-  rejected: 'danger',
-};
+import type { GoodsReceiptNote } from '@/types/inventory';
+import { grnStatusVariant } from '@/lib/statusVariants';
 
 interface GrnListParams extends ListParams {
   status?: string;
@@ -81,7 +74,7 @@ export default function GrnListPage() {
   },
   {
    key: 'status', header: 'Status', width: 150, minWidth: 120, maxWidth: 190,
-   cell: (r) => <Chip variant={variant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>,
+   cell: (r) => <Chip variant={grnStatusVariant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>,
   },
   {
    key: 'qcHandoff', header: 'QC handoff', width: 180, minWidth: 140, maxWidth: 240,

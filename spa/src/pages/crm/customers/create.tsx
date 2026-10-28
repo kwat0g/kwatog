@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -12,7 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
-import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
+import { CustomerForm, customerCreateResolver, customerSchema, type CustomerFormValues } from './form';
 
 import { FormActions } from '@/components/ui/FormActions';
 type FormValues = CustomerFormValues;
@@ -22,7 +21,7 @@ export default function CrmCustomerCreatePage() {
  const qc = useQueryClient();
 
  const methods = useForm<z.input<typeof customerSchema>, unknown, FormValues>({
- resolver: zodResolver(customerSchema),
+ resolver: customerCreateResolver,
  defaultValues: {
  name: '',
  contact_person: '',
@@ -32,6 +31,8 @@ export default function CrmCustomerCreatePage() {
  delivery_address: '',
  delivery_contact_person: '',
  delivery_contact_phone: '',
+ allowed_payment_methods: [], shipping_payer: '', agreement_starts_on: '', agreement_ends_on: '',
+ warranty_duration_days: undefined, warranty_report_window_days: undefined, warranty_start_basis: '', warranty_covered_issues: [], warranty_remedies: [],
  is_active: true,
  },
  });
@@ -54,6 +55,15 @@ export default function CrmCustomerCreatePage() {
  delivery_address: values.delivery_address || undefined,
  delivery_contact_person: values.delivery_contact_person || undefined,
  delivery_contact_phone: values.delivery_contact_phone || undefined,
+ allowed_payment_methods: values.allowed_payment_methods?.length ? values.allowed_payment_methods : null,
+ shipping_payer: values.shipping_payer || null,
+ agreement_starts_on: values.agreement_starts_on || null,
+ agreement_ends_on: values.agreement_ends_on || null,
+ warranty_duration_days: values.warranty_duration_days ?? null,
+ warranty_report_window_days: values.warranty_report_window_days ?? null,
+ warranty_start_basis: values.warranty_start_basis || null,
+ warranty_covered_issues: values.warranty_covered_issues?.length ? values.warranty_covered_issues : null,
+ warranty_remedies: values.warranty_remedies?.length ? values.warranty_remedies : null,
  credit_limit: values.credit_limit != null ? String(values.credit_limit) : null,
  };
  return crmCustomersApi.create(payload);
@@ -74,13 +84,15 @@ export default function CrmCustomerCreatePage() {
  <div>
  <PageHeader
  title="New customer"
+  subtitle="Customer details and defaults used for future orders."
  backTo="/crm/customers"
  backLabel="Customers"
  />
-      <FormDraftBanner safety={safety} />
+ <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-5">
+      <FormDraftBanner safety={safety} inset={false} />
  <FormProvider {...methods}>
  <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}>
- <CustomerForm />
+ <CustomerForm requireWarrantyDefaults />
  <FormActions>
  <Button
  type="button"
@@ -100,6 +112,7 @@ export default function CrmCustomerCreatePage() {
  </FormActions>
  </form>
  </FormProvider>
+ </div>
  </div>
  );
 }

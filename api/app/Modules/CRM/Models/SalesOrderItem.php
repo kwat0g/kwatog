@@ -24,6 +24,7 @@ class SalesOrderItem extends Model
     protected $fillable = [
         'fulfillment_policy', 'sales_order_id', 'product_id', 'quantity', 'unit_price',
         'total', 'quantity_delivered', 'delivery_date', 'requested_delivery_date', 'price_source', 'price_agreement_id', 'pricing_date', 'price_tier_min_qty',
+        'warranty_terms_snapshot',
     ];
 
     protected $casts = [
@@ -34,6 +35,7 @@ class SalesOrderItem extends Model
         'delivery_date'      => 'date',
         'pricing_date' => 'date',
         'requested_delivery_date' => 'date',
+        'warranty_terms_snapshot' => 'array',
     ];
 
     public function stockAllocations(): \Illuminate\Database\Eloquent\Relations\HasMany

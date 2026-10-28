@@ -147,6 +147,10 @@ class FinishFirstWorkOrderTest extends TestCase
         ]);
         $response->assertSuccessful();
         $this->assertSame('completed', $this->wo->fresh()->status->value);
+        $this->getJson('/api/v1/production/my-work-orders/'.$this->wo->hash_id.'/outputs')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.produced_count', 200);
     }
 
     public function test_finish_first_output_accepts_legacy_good_count_payload(): void

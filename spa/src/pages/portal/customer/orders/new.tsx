@@ -7,6 +7,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -21,6 +22,12 @@ interface OrderLine {
   product: PortalCatalogItem & { unit_price: string };
   quantity: string;
 }
+
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'check', label: 'Check' },
+  { value: 'bank_transfer', label: 'Bank transfer' },
+] as const;
 
 export default function CustomerPlaceOrderPage() {
   const navigate = useNavigate();
@@ -47,6 +54,7 @@ export default function CustomerPlaceOrderPage() {
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'check' | 'bank_transfer' | ''>('');
   const [lines, setLines] = useState<OrderLine[]>([]);
   const addProductsRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +74,14 @@ export default function CustomerPlaceOrderPage() {
     queryKey: ['portal', 'customer', 'business-policies'],
     queryFn: customerPortalApi.businessPolicies,
   });
+  const { data: portalUser } = useQuery({
+    queryKey: ['portal', 'customer', 'me'],
+    queryFn: customerPortalApi.me,
+  });
+  const allowedPaymentMethods = portalUser?.customer_terms?.allowed_payment_methods ?? PAYMENT_METHODS.map((method) => method.value);
+  const paymentMethodOptions = PAYMENT_METHODS.filter((method) => allowedPaymentMethods.includes(method.value));
+  const shippingPayer = portalUser?.customer_terms?.shipping_payer;
+  const agreementStatus = portalUser?.customer_terms?.agreement_status;
   const vatRegistered = policies?.vat_status?.trim().toLowerCase() === 'vat registered';
   const rate = policies?.vat_rate != null ? Number(policies.vat_rate) : null;
   useEffect(() => {
@@ -74,6 +90,7 @@ export default function CustomerPlaceOrderPage() {
     setOrderDate(existingOrder.date ?? '');
     setDeliveryDate(existingOrder.requested_delivery_dates?.[0] ?? existingOrder.items?.[0]?.delivery_date ?? '');
     setNotes(existingOrder.notes ?? '');
+    setPaymentMethod(existingOrder.payment_method ?? '');
     setLines((existingOrder.items ?? []).flatMap((item) => item.product ? [{
       product: { ...item.product, part_number: item.product.part_number ?? '', name: item.product.name ?? '', unit_of_measure: item.product.unit_of_measure ?? '', unit_price: item.unit_price, price_source: item.price_source, pricing_method: 'flat' },
       quantity: item.quantity,
@@ -126,6 +143,7 @@ export default function CustomerPlaceOrderPage() {
     mutationFn: () => {
       const payload = {
         notes: notes.trim() || undefined,
+        payment_method: paymentMethod || undefined,
         quote_signature: quote?.signature,
         items: lines.map((line) => ({
           product_id: line.product.id,
@@ -134,7 +152,7 @@ export default function CustomerPlaceOrderPage() {
         })),
       };
       if (id) return customerPortalApi.updateOrder(id, payload);
-      const fingerprint = JSON.stringify({ notes: payload.notes, items: payload.items });
+      const fingerprint = JSON.stringify({ notes: payload.notes, payment_method: payload.payment_method, items: payload.items });
       if (orderRequestRef.current?.fingerprint !== fingerprint) {
         orderRequestRef.current = { fingerprint, key: window.crypto.randomUUID() };
       }
@@ -152,7 +170,7 @@ export default function CustomerPlaceOrderPage() {
   });
 
   const canSubmit =
-    (!id || !!existingOrder?.capabilities?.can_edit) && taxReady && !!quote && !deliveryError && lines.length > 0 && invalidLines.length === 0 && !createMut.isPending;
+    (!id || !!existingOrder?.capabilities?.can_edit) && !!portalUser && !!paymentMethod && paymentMethodOptions.some((method) => method.value === paymentMethod) && taxReady && !!quote && !deliveryError && lines.length > 0 && invalidLines.length === 0 && !createMut.isPending;
   const submissionError = createMut.isError
     ? createMut.error.response?.data?.message ?? 'Unable to submit your order. Your items are saved on this page; please try again.'
     : null;
@@ -191,6 +209,12 @@ export default function CustomerPlaceOrderPage() {
                 min={earliestDeliveryDate} value={deliveryDate} error={deliveryError}
                 helper={id ? `Current schedule: ${existingOrder?.delivery_dates?.join(', ') || existingOrder?.items?.[0]?.delivery_date || '—'}. Select a date to save.` : `Earliest available date: ${earliestDeliveryDate}.`}
                 onChange={(e) => setDeliveryDate(e.target.value)} />
+              <Select label="Payment method" required value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>
+                <option value="">Choose payment method</option>
+                {paymentMethodOptions.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}
+              </Select>
+              <p className="col-span-2 -mt-1 text-xs text-muted">Select your requested payment method. Finance records payment against the invoice.</p>
+              {paymentMethodOptions.length === 0 && <p role="alert" className="col-span-2 text-sm text-warning-fg">No payment methods are configured for this account. Contact Sales before placing an order.</p>}
             </div>
           </section>
           <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -306,9 +330,16 @@ export default function CustomerPlaceOrderPage() {
                 <div className="flex items-center justify-between gap-3"><dt className="text-muted">{taxReady && appliedVat ? `VAT (${Number((appliedVatRate * 100).toFixed(4))}%)` : 'VAT'}</dt>
                   <dd data-testid="order-vat" className="font-mono tabular-nums">{vatCentavos != null ? formatPeso(fromCentavos(vatCentavos)) : 'Pending'}</dd></div>
                 <div className="border-t border-default pt-4">
-                  <dt className="font-medium">Total amount</dt>
+                  <dt className="font-medium">Product total</dt>
                   <dd data-testid="order-total" className="mt-1 font-mono text-2xl font-semibold tabular-nums">{orderTotal != null ? formatPeso(orderTotal) : 'Pending'}</dd>
                   <p className="mt-1 text-xs text-muted">{taxReady ? appliedVat ? 'VAT included' : 'No VAT applied' : 'Loading tax…'}</p>
+                  <p className="mt-1 text-xs text-muted">{agreementStatus === 'expired' || agreementStatus === 'not_yet_effective'
+                    ? 'Your saved agreement was not in effect on this order date. Sales will confirm freight responsibility and any charge separately; freight is excluded here.'
+                    : shippingPayer === 'company'
+                      ? 'Freight is paid by Ogami and excluded from this customer total.'
+                      : shippingPayer === 'customer'
+                        ? 'Freight is excluded. Sales must confirm any customer-paid charge separately.'
+                        : 'Freight payer and amount are not recorded. Confirm with Sales before accepting final charges.'}</p>
                 </div>
               </dl>
               {policyError || (policies && !taxReady) ? <p role="alert" className="mt-4 text-sm text-danger-fg">
@@ -322,7 +353,8 @@ export default function CustomerPlaceOrderPage() {
                 disabled={!canSubmit} loading={createMut.isPending}>{createMut.isPending ? id ? 'Saving changes…' : 'Submitting order…' : id ? 'Save changes' : 'Submit order for review'}</Button>
               <p role="status" className="mt-3 text-xs leading-relaxed text-muted">
                 {lines.length === 0 ? 'Add at least one product to continue.'
-                  : deliveryError || invalidLines.length > 0 ? 'Complete the highlighted fields to continue.'
+                  : !paymentMethod || paymentMethodOptions.length === 0 ? 'Choose an available payment method to continue.'
+                    : deliveryError || invalidLines.length > 0 ? 'Complete the highlighted fields to continue.'
                     : quote ? 'Prices checked. Sales will review and confirm your order.' : 'Checking prices for your quantity and delivery date…'}
               </p>
             </aside>

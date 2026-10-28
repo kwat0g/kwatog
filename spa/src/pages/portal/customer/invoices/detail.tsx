@@ -12,10 +12,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { invoiceStatusVariant } from '@/lib/statusVariants';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -57,7 +58,7 @@ export default function CustomerInvoiceDetailPage() {
           invoice ? (
             <>
               {invoice.invoice_number}{' '}
-              <Chip variant={isOpen ? 'warning' : chipVariantForStatus(invoice.status)}>
+              <Chip variant={invoiceStatusVariant[pendingPayment ? 'awaiting payment verification' : (invoice.display_status ?? invoice.status)] ?? 'neutral'}>
                 {isOpen ? pendingPayment ? 'Awaiting payment verification' : 'Awaiting payment' : invoice.status_label ?? invoice.status}
               </Chip>
             </>
@@ -100,6 +101,16 @@ export default function CustomerInvoiceDetailPage() {
               <StatCard label="Balance Due" value={formatPeso(invoice.balance)} />
               <StatCard label="Due Date" value={invoice.due_date ? formatDate(invoice.due_date) : '—'} />
             </KpiGrid>
+
+            {invoice.sales_order?.payment_method && <p className="text-sm text-muted">
+              Order {invoice.sales_order.so_number} payment method: <span className="font-medium text-primary">{{ cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer' }[invoice.sales_order.payment_method]}</span>.
+            </p>}
+
+            {isOpen && !pendingPayment && invoice.can_submit_payment === false && invoice.payment_submission_blocked_reason?.startsWith('Bank transfer was not selected') && (
+              <p role="status" className="rounded-md border border-warning bg-warning-bg px-4 py-3 text-sm text-warning-fg">
+                {invoice.payment_submission_blocked_reason}
+              </p>
+            )}
 
             {!!invoice.payment_submissions?.length && <Panel title="Payment submissions">
               <div className="space-y-4">

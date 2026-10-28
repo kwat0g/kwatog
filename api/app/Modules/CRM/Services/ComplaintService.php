@@ -20,6 +20,8 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
@@ -71,6 +73,9 @@ class ComplaintService
             'customer:id,name',
             'product:id,part_number,name',
             'salesOrder:id,so_number',
+            'deliveryItem.delivery.invoice',
+            'deliveryItem.delivery.salesOrder:id,so_number',
+            'deliveryItem.salesOrderItem.product',
             'ncr:id,ncr_number,status,severity,disposition',
             'creator:id,name,role_id',
             'assignee:id,name',
@@ -94,6 +99,9 @@ class ComplaintService
             'customer:id,name,email,contact_person',
             'product:id,part_number,name',
             'salesOrder:id,so_number',
+            'deliveryItem.delivery.invoice',
+            'deliveryItem.delivery.salesOrder:id,so_number',
+            'deliveryItem.salesOrderItem.product',
             'ncr:id,ncr_number,status,severity,disposition',
             'replacementWorkOrder:id,wo_number,status,quantity_target',
             'creator:id,name,role_id',
@@ -119,6 +127,7 @@ class ComplaintService
                 'customer_id'       => (int) $data['customer_id'],
                 'product_id'        => $data['product_id']      ?? null,
                 'sales_order_id'    => $data['sales_order_id']  ?? null,
+                'delivery_item_id'  => $data['delivery_item_id'] ?? null,
                 'received_date'     => $data['received_date'],
                 'severity'          => $data['severity'],
                 'status'            => 'open',
@@ -435,6 +444,9 @@ class ComplaintService
         $salesOrderId = isset($data['sales_order_id']) && $data['sales_order_id'] !== null
             ? (int) $data['sales_order_id']
             : null;
+        $deliveryItemId = isset($data['delivery_item_id']) && $data['delivery_item_id'] !== null
+            ? (int) $data['delivery_item_id']
+            : null;
 
         // Match SalesOrderService's order → product → customer lock order for
         // complaints that cite a sales order, reducing cross-module deadlocks.
@@ -447,8 +459,9 @@ class ComplaintService
         }
 
         if ($productId !== null) {
-            $product = Product::query()->lockForUpdate()->find($productId);
-            if (! $product || ! $product->is_active) {
+            $product = ($deliveryItemId !== null ? Product::withTrashed() : Product::query())
+                ->lockForUpdate()->find($productId);
+            if (! $product || ($deliveryItemId === null && ! $product->is_active)) {
                 throw new BusinessRuleException('The selected product is inactive or no longer exists.');
             }
         }
@@ -464,6 +477,20 @@ class ComplaintService
             }
             if ($productId !== null && ! $salesOrder->items()->where('product_id', $productId)->exists()) {
                 throw new BusinessRuleException('The selected product is not part of the selected sales order.');
+            }
+        }
+
+        if ($deliveryItemId !== null) {
+            $deliveryItem = DeliveryItem::query()->with(['delivery', 'salesOrderItem'])->find($deliveryItemId);
+            $delivery = $deliveryItem?->delivery;
+            $deliveryStatus = $delivery?->status instanceof \BackedEnum
+                ? $delivery->status->value
+                : (string) $delivery?->status;
+            if (! $deliveryItem || ! $delivery
+                || ! in_array($deliveryStatus, [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value], true)
+                || (int) $delivery->sales_order_id !== $salesOrderId
+                || (int) $deliveryItem->salesOrderItem?->product_id !== $productId) {
+                throw new BusinessRuleException('The selected delivered item does not match this complaint.');
             }
         }
 

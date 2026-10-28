@@ -13,25 +13,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatPeso } from '@/lib/formatNumber';
-import type { SalesOrder, SalesOrderStatus } from '@/types/crm';
+import { salesOrderStatusVariant } from '@/lib/statusVariants';
+import type { SalesOrder } from '@/types/crm';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const statusVariant: Record<
-  SalesOrderStatus,
-  'success' | 'info' | 'warning' | 'neutral' | 'danger'
-> = {
-  draft: 'neutral',
-  awaiting_confirmation: 'info',
-  delivery_negotiation: 'warning',
-  confirmed: 'info',
-  in_production: 'info',
-  partially_delivered: 'warning',
-  delivered: 'success',
-  invoiced: 'success',
-  paid: 'success',
-  closed: 'success',
-  cancelled: 'danger',
-};
 
 const DEFAULT_FILTERS: SalesOrderListParams = {
   page: 1,
@@ -76,7 +61,7 @@ export default function SalesOrdersListPage() {
     { key: 'date', header: 'Date', align: 'right', cell: (r) => <NumCell>{r.date}</NumCell> },
     {
       key: 'items',
-      header: 'Lines',
+      header: 'Items',
       align: 'right',
       cell: (r) => <NumCell>{r.item_count}</NumCell>,
     },
@@ -90,7 +75,7 @@ export default function SalesOrdersListPage() {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={statusVariant[r.status]}>
+        <Chip variant={salesOrderStatusVariant[r.status]}>
           {statusLabels.get(r.status) ?? r.status_label}
         </Chip>
       ),
@@ -98,15 +83,6 @@ export default function SalesOrdersListPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
-    {
-      key: 'signal',
-      label: 'Queue',
-      type: 'select',
-      options: [
-        { value: '', label: 'All orders' },
-        { value: 'awaiting_confirmation', label: 'Awaiting confirmation or response' },
-      ],
-    },
     {
       key: 'status',
       label: 'Status',
@@ -141,6 +117,7 @@ export default function SalesOrdersListPage() {
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
         searchPlaceholder="Search SO number or customer…"
+        dateRange={{ fromKey: 'date_from', toKey: 'date_to', label: 'Order date' }}
       />
       {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
       {isError && (

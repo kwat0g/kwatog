@@ -12,10 +12,11 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { deliveryStatusVariant } from '@/lib/statusVariants';
 
 async function openProof(deliveryId: string, proofId: string, fileName: string) {
   try {
@@ -66,7 +67,7 @@ export default function CustomerDeliveryDetailPage() {
           delivery ? (
             <>
               {delivery.delivery_number}{' '}
-              <Chip variant={chipVariantForStatus(delivery.status)}>
+              <Chip variant={deliveryStatusVariant[delivery.status]}>
                 {delivery.status_label ?? delivery.status.replace(/_/g, ' ')}
               </Chip>
             </>

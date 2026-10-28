@@ -14,6 +14,8 @@ use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoicePaymentSubmission;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use Illuminate\Database\QueryException;
@@ -123,7 +125,33 @@ class InvoicePaymentSubmissionService
         $pending = $invoice->relationLoaded('paymentSubmissions')
             ? $invoice->paymentSubmissions->contains(fn ($row) => $row->status === Status::Pending)
             : $invoice->paymentSubmissions()->where('status', Status::Pending)->exists();
-        return $pending ? 'Payment already submitted. Await Finance verification.' : null;
+        if ($pending) return 'Payment already submitted. Await Finance verification.';
+        return $this->bankTransferAllowed($invoice)
+            ? null
+            : 'Bank transfer was not selected or allowed for this invoice. Contact Finance to arrange payment using the agreed method.';
+    }
+
+    private function bankTransferAllowed(Invoice $invoice): bool
+    {
+        $order = $invoice->sales_order_id ? SalesOrder::withTrashed()->find($invoice->sales_order_id) : null;
+        $snapshot = $order?->customer_terms_snapshot;
+        if ($order !== null) {
+            if (! is_string($order->payment_method) || $order->payment_method === '') return false;
+            if ($order->payment_method !== 'bank_transfer') return false;
+            if (is_array($snapshot) && array_key_exists('allowed_payment_methods', $snapshot)) {
+                $allowedMethods = $snapshot['allowed_payment_methods'];
+                return $allowedMethods === null || (is_array($allowedMethods) && in_array('bank_transfer', $allowedMethods, true));
+            }
+            return true;
+        }
+
+        $customer = Customer::withTrashed()->find($invoice->customer_id);
+        $allowedMethods = is_array($snapshot) && array_key_exists('allowed_payment_methods', $snapshot)
+            ? $snapshot['allowed_payment_methods'] : $customer?->allowed_payment_methods;
+
+        return ($customer !== null || (is_array($snapshot) && array_key_exists('allowed_payment_methods', $snapshot)))
+            && ($allowedMethods === null
+            || (is_array($allowedMethods) && in_array('bank_transfer', $allowedMethods, true)));
     }
 
     public function verify(Invoice $invoice, InvoicePaymentSubmission $submission, string $cashAccountId, User $by): InvoicePaymentSubmission

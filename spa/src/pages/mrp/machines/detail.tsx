@@ -9,15 +9,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import type { MachineStatus } from '@/types/mrp';
-
-const variant: Record<MachineStatus, 'success' | 'neutral' | 'info' | 'danger' | 'warning'> = {
- running: 'success',
- idle: 'neutral',
- maintenance: 'info',
- breakdown: 'danger',
- offline: 'neutral',
-};
+import { machineStatusVariant } from '@/lib/statusVariants';
 
 export default function MachineDetailPage() {
  const { id } = useParams<{ id: string }>();
@@ -51,7 +43,7 @@ export default function MachineDetailPage() {
  <div className="flex items-center gap-3">
  <span className="font-mono">{data.machine_code}</span>
  <span>{data.name}</span>
- <Chip variant={variant[data.status]}>{data.status_label}</Chip>
+ <Chip variant={machineStatusVariant[data.status]}>{data.status_label}</Chip>
  </div>
  }
  backTo="/mrp/machines"
@@ -107,7 +99,7 @@ export default function MachineDetailPage() {
  <dt className="text-muted">Available now</dt>
  <dd className="font-mono">{data.is_available_now ? 'Yes' : 'No'}</dd>
  <dt className="text-muted">Status</dt>
- <dd><Chip variant={variant[data.status]}>{data.status_label}</Chip></dd>
+ <dd><Chip variant={machineStatusVariant[data.status]}>{data.status_label}</Chip></dd>
  </dl>
  </Panel>
  <Panel title="OEE">

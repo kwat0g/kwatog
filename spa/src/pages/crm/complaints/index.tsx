@@ -11,12 +11,11 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import type { CustomerComplaint, ComplaintSeverity, ComplaintStatus } from '@/types/crm';
+import type { CustomerComplaint, ComplaintSeverity } from '@/types/crm';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { complaintStatusVariant } from '@/lib/statusVariants';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const STATUS_CHIP: Record<ComplaintStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
- open: 'warning', investigating: 'info', resolved: 'info', closed: 'success', cancelled: 'neutral' };
 const SEVERITY_CHIP: Record<ComplaintSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  low: 'neutral', medium: 'info', high: 'warning', critical: 'danger' };
 
@@ -53,7 +52,7 @@ export default function ComplaintsListPage() {
  { key: 'received', header: 'Received', align: 'right',
  cell: (r) => <NumCell>{r.received_date ?? '—'}</NumCell> },
  { key: 'status', header: 'Status',
- cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
+ cell: (r) => <Chip variant={complaintStatusVariant[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
  ];
 
  const filterConfig: FilterConfig[] = [

@@ -287,7 +287,11 @@ class AssignedWorkOrderController
 
     public function outputs(Request $request, WorkOrder $workOrder): JsonResponse
     {
-        $crew = $this->crews->assertCanRead($request->user(), $workOrder, $this->context($request));
+        try {
+            $crew = $this->crews->assertCanRead($request->user(), $workOrder, $this->context($request));
+        } catch (ModelNotFoundException) {
+            $crew = $this->crews->assertCanReadHistorical($request->user(), $workOrder, $this->context($request));
+        }
 
         return response()->json(['data' => $workOrder->outputs()->where('work_order_crew_id', $crew->id)
             ->reorder()->orderByDesc('recorded_at')->orderByDesc('id')->limit(20)->get()

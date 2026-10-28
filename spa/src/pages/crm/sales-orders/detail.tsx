@@ -26,27 +26,11 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso, formatInt, formatDecimal } from '@/lib/formatNumber';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { ChainResultModal, ChainErrorPanel } from './chain-result';
-import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
+import type { SoChainResult } from '@/types/crm';
+import { salesOrderStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
-
-const statusVariant: Record<
-  SalesOrderStatus,
-  'success' | 'info' | 'warning' | 'neutral' | 'danger'
-> = {
-  draft: 'neutral',
-  awaiting_confirmation: 'info',
-  delivery_negotiation: 'warning',
-  confirmed: 'info',
-  in_production: 'info',
-  partially_delivered: 'warning',
-  delivered: 'success',
-  invoiced: 'success',
-  paid: 'success',
-  closed: 'success',
-  cancelled: 'danger',
-};
 
 export default function SalesOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -292,7 +276,7 @@ export default function SalesOrderDetailPage() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <span className="font-mono">{data.so_number}</span>
             <Chip
-              variant={progressLabel === 'Quality hold' ? 'danger' : statusVariant[data.status]}
+              variant={progressLabel === 'Quality hold' ? 'danger' : salesOrderStatusVariant[data.status]}
             >
               {progressLabel}
             </Chip>
@@ -607,10 +591,22 @@ export default function SalesOrderDetailPage() {
                 )}
                 <dt className="text-muted">Payment terms</dt>
                 <dd className="col-span-2 font-mono">Net {data.payment_terms_days}</dd>
+                <dt className="text-muted">Payment method</dt>
+                <dd className="col-span-2">{data.payment_method ? ({ cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer' }[data.payment_method]) : 'Not selected'}</dd>
                 <dt className="text-muted">Delivery terms</dt>
                 <dd className="col-span-2">{data.delivery_terms ?? '—'}</dd>
                 <dt className="text-muted">Incoterm</dt>
                 <dd className="col-span-2">{data.incoterm ?? '—'}</dd>
+                <dt className="text-muted">Freight</dt>
+                <dd className="col-span-2">
+                  {data.customer_terms_snapshot?.agreement_status === 'expired' || data.customer_terms_snapshot?.agreement_status === 'not_yet_effective'
+                    ? 'Customer agreement was not in effect on order date; confirm freight responsibility and any charge before final charges.'
+                    : data.customer_terms_snapshot?.shipping_payer === 'company'
+                      ? 'Company responsibility; excluded from customer total.'
+                      : data.customer_terms_snapshot?.shipping_payer === 'customer'
+                        ? 'Customer responsibility; amount not quoted in system. Confirm separately before final charges.'
+                        : 'Responsibility and amount not recorded; confirm with customer before final charges.'}
+                </dd>
                 <dt className="text-muted">Created by</dt>
                 <dd className="col-span-2">{data.creator?.name ?? '—'}</dd>
                 <dt className="text-muted">Notes</dt>

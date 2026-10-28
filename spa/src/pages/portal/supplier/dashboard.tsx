@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { LuArrowRight } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
+import { purchaseOrderStatusVariant, supplierInvoiceStatusVariant } from '@/lib/statusVariants';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -96,7 +97,7 @@ export default function SupplierDashboardPage() {
                           <Td className="text-muted">{po.date ? formatDate(po.date) : '—'}</Td>
                           <Td align="right" mono>{formatPeso(po.total_amount)}</Td>
                           <Td align="right" mono>
-                            <Chip variant={chipVariantForStatus(po.status)}>
+                            <Chip variant={purchaseOrderStatusVariant[po.status]}>
                               {po.status_label ?? po.status.replace(/_/g, ' ')}
                             </Chip>
                           </Td>
@@ -136,7 +137,7 @@ export default function SupplierDashboardPage() {
                           <Td className="text-muted">{inv.date ? formatDate(inv.date) : '—'}</Td>
                           <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>
                           <Td align="right" mono>
-                            <Chip variant={chipVariantForStatus(inv.status)}>
+                            <Chip variant={supplierInvoiceStatusVariant[inv.status] ?? 'neutral'}>
                               {inv.status_label ?? inv.status.replace(/_/g, ' ')}
                             </Chip>
                           </Td>

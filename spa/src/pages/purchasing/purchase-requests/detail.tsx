@@ -34,24 +34,14 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { fromApprovalRecords } from '@/lib/approvals';
 import { buildP2pChain } from '@/lib/chains';
-import type { PurchaseRequestSourcingMethod, PurchaseRequestStatus } from '@/types/purchasing';
+import type { PurchaseRequestSourcingMethod } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
+import { purchaseRequestStatusVariant } from '@/lib/statusVariants';
 const errMsg = (e: unknown, fallback: string) =>
   (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
-const statusVariant: Record<
-  PurchaseRequestStatus,
-  'neutral' | 'warning' | 'info' | 'success' | 'danger'
-> = {
-  draft: 'neutral',
-  pending: 'info',
-  approved: 'success',
-  rejected: 'danger',
-  converted: 'neutral',
-  cancelled: 'neutral',
-};
 
 export default function PurchaseRequestDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -156,7 +146,7 @@ export default function PurchaseRequestDetailPage() {
         backLabel="Purchase requests"
         actions={
           <div className="flex items-center gap-2">
-            <Chip variant={statusVariant[data.status]}>{data.status_label ?? data.status}</Chip>
+            <Chip variant={purchaseRequestStatusVariant[data.status]}>{data.status_label ?? data.status}</Chip>
             {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
             {data.is_urgent && (
               <Chip variant="danger">

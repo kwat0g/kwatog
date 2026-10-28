@@ -12,12 +12,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { usePermission } from '@/hooks/usePermission';
 import { formatInt } from '@/lib/formatNumber';
-import type { Mold, MoldStatus } from '@/types/mrp';
+import { moldStatusVariant } from '@/lib/statusVariants';
+import type { Mold } from '@/types/mrp';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const variant: Record<MoldStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
- available: 'success', in_use: 'info', maintenance: 'warning', retired: 'neutral' };
-
 const DEFAULT_FILTERS: MoldListParams = {
  page: 1, per_page: 25,
 };
@@ -73,7 +71,7 @@ export default function MoldsListPage() {
  </div>
  ) },
  { key: 'machines', header: 'Compatible machines', align: 'right', cell: (r) => <NumCell>{r.compatible_machines_count}</NumCell> },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => <Chip variant={moldStatusVariant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
  ];
 
  const filterConfig: FilterConfig[] = [

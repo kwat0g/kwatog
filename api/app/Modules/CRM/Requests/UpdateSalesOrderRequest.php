@@ -34,6 +34,7 @@ class UpdateSalesOrderRequest extends FormRequest
             'customer_id'              => ['sometimes', 'required', 'integer', Rule::exists('customers', 'id')->where(fn ($q) => $q->where('is_active', true)->whereNull('deleted_at'))],
             'date'                     => ['sometimes', 'required', 'date'],
             'payment_terms_days'       => ['nullable', 'integer', 'min:0', 'max:365'],
+            'payment_method'           => ['sometimes', 'nullable', 'string', Rule::in(['cash', 'check', 'bank_transfer'])],
             'delivery_terms'           => ['nullable', 'string', 'max:50'],
             'incoterm'                 => ['nullable', Rule::enum(Incoterm::class)],
             'notes'                    => ['nullable', 'string', 'max:2000'],

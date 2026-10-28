@@ -5,7 +5,7 @@ import { budgetingApi } from '@/api/accounting/budgeting';
 import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
@@ -17,6 +17,7 @@ import { formatCompactCurrency } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
 import { reportMutationError } from '@/lib/formErrors';
+import { budgetStatusVariant } from '@/lib/statusVariants';
 import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck, LuPencil, LuUndo2, LuTrash2 } from '@/lib/icons';
 import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -36,14 +37,6 @@ const MONTHS = [
   'Nov',
   'Dec',
 ] as const;
-
-const STATUS_VARIANT: Record<string, ChipVariant> = {
-  active: 'success',
-  approved: 'success',
-  submitted: 'warning',
-  draft: 'neutral',
-  closed: 'neutral',
-};
 
 export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -140,7 +133,7 @@ export default function BudgetDetailPage() {
         title={budget.name}
         subtitle={
           <div className="flex items-center gap-3 mt-1">
-            <Chip variant={STATUS_VARIANT[budget.status] ?? 'neutral'}>
+            <Chip variant={budgetStatusVariant[budget.status]}>
               {budget.status_label ?? budget.status}
             </Chip>
             {budget.department && (

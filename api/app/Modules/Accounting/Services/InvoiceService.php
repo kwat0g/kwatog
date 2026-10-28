@@ -102,7 +102,7 @@ class InvoiceService
             'collections.journalEntry:id,entry_number',
             'journalEntry:id,entry_number,date,status,total_debit,total_credit',
             // 2026-08-08 — compact O2C stepper: the upstream SO + delivery.
-            'salesOrder:id,so_number',
+            'salesOrder:id,so_number,payment_method',
             'delivery:id,delivery_number,status',
             // role_id required so User's $with=['role'] eager-load can resolve.
             'creator:id,name,role_id',
@@ -155,7 +155,7 @@ class InvoiceService
                 'prebill_reason' => $lifecycle === 'prebill' ? trim((string) $data['prebill_reason']) : null,
                 'date'           => $data['date'],
                 'due_date'       => $data['due_date']
-                    ?? Carbon::parse($data['date'])->addDays($customer->payment_terms_days)->toDateString(),
+                    ?? Carbon::parse($data['date'])->addDays($source['payment_terms_days'] ?? $customer->payment_terms_days)->toDateString(),
                 'is_vatable'     => $isVatable,
                 'vat_classification' => $classification,
                 'subtotal'       => $subtotal,
@@ -905,7 +905,7 @@ class InvoiceService
      * customer is authoritative on the invoice; source records may not be
      * combined across customers or across sales orders.
      *
-     * @return array{sales_order_id:?int, delivery_id:?int}
+     * @return array{sales_order_id:?int, delivery_id:?int, payment_terms_days:?int}
      */
     private function resolveSourceChain(array $data, Customer $customer): array
     {
@@ -915,6 +915,7 @@ class InvoiceService
             throw new BusinessRuleException('A delivery invoice must identify its sales order.');
         }
 
+        $salesOrder = null;
         if ($salesOrderId !== null) {
             $salesOrder = SalesOrder::query()->lockForUpdate()->find($salesOrderId);
             if (! $salesOrder) {
@@ -951,7 +952,11 @@ class InvoiceService
             app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
         }
 
-        return ['sales_order_id' => $salesOrderId, 'delivery_id' => $deliveryId];
+        return [
+            'sales_order_id' => $salesOrderId,
+            'delivery_id' => $deliveryId,
+            'payment_terms_days' => $salesOrder?->payment_terms_days,
+        ];
     }
 
     /**

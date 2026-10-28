@@ -16,7 +16,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
-import type { JobPostingStatus, JobApplication, ApplicationStage } from '@/types/recruitment';
+import type { JobPostingStatus, JobApplication } from '@/types/recruitment';
+import { applicationStageVariant } from '@/lib/statusVariants';
 
 const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 'info'> = {
  draft: 'neutral',
@@ -25,14 +26,6 @@ const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 
  filled: 'info',
 };
 
-const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
- new: 'neutral',
- screening: 'info',
- interview: 'warning',
- offer: 'info',
- hired: 'success',
- rejected: 'danger',
-};
 
 export default function PostingDetailPage() {
  const { id } = useParams<{ id: string }>();
@@ -98,7 +91,7 @@ export default function PostingDetailPage() {
 
  const appColumns: Column<JobApplication>[] = [
  { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
- { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
+ { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={applicationStageVariant[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
  { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
  ];
 

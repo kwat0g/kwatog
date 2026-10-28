@@ -14,12 +14,10 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Machine, MachineStatus } from '@/types/mrp';
+import { machineStatusVariant } from '@/lib/statusVariants';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const variant: Record<MachineStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
- running: 'success', idle: 'neutral', maintenance: 'info', breakdown: 'danger', offline: 'neutral' };
-
 export default function MachinesListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
@@ -59,7 +57,7 @@ export default function MachinesListPage() {
  { key: 'ops', header: 'Operators', align: 'right', cell: (r) => <NumCell>{Number(r.operators_required).toFixed(1)}</NumCell> },
  { key: 'hours', header: 'Hrs / day', align: 'right', cell: (r) => <NumCell>{Number(r.available_hours_per_day).toFixed(1)}</NumCell> },
  { key: 'molds', header: 'Compatible molds', align: 'right', cell: (r) => <NumCell>{r.compatible_molds_count}</NumCell> },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => <Chip variant={machineStatusVariant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
  ...(canTransition ? [{
  key: 'actions', header: '', align: 'right' as const,
  cell: (r: Machine) => {

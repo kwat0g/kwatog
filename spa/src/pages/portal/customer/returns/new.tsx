@@ -8,8 +8,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatDate } from '@/lib/formatDate';
 import { SkeletonForm } from '@/components/ui/Skeleton';
-import type { PortalReturnSourceOptions } from '@/types/b2b';
+import type { PortalReturnSourceOptions, PortalWarrantyAdvisory } from '@/types/b2b';
 
 type SourceKind = 'invoice' | 'sales_order' | 'delivery';
 type ReturnableLine = {
@@ -21,6 +22,8 @@ type ReturnableLine = {
   label: string;
   remaining: string;
   hasInventoryItem: boolean;
+  deliveryDate: string | null;
+  warrantyAdvisory: PortalWarrantyAdvisory | null;
 };
 
 function returnableLines(options: PortalReturnSourceOptions | undefined): ReturnableLine[] {
@@ -37,6 +40,8 @@ function returnableLines(options: PortalReturnSourceOptions | undefined): Return
       label: line.label,
       remaining: line.remaining_quantity,
       hasInventoryItem: line.item_id !== null,
+      deliveryDate: line.delivery_date ?? null,
+      warrantyAdvisory: line.warranty_advisory ?? null,
     }))),
     ...customer.salesOrders.flatMap((source) => source.lines.map((line) => ({
       key: `sales_order:${line.id}`,
@@ -47,6 +52,8 @@ function returnableLines(options: PortalReturnSourceOptions | undefined): Return
       label: line.label,
       remaining: line.remaining_quantity,
       hasInventoryItem: line.item_id !== null,
+      deliveryDate: line.delivery_date ?? null,
+      warrantyAdvisory: line.warranty_advisory ?? null,
     }))),
     ...customer.deliveries.flatMap((source) => source.lines.map((line) => ({
       key: `delivery:${line.id}`,
@@ -57,6 +64,8 @@ function returnableLines(options: PortalReturnSourceOptions | undefined): Return
       label: line.label,
       remaining: line.remaining_quantity,
       hasInventoryItem: line.item_id !== null,
+      deliveryDate: line.delivery_date ?? null,
+      warrantyAdvisory: line.warranty_advisory ?? null,
     }))),
   ];
 }
@@ -115,10 +124,15 @@ export default function CustomerCreateReturnPage() {
             <select className="mt-1 h-9 w-full rounded-md border border-default bg-canvas px-3 text-sm text-primary" value={lineKey} onChange={(event) => setLineKey(event.target.value)}>
               <option value="">Choose an invoice, order, or delivery line…</option>
               {lines.map((line) => <option key={line.key} value={line.key} disabled={!line.hasInventoryItem || Number(line.remaining) <= 0}>
-                {line.sourceLabel} · {line.label} · remaining {line.remaining}{!line.hasInventoryItem ? ' · unavailable for stock return' : ''}
+                {line.sourceLabel} · {line.label}{line.deliveryDate ? ` · delivered ${formatDate(line.deliveryDate)}` : ''} · remaining {line.remaining}{!line.hasInventoryItem ? ' · unavailable for stock return' : ''}
               </option>)}
             </select>
           </label>
+          {selectedLine && <p className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">
+            {selectedLine.warrantyAdvisory?.status === 'advisory'
+              ? <>Warranty report-by estimate: <strong>{formatDate(selectedLine.warrantyAdvisory.report_by!)}</strong>; term through <strong>{formatDate(selectedLine.warrantyAdvisory.warranty_through!)}</strong>. Based on recorded terms and dates. Staff review every request; these dates never block submission.</>
+              : 'No reliable warranty date estimate is available for this source line. Staff will review the delivery and saved terms; you can still submit.'}
+          </p>}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Input label="Quantity to return" type="number" min="0.001" step="0.001" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
             <p className="self-end pb-2 text-xs text-muted">Available to return: <span className="font-mono tabular-nums">{selectedLine?.remaining ?? '—'}</span></p>

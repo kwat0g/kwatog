@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { adjustmentsApi } from '@/api/payroll/adjustments';
 import { Button } from '@/components/ui/Button';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
@@ -15,21 +15,9 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
+import { payrollAdjustmentStatusVariant } from '@/lib/statusVariants';
 import type { PayrollAdjustment } from '@/types/payroll';
 
-const statusVariant = (status: string): ChipVariant => {
-  switch (status) {
-    case 'approved':
-    case 'applied':
-      return 'success';
-    case 'pending':
-      return 'warning';
-    case 'rejected':
-      return 'danger';
-    default:
-      return 'neutral';
-  }
-};
 
 export default function PayrollAdjustmentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -108,7 +96,7 @@ export default function PayrollAdjustmentDetailPage() {
         {adjustment && (
           <Panel
             title="Adjustment details"
-            meta={<Chip variant={statusVariant(adjustment.status)}>{adjustment.status_label}</Chip>}
+            meta={<Chip variant={payrollAdjustmentStatusVariant[adjustment.status]}>{adjustment.status_label}</Chip>}
           >
             <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
               <div>

@@ -1,7 +1,21 @@
 import { type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-export type ChipVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple';
+export type ChipVariant =
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'neutral'
+  | 'purple'
+  | 'category-1'
+  | 'category-2'
+  | 'category-3'
+  | 'category-4'
+  | 'category-5'
+  | 'category-6'
+  | 'category-7'
+  | 'category-8';
 
 interface ChipProps {
   variant?: ChipVariant;
@@ -16,6 +30,14 @@ const variants: Record<ChipVariant, string> = {
   info: 'bg-info-bg text-info-fg',
   purple: 'bg-purple-bg text-purple-fg',
   neutral: 'bg-subtle text-muted',
+  'category-1': 'bg-category-1/15 text-primary',
+  'category-2': 'bg-category-2/15 text-primary',
+  'category-3': 'bg-category-3/15 text-primary',
+  'category-4': 'bg-category-4/15 text-primary',
+  'category-5': 'bg-category-5/15 text-primary',
+  'category-6': 'bg-category-6/15 text-primary',
+  'category-7': 'bg-category-7/15 text-primary',
+  'category-8': 'bg-category-8/15 text-primary',
 };
 
 export function Chip({ variant = 'neutral', className, children }: ChipProps) {

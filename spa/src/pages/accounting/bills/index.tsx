@@ -4,7 +4,7 @@ import { LuPlus, LuPrinter } from '@/lib/icons';
 import { billsApi, type BillListParams } from '@/api/accounting/bills';
 import { bulkPrint } from '@/api/print';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type BulkAction, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -15,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { billStatusVariant } from '@/lib/statusVariants';
 import type { Bill } from '@/types/accounting';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
@@ -50,7 +51,7 @@ export default function BillsPage() {
  { key: 'due_date', header: 'Due', cell: (r) => <NumCell className={r.is_overdue ? 'text-danger-fg' : undefined}>{formatDate(r.due_date)}</NumCell> },
  { key: 'total', header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
  { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.payment_approval_pending ? 'warning' : chipVariantForStatus(r.status)}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.payment_approval_pending ? 'warning' : billStatusVariant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
  ];
 
  const filterConfig: FilterConfig[] = [
@@ -61,8 +62,8 @@ export default function BillsPage() {
  ...(billOptions?.statuses ?? []),
  ] },
  {
- key: 'signal', label: 'Signal', type: 'select',
- options: [{ value: '', label: 'All' }, { value: 'unpaid', label: 'Open balance' }, { value: 'due_soon', label: 'Due within 3 days' }] },
+ key: 'signal', label: 'Quick filter', type: 'select',
+ options: [{ value: '', label: 'All bills' }, { value: 'unpaid', label: 'Open balance' }, { value: 'due_soon', label: 'Due within 3 days' }] },
  {
  key: 'overdue', label: 'Overdue', type: 'select',
  options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }] },

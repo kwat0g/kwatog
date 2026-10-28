@@ -17,17 +17,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ChainStep } from '@/types/chain';
-import type { ClearanceStatus } from '@/types/separations';
+import { clearanceStatusVariant } from '@/lib/statusVariants';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDateIso } from '@/lib/formatDate';
-
-const STATUS_CHIP: Record<ClearanceStatus, 'success' | 'warning' | 'info' | 'neutral'> = {
-  pending: 'warning',
-  in_progress: 'info',
-  completed: 'info',
-  finalized: 'success',
-  cancelled: 'neutral',
-};
 
 export default function SeparationDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -129,7 +121,7 @@ export default function SeparationDetailPage() {
         backLabel="Separations"
         actions={
           <div className="flex gap-1.5 items-center">
-            <Chip variant={STATUS_CHIP[data.status]}>{statusLabel ?? data.status}</Chip>
+            <Chip variant={clearanceStatusVariant[data.status]}>{statusLabel ?? data.status}</Chip>
             {allItemsCleared && !data.final_pay_computed && can('hr.separation.finalize') && (
               <Button
                 variant="primary"

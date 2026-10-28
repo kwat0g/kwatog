@@ -35,6 +35,7 @@ import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
+import { grnStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import type { GrnItem } from '@/types/inventory';
 import type { SupplierActivityShipment } from '@/types/supplierActivity';
@@ -365,16 +366,6 @@ export default function GrnDetailPage() {
     !data.journal_entry &&
     can('accounting.journal.post');
 
-  const variant = (
-    {
-      draft: 'neutral',
-      pending_qc: 'warning',
-      accepted: 'success',
-      partial_accepted: 'info',
-      rejected: 'danger',
-    } as const
-  )[data.status];
-
   return (
     <PageShell className="flex flex-col gap-4">
       <PageHeader
@@ -385,7 +376,7 @@ export default function GrnDetailPage() {
         backLabel="GRNs"
         actions={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Chip variant={variant}>
+            <Chip variant={grnStatusVariant[data.status]}>
               {grnOptions?.statuses?.find((option) => option.value === data.status)?.label ??
                 data.status}
             </Chip>

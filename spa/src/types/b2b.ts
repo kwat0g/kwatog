@@ -1,4 +1,5 @@
 import type { DeliveryNegotiation } from '@/types/crm';
+import type { CustomerTermsSnapshot, WarrantyTermsSnapshot } from '@/types/orderAgreements';
 /** Portal user types for ADV10 — B2B Portals */
 
 import type { PurchaseOrderResponse, PurchaseOrderResponseType } from '@/types/purchasing';
@@ -27,6 +28,15 @@ export interface CustomerPortalUser {
   status: 'active' | 'inactive' | 'locked' | 'pending';
   deleted_at: string | null;
   customer: { id: string; name: string } | null;
+  customer_terms?: {
+    allowed_payment_methods: Array<'cash' | 'check' | 'bank_transfer'> | null;
+    shipping_payer: 'customer' | 'company' | null;
+    agreement_starts_on: string | null;
+    agreement_ends_on: string | null;
+    agreement_status: CustomerTermsSnapshot['agreement_status'];
+    payment_terms_days: number;
+    warranty_defaults: WarrantyTermsSnapshot | null;
+  } | null;
   last_login_at: string | null;
   created_at: string;
 }
@@ -184,6 +194,8 @@ export interface PortalSoSummary {
   status: string;
   status_label?: string;
   created_at: string;
+  customer_terms_snapshot?: CustomerTermsSnapshot | null;
+  payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
 }
 
 export interface PortalSoItem {
@@ -201,6 +213,7 @@ export interface PortalSoItem {
   unit_price: string;
   total: string;
   delivery_date: string | null;
+  warranty_terms_snapshot?: WarrantyTermsSnapshot | null;
 }
 
 export interface PortalOrderQuote {
@@ -248,6 +261,7 @@ export interface PortalSoDetail extends PortalSoSummary {
   customer?: { id: string; name: string };
   notes?: string;
   payment_terms_days?: number;
+  payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
   delivery_terms?: string;
   submission_source?: string;
   capabilities?: {
@@ -310,13 +324,25 @@ export interface PortalReturnSourceLine {
   remaining_quantity: string;
   unit_price: string;
   label: string;
+  delivery_date?: string | null;
+  warranty_advisory?: PortalWarrantyAdvisory | null;
+}
+
+export interface PortalWarrantyAdvisory {
+  status: 'advisory' | 'needs_review';
+  start_basis: 'delivery' | 'invoice' | null;
+  start_date: string | null;
+  report_by: string | null;
+  warranty_through: string | null;
+  duration_days: number | null;
+  report_window_days: number | null;
 }
 
 export interface PortalReturnSourceOptions {
   customer: {
     invoices: Array<{ id: string; label: string; lines: PortalReturnSourceLine[] }>;
     salesOrders: Array<{ id: string; label: string; lines: PortalReturnSourceLine[] }>;
-    deliveries: Array<{ id: string; label: string; lines: PortalReturnSourceLine[] }>;
+    deliveries: Array<{ id: string; label: string; sales_order_id: string | null; lines: PortalReturnSourceLine[] }>;
   };
 }
 
@@ -330,10 +356,12 @@ export interface PortalInvoiceSummary {
   balance: string;
   status: string;
   status_label?: string;
+  display_status?: string;
   due_date: string | null;
 }
 
 export interface PortalInvoiceDetail extends PortalInvoiceSummary {
+  sales_order?: { id: string; so_number: string; payment_method: 'cash' | 'check' | 'bank_transfer' | null } | null;
   payment_submissions?: import('./invoice-payments').InvoicePaymentSubmission[];
   can_submit_payment?: boolean;
   payment_submission_blocked_reason?: string | null;
@@ -521,6 +549,14 @@ export interface PortalComplaint {
   resolved_at: string | null;
   closed_at: string | null;
   created_at: string;
+  delivered_item?: {
+    delivery_number: string | null;
+    delivery_date: string | null;
+    part_number: string | null;
+    product_name: string | null;
+    sales_order_number: string | null;
+  } | null;
+  warranty_advisory?: PortalWarrantyAdvisory | null;
 }
 
 // ── 8D Report (customer portal) ──────────────────────

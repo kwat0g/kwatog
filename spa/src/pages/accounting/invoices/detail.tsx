@@ -25,6 +25,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ChainHeader } from '@/components/chain';
 import { ActivityStream } from '@/components/chain/ActivityStream';
 import { buildO2cChain } from '@/lib/chains';
+import { invoiceStatusVariant } from '@/lib/statusVariants';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
@@ -238,7 +239,7 @@ export default function InvoiceDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{invoice.invoice_number ?? 'DRAFT'}</span>
-            <Chip variant={isOpen ? 'warning' : chipVariantForStatus(invoice.display_status)}>
+            <Chip variant={invoiceStatusVariant[pendingPayment ? 'awaiting payment verification' : invoice.display_status] ?? 'neutral'}>
               {isOpen ? pendingPayment ? 'Awaiting payment verification' : 'Awaiting customer payment' : invoice.display_status}
             </Chip>
             {invoice.is_overdue && <Chip variant="danger">overdue</Chip>}
@@ -614,7 +615,7 @@ export default function InvoiceDetailPage() {
               </option>
             ))}
           </Select>
-          <Input label="Reference no." {...register('reference_number')} />
+          <Input label="Reference no. (optional)" helper="Leave blank for cash; enter the check number or transfer reference when available." {...register('reference_number')} />
           <Textarea label="Exception reason" required maxLength={500} {...register('manual_reason')} error={errors.manual_reason?.message} />
           <ModalFooter>
             <Button type="button" variant="secondary" onClick={() => setShowCollect(false)}>

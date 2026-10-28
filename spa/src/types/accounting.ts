@@ -280,6 +280,16 @@ export interface Customer {
   credit_warning_ratio?: number;
   credit_warning?: boolean;
   payment_terms_days: number;
+  allowed_payment_methods: ('cash' | 'check' | 'bank_transfer')[] | null;
+  shipping_payer: 'customer' | 'company' | null;
+  agreement_starts_on: string | null;
+  agreement_ends_on: string | null;
+  agreement_status?: 'not_recorded' | 'not_yet_effective' | 'in_effect' | 'expired';
+  warranty_duration_days: number | null;
+  warranty_report_window_days: number | null;
+  warranty_start_basis: 'delivery' | 'invoice' | null;
+  warranty_covered_issues: ('manufacturing_defect' | 'shipping_damage' | 'customer_caused_damage')[] | null;
+  warranty_remedies: ('repair' | 'replace' | 'credit' | 'refund')[] | null;
   is_active: boolean;
   invoices_count?: number;
 }
@@ -296,6 +306,15 @@ export interface CreateCustomerData {
   tin?: string;
   credit_limit?: string | null;
   payment_terms_days?: number;
+  allowed_payment_methods?: Customer['allowed_payment_methods'];
+  shipping_payer?: Customer['shipping_payer'];
+  agreement_starts_on?: string | null;
+  agreement_ends_on?: string | null;
+  warranty_duration_days?: number | null;
+  warranty_report_window_days?: number | null;
+  warranty_start_basis?: Customer['warranty_start_basis'];
+  warranty_covered_issues?: Customer['warranty_covered_issues'];
+  warranty_remedies?: Customer['warranty_remedies'];
   is_active?: boolean;
 }
 export type UpdateCustomerData = Partial<CreateCustomerData>;

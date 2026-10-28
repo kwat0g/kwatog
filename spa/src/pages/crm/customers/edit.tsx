@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -13,7 +12,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
-import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
+import { CustomerForm, customerResolver, customerSchema, type CustomerFormValues } from './form';
 
 import { FormActions } from '@/components/ui/FormActions';
 type FormValues = CustomerFormValues;
@@ -30,7 +29,7 @@ export default function CrmCustomerEditPage() {
  });
 
  const methods = useForm<z.input<typeof customerSchema>, unknown, FormValues>({
- resolver: zodResolver(customerSchema),
+ resolver: customerResolver,
  defaultValues: {
  name: '',
  contact_person: '',
@@ -40,6 +39,8 @@ export default function CrmCustomerEditPage() {
  delivery_address: '',
  delivery_contact_person: '',
  delivery_contact_phone: '',
+ allowed_payment_methods: [], shipping_payer: '', agreement_starts_on: '', agreement_ends_on: '',
+ warranty_duration_days: undefined, warranty_report_window_days: undefined, warranty_start_basis: '', warranty_covered_issues: [], warranty_remedies: [],
  is_active: true,
  },
  });
@@ -57,6 +58,15 @@ export default function CrmCustomerEditPage() {
  delivery_address: data.delivery_address ?? '',
  delivery_contact_person: data.delivery_contact_person ?? '',
  delivery_contact_phone: data.delivery_contact_phone ?? '',
+ allowed_payment_methods: data.allowed_payment_methods ?? [],
+ shipping_payer: data.shipping_payer ?? '',
+ agreement_starts_on: data.agreement_starts_on ?? '',
+ agreement_ends_on: data.agreement_ends_on ?? '',
+ warranty_duration_days: data.warranty_duration_days ?? undefined,
+ warranty_report_window_days: data.warranty_report_window_days ?? undefined,
+ warranty_start_basis: data.warranty_start_basis ?? '',
+ warranty_covered_issues: data.warranty_covered_issues ?? [],
+ warranty_remedies: data.warranty_remedies ?? [],
  credit_limit: data.credit_limit ? Number(data.credit_limit) : undefined,
  payment_terms_days: data.payment_terms_days,
  is_active: data.is_active,
@@ -75,6 +85,15 @@ export default function CrmCustomerEditPage() {
  delivery_address: values.delivery_address || undefined,
  delivery_contact_person: values.delivery_contact_person || undefined,
  delivery_contact_phone: values.delivery_contact_phone || undefined,
+ allowed_payment_methods: values.allowed_payment_methods?.length ? values.allowed_payment_methods : null,
+ shipping_payer: values.shipping_payer || null,
+ agreement_starts_on: values.agreement_starts_on || null,
+ agreement_ends_on: values.agreement_ends_on || null,
+ warranty_duration_days: values.warranty_duration_days ?? null,
+ warranty_report_window_days: values.warranty_report_window_days ?? null,
+ warranty_start_basis: values.warranty_start_basis || null,
+ warranty_covered_issues: values.warranty_covered_issues?.length ? values.warranty_covered_issues : null,
+ warranty_remedies: values.warranty_remedies?.length ? values.warranty_remedies : null,
  credit_limit: values.credit_limit != null ? String(values.credit_limit) : null,
  };
  return crmCustomersApi.update(id!, payload);
@@ -97,10 +116,12 @@ export default function CrmCustomerEditPage() {
  <div>
  <PageHeader
  title={data ? `Edit ${data.name}` : 'Edit customer'}
+  subtitle="Update customer details and defaults used for future orders."
  backTo={backTo}
  backLabel={data?.name ?? 'Customers'}
  />
-      <FormDraftBanner safety={safety} />
+ <div className="mx-auto w-full max-w-screen-2xl px-4 sm:px-5">
+      <FormDraftBanner safety={safety} inset={false} />
  {isLoading && <SkeletonDetail />}
  {isError && (
  <EmptyState
@@ -133,6 +154,7 @@ export default function CrmCustomerEditPage() {
  </form>
  </FormProvider>
  )}
+ </div>
  </div>
  );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
+import { budgetTransferStatusVariant } from '@/lib/statusVariants';
 import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
@@ -18,12 +19,6 @@ import { LuPlus, LuCircleCheck, LuCircleX } from '@/lib/icons';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { reportMutationError } from '@/lib/formErrors';
 import toast from 'react-hot-toast';
-
-const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'neutral' | 'danger'> = {
-  approved: 'success',
-  pending: 'warning',
-  rejected: 'neutral',
-};
 
 export default function BudgetTransferListPage() {
   const { can, canApprove } = usePermission();
@@ -155,7 +150,7 @@ export default function BudgetTransferListPage() {
                       <Td className="uppercase">{transfer.month}</Td>
                       <Td align="right" mono>{formatPeso(transfer.amount)}</Td>
                       <Td><span className="text-sm text-secondary">{transfer.reason}</span></Td>
-                      <Td align="center"><Chip variant={STATUS_VARIANT[transfer.status] ?? 'neutral'}>{transfer.status_label ?? transfer.status}</Chip></Td>
+                      <Td align="center"><Chip variant={budgetTransferStatusVariant[transfer.status]}>{transfer.status_label ?? transfer.status}</Chip></Td>
                       <Td align="right">
                         {transfer.status === 'pending' ? (
                           <div className="flex justify-end gap-1.5">

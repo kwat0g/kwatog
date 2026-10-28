@@ -15,17 +15,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { reportMutationError } from '@/lib/formErrors';
 import { formatInt } from '@/lib/formatNumber';
-import type { MoldStatus } from '@/types/mrp';
+import { moldStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { MoldShotMeter } from '@/components/mrp/MoldShotMeter';
-
-const variant: Record<MoldStatus, 'success' | 'neutral' | 'info' | 'danger' | 'warning'> = {
- available: 'success',
- in_use: 'info',
- maintenance: 'warning',
- retired: 'neutral',
-};
 
 export default function MoldDetailPage() {
  const { id } = useParams<{ id: string }>();
@@ -101,7 +94,7 @@ export default function MoldDetailPage() {
  <div className="flex items-center gap-3">
  <span className="font-mono">{m.mold_code}</span>
  <span>{m.name}</span>
- <Chip variant={variant[m.status]}>{m.status_label}</Chip>
+      <Chip variant={moldStatusVariant[m.status]}>{m.status_label}</Chip>
  {m.nearing_limit && <Chip variant="warning">Near shot limit</Chip>}
  </div>
  }

@@ -211,6 +211,7 @@ class CustomerPortalService
             'customer_id' => $customerId,
             'date' => $orderDateString,
             'notes' => $data['notes'] ?? null,
+            'payment_method' => $data['payment_method'] ?? null,
             'items' => $items,
         ];
 
@@ -264,6 +265,7 @@ class CustomerPortalService
                     'date' => $orderDateString,
                     'items' => $items,
                     'notes' => $data['notes'] ?? null,
+                    'payment_method' => $data['payment_method'] ?? null,
                     'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
                     'quote_signature' => $data['quote_signature'] ?? null,
                     'portal_idempotency_key' => $idempotencyKey,
@@ -438,7 +440,7 @@ class CustomerPortalService
                 $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date']];
             }
             $updated = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->update(
-                $row, ['items' => $items, 'notes' => $data['notes'] ?? null, 'quote_signature' => $data['quote_signature'] ?? null], $user,
+                $row, ['items' => $items, 'notes' => $data['notes'] ?? null, 'payment_method' => $data['payment_method'] ?? $row->payment_method, 'quote_signature' => $data['quote_signature'] ?? null], $user,
             ));
             $this->recordCustomerAudit('customer.order.updated', $updated, $user->id, $user->customer_id, [
                 'before' => $before, 'after' => $updated->toArray(),
@@ -631,7 +633,7 @@ class CustomerPortalService
     {
         $query = Invoice::where('customer_id', $customerId)
             ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid])
-            ->with(['salesOrder:id,so_number'])
+            ->with(['salesOrder:id,so_number,payment_method'])
             ->orderByDesc('created_at');
 
         if (! empty($filters['status'])) {
@@ -664,7 +666,7 @@ class CustomerPortalService
         abort_if($invoice->customer_id !== $customerId, 403);
         abort_if(! in_array($invoice->status, [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid], true), 404);
 
-        $invoice->load(['salesOrder:id,so_number', 'items', 'collections', 'paymentSubmissions']);
+        $invoice->load(['salesOrder:id,so_number,payment_method', 'items', 'collections', 'paymentSubmissions']);
 
         return $invoice;
     }
@@ -963,6 +965,7 @@ class CustomerPortalService
     public function complaints(int $customerId, array $filters = []): LengthAwarePaginator
     {
         $query = CustomerComplaint::query()
+            ->with(['deliveryItem.delivery.invoice', 'deliveryItem.delivery.salesOrder:id,so_number', 'deliveryItem.salesOrderItem.product'])
             ->where('customer_id', $customerId);
 
         if (! empty($filters['status'])) {
@@ -1004,15 +1007,42 @@ class CustomerPortalService
             }
         }
 
+        $deliveryItemId = null;
+        $productId = null;
+        if (($data['delivery_item_id'] ?? null) !== null && ($data['delivery_item_id'] ?? '') !== '') {
+            $deliveryItemId = HashIdFilter::decode($data['delivery_item_id'], DeliveryItem::class);
+            $deliveryItem = $deliveryItemId
+                ? DeliveryItem::query()->with(['delivery', 'salesOrderItem'])->find($deliveryItemId)
+                : null;
+            $delivery = $deliveryItem?->delivery;
+            $deliveryStatus = $delivery?->status instanceof \BackedEnum
+                ? $delivery->status->value
+                : (string) $delivery?->status;
+
+            if (! $deliveryItem || ! $delivery
+                || ! in_array($deliveryStatus, [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value], true)
+                || ! SalesOrder::query()->whereKey($delivery->sales_order_id)->where('customer_id', $customerId)->exists()) {
+                throw new BusinessRuleException('The selected delivered item does not belong to this customer.');
+            }
+            if ($salesOrderId !== null && $salesOrderId !== (int) $delivery->sales_order_id) {
+                throw new BusinessRuleException('The selected delivered item does not match the selected order.');
+            }
+
+            $salesOrderId = (int) $delivery->sales_order_id;
+            $productId = (int) $deliveryItem->salesOrderItem?->product_id;
+        }
+
         // Portal users are not internal users — impersonate a system user so
         // HasAuditLog writes a valid users.id into audit_logs.user_id. Route
         // the write through CRM so the 8D record and durable NCR handoff are
         // identical to the internal complaint workflow.
         $portalUser = auth('customer_portal')->user();
-        $complaint = $this->systemUser->impersonate(function () use ($customerId, $data, $salesOrderId) {
+        $complaint = $this->systemUser->impersonate(function () use ($customerId, $data, $salesOrderId, $deliveryItemId, $productId) {
             return $this->complaintService->create([
                 'customer_id' => $customerId,
                 'sales_order_id' => $salesOrderId,
+                'product_id' => $productId,
+                'delivery_item_id' => $deliveryItemId,
                 'received_date' => now()->toDateString(),
                 'severity' => $data['severity'],
                 'description' => $data['description'],

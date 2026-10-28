@@ -12,15 +12,11 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import type { Shipment, ShipmentStatus } from '@/types/supplyChain';
+import type { Shipment } from '@/types/supplyChain';
+import { shipmentStatusVariant } from '@/lib/statusVariants';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
- ordered: 'neutral', shipped: 'info', in_transit: 'info',
- customs: 'warning', cleared: 'info', received: 'success', cancelled: 'neutral',
-};
-
 export default function ShipmentsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -54,7 +50,7 @@ export default function ShipmentsListPage() {
  { key: 'eta', header: 'ETA', align: 'right',
  cell: (r) => <NumCell>{r.eta ?? '—'}</NumCell> },
  { key: 'status', header: 'Status',
- cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
+ cell: (r) => <Chip variant={shipmentStatusVariant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
  ];
 
  const filterConfig: FilterConfig[] = [

@@ -18,23 +18,10 @@ import { formatPeso } from '@/lib/formatNumber';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 import type { ListParams } from '@/types';
-import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchasing';
+import type { PurchaseOrder } from '@/types/purchasing';
+import { purchaseOrderStatusVariant } from '@/lib/statusVariants';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> =
-  {
-    draft: 'neutral',
-    pending_approval: 'info',
-    approved: 'success',
-    sent: 'info',
-    acknowledged: 'info',
-    supplier_proposed: 'warning',
-    supplier_declined: 'danger',
-    partially_received: 'warning',
-    received: 'success',
-    closed: 'neutral',
-    cancelled: 'danger',
-  };
 
 interface PurchaseOrderListParams extends ListParams {
   status?: string;
@@ -135,7 +122,7 @@ export default function PurchaseOrdersListPage() {
       header: 'Status',
       cell: (r) => (
         <span className="flex items-center gap-1.5">
-          <Chip variant={variant[r.status]}>
+          <Chip variant={purchaseOrderStatusVariant[r.status]}>
             {statusLabels.get(r.status) ?? r.status.replace(/_/g, ' ')}
           </Chip>
           {r.has_overdue_approval && (

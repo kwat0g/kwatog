@@ -19,6 +19,7 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatImpact, severityVariant } from './helpers';
+import { recommendationStatusVariant } from '@/lib/statusVariants';
 import {
   decisionView,
   detectorLabel,
@@ -207,16 +208,6 @@ function ownerLabel(recommendation: Recommendation, options: RecommendationOptio
   return known.length ? known.join(', ') : 'Owner not recorded';
 }
 
-function statusVariant(status: Recommendation['status']) {
-  return status === 'open' || status === 'in_progress'
-    ? 'info'
-    : status === 'snoozed'
-      ? 'warning'
-      : status === 'resolved'
-        ? 'success'
-        : 'neutral';
-}
-
 export default function DecisionCenterPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -373,7 +364,7 @@ export default function DecisionCenterPage() {
       header: 'Status',
       className: 'w-28',
       cell: (recommendation) => (
-        <Chip variant={statusVariant(recommendation.status)}>
+        <Chip variant={recommendationStatusVariant[recommendation.status]}>
           {recommendationStatusLabel(recommendation.status)}
         </Chip>
       ),

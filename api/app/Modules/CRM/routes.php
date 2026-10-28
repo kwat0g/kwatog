@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\CRM\Controllers\ComplaintController;
+use App\Modules\CRM\Controllers\CustomerWarrantyTermsController;
+use App\Modules\CRM\Controllers\CustomerAgreementDocumentController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
 use App\Modules\CRM\Controllers\ProductController;
 use App\Modules\CRM\Controllers\ProductImageController;
@@ -27,6 +29,18 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::patch('/customers/{customer}/restore', [CustomerController::class, 'restore'])
         ->middleware('permission:accounting.customers.manage')
         ->withTrashed();
+    Route::get('/customers/{customer}/agreement-documents', [CustomerAgreementDocumentController::class, 'index'])
+        ->middleware('permission:accounting.customers.view');
+    Route::post('/customers/{customer}/agreement-documents', [CustomerAgreementDocumentController::class, 'store'])
+        ->middleware(['permission:accounting.customers.manage', 'throttle:sensitive']);
+    Route::get('/customers/{customer}/agreement-documents/{document}/download', [CustomerAgreementDocumentController::class, 'download'])
+        ->middleware('permission:accounting.customers.view');
+    Route::get('/customers/{customer}/warranty-terms', [CustomerWarrantyTermsController::class, 'index'])
+        ->middleware('permission:accounting.customers.view');
+    Route::put('/customers/{customer}/warranty-terms/{product}', [CustomerWarrantyTermsController::class, 'upsert'])
+        ->middleware('permission:accounting.customers.manage')->withTrashed();
+    Route::delete('/customers/{customer}/warranty-terms/{product}', [CustomerWarrantyTermsController::class, 'destroy'])
+        ->middleware('permission:accounting.customers.manage')->withTrashed();
 
     /* ─── Products ─── */
     Route::get('/products/options', [ProductController::class, 'options'])

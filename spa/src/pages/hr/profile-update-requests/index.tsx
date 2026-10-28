@@ -269,7 +269,7 @@ export default function ProfileUpdateRequestsPage() {
                 size="compact"
                 icon="inbox"
                 title="No requests"
-                description={`There are no ${statusLabels.get(status ?? '')?.toLowerCase() ?? status ?? defaultStatus} profile update requests.`}
+                description={`There are no ${(status ? statusLabels.get(status) : undefined)?.toLowerCase() ?? status ?? defaultStatus} profile update requests.`}
               />
             )}
           />

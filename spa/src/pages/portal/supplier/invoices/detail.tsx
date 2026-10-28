@@ -14,6 +14,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { billStatusVariant, supplierInvoiceStatusVariant } from '@/lib/statusVariants';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -52,7 +53,7 @@ export default function SupplierInvoiceDetailPage() {
           invoice ? (
             <>
               {invoice.supplier_invoice_number}{' '}
-              <Chip variant={chipVariantForStatus(invoice.status)}>
+              <Chip variant={supplierInvoiceStatusVariant[invoice.status] ?? 'neutral'}>
                 {invoice.status_label ?? invoice.status}
               </Chip>
             </>
@@ -110,7 +111,7 @@ export default function SupplierInvoiceDetailPage() {
                   <tbody>{invoice.bills.map((bill) => (
                     <tr key={bill.id} className={trCls}>
                       <Td mono>{bill.grn_number ?? '—'}</Td><Td mono>{bill.bill_number}</Td>
-                      <Td><Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip></Td>
+                      <Td><Chip variant={billStatusVariant[bill.status]}>{bill.status}</Chip></Td>
                       <Td align="right" mono>{formatPeso(bill.total_amount)}</Td>
                       <Td align="right" mono>{formatPeso(bill.balance)}</Td>
                     </tr>

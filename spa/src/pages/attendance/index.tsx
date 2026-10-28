@@ -26,7 +26,7 @@ import { departmentsApi } from '@/api/hr/departments';
 import { employeesApi } from '@/api/hr/employees';
 import { shiftsApi } from '@/api/attendance/shifts';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -45,6 +45,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { showUndoToast } from '@/lib/undoToast';
+import { attendanceStatusVariant } from '@/lib/statusVariants';
 import type { Attendance, Shift } from '@/types/attendance';
 import type { Employee } from '@/types/hr';
 
@@ -411,7 +412,7 @@ export default function AttendancePage() {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={chipVariantForStatus(r.status)}>
+        <Chip variant={attendanceStatusVariant[r.status]}>
           {r.status_label ?? statusLabels.get(r.status) ?? r.status}
         </Chip>
       ),

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
+import { budgetStatusVariant } from '@/lib/statusVariants';
 import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
@@ -226,7 +227,7 @@ export default function BudgetOverviewPage() {
                       <Td align="right" mono>{formatCompactCurrency(budget.total_spent, 1_000, 'K')}</Td>
                       <Td align="right" mono>{formatCompactCurrency(budget.available, 1_000, 'K')}</Td>
                       <Td align="center"><span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium font-mono tabular-nums', getStatusColor(budget.utilization_pct))}>{budget.utilization_pct}%</span></Td>
-                      <Td align="center"><Chip variant={budget.status === 'active' ? 'success' : budget.status === 'draft' ? 'neutral' : budget.status === 'closed' ? 'neutral' : 'warning'}>{budget.status_label ?? budget.status}</Chip></Td>
+                      <Td align="center"><Chip variant={budgetStatusVariant[budget.status]}>{budget.status_label ?? budget.status}</Chip></Td>
                     </tr>
                   ))}
                 </tbody>

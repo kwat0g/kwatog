@@ -10,20 +10,12 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatDate, formatTime } from '@/lib/formatDate';
+import { attendanceStatusVariant } from '@/lib/statusVariants';
 
 const MONTH_NAMES = [
  'January', 'February', 'March', 'April', 'May', 'June',
  'July', 'August', 'September', 'October', 'November', 'December',
 ];
-
-const STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
- present: 'success',
- late: 'warning',
- halfday: 'warning',
- absent: 'danger',
- on_leave: 'info',
- holiday: 'neutral',
-};
 
 function fmtHours(value: string | number | null | undefined): string {
  if (value == null || value === '') return '—';
@@ -73,7 +65,7 @@ function attendanceColumns(statusLabels: ReadonlyMap<string, string>): Column<Se
  header: 'Status',
  cell: (r) =>
  r.status ? (
- <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>
+ <Chip variant={attendanceStatusVariant[r.status] ?? 'neutral'}>
  {statusLabels.get(r.status) ?? r.status}
  </Chip>
  ) : (

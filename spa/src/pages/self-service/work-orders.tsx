@@ -10,7 +10,7 @@ import { workOrdersApi } from '@/api/production/workOrders';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { StickyActionBar } from '@/components/ui/StickyActionBar';
@@ -25,6 +25,7 @@ import { usePendingProductionSubmission } from '@/hooks/usePendingProductionSubm
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { DraftRestoreBanner } from '@/components/ui/DraftRestoreBanner';
 import { createRequestKey } from '@/lib/requestKey';
+import { workOrderStatusVariant } from '@/lib/statusVariants';
 
 export default function MyWorkOrdersPage() {
   const userId = useAuthStore((state) => state.user?.id);
@@ -72,7 +73,7 @@ export default function MyWorkOrdersPage() {
                     {order.wo_number}
                   </Link>
                   {order.repair && <Chip variant="purple">Repair</Chip>}
-                  <Chip variant={chipVariantForStatus(order.status)}>
+                  <Chip variant={workOrderStatusVariant[order.status]}>
                     {order.status.replaceAll('_', ' ')}
                   </Chip>
                 </div>
@@ -150,7 +151,7 @@ export default function MyWorkOrdersPage() {
                   >
                     {entry.work_order.wo_number}
                   </Link>
-                  <Chip variant={chipVariantForStatus(entry.work_order.status)}>
+                  <Chip variant={workOrderStatusVariant[entry.work_order.status]}>
                     {entry.work_order.status.replaceAll('_', ' ')}
                   </Chip>
                 </div>
@@ -426,7 +427,7 @@ function MyWorkOrderDetail() {
             <Panel
               title={data.repair ? 'Repair assignment' : 'Production assignment'}
               meta={
-                <Chip variant={chipVariantForStatus(data.status)}>
+                <Chip variant={workOrderStatusVariant[data.status]}>
                   {data.status.replaceAll('_', ' ')}
                 </Chip>
               }

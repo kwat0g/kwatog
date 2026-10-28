@@ -82,6 +82,7 @@ class SalesOrderAgreementService
     public function summary(SalesOrder $order, Request $request, bool $readOnly = false): array
     {
         $rows = $order->relationLoaded('agreements') ? $order->agreements : $order->agreements()->with(['publisher:id,name', 'recorder:id,name'])->get();
+        $order->loadMissing('items.product:id,part_number,name');
         $latest = $rows->first();
         $currentSnapshot = $this->snapshot($order);
         $internal = $request->is('api/v1/b2b/customer/*') ? null : auth('sanctum')->user();
@@ -93,6 +94,13 @@ class SalesOrderAgreementService
         $canAcknowledge = ! $readOnly && $ownsOrder && $order->status->isBeforeConfirmation() && $latest && $latest->acknowledgment_method === null && $this->snapshotsMatch($latest->snapshot, $currentSnapshot);
         return [
             'sales_order_id' => $order->hash_id, 'so_number' => $order->so_number,
+            'payment_method' => $order->payment_method,
+            'customer_terms_snapshot' => $order->customer_terms_snapshot,
+            'warranty_terms' => $order->items->map(fn ($item): array => [
+                'product_id' => $item->product?->hash_id ?? app('hashids')->encode($item->product_id),
+                'product_label' => trim(($item->product?->part_number ?? '').' '.($item->product?->name ?? '')),
+                'terms' => $item->warranty_terms_snapshot,
+            ])->values()->all(),
             'can_publish' => (bool) $canPublish, 'can_record_external' => (bool) $canExternal, 'can_acknowledge' => (bool) $canAcknowledge,
             'revisions' => $rows->map(function (SalesOrderAgreement $row) use ($latest, $canView, $ownsOrder, $currentSnapshot, $readOnly): array {
                 $current = $row->is($latest); $stale = ! $this->snapshotsMatch($row->snapshot, $currentSnapshot);
@@ -115,6 +123,7 @@ class SalesOrderAgreementService
             'unit_price' => bcadd((string) $item->unit_price, '0', 2), 'delivery_date' => $item->delivery_date?->toDateString()])
             ->sortBy(fn ($item) => implode('|', [$item['product_id'], $item['quantity'], $item['unit_price'], $item['delivery_date'] ?? '']))->values()->all();
         return ['customer_id' => $order->customer?->hash_id ?? app('hashids')->encode($order->customer_id),
+            'payment_method' => $order->payment_method,
             'payment_terms_days' => (int) $order->payment_terms_days, 'delivery_terms' => $order->delivery_terms,
             'incoterm' => $order->incoterm?->value, 'subtotal' => bcadd((string) $order->subtotal, '0', 2),
             'vat_amount' => bcadd((string) $order->vat_amount, '0', 2), 'total_amount' => bcadd((string) $order->total_amount, '0', 2), 'items' => $items];
@@ -129,6 +138,9 @@ class SalesOrderAgreementService
 
     private function snapshotsMatch(array $saved, array $current): bool
     {
+        if (! array_key_exists('payment_method', $saved) && ($current['payment_method'] ?? null) === null) {
+            $saved['payment_method'] = null;
+        }
         foreach ($saved['items'] as &$item) unset($item['product_label']);
         foreach ($current['items'] as &$item) unset($item['product_label']);
         return $this->sortObjectKeys($saved) === $this->sortObjectKeys($current);

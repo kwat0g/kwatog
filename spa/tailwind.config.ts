@@ -108,14 +108,14 @@ const config: Config = {
         },
 
         category: {
-          1: 'var(--chart-1)',
-          2: 'var(--chart-2)',
-          3: 'var(--chart-3)',
-          4: 'var(--chart-4)',
-          5: 'var(--chart-5)',
-          6: 'var(--chart-6)',
-          7: 'var(--chart-7)',
-          8: 'var(--chart-8)',
+          1: 'color-mix(in srgb, var(--chart-1) calc(<alpha-value> * 100%), transparent)',
+          2: 'color-mix(in srgb, var(--chart-2) calc(<alpha-value> * 100%), transparent)',
+          3: 'color-mix(in srgb, var(--chart-3) calc(<alpha-value> * 100%), transparent)',
+          4: 'color-mix(in srgb, var(--chart-4) calc(<alpha-value> * 100%), transparent)',
+          5: 'color-mix(in srgb, var(--chart-5) calc(<alpha-value> * 100%), transparent)',
+          6: 'color-mix(in srgb, var(--chart-6) calc(<alpha-value> * 100%), transparent)',
+          7: 'color-mix(in srgb, var(--chart-7) calc(<alpha-value> * 100%), transparent)',
+          8: 'color-mix(in srgb, var(--chart-8) calc(<alpha-value> * 100%), transparent)',
         },
 
         // Focus ring

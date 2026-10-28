@@ -32,7 +32,7 @@ class SalesOrder extends Model
     protected $fillable = [
         'so_number', 'customer_id', 'sales_rep_id', 'date', 'subtotal', 'vat_amount',
         'total_amount', 'status', 'payment_terms_days', 'delivery_terms',
-        'notes', 'submission_source', 'mrp_plan_id', 'created_by', 'incoterm', 'confirmed_at',
+        'notes', 'submission_source', 'mrp_plan_id', 'created_by', 'incoterm', 'payment_method', 'customer_terms_snapshot', 'confirmed_at',
         'customer_confirmation_requested_at',
         'portal_idempotency_key', 'portal_idempotency_fingerprint',
         'in_production_at', 'partially_delivered_at', 'delivered_at',
@@ -47,6 +47,7 @@ class SalesOrder extends Model
         'status'             => SalesOrderStatus::class,
         'submission_source'  => SalesOrderSubmissionSource::class,
         'payment_terms_days' => 'integer',
+        'customer_terms_snapshot' => 'array',
         'mrp_plan_id'        => 'integer',
         'incoterm'           => Incoterm::class,
         'confirmed_at'       => 'datetime',

@@ -58,7 +58,7 @@ class CustomerAuthController
         );
 
         /** @var CustomerPortalUser $user */
-        $user = $user->load('customer:id,name,is_active');
+        $user = $user->load('customer:id,name,is_active,payment_terms_days,allowed_payment_methods,shipping_payer,agreement_starts_on,agreement_ends_on,warranty_duration_days,warranty_report_window_days,warranty_start_basis,warranty_covered_issues,warranty_remedies');
 
         return response()->json([
             'data' => ['user' => new CustomerPortalUserResource($user)],
@@ -104,7 +104,7 @@ class CustomerAuthController
     public function me(Request $request): JsonResponse
     {
         /** @var \App\Modules\B2B\Models\CustomerPortalUser $user */
-        $user = $request->user('customer_portal')->load('customer:id,name,is_active');
+        $user = $request->user('customer_portal')->load('customer:id,name,is_active,payment_terms_days,allowed_payment_methods,shipping_payer,agreement_starts_on,agreement_ends_on,warranty_duration_days,warranty_report_window_days,warranty_start_basis,warranty_covered_issues,warranty_remedies');
 
         return response()->json(['data' => new CustomerPortalUserResource($user)]);
     }

@@ -20,20 +20,10 @@ import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { usePermission } from '@/hooks/usePermission';
-import type { InspectionStatus } from '@/types/quality';
+import { inspectionStatusVariant } from '@/lib/statusVariants';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatQuantity } from '@/lib/formatNumber';
 import { InspectionChecklistPanel } from './components/InspectionChecklistPanel';
-
-const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> =
-  {
-    draft: 'neutral',
-    in_progress: 'info',
-    awaiting_review: 'warning',
-    passed: 'success',
-    failed: 'danger',
-    cancelled: 'neutral',
-  };
 
 export default function InspectionDetailPage() {
   const navigate = useNavigate();
@@ -208,7 +198,7 @@ export default function InspectionDetailPage() {
         title={
           <span>
             {data.inspection_number}
-            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">
+            <Chip variant={inspectionStatusVariant[data.status]} className="ml-3">
               {data.status_label ?? statusLabel ?? data.status}
             </Chip>
           </span>

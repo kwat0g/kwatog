@@ -39,29 +39,15 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { fromApprovalRecords } from '@/lib/approvals';
+import { purchaseOrderStatusVariant } from '@/lib/statusVariants';
 import type {
   PurchaseOrderResponseStatus,
   PurchaseOrderResponseType,
-  PurchaseOrderStatus,
   RfqCommercialCharges,
   SupplierDispatchStatus,
 } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
-const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> =
-  {
-    draft: 'neutral',
-    pending_approval: 'info',
-    approved: 'success',
-    sent: 'info',
-    acknowledged: 'info',
-    supplier_proposed: 'warning',
-    supplier_declined: 'danger',
-    partially_received: 'warning',
-    received: 'success',
-    closed: 'neutral',
-    cancelled: 'danger',
-  };
 const dispatchVariant: Record<
   SupplierDispatchStatus,
   'neutral' | 'info' | 'warning' | 'success' | 'danger'
@@ -302,7 +288,7 @@ export default function PurchaseOrderDetailPage() {
         backLabel="Purchase orders"
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Chip variant={variant[data.status]}>{statusLabel ?? data.status}</Chip>
+            <Chip variant={purchaseOrderStatusVariant[data.status]}>{statusLabel ?? data.status}</Chip>
             {can('return_management.manage') &&
               [
                 'approved',

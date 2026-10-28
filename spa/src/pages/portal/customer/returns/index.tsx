@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { returnRequestStatusVariant } from '@/lib/statusVariants';
 
 export default function CustomerReturnsPage() {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ export default function CustomerReturnsPage() {
           <thead><tr className={theadTrCls}><Th>RMA</Th><Th>Status</Th><Th>Reason</Th><Th>Submitted</Th></tr></thead>
           <tbody>{query.data.data.map((request) => <tr key={request.id} className={trCls}>
             <Td mono><Link className="text-link hover:underline" to={`/portal/customer/returns/${request.id}`}>{request.rma_number}</Link></Td>
-            <Td><Chip variant={chipVariantForStatus(request.status)}>{request.status_label}</Chip></Td>
+            <Td><Chip variant={returnRequestStatusVariant[request.status] ?? 'neutral'}>{request.status_label}</Chip></Td>
             <Td>{request.reason_description ?? request.reason_code ?? '—'}</Td>
             <Td mono className="text-muted">{formatDate(request.created_at)}</Td>
           </tr>)}</tbody>

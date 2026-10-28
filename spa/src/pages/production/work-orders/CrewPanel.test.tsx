@@ -1043,3 +1043,48 @@ it('offers explicit recovery after confirmation runs out of time and clears the 
   ).toBeNull();
   expect(workOrdersApi.applyAssignment).toHaveBeenCalledTimes(1);
 });
+
+it('refreshes crew data without regenerating the just-applied equipment proposal', async () => {
+  const proposal = {
+    schedule: {
+      id: 'proposal-slot',
+      machine_id: 'proposal-machine',
+      mold_id: 'proposal-mold',
+      scheduled_start: new Date(Date.now() + 3600000).toISOString(),
+      scheduled_end: new Date(Date.now() + 7200000).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    members,
+    recorder_employee_id: 'a',
+    minimum_workers: 1,
+    maximum_workers: 1,
+    expected_crew_id: null,
+    blockers: [],
+    equipment_blockers: [],
+  };
+  vi.mocked(workOrdersApi.generateAssignmentSuggestion).mockResolvedValue(proposal);
+  vi.mocked(workOrdersApi.applyAssignment).mockResolvedValue(context);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+  render(
+    <QueryClientProvider client={client}>
+      <AssignmentReview
+        woId="wo-1"
+        context={{ ...context, current: null }}
+        generate
+        confirm
+        onClose={vi.fn()}
+      />
+    </QueryClientProvider>,
+  );
+  fireEvent.change(screen.getByLabelText('Number of workers'), { target: { value: '1' } });
+  await screen.findByText('proposal-machine');
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm work order' }));
+
+  await waitFor(() => expect(workOrdersApi.applyAssignment).toHaveBeenCalledTimes(1));
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['production', 'work-orders'] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['production', 'crew', 'wo-1'] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['production', 'dashboard'] });
+  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: ['production'] });
+});

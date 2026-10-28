@@ -31,6 +31,7 @@ class SalesOrderItemResource extends JsonResource
             'remaining_quantity' => $this->remaining_quantity,
             'delivery_date'      => optional($this->delivery_date)->toDateString(),
             'requested_delivery_date' => optional($this->requested_delivery_date ?? $this->delivery_date)->toDateString(),
+            'warranty_terms_snapshot' => $this->warranty_terms_snapshot,
         ];
     }
 }

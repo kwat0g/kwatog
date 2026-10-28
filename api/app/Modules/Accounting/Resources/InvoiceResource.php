@@ -58,6 +58,7 @@ class InvoiceResource extends JsonResource
             'sales_order'    => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id'        => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
+                'payment_method' => $this->salesOrder->payment_method,
             ] : null),
             'delivery'       => $this->whenLoaded('delivery', fn () => $this->delivery ? [
                 'id'              => $this->delivery->hash_id,

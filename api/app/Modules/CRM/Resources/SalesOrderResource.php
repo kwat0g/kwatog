@@ -59,6 +59,8 @@ class SalesOrderResource extends JsonResource
                 SalesOrderService::allowedTransitions()[$this->status?->value ?? ''] ?? [],
             ),
             'payment_terms_days' => (int) $this->payment_terms_days,
+            'payment_method'     => $this->payment_method,
+            'customer_terms_snapshot' => $this->customer_terms_snapshot,
             'delivery_terms'     => $this->delivery_terms,
             'incoterm'           => $this->incoterm?->value,
             'notes'              => $this->notes,

@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { AxiosError } from 'axios';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { customerPortalApi } from '@/api/b2b/customer';
@@ -29,12 +28,12 @@ function renderPanel(props: React.ComponentProps<typeof OrderAgreementsPanel>) {
 beforeEach(() => { vi.mocked(salesOrdersApi.agreements).mockResolvedValue(payload([])); vi.mocked(customerPortalApi.agreements).mockResolvedValue(payload([])); });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-it('shows an honest empty state without company defaults', async () => {
-  vi.mocked(salesOrdersApi.agreements).mockResolvedValue(payload([], { can_publish: true }));
+it('directs users to customer terms when no order-specific revision exists', async () => {
+  vi.mocked(salesOrdersApi.agreements).mockResolvedValue(payload([]));
   renderPanel({ orderId: 'order-hash', realm: 'internal' });
-  expect(await screen.findByText('No terms recorded.')).toBeVisible();
-  expect(screen.queryByText(/standard terms/i)).not.toBeInTheDocument();
-  expect(screen.getByRole('textbox', { name: /terms shared with customer/i })).toBeVisible();
+  expect(await screen.findByText('No terms were recorded on this order. Set customer terms on the Customer profile.')).toBeVisible();
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /publish new revision/i })).not.toBeInTheDocument();
 });
 
 it('shows current text and snapshot, with prior revisions preserved in disclosures', async () => {
@@ -46,26 +45,23 @@ it('shows current text and snapshot, with prior revisions preserved in disclosur
   expect(screen.getByText('Earlier terms.')).toBeInTheDocument();
 });
 
-it('publishes with explicit customer visibility and disables while pending', async () => {
-  let finish!: (value: OrderAgreements) => void;
-  vi.mocked(salesOrdersApi.agreements).mockResolvedValue(payload([], { can_publish: true }));
-  vi.mocked(salesOrdersApi.publishAgreement).mockReturnValue(new Promise((resolve) => { finish = resolve; }) as never);
-  renderPanel({ orderId: 'order-hash', realm: 'internal' });
-  expect(await screen.findByText('No terms recorded.')).toBeVisible();
-  fireEvent.change(screen.getByRole('textbox', { name: /terms shared with customer/i }), { target: { value: 'Paid before delivery' } });
-  expect(screen.getByText('These terms, revisions, and any attachment will be visible to this order’s customer.')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Publish new revision' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled());
-  act(() => finish(payload([agreement()])));
-});
-
-it('shows server field errors inline', async () => {
-  vi.mocked(salesOrdersApi.agreements).mockResolvedValue(payload([], { can_publish: true }));
-  vi.mocked(salesOrdersApi.publishAgreement).mockRejectedValue(new AxiosError('Invalid terms', 'ERR_BAD_REQUEST', undefined, undefined, { status: 422, statusText: 'Unprocessable Entity', headers: {}, config: {} as never, data: { message: 'Invalid terms', errors: { terms: ['Terms are required by server.'] } } }));
-  renderPanel({ orderId: 'order-hash', realm: 'internal' });
-  fireEvent.change(await screen.findByRole('textbox', { name: /terms shared with customer/i }), { target: { value: 'terms' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Publish new revision' }));
-  expect(await screen.findByText('Terms are required by server.')).toBeVisible();
+it('shows saved customer payment, freight and warranty terms on the order', () => {
+  const data = payload([], {
+    payment_method: 'bank_transfer',
+    customer_terms_snapshot: {
+      agreement_status: 'in_effect', agreement_starts_on: '2026-10-01', agreement_ends_on: '2027-10-01',
+      allowed_payment_methods: ['cash', 'check', 'bank_transfer'], shipping_payer: 'customer', payment_terms_days: 30,
+      delivery_terms: null, incoterm: null,
+      warranty_defaults: { warranty_duration_days: 30, warranty_report_window_days: 7, warranty_start_basis: 'delivery', warranty_covered_issues: ['manufacturing_defect'], warranty_remedies: ['replace'] },
+    },
+    warranty_terms: [{ product_id: 'product-hash', product_label: 'WB-001 · Wiper bushing', terms: { warranty_duration_days: 30, warranty_report_window_days: 7, warranty_start_basis: 'delivery', warranty_covered_issues: ['manufacturing_defect'], warranty_remedies: ['replace'] } }],
+  });
+  renderPanel({ orderId: 'order-hash', realm: 'customer', readOnlyData: data });
+  expect(screen.getByText('Bank transfer')).toBeVisible();
+  expect(screen.getByText('Customer (fee quoted separately)')).toBeVisible();
+  expect(screen.getByText('Freight is not included in the order total. Sales must confirm any customer-paid charge separately.')).toBeVisible();
+  expect(screen.getAllByText('30 days')).toHaveLength(2);
+  expect(screen.getByText('7 days')).toBeVisible();
 });
 
 it('requires explicit review and acknowledges the displayed current revision', async () => {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -13,6 +13,7 @@ import { CompanyName } from '@/components/brand/CompanyName';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { salesOrderStatusVariant } from '@/lib/statusVariants';
 import type { PortalSoSummary } from '@/types/b2b';
 
 type OrderFilters = { page: number; per_page: number; status?: string; search?: string };
@@ -64,7 +65,7 @@ export default function CustomerOrdersPage() {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={chipVariantForStatus(r.status)}>
+        <Chip variant={salesOrderStatusVariant[r.status]}>
           {r.status_label ?? r.status.replace(/_/g, ' ')}
         </Chip>
       ),

@@ -5,7 +5,7 @@ import { budgetingApi } from '@/api/accounting/budgeting';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import { Select } from '@/components/ui/Select';
 import { LuArrowLeft, LuBuilding2 } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { formatCompactCurrency } from '@/lib/formatNumber';
+import { budgetStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
@@ -102,7 +103,7 @@ export default function DepartmentBudgetDetailPage() {
       </div>
 
       {budgets.map((budget) => (
-        <Panel key={budget.id} title={budget.name} meta={<div className="flex items-center gap-3"><Chip variant={chipVariantForStatus(budget.status)}>{budget.status_label ?? budget.status}</Chip><span className={cn('text-xs font-medium px-1.5 py-0.5 rounded', getTextColor(budget.utilization_pct))}>{budget.utilization_pct}% used</span></div>}>
+        <Panel key={budget.id} title={budget.name} meta={<div className="flex items-center gap-3"><Chip variant={budgetStatusVariant[budget.status]}>{budget.status_label ?? budget.status}</Chip><span className={cn('text-xs font-medium px-1.5 py-0.5 rounded', getTextColor(budget.utilization_pct))}>{budget.utilization_pct}% used</span></div>}>
           {budget.line_items && budget.line_items.length > 0 ? (
             <div className="overflow-x-auto">
               <table className={tableCls}>

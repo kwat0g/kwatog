@@ -125,6 +125,11 @@ function throttleMessage(error: AxiosError<LaravelDebugError>): string {
 const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error: AxiosError<LaravelDebugError>) => {
  const status = error.response?.status;
  const data = error.response?.data;
+ const cloudflareRayId = error.response?.headers?.['cf-ray'];
+ const cloudflareChallenge = status === 403 && (
+  String(error.response?.headers?.['cf-mitigated'] ?? '').toLowerCase() === 'challenge'
+  || (typeof data === 'string' && /Just a moment|cdn-cgi\/challenge-platform|cf_chl_opt/.test(data))
+ );
 
  // Push every 4xx/5xx into the in-memory dev log so the floating
  // DevErrorPanel can show Laravel's exception details inline.
@@ -133,12 +138,14 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  method: (error.config?.method ?? 'get').toUpperCase(),
  url: error.config?.url ?? '(unknown)',
  status,
- message: data?.message ?? error.message ?? 'Unknown error',
+ message: cloudflareChallenge
+  ? `Cloudflare security challenge blocked the request${cloudflareRayId ? ` (Ray ID ${String(cloudflareRayId)})` : ''}.`
+  : data?.message ?? error.message ?? 'Unknown error',
  exception: data?.exception,
  file: data?.file,
  line: data?.line,
  trace: data?.trace,
- raw: data,
+ raw: cloudflareChallenge ? undefined : data,
  });
  }
 
@@ -210,6 +217,11 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  }
  } else if (data?.code === 'feature_disabled') {
  // ModuleGuard handles UI; suppress toast here.
+ } else if (cloudflareChallenge) {
+ if (showToast) {
+ markReported(error);
+ toast.error(`Cloudflare blocked this request with a security challenge. Refresh the page and try again.${cloudflareRayId ? ` Ray ID: ${String(cloudflareRayId)}.` : ''}`);
+ }
  } else if (showToast) {
  markReported(error);
  toast.error(data?.message ?? 'You do not have permission to perform this action.');

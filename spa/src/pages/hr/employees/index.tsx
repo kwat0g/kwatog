@@ -8,7 +8,7 @@ import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
 import { employeeAccountsApi } from '@/api/hr/employee-accounts';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -23,6 +23,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
+import { employeeStatusVariant } from '@/lib/statusVariants';
 import { SalaryAdjustmentsTab } from '@/pages/hr/salary-adjustments';
 import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
@@ -187,7 +188,7 @@ export default function EmployeesListPage() {
       key: 'status',
       header: 'Status',
       cell: (row) => (
-        <Chip variant={chipVariantForStatus(row.status)}>
+        <Chip variant={employeeStatusVariant[row.status]}>
           {statusLabel.get(row.status) ?? row.status.replace('_', ' ')}
         </Chip>
       ),
@@ -461,7 +462,7 @@ export default function EmployeesListPage() {
               <div className="min-w-0">
                 <p className="m-0 text-label text-primary">{previewEmployee.position?.title ?? 'Position not set'}</p>
                 <p className="m-0 text-caption text-muted">{previewEmployee.employee_no}</p>
-                <Chip variant={chipVariantForStatus(previewEmployee.status)}>
+                <Chip variant={employeeStatusVariant[previewEmployee.status]}>
                   {statusLabel.get(previewEmployee.status) ?? previewEmployee.status.replace('_', ' ')}
                 </Chip>
               </div>

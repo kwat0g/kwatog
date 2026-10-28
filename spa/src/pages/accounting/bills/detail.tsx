@@ -26,6 +26,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { ApprovalTimeline, ChainHeader } from '@/components/chain';
 import { buildP2pChain } from '@/lib/chains';
+import { billStatusVariant } from '@/lib/statusVariants';
 import { fromApprovalRecords } from '@/lib/approvals';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -262,7 +263,7 @@ export default function BillDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{bill.bill_number}</span>
-            <Chip variant={bill.payment_approval_pending ? 'warning' : chipVariantForStatus(bill.status)}>
+            <Chip variant={bill.payment_approval_pending ? 'warning' : billStatusVariant[bill.status]}>
               {bill.status_label ?? bill.status}
             </Chip>
             {bill.is_overdue && <Chip variant="danger">overdue</Chip>}

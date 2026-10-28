@@ -31,6 +31,7 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Support\WarrantyAdvisory;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\MrbStatus;
@@ -357,7 +358,7 @@ class ReturnRequestService
         $invoiceModels = Invoice::query()
             ->where('customer_id', $customerId)
             ->whereNotIn('status', ['draft', 'cancelled'])
-            ->with('items')
+            ->with(['items.sourceDeliveryItem.delivery', 'items.sourceDeliveryItem.salesOrderItem'])
             ->latest('date')
             ->limit(100)
             ->get();
@@ -379,7 +380,7 @@ class ReturnRequestService
         $deliveryModels = Delivery::query()
             ->whereHas('salesOrder', fn ($query) => $query->where('customer_id', $customerId))
             ->whereIn('status', [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value])
-            ->with(['salesOrder:id,so_number', 'items.salesOrderItem'])
+            ->with(['salesOrder:id,so_number', 'invoice:id,date', 'items.salesOrderItem.product'])
             ->latest('delivered_at')
             ->limit(100)
             ->get();
@@ -403,15 +404,26 @@ class ReturnRequestService
                 'id' => $invoice->hash_id,
                 'label' => $invoice->invoice_number,
                 'sales_order_id' => $invoice->sales_order_id ? HashId::encode((int) $invoice->sales_order_id) : null,
-                'lines' => $invoice->items->map(fn ($line): array => [
-                    'id' => $line->hash_id,
-                    'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
-                    'item_id' => isset($itemMap[(int) $line->product_id]) ? HashId::encode($itemMap[(int) $line->product_id]) : null,
-                    'quantity' => (string) $line->quantity,
-                    'remaining_quantity' => $remaining('invoice_item', (int) $line->id),
-                    'unit_price' => (string) $line->unit_price,
-                    'label' => (string) ($line->description ?: 'Invoice line '.$line->id),
-                ])->values(),
+                'lines' => $invoice->items->map(function ($line) use ($invoice, $itemMap, $remaining): array {
+                    $deliveryItem = $line->sourceDeliveryItem;
+                    $deliveryDate = $deliveryItem?->delivery?->delivered_at?->toDateString();
+
+                    return [
+                        'id' => $line->hash_id,
+                        'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
+                        'item_id' => isset($itemMap[(int) $line->product_id]) ? HashId::encode($itemMap[(int) $line->product_id]) : null,
+                        'quantity' => (string) $line->quantity,
+                        'remaining_quantity' => $remaining('invoice_item', (int) $line->id),
+                        'unit_price' => (string) $line->unit_price,
+                        'label' => (string) ($line->description ?: 'Invoice line '.$line->id),
+                        'delivery_date' => $deliveryDate,
+                        'warranty_advisory' => WarrantyAdvisory::from(
+                            $deliveryItem?->salesOrderItem?->warranty_terms_snapshot,
+                            $deliveryDate,
+                            $invoice->date?->toDateString(),
+                        ),
+                    ];
+                })->values(),
             ])->values();
 
         $salesOrders = $salesOrderModels
@@ -426,6 +438,8 @@ class ReturnRequestService
                     'remaining_quantity' => $remaining('sales_order_item', (int) $line->id),
                     'unit_price' => (string) $line->unit_price,
                     'label' => 'SO line '.$line->id,
+                    'delivery_date' => null,
+                    'warranty_advisory' => WarrantyAdvisory::from($line->warranty_terms_snapshot, null, null),
                 ])->values(),
             ])->values();
 
@@ -434,8 +448,9 @@ class ReturnRequestService
                 'id' => $delivery->hash_id,
                 'label' => $delivery->delivery_number,
                 'sales_order_id' => $delivery->sales_order_id ? HashId::encode((int) $delivery->sales_order_id) : null,
-                'lines' => $delivery->items->map(function ($line) use ($itemMap, $remaining): array {
+                'lines' => $delivery->items->map(function ($line) use ($delivery, $itemMap, $remaining): array {
                     $productId = $line->salesOrderItem?->product_id;
+                    $deliveryDate = $delivery->delivered_at?->toDateString();
 
                     return [
                         'id' => $line->hash_id,
@@ -444,7 +459,13 @@ class ReturnRequestService
                         'quantity' => (string) $line->quantity,
                         'remaining_quantity' => $remaining('delivery_item', (int) $line->id),
                         'unit_price' => (string) $line->unit_price,
-                        'label' => 'Delivery line '.$line->id,
+                        'label' => trim(($line->salesOrderItem?->product?->part_number ?? '').' '.($line->salesOrderItem?->product?->name ?? '')) ?: 'Delivery line '.$line->id,
+                        'delivery_date' => $deliveryDate,
+                        'warranty_advisory' => WarrantyAdvisory::from(
+                            $line->salesOrderItem?->warranty_terms_snapshot,
+                            $deliveryDate,
+                            $delivery->invoice?->date?->toDateString(),
+                        ),
                     ];
                 })->values(),
             ])->values();

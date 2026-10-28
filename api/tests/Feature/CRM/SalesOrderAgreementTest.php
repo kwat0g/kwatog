@@ -26,6 +26,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SalesOrderAgreementTest extends TestCase
@@ -145,6 +146,28 @@ class SalesOrderAgreementTest extends TestCase
         } catch (\LogicException) {
             $this->assertSame('Terms v1', $revision->fresh()->terms);
         }
+    }
+
+    public function test_payment_method_change_stales_acknowledged_terms_but_legacy_snapshot_without_method_remains_current(): void
+    {
+        [$order, $actor] = $this->orderWithActor('crm.sales_orders.update');
+        $revision = app(SalesOrderAgreementService::class)->publish($order, $actor, 'Payment terms confirmed by customer.', null);
+
+        $legacySnapshot = $revision->snapshot;
+        unset($legacySnapshot['payment_method']);
+        DB::table('sales_order_agreements')->where('id', $revision->id)->update([
+            'snapshot' => json_encode($legacySnapshot, JSON_THROW_ON_ERROR),
+        ]);
+        $this->assertFalse(app(SalesOrderAgreementService::class)->summary($order->fresh(), request(), true)['revisions'][0]['is_stale']);
+
+        app(SalesOrderAgreementService::class)->acknowledgeExternal($order, $revision->fresh(), $actor, [
+            'representative' => 'A. Buyer', 'acknowledged_at' => now()->subDay(), 'reference' => 'Email payment confirmation',
+        ]);
+        $order->update(['payment_method' => 'bank_transfer']);
+
+        $this->assertTrue(app(SalesOrderAgreementService::class)->summary($order->fresh(), request(), true)['revisions'][0]['is_stale']);
+        $this->expectException(BusinessRuleException::class);
+        app(SalesOrderAgreementService::class)->assertConfirmable($order->fresh());
     }
 
     public function test_no_agreement_keeps_confirmation_guard_open_and_product_renaming_does_not_stale_terms(): void

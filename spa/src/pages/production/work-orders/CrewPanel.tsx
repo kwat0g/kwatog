@@ -1478,7 +1478,9 @@ function AssignmentEditor({
         ...(confirm ? { preferred_production_date: preferredDay || null } : {}),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['production'] });
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+      qc.invalidateQueries({ queryKey: ['production', 'crew', woId] });
+      qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
       qc.invalidateQueries({ queryKey: ['mrp'] });
       onClose();
     },

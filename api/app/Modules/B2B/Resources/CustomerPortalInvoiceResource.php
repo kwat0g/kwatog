@@ -35,6 +35,7 @@ class CustomerPortalInvoiceResource extends JsonResource
             'sales_order'    => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id'        => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
+                'payment_method' => $this->salesOrder->payment_method,
             ] : null),
             'items'          => $this->whenLoaded('items', fn () => $this->items->map(static fn ($item): array => [
                 'id'          => $item->hash_id,

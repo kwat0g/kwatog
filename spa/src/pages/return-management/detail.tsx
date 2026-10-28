@@ -8,7 +8,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Chip, chipVariantForStatus, type ChipVariant } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -27,21 +27,11 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime, manilaIsoDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import { returnRequestStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 const DisposeDialog = lazy(() => import('./dispose'));
-
-const STATUS_VARIANT: Record<string, ChipVariant> = {
-  draft: 'neutral',
-  pending_approval: 'warning',
-  approved: 'info',
-  received: 'info',
-  inspected: 'purple',
-  completed: 'success',
-  rejected: 'danger',
-  cancelled: 'neutral',
-};
 
 /** Design-token dot class for each timeline event. */
 const TIMELINE_DOT: Record<string, string> = {
@@ -513,7 +503,7 @@ export default function ReturnRequestDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{rma.rma_number}</span>
-            <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>{rma.status_label}</Chip>
+            <Chip variant={returnRequestStatusVariant[rma.status] ?? 'neutral'}>{rma.status_label}</Chip>
           </div>
         }
         subtitle={rma.type_label}
@@ -575,7 +565,7 @@ export default function ReturnRequestDetailPage() {
                 <div>
                   <dt className="text-2xs uppercase tracking-wider text-muted">Status</dt>
                   <dd>
-                    <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>
+                    <Chip variant={returnRequestStatusVariant[rma.status] ?? 'neutral'}>
                       {rma.status_label}
                     </Chip>
                   </dd>

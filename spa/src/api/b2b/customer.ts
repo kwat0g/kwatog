@@ -112,6 +112,7 @@ export const customerPortalApi = {
   quote_signature?: string;
   date?: string;
   notes?: string;
+  payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
   items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
   }, idempotencyKey: string) => {
   const { data } = await portalClient.post<{ data: PortalSoDetail; message: string }>('/b2b/customer/orders', form, {
@@ -123,6 +124,7 @@ export const customerPortalApi = {
  updateOrder: async (id: string, form: {
   quote_signature?: string;
   notes?: string;
+  payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
   items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
  }) => {
   const { data } = await portalClient.put<{ data: PortalSoDetail; message?: string }>(`/b2b/customer/orders/${id}`, form);
@@ -265,6 +267,7 @@ export const customerPortalApi = {
 
  createComplaint: async (form: {
   order_id?: string;
+  delivery_item_id?: string;
   severity: string;
  description: string;
  affected_quantity: number;

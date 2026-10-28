@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { reportMutationError } from '@/lib/formErrors';
+import { employeeStatusVariant } from '@/lib/statusVariants';
 import { AxiosError } from 'axios';
 import { LuPencil, LuUserMinus, LuEye, LuEyeOff, LuPlus, LuCheck, LuCamera } from '@/lib/icons';
 import { employeesApi, type SeparateData } from '@/api/hr/employees';
@@ -102,7 +103,7 @@ export default function EmployeeDetailPage() {
         title={
           <span className="flex items-center gap-2">
             {employee.full_name}
-            <Chip variant={chipVariantForStatus(employee.status)}>
+            <Chip variant={employeeStatusVariant[employee.status]}>
               {employee.status_label ?? employee.status}
             </Chip>
           </span>

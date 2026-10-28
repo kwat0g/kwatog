@@ -30,18 +30,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { usePermission } from '@/hooks/usePermission';
 import type { ContainerSize, ContainerType, LandedCostAllocationMethod, ShipmentContainer, ShipmentContainerData, ShipmentDocumentType, ShipmentStatus } from '@/types/supplyChain';
+import { shipmentStatusVariant } from '@/lib/statusVariants';
 import { formatDateIso, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-
-const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  ordered: 'neutral',
-  shipped: 'info',
-  in_transit: 'info',
-  customs: 'warning',
-  cleared: 'info',
-  received: 'success',
-  cancelled: 'neutral',
-};
 
 type ContainerDraft = {
   container_number: string;
@@ -339,7 +330,7 @@ export default function ShipmentDetailPage() {
         title={
           <span>
             <span className="font-mono">{data.shipment_number}</span>
-            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">
+            <Chip variant={shipmentStatusVariant[data.status]} className="ml-3">
               {statusLabels.get(data.status) ?? data.status.replace('_', ' ')}
             </Chip>
           </span>

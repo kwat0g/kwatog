@@ -7,6 +7,7 @@ namespace Tests\Feature\B2B;
 use App\Modules\Accounting\Models\Collection;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\CRM\Models\SalesOrder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,6 +19,56 @@ use Tests\TestCase;
 class CustomerInvoicePaymentSubmissionTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_order_invoice_cannot_submit_bank_transfer_without_a_selected_order_method(): void
+    {
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
+        $invoice = Invoice::factory()->create(['status' => 'finalized', 'date' => now()->toDateString()]);
+        $order = SalesOrder::factory()->create([
+            'customer_id' => $invoice->customer_id,
+            'payment_method' => null,
+            'customer_terms_snapshot' => ['allowed_payment_methods' => null],
+        ]);
+        $invoice->update(['sales_order_id' => $order->id]);
+        $portal = CustomerPortalUser::create([
+            'customer_id' => $invoice->customer_id,
+            'name' => 'Customer',
+            'email' => Str::uuid().'@test.local',
+            'password' => bcrypt('Password1!'),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($portal, 'customer_portal')
+            ->getJson('/api/v1/b2b/customer/invoices/'.$invoice->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.can_submit_payment', false)
+            ->assertJsonPath('data.payment_submission_blocked_reason', 'Bank transfer was not selected or allowed for this invoice. Contact Finance to arrange payment using the agreed method.');
+    }
+
+    public function test_portal_invoice_shows_the_payment_method_selected_for_its_sales_order(): void
+    {
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
+        $invoice = Invoice::factory()->create(['status' => 'finalized', 'date' => now()->toDateString()]);
+        $order = SalesOrder::factory()->create([
+            'customer_id' => $invoice->customer_id,
+            'payment_method' => 'bank_transfer',
+            'customer_terms_snapshot' => ['allowed_payment_methods' => ['bank_transfer']],
+        ]);
+        $invoice->update(['sales_order_id' => $order->id]);
+        $portal = CustomerPortalUser::create([
+            'customer_id' => $invoice->customer_id,
+            'name' => 'Customer',
+            'email' => Str::uuid().'@test.local',
+            'password' => bcrypt('Password1!'),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($portal, 'customer_portal')
+            ->getJson('/api/v1/b2b/customer/invoices/'.$invoice->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.sales_order.payment_method', 'bank_transfer')
+            ->assertJsonPath('data.can_submit_payment', true);
+    }
 
     public function test_customer_can_submit_required_proof_without_recording_collection(): void
     {

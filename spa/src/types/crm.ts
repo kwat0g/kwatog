@@ -1,6 +1,7 @@
 // Sprint 6 — CRM types. IDs are hash strings; decimals are strings.
 
 import type { Incoterm } from '@/types/supplyChain';
+import type { CustomerTermsSnapshot, WarrantyTermsSnapshot } from '@/types/orderAgreements';
 
 export interface Product {
   financial_change_request?: {
@@ -131,6 +132,7 @@ export interface SalesOrderItem {
   quantity_delivered: string;
   remaining_quantity: string;
   delivery_date: string;
+  warranty_terms_snapshot?: WarrantyTermsSnapshot | null;
 }
 
 export interface SalesOrderStatusHistoryEvent {
@@ -155,6 +157,8 @@ export interface SalesOrder {
   status_label: string;
   next_statuses?: Array<{ value: string; label: string }>;
   payment_terms_days: number;
+  payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
+  customer_terms_snapshot?: CustomerTermsSnapshot | null;
   // Sprint 6 audit §3.2: linked chain context populated on the detail
   // payload only (whenLoaded on the resource).
   mrp_plan?: {
@@ -238,6 +242,7 @@ export interface CreateSalesOrderData {
   customer_id: string;
   date: string;
   payment_terms_days?: number;
+  payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
   delivery_terms?: string | null;
   incoterm?: Incoterm | null;
   notes?: string | null;

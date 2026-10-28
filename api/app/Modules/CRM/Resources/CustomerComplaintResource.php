@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
+use App\Modules\CRM\Support\WarrantyAdvisory;
 
 class CustomerComplaintResource extends JsonResource
 {
@@ -43,6 +44,20 @@ class CustomerComplaintResource extends JsonResource
                 'id'        => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
             ] : null),
+            'delivered_item' => $this->whenLoaded('deliveryItem', fn () => $this->deliveryItem ? [
+                'id' => $this->deliveryItem->hash_id,
+                'delivery_number' => $this->deliveryItem->delivery?->delivery_number,
+                'delivery_date' => $this->deliveryItem->delivery?->delivered_at?->toDateString(),
+                'part_number' => $this->deliveryItem->salesOrderItem?->product?->part_number,
+                'product_name' => $this->deliveryItem->salesOrderItem?->product?->name,
+            ] : null),
+            'warranty_advisory' => $this->whenLoaded('deliveryItem', fn () => $this->deliveryItem
+                ? WarrantyAdvisory::from(
+                    $this->deliveryItem->salesOrderItem?->warranty_terms_snapshot,
+                    $this->deliveryItem->delivery?->delivered_at?->toDateString(),
+                    $this->deliveryItem->delivery?->invoice?->date?->toDateString(),
+                )
+                : null),
             'ncr'               => $this->whenLoaded('ncr', fn () => $this->ncr ? [
                 'id'         => $this->ncr->hash_id,
                 'ncr_number' => $this->ncr->ncr_number,

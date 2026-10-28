@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
@@ -10,6 +10,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { returnRequestStatusVariant } from '@/lib/statusVariants';
 
 export default function CustomerReturnDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -25,7 +26,7 @@ export default function CustomerReturnDetailPage() {
   const request = query.data;
   return <div>
     <PageHeader
-      title={<>{request.rma_number} <Chip variant={chipVariantForStatus(request.status)}>{request.status_label}</Chip></>}
+      title={<>{request.rma_number} <Chip variant={returnRequestStatusVariant[request.status] ?? 'neutral'}>{request.status_label}</Chip></>}
       subtitle={`Submitted ${formatDate(request.created_at)}`}
       backTo="/portal/customer/returns"
       backLabel="Returns & RMAs"

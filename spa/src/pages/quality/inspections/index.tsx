@@ -16,20 +16,11 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import type { Inspection, InspectionStatus } from '@/types/quality';
+import type { Inspection } from '@/types/quality';
+import { inspectionStatusVariant } from '@/lib/statusVariants';
 import { formatDateIso } from '@/lib/formatDate';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> =
-  {
-    draft: 'neutral',
-    in_progress: 'info',
-    awaiting_review: 'warning',
-    passed: 'success',
-    failed: 'danger',
-    cancelled: 'neutral',
-  };
-
 const DEFAULT_FILTERS: InspectionListParams = {
   page: 1,
   per_page: 25,
@@ -130,7 +121,7 @@ export default function InspectionsListPage() {
       header: 'Status',
       cell: (r) => (
         <div className="space-y-1">
-          <Chip variant={r.work_order_quality?.state === 'released' ? 'success' : STATUS_CHIP[r.status]}>
+          <Chip variant={r.work_order_quality?.state === 'released' ? 'success' : inspectionStatusVariant[r.status]}>
             {r.work_order_quality?.state === 'released' ? 'Quality released' : r.status_label ?? labels.get(r.status) ?? r.status}
           </Chip>
           {r.work_order_quality?.state === 'released' && r.status === 'failed' && (

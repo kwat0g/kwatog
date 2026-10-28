@@ -26,6 +26,7 @@ class CustomerComplaint extends Model
 
     protected $fillable = [
         'complaint_number', 'customer_id', 'product_id', 'sales_order_id',
+        'delivery_item_id',
         'received_date', 'severity', 'status', 'description',
         'affected_quantity', 'ncr_id', 'replacement_work_order_id',
         'ncr_handoff_status', 'ncr_handoff_message', 'ncr_handoff_at',
@@ -62,6 +63,11 @@ class CustomerComplaint extends Model
     public function salesOrder(): BelongsTo
     {
         return $this->belongsTo(SalesOrder::class);
+    }
+
+    public function deliveryItem(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\SupplyChain\Models\DeliveryItem::class);
     }
 
     public function ncr(): BelongsTo

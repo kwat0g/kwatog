@@ -1163,6 +1163,7 @@ class MrpEngineService
     private function remainingToProduce(SalesOrderItem $line): float
     {
         $good = 0;
+        $inlineRepairCommitment = 0;
         $roots = WorkOrder::query()
             ->where('sales_order_item_id', $line->id)
             ->whereNull('parent_wo_id')
@@ -1193,7 +1194,9 @@ class MrpEngineService
                     ->whereHas('inspection', fn ($q) => $q->where('entity_type', 'work_order')->whereIn('entity_id', $roots->pluck('id')))->get();
                 foreach ($inlineRepairs as $repair) {
                     $processed = $outputs->where('rework_ncr_id', $repair->id)->sum(fn ($output) => $output->good_count + $output->reject_count);
-                    $good += max(0, (int) $repair->confirmed_rework_quantity - (int) $processed);
+                    $repairCommitment = max(0, (int) $repair->confirmed_rework_quantity - (int) $processed);
+                    $inlineRepairCommitment += $repairCommitment;
+                    $good += $repairCommitment;
                 }
                 foreach ($outputs as $output) {
                     $result = $latestResults->get($output->id);
@@ -1213,7 +1216,7 @@ class MrpEngineService
 
         if ($line->fulfillment_policy === 'stock_first') {
             $coverage = app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->lineCoverage($line);
-            return max(0.0, (float) $coverage['demand'] - (float) $coverage['ready_quantity'] - (float) $coverage['awaiting_qc']);
+            return max(0.0, (float) $coverage['demand'] - (float) $coverage['ready_quantity'] - (float) $coverage['awaiting_qc'] - $inlineRepairCommitment);
         }
         return max(0.0, (float) $line->quantity - max($delivered, min((float) $line->quantity, (float) $good)));
     }

@@ -5,7 +5,7 @@ import { LuPlus, LuListChecks, LuRotateCcw, LuCheck } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { leaveRequestsApi, type BulkApproveLeaveResult, type LeaveListParams } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
+import { leaveStatusVariant } from '@/lib/statusVariants';
 import { reportMutationError } from '@/lib/formErrors';
 import { LeaveTypesManager } from './types';
 import { YearEndLeaveModal } from './year-end';
@@ -221,7 +222,7 @@ export default function LeavesPage() {
  )}
  </NumCell>
  ) },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{statusLabels.get(r.status) ?? r.status.replace('_', ' ')}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => <Chip variant={leaveStatusVariant[r.status]}>{statusLabels.get(r.status) ?? r.status.replace('_', ' ')}</Chip> },
  {
  key: 'actions',
  header: '',

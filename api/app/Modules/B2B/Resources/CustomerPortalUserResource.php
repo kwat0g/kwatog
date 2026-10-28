@@ -25,6 +25,21 @@ class CustomerPortalUserResource extends JsonResource
                 'id'   => $this->customer->hash_id,
                 'name' => $this->customer->name,
             ] : null),
+            'customer_terms'      => $this->whenLoaded('customer', fn () => $this->customer ? [
+                'allowed_payment_methods' => $this->customer->allowed_payment_methods,
+                'shipping_payer' => $this->customer->shipping_payer,
+                'agreement_starts_on' => $this->customer->agreement_starts_on?->toDateString(),
+                'agreement_ends_on' => $this->customer->agreement_ends_on?->toDateString(),
+                'agreement_status' => $this->agreementStatus(),
+                'payment_terms_days' => (int) $this->customer->payment_terms_days,
+                'warranty_defaults' => [
+                    'warranty_duration_days' => $this->customer->warranty_duration_days,
+                    'warranty_report_window_days' => $this->customer->warranty_report_window_days,
+                    'warranty_start_basis' => $this->customer->warranty_start_basis,
+                    'warranty_covered_issues' => $this->customer->warranty_covered_issues,
+                    'warranty_remedies' => $this->customer->warranty_remedies,
+                ],
+            ] : null),
             'last_login_at'       => optional($this->last_login_at)->toIso8601String(),
             'created_at'          => optional($this->created_at)->toIso8601String(),
         ];
@@ -38,5 +53,15 @@ class CustomerPortalUserResource extends JsonResource
         if ($this->must_change_password) return 'pending';
 
         return 'active';
+    }
+
+    private function agreementStatus(): string
+    {
+        $startsOn = $this->customer->agreement_starts_on?->toDateString();
+        $endsOn = $this->customer->agreement_ends_on?->toDateString();
+        if ($startsOn === null && $endsOn === null) return 'not_recorded';
+        if ($startsOn !== null && today()->toDateString() < $startsOn) return 'not_yet_effective';
+        if ($endsOn !== null && today()->toDateString() > $endsOn) return 'expired';
+        return 'in_effect';
     }
 }

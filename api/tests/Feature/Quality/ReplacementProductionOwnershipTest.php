@@ -62,7 +62,7 @@ class ReplacementProductionOwnershipTest extends TestCase
     }
 
     /** @return array{Product, ?SalesOrder, ?SalesOrderItem, WorkOrder, Inspection} */
-    private function failedBatch(bool $soBound): array
+    private function failedBatch(bool $soBound, bool $fullPiece = false): array
     {
         $product = Product::factory()->create();
         $order = $soBound ? SalesOrder::factory()->create() : null;
@@ -70,6 +70,9 @@ class ReplacementProductionOwnershipTest extends TestCase
         $line = $order ? SalesOrderItem::factory()->create([
             'sales_order_id' => $order->id, 'product_id' => $product->id, 'quantity' => 10,
         ]) : null;
+        if ($fullPiece) {
+            config(['inspection.finish_first_wo_enabled' => true]);
+        }
         $original = WorkOrder::factory()->create([
             'product_id' => $product->id, 'sales_order_id' => $order?->id, 'sales_order_item_id' => $line?->id,
             'quantity_target' => 10,
@@ -150,6 +153,67 @@ class ReplacementProductionOwnershipTest extends TestCase
         app(QueueMrpOnOutgoingInspectionFailed::class)->handle(new InspectionFailed($inspection));
 
         Bus::assertDispatched(RunAutomaticMrpJob::class, fn (RunAutomaticMrpJob $job): bool => $job->salesOrderIds === [$order->id]);
+    }
+
+    public function test_a_failed_full_piece_order_batch_waits_for_sorting_before_replanning(): void
+    {
+        Bus::fake([RunAutomaticMrpJob::class]);
+        [, $order, , , $inspection] = $this->failedBatch(true, true);
+        $inspection->forceFill(['counted_capture' => ['workflow' => 'finish_first_v1', 'version' => 2]])->save();
+
+        app(QueueMrpOnOutgoingInspectionFailed::class)->handle(new InspectionFailed($inspection));
+
+        Bus::assertNotDispatched(RunAutomaticMrpJob::class);
+    }
+
+    public function test_mrp_does_not_replace_confirmed_inline_repair_after_full_piece_sorting(): void
+    {
+        [$product, $order, $line, $original, $inspection] = $this->failedBatch(true, true);
+        $line->forceFill(['fulfillment_policy' => 'stock_first'])->save();
+        $reviewer = User::factory()->create(['role_id' => Role::where('slug', 'system_admin')->value('id')]);
+        $inspection->forceFill([
+            'counted_capture' => ['workflow' => 'finish_first_v1', 'version' => 2],
+            'inspector_id' => $this->user->id,
+            'reviewed_by' => $reviewer->id,
+            'reviewed_at' => now(),
+            'accepted_quantity' => 9,
+        ])->save();
+        $ncr = NonConformanceReport::factory()->create([
+            'inspection_id' => $inspection->id,
+            'product_id' => $product->id,
+            'status' => 'in_progress',
+            'disposition' => 'rework',
+            'affected_quantity' => 10,
+        ]);
+        $ncr->forceFill([
+            'confirmed_rework_quantity' => 1,
+            'rework_work_order_id' => $original->id,
+            'sorting_performed_by' => $this->user->id,
+            'sorting_approved_by' => $reviewer->id,
+            'sorting_approved_at' => now(),
+            'sorting_inspected_quantity' => '10.000',
+            'sorting_evidence_reference' => 'SORT-TEST: 10 inspected, 9 conforming, one assigned for repair.',
+            'mrb_accepted_quantity' => '9.000',
+            'mrb_decided_by' => $reviewer->id,
+            'mrb_decided_at' => now(),
+        ])->save();
+
+        $this->assertTrue($inspection->fresh()->canReleaseOutgoing());
+
+        $material = Item::factory()->create();
+        $bom = Bom::create(['product_id' => $product->id, 'version' => 1, 'is_active' => true]);
+        BomItem::create([
+            'bom_id' => $bom->id, 'item_id' => $material->id, 'quantity_per_unit' => '1.0000',
+            'unit' => $material->unit_of_measure, 'waste_factor' => '0.00', 'sort_order' => 0,
+        ]);
+        StockLevel::create([
+            'item_id' => $material->id, 'location_id' => WarehouseLocation::factory()->create()->id,
+            'quantity' => '100.000', 'reserved_quantity' => '0.000', 'weighted_avg_cost' => '5.0000', 'lock_version' => 0,
+        ]);
+
+        app(MrpEngineService::class)->runForSalesOrder($order->fresh());
+
+        $this->assertSame(0, WorkOrder::where('sales_order_item_id', $line->id)->whereKeyNot($original->id)->count());
     }
 
     public function test_a_failed_stock_batch_does_not_replan_and_ncr_still_replaces_it(): void

@@ -26,17 +26,10 @@ import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ChainHeader } from '@/components/chain';
 import type { ChainStep } from '@/types/chain';
 import { usePermission } from '@/hooks/usePermission';
-import type { ComplaintSeverity, ComplaintStatus, EightDReport } from '@/types/crm';
+import type { ComplaintSeverity, EightDReport } from '@/types/crm';
+import { complaintStatusVariant } from '@/lib/statusVariants';
 import { formatDateTime, formatDateIso } from '@/lib/formatDate';
 
-const STATUS_CHIP: Record<ComplaintStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> =
-  {
-    open: 'warning',
-    investigating: 'info',
-    resolved: 'info',
-    closed: 'success',
-    cancelled: 'neutral',
-  };
 const SEVERITY_CHIP: Record<
   ComplaintSeverity,
   'success' | 'danger' | 'warning' | 'neutral' | 'info'
@@ -286,7 +279,7 @@ export default function ComplaintDetailPage() {
         title={
           <span>
             {data.complaint_number}
-            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">
+            <Chip variant={complaintStatusVariant[data.status]} className="ml-3">
               {data.status_label ?? data.status}
             </Chip>
             <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">
