@@ -1049,3 +1049,7 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 ## Resume instruction
 
 Continue remaining notification and badge PRs. Keep each functional finding in its own PR and update this file with verification and gaps.
+
+## CI verification
+
+Playwright accessibility and visual-baseline jobs passed on run `40370063996` after `ci/playwright-browser-install` removed the apt dependency install. Vitest passed on retry after one visibility assertion failure.
