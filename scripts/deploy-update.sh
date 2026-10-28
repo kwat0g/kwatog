@@ -80,11 +80,6 @@ env_value() {
             }
         }
     ' "${ENV_FILE}")"
-    if [[ "${value}" == '"'*'"' ]]; then
-        value="${value:1:${#value}-2}"
-    elif [[ "${value}" == "'"*"'" ]]; then
-        value="${value:1:${#value}-2}"
-    fi
     printf '%s' "${value}"
 }
 

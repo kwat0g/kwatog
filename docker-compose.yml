@@ -166,6 +166,7 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile
     container_name: ogami-queue-mail
+    restart: unless-stopped
     working_dir: /var/www
     volumes:
       - ./api:/var/www

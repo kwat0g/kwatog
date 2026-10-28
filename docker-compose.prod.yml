@@ -1,5 +1,5 @@
 # ─── Ogami ERP — Production Compose ───────────────────────────────────────
-# Used on the production VPS (DigitalOcean droplet, Ubuntu 22.04 LTS).
+# Used on the production VPS (Ubuntu 22.04 LTS).
 # Differences vs docker-compose.yml (dev):
 #   • SPA is built into static files at deploy time, then mounted into nginx
 #     (no Vite dev server, no HMR).

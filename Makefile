@@ -167,12 +167,17 @@ prod-restore:
 #   • You're SSH'd into the production VPS at /opt/ogami-erp
 #   • .env (copied from .env.production.example) is filled in
 #   • Let's Encrypt certs exist at /etc/letsencrypt/live/$$SERVER_NAME/
-#   • $$SERVER_NAME env var is exported (e.g. erp.ogami.example)
+#   • $$SERVER_NAME env var is exported (default domain: ogamiph.dev)
 # Full runbook: docs/DEPLOY.md
 PROD_COMPOSE := docker compose -f docker-compose.prod.yml
 
 build-spa:
-	cd spa && docker run --rm -v "$$PWD:/app" -w /app node:20-alpine \
+	cd spa && docker run --rm \
+		-e VITE_REVERB_APP_KEY="$${VITE_REVERB_APP_KEY:?set VITE_REVERB_APP_KEY to match REVERB_APP_KEY}" \
+		-e VITE_REVERB_HOST="$${SERVER_NAME:?export SERVER_NAME}" \
+		-e VITE_REVERB_PORT=443 \
+		-e VITE_REVERB_SCHEME=https \
+		-v "$$PWD:/app" -w /app node:20-alpine \
 		sh -c "npm ci --no-audit --no-fund && npm run build"
 
 prod-up:
@@ -201,7 +206,7 @@ prod-migrate:
 	$(PROD_COMPOSE) exec api php artisan migrate --force
 
 deploy: build-spa
-	@if [ -z "$$SERVER_NAME" ]; then echo "ERROR: export SERVER_NAME=erp.your.domain"; exit 1; fi
+	@if [ -z "$$SERVER_NAME" ]; then echo "ERROR: export SERVER_NAME=ogamiph.dev (or your production domain)"; exit 1; fi
 	$(PROD_COMPOSE) build --pull
 	# Apply schema changes before starting code that can consume queued work.
 	$(PROD_COMPOSE) up -d db redis

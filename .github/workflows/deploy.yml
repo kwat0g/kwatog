@@ -12,8 +12,10 @@ name: Deploy to VPS
 # Rollback: SSH in, point `current` back to the prior release directory,
 # and re-run `docker compose -f current/docker-compose.prod.yml up -d`.
 #
-# Required repo secrets:
+# Required GitHub `production` environment secrets:
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
+# Required `production` environment variable:
+#   VITE_REVERB_APP_KEY (must match REVERB_APP_KEY in the server's .env)
 #
 # First-time prep on the box (one-off):
 #   mkdir -p $DEPLOY_PATH/{releases,shared/storage}
@@ -31,6 +33,7 @@ on:
       server_name:
         description: 'Production DNS name (must match SERVER_NAME in .env)'
         required: true
+        default: 'ogamiph.dev'
 
 permissions:
   contents: read
@@ -85,7 +88,13 @@ jobs:
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Build SPA artifact
+        env:
+          VITE_REVERB_APP_KEY: ${{ vars.VITE_REVERB_APP_KEY }}
+          VITE_REVERB_HOST: ${{ inputs.server_name }}
+          VITE_REVERB_PORT: '443'
+          VITE_REVERB_SCHEME: https
         run: |
+          test -n "$VITE_REVERB_APP_KEY" || { echo 'Set production environment variable VITE_REVERB_APP_KEY to match REVERB_APP_KEY in .env'; exit 1; }
           cd spa
           # Use whatever node version the SPA expects; nvm is not assumed in CI.
           # Re-install instead of cache because deploy is rare and predictable >
@@ -151,9 +160,32 @@ jobs:
             grep -Fqx -- "SERVER_NAME=$EXPECTED_SERVER_NAME" .env
             docker compose -f docker-compose.prod.yml build --pull
             docker compose -f docker-compose.prod.yml up -d db redis
-            set -a
-            . ./.env
-            set +a
+            # Read dotenv values literally; shell-sourcing can expand '$' in SMTP secrets.
+            env_value() {
+              local key="$1" value
+              value="$(awk -v wanted="$key" '
+                $0 !~ /^[[:space:]]*#/ && index($0, "=") {
+                  key = $0
+                  sub(/=.*/, "", key)
+                  if (key == wanted) {
+                    sub(/^[^=]*=/, "", $0)
+                    sub(/[[:space:]]*\r$/, "", $0)
+                    print $0
+                    exit
+                  }
+                }
+              ' .env)"
+              printf '%s' "$value"
+            }
+            DB_USERNAME="$(env_value DB_USERNAME)"
+            DB_PASSWORD="$(env_value DB_PASSWORD)"
+            DB_DATABASE="$(env_value DB_DATABASE)"
+            BACKUP_KEEP="$(env_value BACKUP_KEEP)"
+            BACKUP_S3_BUCKET="$(env_value BACKUP_S3_BUCKET)"
+            BACKUP_S3_PREFIX="$(env_value BACKUP_S3_PREFIX)"
+            AWS_ACCESS_KEY_ID="$(env_value AWS_ACCESS_KEY_ID)"
+            AWS_SECRET_ACCESS_KEY="$(env_value AWS_SECRET_ACCESS_KEY)"
+            AWS_DEFAULT_REGION="$(env_value AWS_DEFAULT_REGION)"
             STATUS=missing
             for i in $(seq 1 60); do
               STATUS=$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || true)
@@ -167,6 +199,9 @@ jobs:
             DB_USERNAME="$DB_USERNAME" DB_PASSWORD="$DB_PASSWORD" DB_DATABASE="$DB_DATABASE" \
             BACKUP_KEEP="${BACKUP_KEEP:-30}" BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-}" \
             BACKUP_S3_PREFIX="${BACKUP_S3_PREFIX:-}" \
+            AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
+            AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+            AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-}" \
             ./scripts/db-backup-cron.sh
             # The one-shot service is the only migration entry point for this
             # release; API and consumers depend on its successful completion.

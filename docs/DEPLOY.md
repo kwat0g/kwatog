@@ -1,22 +1,38 @@
 # Ogami ERP — Production Deployment Runbook
 
-> Sprint 4 / Task 38 — VPS deployment for Semester 1 defense.
->
-> Stack: DigitalOcean droplet (Ubuntu 22.04 LTS, 4 GB RAM, 2 vCPU, 80 GB SSD)
-> running [`docker-compose.prod.yml`](../docker-compose.prod.yml) with Let's
-> Encrypt SSL terminated at Nginx, daily `pg_dump` backups via cron, and a
-> non-interactive `make deploy` flow.
+Supported fresh deployment: Ubuntu 22.04 LTS VPS, [`docker-compose.prod.yml`](../docker-compose.prod.yml), static SPA, Nginx/Let's Encrypt, and Docker-managed scheduler/workers. Current domain: `ogamiph.dev`.
+
+## Moving the current VPS
+
+The running VPS still uses the legacy `docker-compose.yml` + `docker-compose.vps.yml` stack: Caddy with Cloudflare Origin certificates, Vite's development server, and Laravel settings from `api/.env`. A fresh production deployment below uses the root `.env` copied from [`.env.production.example`](../.env.production.example), static SPA files, and Nginx/Let's Encrypt. Do not mix the two Compose paths.
+
+The current private files are not production templates: both `.env` files set `APP_ENV=local`; `api/.env` enables demo/reference seeding; root `.env` sets `MAIL_MAILER=log` while `api/.env` sets SMTP. Do not copy either file as the new production `.env`. Use the production template, copy required company settings from the private API file, and keep all credentials out of Git.
+
+The current `REVERB_APP_SECRET` matches a value that was present in the tracked development template. Git history retains it, so treat it as exposed: generate a fresh secret for the replacement server. Never reuse `CHANGEME` or a development example value in production.
+
+The current `HASHIDS_SALT` also matches a tracked development placeholder. HashIDs only obfuscates IDs; it is not access control. When restoring the existing database, keep its current salt to preserve existing URLs. For a genuinely fresh database, generate a unique salt. Never change it after records and links exist without a planned ID migration.
+
+Before the old VPS expires:
+
+1. Create and verify an off-host PostgreSQL dump and private-file archive using [Daily backups](#9-daily-backups) and the Admin Backup & Restore center. Copy both archives somewhere outside the old server.
+2. Securely retain the current root `.env` and `api/.env` for reference. They contain credentials; do not add them to this repository. Production Compose uses only the new root `.env`.
+3. Record the new host's public IP, then update Cloudflare `A`/`AAAA` records for `ogamiph.dev` and `www.ogamiph.dev`.
+4. Production Compose uses Let's Encrypt certificates under `/etc/letsencrypt`. The legacy Caddy certificate and private key under `docker/caddy/certs/` are ignored by Git; create a new Cloudflare Origin certificate only if intentionally keeping the legacy Caddy stack.
+5. Recreate GitHub's `production` environment settings: secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`; variable `VITE_REVERB_APP_KEY`, matching `REVERB_APP_KEY` in the new `.env`.
+6. The old host uses an enabled `ogami-scheduler.timer`. The production Compose stack has its own `scheduler` service; use that service and do not also enable the host timer.
+
+Restore the database and private files before opening traffic. Do not run the initial administrator seeder against a restored database.
 
 ---
 
-## 1. Provision the droplet
+## 1. Provision a VPS
 
-1. Create a DigitalOcean droplet:
+1. Create an Ubuntu VPS:
    - Image: **Ubuntu 22.04 LTS x64**
-   - Plan: 4 GB / 2 vCPU / 80 GB SSD (`s-2vcpu-4gb`)
-   - Datacenter: **SGP1** (Singapore — lowest latency to PH)
+   - Starting size: **4 GB RAM, 2 vCPU, 80 GB SSD**
+   - Region near the users and database backups
    - SSH key: add yours; **disable password auth**.
-2. Point an `A` record from your domain (e.g. `erp.ogami.example`) at the droplet's public IPv4.
+2. Point `ogamiph.dev` and `www.ogamiph.dev` at the new public IPv4/IPv6.
 3. SSH in as `root` and create a non-root admin:
    ```bash
    adduser ogami
@@ -70,17 +86,17 @@ git checkout main
 
 ## 4. Provision SSL (Let's Encrypt)
 
-The droplet must already have port 80 reachable from the internet.
+The VPS must already have port 80 reachable from the internet.
 
 ```bash
 # Stop anything bound to port 80 first.
 sudo certbot certonly --standalone \
-    -d erp.ogami.example \
-    -m admin@ogami.example \
+    -d ogamiph.dev -d www.ogamiph.dev \
+    -m admin@ogamiph.dev \
     --agree-tos --no-eff-email
 ```
 
-Certs land at `/etc/letsencrypt/live/erp.ogami.example/`. The compose file
+Certs land at `/etc/letsencrypt/live/ogamiph.dev/`. The compose file
 mounts the parent directory **read-only** into the nginx container.
 
 ### Auto-renew
@@ -104,16 +120,18 @@ sudo certbot renew --dry-run
 ```bash
 cd /opt/ogami-erp
 cp .env.production.example .env
-nano .env   # fill in DB_PASSWORD, APP_KEY, HASHIDS_SALT, and Mail Manager MAIL_*, etc.
+chmod 600 .env
+nano .env   # fill generated secrets, SMTP credentials, admin, and company settings
 ```
 
 For Amazon SES Mail Manager, use the authenticated ingress endpoint hostname
 ending in `.mail-manager-smtp.amazonaws.com`, together with that endpoint's
 username and SMTP password. Use an approved sender for `MAIL_FROM_ADDRESS`.
 The production settings are `MAIL_PORT=587` and `MAIL_SCHEME=smtp`.
-The production Compose file uses `env_file` with `format: raw`, so literal
-`$` characters in SMTP credentials are passed unchanged to Laravel. Keep the
-password in `.env` as the provider supplied it; do not shell-source `.env`.
+The production Compose file uses `env_file` with `format: raw`: values pass
+through unchanged, including `$`, `#`, and quote characters. Do not quote
+values, even when they contain spaces; keep the password exactly as supplied
+and do not shell-source `.env`.
 
 If the organization uses another SMTP relay, use that provider's SMTP login,
 SMTP key/password, hostname, and verified sender instead. Do not use an API key,
@@ -137,12 +155,18 @@ Manager archive and the recipient inbox when testing Gmail/Yahoo delivery.
 Generate values:
 
 ```bash
-# APP_KEY (run inside a temporary container so PHP isn't required on the host)
-docker run --rm -v "$PWD:/app" -w /app/api composer:2 php artisan key:generate --show
+# APP_KEY (standalone PHP; does not need the application dependencies)
+docker run --rm composer:2 php -r 'echo "base64:", base64_encode(random_bytes(32)), PHP_EOL;'
 
-# DB_PASSWORD, HASHIDS_SALT, REVERB_APP_KEY, REVERB_APP_SECRET
-openssl rand -base64 32   # run multiple times
+# DB_PASSWORD, HASHIDS_SALT, REVERB_APP_KEY, REVERB_APP_SECRET,
+# HEALTH_DETAIL_TOKEN, BACKUP_RECOVERY_SECRET
+openssl rand -hex 32      # run separately for each secret
 ```
+
+`REVERB_APP_KEY` is public client configuration, not the secret. Set GitHub's
+`production` environment variable `VITE_REVERB_APP_KEY` to the same value; the
+deploy workflow embeds it in the SPA build. `VITE_REVERB_HOST`, port, and scheme
+come from `server_name` and HTTPS defaults.
 
 **Critical:** `SERVER_NAME` in `.env` must be the real production DNS name.
 The production Compose file mounts [`docker/nginx/prod.conf`](../docker/nginx/prod.conf)
@@ -232,11 +256,15 @@ The SPA is built into static files and served by nginx; there is no Vite dev
 server in production.
 
 ```bash
-cd /opt/ogami-erp/spa
-docker run --rm -v "$PWD:/app" -w /app node:20-alpine sh -c \
-    "npm ci --no-audit --no-fund && npm run build"
+cd /opt/ogami-erp
+export SERVER_NAME=ogamiph.dev
+export VITE_REVERB_APP_KEY='<same public value as REVERB_APP_KEY in .env>'
+make build-spa
 # `dist/` is mounted into nginx via the compose volume; no further action needed.
 ```
+
+The SPA build receives `SERVER_NAME` and `VITE_REVERB_APP_KEY`; do not build it
+with the default key if the backend uses a different `REVERB_APP_KEY`.
 
 Reload nginx so it picks up the new index.html:
 
@@ -258,7 +286,7 @@ report a broken site. A browser always sends these headers; `curl` must be told
 to.
 
 ```bash
-ORIGIN=https://erp.ogami.example      # must match a SANCTUM_STATEFUL_DOMAINS entry
+ORIGIN=https://ogamiph.dev           # must match a SANCTUM_STATEFUL_DOMAINS entry
 H=(-H "Origin: $ORIGIN" -H "Referer: $ORIGIN/" -H "Accept: application/json" \
    -H "X-Requested-With: XMLHttpRequest")
 
@@ -303,19 +331,9 @@ sudo install -d -m 0750 /var/backups/ogami
 ```bash
 sudo tee /etc/cron.daily/ogami-pgdump <<'EOF'
 #!/bin/sh
-set -eu
-cd /opt/ogami-erp
-# Source env so the host wrapper can upload to BACKUP_S3_BUCKET / AWS_*.
-set -a; . ./.env; set +a
-DB_CONTAINER=ogami-db \
-CONTAINER_BACKUP_DIR=/var/backups/ogami \
-HOST_BACKUP_DIR=/var/backups/ogami \
-DB_USERNAME="$DB_USERNAME" DB_PASSWORD="$DB_PASSWORD" DB_DATABASE="$DB_DATABASE" \
-BACKUP_KEEP=30 BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-}" \
-BACKUP_S3_PREFIX="${BACKUP_S3_PREFIX:-}" \
-/opt/ogami-erp/scripts/db-backup-cron.sh
+exec /opt/ogami-erp/ops/cron/ogami-pgdump
 EOF
-sudo chmod +x /etc/cron.daily/ogami-pgdump
+sudo chmod 0755 /etc/cron.daily/ogami-pgdump
 sudo /etc/cron.daily/ogami-pgdump   # test once
 ```
 
@@ -334,7 +352,7 @@ drills.
 
 ### Off-site (S3) replication
 
-Daily backups live on the same droplet by default. To replicate off-site:
+Daily backups live on the same VPS by default. To replicate off-site:
 
 1. Provision an S3 (or S3-compatible) bucket with versioning + lifecycle
    rules — never reuse the prod AWS account/key for anything else.
@@ -438,7 +456,7 @@ git pull --ff-only
 docker compose -f docker-compose.prod.yml build --pull
 docker compose -f docker-compose.prod.yml up -d db redis
 # Take the pre-migration backup before changing the schema.
-DB_PASSWORD="$DB_PASSWORD" make prod-backup
+sudo /etc/cron.daily/ogami-pgdump
 status=missing
 for i in $(seq 1 60); do
     status="$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || echo missing)"
@@ -568,7 +586,7 @@ docker compose -f docker-compose.prod.yml exec api \
 Phase 5b ships error-tracking *hooks* but does not bundle the SDK. To
 enable Sentry on a deployment:
 
-1. SSH into the droplet:
+1. SSH into the VPS:
    ```bash
    cd /opt/ogami-erp
    docker compose -f docker-compose.prod.yml exec api \
@@ -612,6 +630,6 @@ To leave Sentry disabled, do nothing — the absence of
 | HashIDs `HASHIDS_SALT` MUST stay constant after first deploy. Changing it invalidates every URL/foreign reference in the wild. | Treat the value like an APP_KEY — back it up out-of-band. |
 | Reverb WebSocket connections require `wss://` with `connect-src` allowing it in CSP. Already configured in `prod.conf`. | If clients can't connect, check the browser console for CSP violations. |
 
-**Acceptance:** open `https://erp.ogami.example/login` in a browser, sign in
+**Acceptance:** open `https://ogamiph.dev/login` in a browser, sign in
 as the seeded admin user, navigate Accounting → Trial Balance, see the
 Sprint 3 payroll JE reflected, click Print → PDF downloads. Defense ready.
