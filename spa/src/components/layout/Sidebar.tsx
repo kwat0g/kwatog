@@ -166,6 +166,7 @@ function badgeDestination(path: string, key: string): string {
     shipments: 'status=mid_pipe',
     pending_so: 'signal=awaiting_confirmation',
     overtime: 'signal=awaiting_my_approval',
+    clearance_pending: 'signal=clearance_pending',
     ncrs: 'signal=open',
   };
   const destinations: Record<string, string> = {
@@ -738,6 +739,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuListChecks,
         feature: 'hr',
         permission: 'hr.separation.view',
+        badgeKey: 'clearance_pending',
       },
       {
         to: '/hr/profile-update-requests',

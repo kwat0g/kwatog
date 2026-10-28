@@ -6,6 +6,7 @@ export interface SeparationListParams extends ListParams {
  status?: ClearanceStatus | '';
  separation_reason?: SeparationReason;
  employee_id?: string;
+ signal?: 'clearance_pending' | '';
 }
 
 export const separationsApi = {

@@ -68,6 +68,7 @@ use App\Modules\HR\Listeners\AutoProvisionUserOnEmployeeHire;
 use App\Modules\HR\Listeners\DeactivateAccountOnClearanceComplete;
 use App\Modules\HR\Listeners\InitializeLeaveBalances;
 use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
+use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
@@ -335,6 +336,7 @@ class AppServiceProvider extends ServiceProvider
             BudgetTransfer::class,
             Employee::class,
             Attendance::class,
+            Clearance::class,
         ] as $badgeModel) {
             $badgeModel::observe(BadgeInvalidationObserver::class);
         }

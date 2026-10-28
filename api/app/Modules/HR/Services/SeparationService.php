@@ -60,7 +60,15 @@ class SeparationService
             'employee.department:id,name,code',
             'employee.position:id,title',
         ]);
-        $this->scopeClearances($q, $user);
+        if (($filters['signal'] ?? null) === 'clearance_pending') {
+            if ($user === null) {
+                $q->whereRaw('1 = 0');
+            } else {
+                $this->pendingClearancesFor($user, $q);
+            }
+        } else {
+            $this->scopeClearances($q, $user);
+        }
         foreach (['status', 'separation_reason'] as $f) {
             if (! empty($filters[$f])) $q->where($f, $filters[$f]);
         }
@@ -100,6 +108,42 @@ class SeparationService
         return $q->orderByDesc('id')->paginate($perPage);
     }
 
+    /**
+     * Clearances with at least one pending checklist item the user can sign.
+     * The list drill-down and sidebar badge use this same row scope.
+     *
+     * @param  Builder<Clearance>|null  $query
+     * @return Builder<Clearance>
+     */
+    public function pendingClearancesFor(User $user, ?Builder $query = null): Builder
+    {
+        $query ??= Clearance::query();
+        $this->scopeClearances($query, $user);
+        $query->whereIn('status', [ClearanceStatus::Pending->value, ClearanceStatus::InProgress->value]);
+
+        if (! $user->hasPermission('hr.clearance.sign')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $pendingItem = "EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(clearances.clearance_items::jsonb, '[]'::jsonb)) AS item WHERE item->>'status' = 'pending')";
+        if (in_array($user->role?->slug, ['hr_officer', 'system_admin'], true)) {
+            return $query->whereRaw($pendingItem);
+        }
+
+        $departmentId = DepartmentScope::departmentIdFor($user);
+        $labels = $departmentId === null ? [] : $this->checklistDepartmentLabels($departmentId);
+        if ($labels === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $placeholders = implode(',', array_fill(0, count($labels), '?'));
+
+        return $query->whereRaw(
+            "EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(clearances.clearance_items::jsonb, '[]'::jsonb)) AS item WHERE item->>'status' = 'pending' AND lower(trim(item->>'department')) IN ({$placeholders}))",
+            $labels,
+        );
+    }
+
     public function show(Clearance $clearance, ?User $user = null): Clearance
     {
         $this->scopeClearances(Clearance::query(), $user)->whereKey($clearance->id)->firstOrFail();
@@ -135,16 +179,24 @@ class SeparationService
             return $query->whereRaw('1 = 0');
         }
         // Resolve stored labels through the same rule as signing, including legacy prefixes.
-        $storedLabels = DB::table('clearances')->whereNull('deleted_at')
-            ->selectRaw("DISTINCT trim(item->>'department') AS label")
-            ->crossJoin(DB::raw('jsonb_array_elements(clearance_items::jsonb) AS item'))
-            ->pluck('label');
-        $labels = $storedLabels->filter(fn ($label) =>
-            (int) $this->resolveChecklistDepartment((string) $label)?->id === (int) $departmentId)->all();
+        $labels = $this->checklistDepartmentLabels((int) $departmentId);
         if ($labels === []) return $query->whereRaw('1 = 0');
-        $labels = array_values(array_unique(array_map('strtolower', $labels)));
         $placeholders = implode(',', array_fill(0, count($labels), '?'));
         return $query->whereRaw("EXISTS (SELECT 1 FROM jsonb_array_elements(clearance_items::jsonb) item WHERE lower(trim(item->>'department')) IN ({$placeholders}))", $labels);
+    }
+
+    /** @return list<string> */
+    private function checklistDepartmentLabels(int $departmentId): array
+    {
+        return DB::table('clearances')->whereNull('deleted_at')
+            ->selectRaw("DISTINCT trim(item->>'department') AS label")
+            ->crossJoin(DB::raw('jsonb_array_elements(clearance_items::jsonb) AS item'))
+            ->pluck('label')
+            ->filter(fn ($label) => (int) $this->resolveChecklistDepartment((string) $label)?->id === $departmentId)
+            ->map(fn ($label) => strtolower(trim((string) $label)))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** Only checklist owners receive other departments' task details. */

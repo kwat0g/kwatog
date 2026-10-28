@@ -153,6 +153,13 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 - Evidence: F-017 in `FINDINGS.md`; screenshots and machine reports under [`screenshots/before/inventory-scanner/`](screenshots/before/inventory-scanner/) and [`screenshots/after/inventory-scanner/`](screenshots/after/inventory-scanner/). Other roles, Floor theme, axe, keyboard/screen-reader walkthrough, and runtime performance remain unchecked. No table-specific 0/1/10/50/500-row checks apply.
 - Tracking: PR [#512](https://github.com/kwat0g/kwatog/pull/512) contains this route unit.
 
+## Phase 4: Inventory Dashboard audit
+
+- Rendered `/inventory/dashboard` with a local synthetic admin fixture in Light and Dark at 375, 768, 1024, 1280, 1440, 1920, and 2560px. Reports and screenshots are under `screenshots/after/inventory-dashboard/`.
+- Header and content edges align within 1px. No page horizontal overflow, double vertical scroll, sampled contrast below 4.5:1, sampled text below 12px, or undersized action controls appeared.
+- At 375–1024px, the low-stock table needs horizontal scrolling without a visible cue, label, or keyboard-focusable region. At 375px, Low stock and Recent movements stay side by side; long values wrap into tall rows. F-018 records the open layout issue.
+- No route implementation change, test, or CI/CD run in this audit recovery.
+
 ## Next action
 
-Continue Phase 4 with `/inventory/dashboard`, then complete remaining Inventory routes before moving to the next module by traffic and severity. This work does not prove all 361 routes. Full route rendering, per-role walkthroughs, unvisited modal/drawer states, print views, axe, and performance checks remain open.
+Address F-018, then continue remaining Inventory routes before moving to the next module by traffic and severity. This work does not prove all 361 routes. Full route rendering, per-role walkthroughs, unvisited modal/drawer states, print views, axe, and performance checks remain open.

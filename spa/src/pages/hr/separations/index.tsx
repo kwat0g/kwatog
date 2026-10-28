@@ -18,7 +18,7 @@ const STATUS_CHIP: Record<ClearanceStatus, 'success' | 'warning' | 'info' | 'neu
  pending: 'warning', in_progress: 'info', completed: 'info', finalized: 'success', cancelled: 'neutral' };
 
 const DEFAULT_FILTERS: SeparationListParams = {
- page: 1, per_page: 25, status: '',
+ page: 1, per_page: 25, status: '', signal: '',
 };
 
 export default function SeparationsListPage() {
@@ -88,8 +88,8 @@ export default function SeparationsListPage() {
  <FilterBar
  filters={filterConfig}
  values={filters}
- onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
- onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
+ onSearch={(search) => setFilters((f) => ({ ...f, search, signal: '', page: 1 }))}
+ onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, signal: '', page: 1 }))}
  searchPlaceholder="Search…"
  />
  {isLoading && !data && <SkeletonTable columns={8} rows={6} />}

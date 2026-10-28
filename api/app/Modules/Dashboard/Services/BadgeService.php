@@ -23,6 +23,7 @@ use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
+use App\Modules\HR\Services\SeparationService;
 use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
@@ -99,6 +100,7 @@ class BadgeService
         'ncrs' => 'quality',
         'overdue_ncrs' => 'quality',
         'profile_requests' => 'hr',
+        'clearance_pending' => 'hr',
         'payroll' => 'payroll',
         'training_expiry' => 'hr',
         'training_upcoming' => 'hr',
@@ -418,6 +420,16 @@ class BadgeService
                 'description' => 'Profile changes you can review',
                 'counter'     => fn (): int => app(ProfileUpdateRequestService::class)
                     ->awaitingMyActionQuery($user)
+                    ->count(),
+            ],
+
+            'clearance_pending' => [
+                'permissions' => ['hr.separation.view'],
+                'required_permissions' => ['hr.clearance.sign'],
+                'label' => 'Clearance items',
+                'description' => 'Clearances with pending items you can sign',
+                'counter' => fn (): int => app(SeparationService::class)
+                    ->pendingClearancesFor($user)
                     ->count(),
             ],
 

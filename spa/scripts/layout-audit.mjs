@@ -154,6 +154,64 @@ function localUser(role, themeMode) {
   };
 }
 
+function sampleInventoryDashboard(count) {
+  const rows = Math.min(10, count);
+
+  return {
+    consumption_history_days: 30,
+    total_stock_value: '1234567890123.45',
+    items_below_reorder: Math.min(14, count),
+    items_critical: Math.min(4, count),
+    items_low_stock: Math.min(14, count),
+    items_out_of_stock: Math.min(1, count),
+    pending_grns: Math.min(4, count),
+    low_stock_alerts: Array.from({ length: rows }, (_, index) => ({
+      item_id: `layout-dashboard-item-${index + 1}`,
+      code: index === 0 ? 'RAW-MATERIAL-REFERENCE-000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`,
+      name: index === 0 ? 'Long resin description for inventory dashboard width review' : `Dashboard material ${index + 1}`,
+      available: index === 0 ? '0.000' : ((index + 1) * 12.5).toFixed(3),
+      reorder_point: '25000.000',
+      safety_stock: '5000.000',
+      lead_time_days: 14,
+      is_critical: index === 0,
+      severity: index === 0 ? 'critical' : 'low',
+      open_pr: index % 3 === 0 ? { number: `PR-202610-${String(index + 1).padStart(5, '0')}`, status: 'pending', status_label: 'Pending' } : null,
+      open_po: index % 3 === 1 ? { number: `PO-202610-${String(index + 1).padStart(5, '0')}`, status: 'approved', status_label: 'Approved' } : null,
+    })),
+    recent_movements: Array.from({ length: Math.min(20, count) }, (_, index) => {
+      const movementTypes = ['grn_receipt', 'material_issue', 'transfer', 'adjustment_out', 'production_receipt'];
+      const movementType = movementTypes[index % movementTypes.length];
+
+      return {
+        id: `layout-dashboard-movement-${index + 1}`,
+        created_at: `2026-10-${String((index % 28) + 1).padStart(2, '0')}T09:14:00+08:00`,
+        movement_type: movementType,
+        movement_type_label: movementType.replaceAll('_', ' '),
+        item: {
+          code: index === 0 ? 'RAW-MATERIAL-REFERENCE-000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`,
+          name: index === 0 ? 'Long resin description for inventory dashboard width review' : `Dashboard material ${index + 1}`,
+        },
+        quantity: index === 0 ? '123456789.125' : `${(index + 1) * 1250}.000`,
+        unit_cost: '1234.5000',
+        total_cost: '1543125000.00',
+        from_location: null,
+        to_location: null,
+      };
+    }),
+    top_consumed_materials: Array.from({ length: rows }, (_, index) => ({
+      id: `layout-dashboard-consumed-${index + 1}`,
+      code: index === 0 ? 'RAW-MATERIAL-REFERENCE-000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`,
+      name: index === 0 ? 'Long resin description for inventory dashboard width review' : `Dashboard material ${index + 1}`,
+      unit_of_measure: 'kg',
+      qty: index === 0 ? '123456789.125' : `${(index + 1) * 1250}.000`,
+      total_value: index === 0 ? '999999999999.99' : `${((index + 1) * 1234.5).toFixed(2)}`,
+    })),
+  };
+}
+
+assert.equal(sampleInventoryDashboard(50).low_stock_alerts.length, 10);
+assert.equal(sampleInventoryDashboard(0).recent_movements.length, 0);
+
 function sampleAdjustments(count) {
   return Array.from({ length: count }, (_, index) => ({
     id: `layout-${index + 1}`,
@@ -936,6 +994,7 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
     else if (pathname.endsWith('/business-policies')) json = { data: { functional_currency_code: 'PHP', reporting_currency_code: 'PHP' } };
     else if (pathname.endsWith('/landing/contact')) json = { legal_name: 'OGAMI ERP' };
     else if (pathname.endsWith('/dashboards/badges')) json = { data: {} };
+    else if (pathname.endsWith('/inventory/dashboard')) json = { data: sampleInventoryDashboard(rowCount) };
     else if (pathname.endsWith('/inventory/scan/options')) json = {
       data: { contexts: [
         { value: 'lookup', label: 'General lookup' },

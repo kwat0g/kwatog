@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Models\Clearance;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Services\SeparationService;
@@ -256,6 +257,62 @@ class SeparationContractRegressionTest extends TestCase
         // 22P02 invalid-input error.
         $this->assertCount(1, $this->service()->list(['employee_id' => $employee->hash_id])->items());
         $this->assertCount(0, $this->service()->list(['employee_id' => 'not-a-real-hash'])->items());
+    }
+
+    public function test_clearance_badge_and_filtered_list_include_only_signer_department_tasks(): void
+    {
+        Cache::flush();
+        $maintenance = Department::factory()->create(['name' => 'Maintenance', 'code' => 'MAINT']);
+        $hr = Department::factory()->create(['name' => 'Human Resources', 'code' => 'HR']);
+        $signerEmployee = Employee::factory()->create(['department_id' => $maintenance->id]);
+        $signer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'maintenance_tech')->value('id'),
+            'employee_id' => $signerEmployee->id,
+        ]);
+        $subject = Employee::factory()->create(['department_id' => $hr->id]);
+        $actionable = $this->makeClearance($subject, [
+            'clearance_items' => [
+                ['department' => 'Maintenance', 'item_key' => 'maintenance', 'label' => 'Return tools',
+                    'status' => 'pending', 'signed_by' => null, 'signed_at' => null, 'remarks' => null],
+                ['department' => 'Human Resources', 'item_key' => 'hr', 'label' => 'Exit interview',
+                    'status' => 'pending', 'signed_by' => null, 'signed_at' => null, 'remarks' => null],
+            ],
+        ]);
+        $this->makeClearance(Employee::factory()->create(['department_id' => $hr->id]), [
+            'clearance_items' => [
+                ['department' => 'Human Resources', 'item_key' => 'hr-only', 'label' => 'Exit interview',
+                    'status' => 'pending', 'signed_by' => null, 'signed_at' => null, 'remarks' => null],
+            ],
+        ]);
+        $this->makeClearance($subject, [
+            'status' => ClearanceStatus::Completed->value,
+            'clearance_items' => [
+                ['department' => 'Maintenance', 'item_key' => 'completed', 'label' => 'Return tools',
+                    'status' => 'pending', 'signed_by' => null, 'signed_at' => null, 'remarks' => null],
+            ],
+        ]);
+
+        $list = $this->actingAs($signer, 'sanctum')
+            ->getJson('/api/v1/hr/clearances?signal=clearance_pending')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $actionable->hash_id)
+            ->assertJsonCount(1, 'data.0.clearance_items');
+
+        $this->assertSame('Maintenance', $list->json('data.0.clearance_items.0.department'));
+        $this->actingAs($signer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->assertJsonPath('data.clearance_pending.count', 1);
+
+        $this->actingAs($signer, 'sanctum')
+            ->patchJson("/api/v1/hr/clearances/{$actionable->hash_id}/items", ['item_key' => 'maintenance'])
+            ->assertOk();
+
+        $this->actingAs($signer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->assertJsonPath('data.clearance_pending.count', 0);
     }
 
     // ── M023-F011: no raw signer PK in the payload ───────────────────────

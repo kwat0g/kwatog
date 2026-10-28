@@ -1046,6 +1046,13 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - API parity coverage checks HR count/list, department scope, self-service badge denial, past/today/completed/archived exclusions, and cache invalidation. Sidebar deep-link coverage added. Tests were not run: PHP and Vitest are unavailable; shared `ogami_test` was not touched. `git diff --check` is the only verification.
 - F-84 records that the current scheduler notifies HR and department heads only. Employee self-service DTR is read-only and has no missing-timeout queue; no employee badge or recipient was added.
 
+## HR separation clearance badge recovery
+
+- Added `clearance_pending` from the approved policy. It counts clearance rows with pending checklist items the current user can sign and links to `/hr/separations?signal=clearance_pending`.
+- The badge and list use `SeparationService::pendingClearancesFor()`. Row visibility and department checklist scope match the sign action; completed, finalized, cancelled, and other-department-only work stay out.
+- Clearance model changes now invalidate the cached badge. The regression test covers department scoping, badge/list parity, terminal rows, and cache invalidation.
+- Tests and CI/CD were skipped at the user's direction.
+
 ## Resume instruction
 
 Continue remaining notification and badge PRs. Keep each functional finding in its own PR and update this file with verification and gaps.

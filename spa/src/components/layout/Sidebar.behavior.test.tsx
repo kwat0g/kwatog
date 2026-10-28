@@ -77,6 +77,21 @@ it('opens Overtime on the actionable approval queue', () => {
   );
 });
 
+it('opens Separation Clearance on the pending items the user can sign', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'clearance_pending'
+    ? { count: 2, severity: 'warning', label: 'Clearance items', description: 'Clearances with pending items you can sign' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/separations']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Separation Clearance/ })).toHaveAttribute(
+    'href',
+    '/hr/separations?signal=clearance_pending',
+  );
+});
+
 it('opens Attendance on the missing-time-out list filter', () => {
   badgeMock.getBadge.mockImplementation((key) => key === 'missing_time_out'
     ? {
