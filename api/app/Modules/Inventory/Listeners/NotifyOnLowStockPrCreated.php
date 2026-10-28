@@ -33,7 +33,7 @@ class NotifyOnLowStockPrCreated implements ShouldQueue
                 ->filter(fn (User $user): bool => $user->hasPermission('inventory.view'))
                 ->values();
 
-            $this->notifications->send($audience, 'inventory.low_stock', [
+            $this->notifications->sendForSubject($item, $audience, 'inventory.low_stock', [
                 'title'       => "Low Stock — {$item->code}",
                 'message'     => "{$item->name} is below its reorder point. A purchase request was created.",
                 'link_to'     => "/inventory/items/{$item->hash_id}",

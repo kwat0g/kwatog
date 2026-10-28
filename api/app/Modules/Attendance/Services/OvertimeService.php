@@ -214,6 +214,7 @@ class OvertimeService
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = OvertimeRequest::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'approver:id,name,role_id']);
+        $approvalQueue = ($filters['signal'] ?? '') === 'awaiting_my_approval';
         if (!empty($filters['employee_id'])) {
             $empId = \App\Common\Support\HashIdFilter::decode(
                 $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
@@ -228,12 +229,18 @@ class OvertimeService
                     ->orWhere('middle_name', SearchOperator::like(), SearchOperator::contains($term))
                     ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))));
         }
-        if (!empty($filters['status'])) $q->where('status', $filters['status']);
+        if (!empty($filters['status']) && ! $approvalQueue) $q->where('status', $filters['status']);
         if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('date', '<=', $filters['to']);
 
         if ($user) {
-            $this->decisionPolicy->visibleTo($q, $user);
+            if ($approvalQueue) {
+                $this->decisionPolicy->awaitingMyApprovalQuery($q, $user);
+            } else {
+                $this->decisionPolicy->visibleTo($q, $user);
+            }
+        } elseif ($approvalQueue) {
+            $q->whereRaw('1 = 0');
         }
 
         return $q->orderByDesc('date')->paginate(min((int) ($filters['per_page'] ?? 25), 100));

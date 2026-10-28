@@ -7,6 +7,8 @@ export type ProfileUpdateRequestStatus =
  | 'approved'
  | 'rejected';
 
+export type ProfileUpdateRequestSignal = 'awaiting_my_action';
+
 export interface ProfileUpdateReviewItem {
  id: string;
  status: ProfileUpdateRequestStatus;
@@ -31,7 +33,7 @@ export interface ProfileUpdateReviewItem {
 
 export const profileUpdateRequestsApi = {
  options: () => client.get<{ data: { statuses: Array<{ value: ProfileUpdateRequestStatus; label: string }> } }>('/hr/profile-update-requests/options').then((r) => r.data.data),
- list: (params?: { status?: ProfileUpdateRequestStatus; page?: number; per_page?: number }) =>
+ list: (params?: { status?: ProfileUpdateRequestStatus; signal?: ProfileUpdateRequestSignal; page?: number; per_page?: number }) =>
  client
  .get<PaginatedResponse<ProfileUpdateReviewItem>>('/hr/profile-update-requests', { params })
  .then((r) => r.data),

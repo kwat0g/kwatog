@@ -226,7 +226,13 @@
           "scrollWidth": 92,
           "clientWidth": 1,
           "scrollHeight": 20,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 92,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -241,7 +247,13 @@
           "scrollWidth": 56,
           "clientWidth": 40,
           "scrollHeight": 56,
-          "clientHeight": 40
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
         }
       ],
       "verticalScrollContainers": [],
@@ -263,7 +275,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "h1",
@@ -277,7 +293,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "RAW-MATERIAL-REFERENCE-000001 · Premium injection-grade polypropylene resin"
+            ]
           },
           {
             "tag": "button",
@@ -291,7 +311,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Edit"
+            ]
           },
           {
             "tag": "div",
@@ -305,7 +329,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
@@ -319,189 +349,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Reserved",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Usable now",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "QC held",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Quarantine / scrap",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Approved free for orders",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "QC approved; safety stock retained",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Incoming stock production",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "Production and QC remain required",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Standard cost",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
@@ -515,7 +369,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
@@ -529,133 +389,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Item type",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Unit of measure",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder method",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder point",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Safety stock",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "MOQ",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Lead time",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Description",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Unit conversions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
@@ -669,7 +409,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "button",
@@ -683,7 +427,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Add conversion"
+            ]
           },
           {
             "tag": "p",
@@ -697,7 +445,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "div",
@@ -711,7 +463,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "color(srgb 0.94902 0.929412 0.894118)",
-            "contrast": 5.12
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "h3",
@@ -725,7 +479,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "No alternate units configured"
+            ]
           },
           {
             "tag": "p",
@@ -739,21 +497,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Quick actions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           },
           {
             "tag": "span",
@@ -767,21 +515,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "span",
-            "className": "text-muted",
-            "text": "·",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "19.5px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "·"
+            ]
           }
         ],
         "combinations": [
@@ -799,170 +537,96 @@
           {
             "tag": "a",
             "size": 11,
-            "text": "Items"
+            "text": "Items",
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "button",
             "size": 11,
-            "text": "Edit"
+            "text": "Edit",
+            "count": 2,
+            "examples": [
+              "Edit",
+              "Add conversion"
+            ]
           },
           {
             "tag": "div",
             "size": 10,
-            "text": "On hand"
+            "text": "On hand",
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
             "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Reserved"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Usable now"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "QC held"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Quarantine / scrap"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Approved free for orders"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "QC approved; safety stock retained"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Incoming stock production"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "Production and QC remain required"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Standard cost"
+            "text": "kg",
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
             "size": 12,
-            "text": "Specifications"
+            "text": "Specifications",
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
             "size": 10,
-            "text": "Category"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Item type"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Unit of measure"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder method"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder point"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Safety stock"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "MOQ"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Lead time"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Description"
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Unit conversions"
+            "text": "Category",
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
             "size": 11,
-            "text": "0 configured"
-          },
-          {
-            "tag": "button",
-            "size": 11,
-            "text": "Add conversion"
+            "text": "0 configured",
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "p",
             "size": 11,
-            "text": "Factors record base units per one source unit. Conversions lock when a purchase,"
+            "text": "Factors record base units per one source unit. Conversions lock when a purchase,",
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Add a source unit that converts to kg."
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Quick actions"
+            "text": "Add a source unit that converts to kg.",
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           }
         ],
-        "contrastBelowAA": []
+        "contrastBelowAA": [],
+        "below12px": []
       },
       "buttons": [
         {
@@ -970,14 +634,22 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
       "buttonTargetsBelow44": [
@@ -986,17 +658,27 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
-      "scrollContextCount": 1
+      "scrollContextCount": 1,
+      "controls": [],
+      "controlsBelow44": []
     },
     {
       "route": "/inventory/items/layout-item-001",
@@ -1151,7 +833,13 @@
           "scrollWidth": 92,
           "clientWidth": 1,
           "scrollHeight": 20,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 92,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 1
         },
         {
           "tag": "a",
@@ -1166,22 +854,13 @@
           "scrollWidth": 63,
           "clientWidth": 47,
           "scrollHeight": 17,
-          "clientHeight": 17
-        },
-        {
-          "tag": "a",
-          "className": "min-w-0 truncate text-muted hover:text-primary",
-          "horizontal": true,
-          "intentionalHorizontal": true,
-          "vertical": false,
-          "insideMain": false,
-          "insideSidebar": false,
-          "overflowX": "hidden",
-          "overflowY": "hidden",
-          "scrollWidth": 31,
-          "clientWidth": 19,
-          "scrollHeight": 17,
-          "clientHeight": 17
+          "clientHeight": 17,
+          "count": 2,
+          "examples": [],
+          "maxScrollWidth": 63,
+          "maxClientWidth": 47,
+          "maxScrollHeight": 17,
+          "maxClientHeight": 17
         },
         {
           "tag": "span",
@@ -1196,7 +875,13 @@
           "scrollWidth": 90,
           "clientWidth": 64,
           "scrollHeight": 17,
-          "clientHeight": 17
+          "clientHeight": 17,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 90,
+          "maxClientWidth": 64,
+          "maxScrollHeight": 17,
+          "maxClientHeight": 17
         },
         {
           "tag": "span",
@@ -1211,7 +896,13 @@
           "scrollWidth": 110,
           "clientWidth": 96,
           "scrollHeight": 17,
-          "clientHeight": 17
+          "clientHeight": 17,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 110,
+          "maxClientWidth": 96,
+          "maxScrollHeight": 17,
+          "maxClientHeight": 17
         },
         {
           "tag": "div",
@@ -1226,7 +917,13 @@
           "scrollWidth": 56,
           "clientWidth": 40,
           "scrollHeight": 56,
-          "clientHeight": 40
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
         }
       ],
       "verticalScrollContainers": [
@@ -1243,7 +940,13 @@
           "scrollWidth": 55,
           "clientWidth": 55,
           "scrollHeight": 1002,
-          "clientHeight": 931
+          "clientHeight": 931,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 55,
+          "maxClientWidth": 55,
+          "maxScrollHeight": 1002,
+          "maxClientHeight": 931
         }
       ],
       "sidebarVerticalScroll": true,
@@ -1264,7 +967,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "h1",
@@ -1278,7 +985,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "RAW-MATERIAL-REFERENCE-000001 · Premium injection-grade polypropylene resin"
+            ]
           },
           {
             "tag": "button",
@@ -1292,7 +1003,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Edit"
+            ]
           },
           {
             "tag": "div",
@@ -1306,7 +1021,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
@@ -1320,189 +1041,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Reserved",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Usable now",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "QC held",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Quarantine / scrap",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Approved free for orders",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "QC approved; safety stock retained",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Incoming stock production",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "Production and QC remain required",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Standard cost",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
@@ -1516,7 +1061,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
@@ -1530,133 +1081,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Item type",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Unit of measure",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder method",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder point",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Safety stock",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "MOQ",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Lead time",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Description",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Unit conversions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
@@ -1670,7 +1101,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "button",
@@ -1684,7 +1119,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Add conversion"
+            ]
           },
           {
             "tag": "p",
@@ -1698,7 +1137,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "div",
@@ -1712,7 +1155,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "color(srgb 0.94902 0.929412 0.894118)",
-            "contrast": 5.12
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "h3",
@@ -1726,7 +1171,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "No alternate units configured"
+            ]
           },
           {
             "tag": "p",
@@ -1740,21 +1189,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Quick actions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           },
           {
             "tag": "span",
@@ -1768,21 +1207,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "span",
-            "className": "text-muted",
-            "text": "·",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "19.5px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "·"
+            ]
           }
         ],
         "combinations": [
@@ -1800,170 +1229,96 @@
           {
             "tag": "a",
             "size": 11,
-            "text": "Items"
+            "text": "Items",
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "button",
             "size": 11,
-            "text": "Edit"
+            "text": "Edit",
+            "count": 2,
+            "examples": [
+              "Edit",
+              "Add conversion"
+            ]
           },
           {
             "tag": "div",
             "size": 10,
-            "text": "On hand"
+            "text": "On hand",
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
             "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Reserved"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Usable now"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "QC held"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Quarantine / scrap"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Approved free for orders"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "QC approved; safety stock retained"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Incoming stock production"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "Production and QC remain required"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Standard cost"
+            "text": "kg",
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
             "size": 12,
-            "text": "Specifications"
+            "text": "Specifications",
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
             "size": 10,
-            "text": "Category"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Item type"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Unit of measure"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder method"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder point"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Safety stock"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "MOQ"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Lead time"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Description"
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Unit conversions"
+            "text": "Category",
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
             "size": 11,
-            "text": "0 configured"
-          },
-          {
-            "tag": "button",
-            "size": 11,
-            "text": "Add conversion"
+            "text": "0 configured",
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "p",
             "size": 11,
-            "text": "Factors record base units per one source unit. Conversions lock when a purchase,"
+            "text": "Factors record base units per one source unit. Conversions lock when a purchase,",
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Add a source unit that converts to kg."
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Quick actions"
+            "text": "Add a source unit that converts to kg.",
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           }
         ],
-        "contrastBelowAA": []
+        "contrastBelowAA": [],
+        "below12px": []
       },
       "buttons": [
         {
@@ -1971,14 +1326,22 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
       "buttonTargetsBelow44": [
@@ -1987,17 +1350,27 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
-      "scrollContextCount": 1
+      "scrollContextCount": 1,
+      "controls": [],
+      "controlsBelow44": []
     },
     {
       "route": "/inventory/items/layout-item-001",
@@ -2152,7 +1525,13 @@
           "scrollWidth": 92,
           "clientWidth": 1,
           "scrollHeight": 20,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 92,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -2167,7 +1546,13 @@
           "scrollWidth": 56,
           "clientWidth": 40,
           "scrollHeight": 56,
-          "clientHeight": 40
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
         }
       ],
       "verticalScrollContainers": [],
@@ -2189,7 +1574,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "h1",
@@ -2203,7 +1592,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "RAW-MATERIAL-REFERENCE-000001 · Premium injection-grade polypropylene resin"
+            ]
           },
           {
             "tag": "button",
@@ -2217,7 +1610,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Edit"
+            ]
           },
           {
             "tag": "div",
@@ -2231,7 +1628,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
@@ -2245,189 +1648,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Reserved",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Usable now",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "QC held",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Quarantine / scrap",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Approved free for orders",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "QC approved; safety stock retained",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Incoming stock production",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "Production and QC remain required",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Standard cost",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
@@ -2441,7 +1668,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
@@ -2455,133 +1688,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Item type",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Unit of measure",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder method",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder point",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Safety stock",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "MOQ",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Lead time",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Description",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Unit conversions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
@@ -2595,7 +1708,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "button",
@@ -2609,7 +1726,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Add conversion"
+            ]
           },
           {
             "tag": "p",
@@ -2623,7 +1744,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "div",
@@ -2637,7 +1762,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "color(srgb 0.94902 0.929412 0.894118)",
-            "contrast": 5.12
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "h3",
@@ -2651,7 +1778,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "No alternate units configured"
+            ]
           },
           {
             "tag": "p",
@@ -2665,21 +1796,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Quick actions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           },
           {
             "tag": "span",
@@ -2693,21 +1814,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "span",
-            "className": "text-muted",
-            "text": "·",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "19.5px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "·"
+            ]
           }
         ],
         "combinations": [
@@ -2725,170 +1836,96 @@
           {
             "tag": "a",
             "size": 11,
-            "text": "Items"
+            "text": "Items",
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "button",
             "size": 11,
-            "text": "Edit"
+            "text": "Edit",
+            "count": 2,
+            "examples": [
+              "Edit",
+              "Add conversion"
+            ]
           },
           {
             "tag": "div",
             "size": 10,
-            "text": "On hand"
+            "text": "On hand",
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
             "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Reserved"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Usable now"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "QC held"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Quarantine / scrap"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Approved free for orders"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "QC approved; safety stock retained"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Incoming stock production"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "Production and QC remain required"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Standard cost"
+            "text": "kg",
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
             "size": 12,
-            "text": "Specifications"
+            "text": "Specifications",
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
             "size": 10,
-            "text": "Category"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Item type"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Unit of measure"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder method"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder point"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Safety stock"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "MOQ"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Lead time"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Description"
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Unit conversions"
+            "text": "Category",
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
             "size": 11,
-            "text": "0 configured"
-          },
-          {
-            "tag": "button",
-            "size": 11,
-            "text": "Add conversion"
+            "text": "0 configured",
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "p",
             "size": 11,
-            "text": "Factors record base units per one source unit. Conversions lock when a purchase,"
+            "text": "Factors record base units per one source unit. Conversions lock when a purchase,",
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Add a source unit that converts to kg."
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Quick actions"
+            "text": "Add a source unit that converts to kg.",
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           }
         ],
-        "contrastBelowAA": []
+        "contrastBelowAA": [],
+        "below12px": []
       },
       "buttons": [
         {
@@ -2896,14 +1933,22 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
       "buttonTargetsBelow44": [
@@ -2912,17 +1957,27 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
-      "scrollContextCount": 1
+      "scrollContextCount": 1,
+      "controls": [],
+      "controlsBelow44": []
     },
     {
       "route": "/inventory/items/layout-item-001",
@@ -3077,7 +2132,13 @@
           "scrollWidth": 92,
           "clientWidth": 1,
           "scrollHeight": 20,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 92,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -3092,7 +2153,13 @@
           "scrollWidth": 56,
           "clientWidth": 40,
           "scrollHeight": 56,
-          "clientHeight": 40
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
         }
       ],
       "verticalScrollContainers": [],
@@ -3114,7 +2181,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "h1",
@@ -3128,7 +2199,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "RAW-MATERIAL-REFERENCE-000001 · Premium injection-grade polypropylene resin"
+            ]
           },
           {
             "tag": "button",
@@ -3142,7 +2217,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Edit"
+            ]
           },
           {
             "tag": "div",
@@ -3156,7 +2235,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
@@ -3170,189 +2255,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Reserved",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Usable now",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "QC held",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Quarantine / scrap",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Approved free for orders",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "QC approved; safety stock retained",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Incoming stock production",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "Production and QC remain required",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Standard cost",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
@@ -3366,7 +2275,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
@@ -3380,133 +2295,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Item type",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Unit of measure",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder method",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder point",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Safety stock",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "MOQ",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Lead time",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Description",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Unit conversions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
@@ -3520,7 +2315,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "button",
@@ -3534,7 +2333,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Add conversion"
+            ]
           },
           {
             "tag": "p",
@@ -3548,7 +2351,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "div",
@@ -3562,7 +2369,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "color(srgb 0.94902 0.929412 0.894118)",
-            "contrast": 5.12
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "h3",
@@ -3576,7 +2385,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "No alternate units configured"
+            ]
           },
           {
             "tag": "p",
@@ -3590,21 +2403,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Quick actions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           },
           {
             "tag": "span",
@@ -3618,21 +2421,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "span",
-            "className": "text-muted",
-            "text": "·",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "19.5px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "·"
+            ]
           }
         ],
         "combinations": [
@@ -3650,170 +2443,96 @@
           {
             "tag": "a",
             "size": 11,
-            "text": "Items"
+            "text": "Items",
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "button",
             "size": 11,
-            "text": "Edit"
+            "text": "Edit",
+            "count": 2,
+            "examples": [
+              "Edit",
+              "Add conversion"
+            ]
           },
           {
             "tag": "div",
             "size": 10,
-            "text": "On hand"
+            "text": "On hand",
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
             "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Reserved"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Usable now"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "QC held"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Quarantine / scrap"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Approved free for orders"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "QC approved; safety stock retained"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Incoming stock production"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "Production and QC remain required"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Standard cost"
+            "text": "kg",
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
             "size": 12,
-            "text": "Specifications"
+            "text": "Specifications",
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
             "size": 10,
-            "text": "Category"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Item type"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Unit of measure"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder method"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder point"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Safety stock"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "MOQ"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Lead time"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Description"
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Unit conversions"
+            "text": "Category",
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
             "size": 11,
-            "text": "0 configured"
-          },
-          {
-            "tag": "button",
-            "size": 11,
-            "text": "Add conversion"
+            "text": "0 configured",
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "p",
             "size": 11,
-            "text": "Factors record base units per one source unit. Conversions lock when a purchase,"
+            "text": "Factors record base units per one source unit. Conversions lock when a purchase,",
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Add a source unit that converts to kg."
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Quick actions"
+            "text": "Add a source unit that converts to kg.",
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           }
         ],
-        "contrastBelowAA": []
+        "contrastBelowAA": [],
+        "below12px": []
       },
       "buttons": [
         {
@@ -3821,14 +2540,22 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
       "buttonTargetsBelow44": [
@@ -3837,17 +2564,27 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
-      "scrollContextCount": 1
+      "scrollContextCount": 1,
+      "controls": [],
+      "controlsBelow44": []
     },
     {
       "route": "/inventory/items/layout-item-001",
@@ -4002,7 +2739,13 @@
           "scrollWidth": 92,
           "clientWidth": 1,
           "scrollHeight": 20,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 92,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -4017,7 +2760,13 @@
           "scrollWidth": 56,
           "clientWidth": 40,
           "scrollHeight": 56,
-          "clientHeight": 40
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
         }
       ],
       "verticalScrollContainers": [],
@@ -4039,7 +2788,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "h1",
@@ -4053,7 +2806,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "RAW-MATERIAL-REFERENCE-000001 · Premium injection-grade polypropylene resin"
+            ]
           },
           {
             "tag": "button",
@@ -4067,7 +2824,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Edit"
+            ]
           },
           {
             "tag": "div",
@@ -4081,7 +2842,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
@@ -4095,189 +2862,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Reserved",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Usable now",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "QC held",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Quarantine / scrap",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Approved free for orders",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "QC approved; safety stock retained",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Incoming stock production",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "Production and QC remain required",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Standard cost",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
@@ -4291,7 +2882,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
@@ -4305,133 +2902,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Item type",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Unit of measure",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder method",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder point",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Safety stock",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "MOQ",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Lead time",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Description",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Unit conversions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
@@ -4445,7 +2922,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "button",
@@ -4459,7 +2940,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Add conversion"
+            ]
           },
           {
             "tag": "p",
@@ -4473,7 +2958,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "div",
@@ -4487,7 +2976,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "color(srgb 0.94902 0.929412 0.894118)",
-            "contrast": 5.12
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "h3",
@@ -4501,7 +2992,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "No alternate units configured"
+            ]
           },
           {
             "tag": "p",
@@ -4515,21 +3010,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Quick actions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           },
           {
             "tag": "span",
@@ -4543,21 +3028,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "span",
-            "className": "text-muted",
-            "text": "·",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "19.5px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "·"
+            ]
           }
         ],
         "combinations": [
@@ -4575,170 +3050,96 @@
           {
             "tag": "a",
             "size": 11,
-            "text": "Items"
+            "text": "Items",
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "button",
             "size": 11,
-            "text": "Edit"
+            "text": "Edit",
+            "count": 2,
+            "examples": [
+              "Edit",
+              "Add conversion"
+            ]
           },
           {
             "tag": "div",
             "size": 10,
-            "text": "On hand"
+            "text": "On hand",
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
             "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Reserved"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Usable now"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "QC held"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Quarantine / scrap"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Approved free for orders"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "QC approved; safety stock retained"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Incoming stock production"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "Production and QC remain required"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Standard cost"
+            "text": "kg",
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
             "size": 12,
-            "text": "Specifications"
+            "text": "Specifications",
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
             "size": 10,
-            "text": "Category"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Item type"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Unit of measure"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder method"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder point"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Safety stock"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "MOQ"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Lead time"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Description"
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Unit conversions"
+            "text": "Category",
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
             "size": 11,
-            "text": "0 configured"
-          },
-          {
-            "tag": "button",
-            "size": 11,
-            "text": "Add conversion"
+            "text": "0 configured",
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "p",
             "size": 11,
-            "text": "Factors record base units per one source unit. Conversions lock when a purchase,"
+            "text": "Factors record base units per one source unit. Conversions lock when a purchase,",
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Add a source unit that converts to kg."
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Quick actions"
+            "text": "Add a source unit that converts to kg.",
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           }
         ],
-        "contrastBelowAA": []
+        "contrastBelowAA": [],
+        "below12px": []
       },
       "buttons": [
         {
@@ -4746,14 +3147,22 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
       "buttonTargetsBelow44": [
@@ -4762,17 +3171,27 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
-      "scrollContextCount": 1
+      "scrollContextCount": 1,
+      "controls": [],
+      "controlsBelow44": []
     },
     {
       "route": "/inventory/items/layout-item-001",
@@ -4927,7 +3346,13 @@
           "scrollWidth": 92,
           "clientWidth": 1,
           "scrollHeight": 20,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 92,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -4942,7 +3367,13 @@
           "scrollWidth": 56,
           "clientWidth": 40,
           "scrollHeight": 56,
-          "clientHeight": 40
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
         }
       ],
       "verticalScrollContainers": [],
@@ -4964,7 +3395,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "h1",
@@ -4978,7 +3413,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "RAW-MATERIAL-REFERENCE-000001 · Premium injection-grade polypropylene resin"
+            ]
           },
           {
             "tag": "button",
@@ -4992,7 +3431,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Edit"
+            ]
           },
           {
             "tag": "div",
@@ -5006,7 +3449,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
@@ -5020,189 +3469,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Reserved",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Usable now",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "QC held",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Quarantine / scrap",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "kg",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Approved free for orders",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "QC approved; safety stock retained",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Incoming stock production",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted mt-1",
-            "text": "Production and QC remain required",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 11,
-            "weight": "400",
-            "lineHeight": "15.4px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1.5",
-            "text": "Standard cost",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "500",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
@@ -5216,7 +3489,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
@@ -5230,133 +3509,13 @@
             "textTransform": "uppercase",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Item type",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Unit of measure",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder method",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Reorder point",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Safety stock",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "MOQ",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Lead time",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "dt",
-            "className": "text-2xs uppercase tracking-wider text-muted",
-            "text": "Description",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 10,
-            "weight": "400",
-            "lineHeight": "14px",
-            "letterSpacing": "0.5px",
-            "textTransform": "uppercase",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Unit conversions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
@@ -5370,7 +3529,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "button",
@@ -5384,7 +3547,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Add conversion"
+            ]
           },
           {
             "tag": "p",
@@ -5398,7 +3565,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "div",
@@ -5412,7 +3583,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "color(srgb 0.94902 0.929412 0.894118)",
-            "contrast": 5.12
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "h3",
@@ -5426,7 +3599,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "No alternate units configured"
+            ]
           },
           {
             "tag": "p",
@@ -5440,21 +3617,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "h3",
-            "className": "text-sm font-medium text-primary",
-            "text": "Quick actions",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "500",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           },
           {
             "tag": "span",
@@ -5468,21 +3635,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "span",
-            "className": "text-muted",
-            "text": "·",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "19.5px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "·"
+            ]
           }
         ],
         "combinations": [
@@ -5500,170 +3657,96 @@
           {
             "tag": "a",
             "size": 11,
-            "text": "Items"
+            "text": "Items",
+            "count": 1,
+            "examples": [
+              "Items"
+            ]
           },
           {
             "tag": "button",
             "size": 11,
-            "text": "Edit"
+            "text": "Edit",
+            "count": 2,
+            "examples": [
+              "Edit",
+              "Add conversion"
+            ]
           },
           {
             "tag": "div",
             "size": 10,
-            "text": "On hand"
+            "text": "On hand",
+            "count": 8,
+            "examples": [
+              "On hand",
+              "Reserved",
+              "Usable now"
+            ]
           },
           {
             "tag": "div",
             "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Reserved"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Usable now"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "QC held"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Quarantine / scrap"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "kg"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Approved free for orders"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "QC approved; safety stock retained"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Incoming stock production"
-          },
-          {
-            "tag": "div",
-            "size": 11,
-            "text": "Production and QC remain required"
-          },
-          {
-            "tag": "div",
-            "size": 10,
-            "text": "Standard cost"
+            "text": "kg",
+            "count": 7,
+            "examples": [
+              "kg",
+              "QC approved; safety stock retained",
+              "Production and QC remain required"
+            ]
           },
           {
             "tag": "h3",
             "size": 12,
-            "text": "Specifications"
+            "text": "Specifications",
+            "count": 3,
+            "examples": [
+              "Specifications",
+              "Unit conversions",
+              "Quick actions"
+            ]
           },
           {
             "tag": "dt",
             "size": 10,
-            "text": "Category"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Item type"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Unit of measure"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder method"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Reorder point"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Safety stock"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "MOQ"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Lead time"
-          },
-          {
-            "tag": "dt",
-            "size": 10,
-            "text": "Description"
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Unit conversions"
+            "text": "Category",
+            "count": 9,
+            "examples": [
+              "Category",
+              "Item type",
+              "Unit of measure"
+            ]
           },
           {
             "tag": "span",
             "size": 11,
-            "text": "0 configured"
-          },
-          {
-            "tag": "button",
-            "size": 11,
-            "text": "Add conversion"
+            "text": "0 configured",
+            "count": 1,
+            "examples": [
+              "0 configured"
+            ]
           },
           {
             "tag": "p",
             "size": 11,
-            "text": "Factors record base units per one source unit. Conversions lock when a purchase,"
+            "text": "Factors record base units per one source unit. Conversions lock when a purchase,",
+            "count": 1,
+            "examples": [
+              "Factors record base units per one source unit. Conversions lock when a purchase,"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Add a source unit that converts to kg."
-          },
-          {
-            "tag": "h3",
-            "size": 12,
-            "text": "Quick actions"
+            "text": "Add a source unit that converts to kg.",
+            "count": 1,
+            "examples": [
+              "Add a source unit that converts to kg."
+            ]
           }
         ],
-        "contrastBelowAA": []
+        "contrastBelowAA": [],
+        "below12px": []
       },
       "buttons": [
         {
@@ -5671,14 +3754,22 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
       "buttonTargetsBelow44": [
@@ -5687,17 +3778,28 @@
           "width": 69,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Edit"
+          ]
         },
         {
           "label": "Add conversion",
           "width": 119,
           "height": 24,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Add conversion"
+          ]
         }
       ],
-      "scrollContextCount": 1
+      "scrollContextCount": 1,
+      "controls": [],
+      "controlsBelow44": []
     }
-  ]
+  ],
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values."
 }

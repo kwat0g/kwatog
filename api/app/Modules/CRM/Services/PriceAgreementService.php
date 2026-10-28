@@ -84,6 +84,12 @@ class PriceAgreementService
             $pid = HashIdFilter::decode($filters['product_id'], Product::class);
             if ($pid) $q->where('product_id', $pid);
         }
+        if (array_key_exists('agreement', $filters) && $filters['agreement'] !== '' && $filters['agreement'] !== null) {
+            $agreementId = is_scalar($filters['agreement'])
+                ? HashIdFilter::decode($filters['agreement'], PriceAgreement::class)
+                : null;
+            $q->whereKey($agreementId ?? 0);
+        }
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term): void {

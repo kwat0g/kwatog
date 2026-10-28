@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\DSS\Verifiers;
 
-use App\Common\Services\SettingsService;
 use App\Modules\DSS\Contracts\RecommendationVerifierInterface;
 use App\Modules\DSS\Contracts\VerificationResult;
 use App\Modules\DSS\Models\DssRecommendation;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\NcrSlaService;
 use Carbon\Carbon;
 
 final class NcrSlaVerifier implements RecommendationVerifierInterface
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(private readonly NcrSlaService $ncrSla) {}
 
     public function verify(DssRecommendation $recommendation): VerificationResult
     {
@@ -42,7 +42,7 @@ final class NcrSlaVerifier implements RecommendationVerifierInterface
             if ($emittedClock->isFuture()) {
                 return new VerificationResult(VerificationResult::UNAVAILABLE);
             }
-            $currentSlaHours = $this->settings->requiredInt("quality.ncr.sla_{$severity->value}_hours", 1, 87600);
+            $currentSlaHours = $this->ncrSla->hoursFor($severity);
             if ($currentSlaHours !== $context['sla_hours']) {
                 return new VerificationResult(VerificationResult::UNAVAILABLE);
             }
@@ -76,14 +76,12 @@ final class NcrSlaVerifier implements RecommendationVerifierInterface
                 );
             }
 
-            $clock = $ncr->last_escalated_at ?? $ncr->created_at;
+            $clock = $this->ncrSla->clockStart($ncr);
             if ($clock === null || $clock->isFuture()) {
                 return new VerificationResult(VerificationResult::UNAVAILABLE);
             }
-            if ($clock->isFuture()) {
-                return new VerificationResult(VerificationResult::UNAVAILABLE);
-            }
-            if ($clock->lte(now()->subHours($currentSlaHours))) {
+            $dueAt = $this->ncrSla->dueAt($ncr);
+            if ($dueAt !== null && $dueAt->lte(now())) {
                 return new VerificationResult(VerificationResult::STILL_OPEN);
             }
 

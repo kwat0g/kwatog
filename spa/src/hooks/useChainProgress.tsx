@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
-import { LuRefreshCw } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
 import { getEcho } from '@/lib/echo';
-import type { ChainEntityType, ChainStepEvent } from '@/types/chain';
+import type { ChainEntityType } from '@/types/chain';
 
 /**
  * Series C — Task C4. Real-time chain progress.
@@ -61,28 +59,13 @@ export function useChainProgress(
       if (disposed) return;
       const sub = echo.private(channelName);
 
-      const handler = (payload: ChainStepEvent) => {
-        // Invalidate every view derived from the entity so a page-local
-        // detail query and its separate chain query cannot drift apart.
-        refresh();
+      const handler = () => refresh();
 
-        // Only toast when somebody else triggered the change. We don't
-        // know the current user's name here so we just always show it —
-        // duplicate toasts on the actor's own browser are mild noise but
-        // confirm the action landed.
-        const stepLabel = humanize(payload.active_step);
-        const who = payload.actor_name ? ` by ${payload.actor_name}` : '';
-        toast(`${stepLabel} updated${who}`, {
-          icon: <LuRefreshCw size={16} className="text-muted" />,
-          duration: 3500,
-        });
-      };
-
-      sub.listen('.chain.step_advanced', handler as (e: unknown) => void);
+      sub.listen('.chain.refresh', handler as (e: unknown) => void);
 
       teardown = () => {
         try {
-          sub.stopListening('.chain.step_advanced');
+          sub.stopListening('.chain.refresh');
         } catch {
           // ignore: channel was already gone (e.g. HMR teardown)
         }
@@ -109,11 +92,4 @@ export function useChainProgress(
     additionalQueryKeysSignature,
     queryClient,
   ]);
-}
-
-function humanize(step: string): string {
-  return step
-    .split('_')
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(' ');
 }

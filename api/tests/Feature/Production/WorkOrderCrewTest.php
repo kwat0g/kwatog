@@ -84,11 +84,15 @@ class WorkOrderCrewTest extends TestCase
         $this->assertFalse($a->hasPermission('production.wo.record'));
         $this->actingAs($b, 'sanctum')->getJson('/api/v1/production/my-work-orders/'.$wo->hash_id)
             ->assertOk()->assertJsonPath('data.can_record', false);
-        $second = $service->assign($wo, array_replace($data, ['recorder_employee_id' => $b->employee_id,
+        $second = $service->assign($wo, array_replace($data, ['employee_ids' => [$b->employee_id],
+            'recorder_employee_id' => $b->employee_id, 'minimum_workers' => 1,
             'expected_crew_id' => $first->id, 'reason' => 'Recorder handover']), $manager);
         $this->assertNotNull($first->fresh()->ended_at);
         $this->assertNotSame($first->id, $second->id);
         $this->assertSame($a->employee_id, $first->recorder_employee_id);
+        $notice = DB::table('notifications')->where('notifiable_id', $a->id)->where('type', 'production.crew.changed')->first();
+        $this->assertNotNull($notice);
+        $this->assertSame('/self-service/work-orders/'.$wo->hash_id.'?crew_id='.$first->hash_id, json_decode($notice->data, true)['link_to']);
         $this->expectException(BusinessRuleException::class);
         $service->assertCanRecord($a, $wo, $first->id);
     }

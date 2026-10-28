@@ -96,16 +96,17 @@ class SupplierDeteriorationTest extends TestCase
 
         $captured = null;
         $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')
+        $notifications->shouldReceive('sendForSubject')
             ->once()
-            ->andReturnUsing(function ($recipients, string $type, array $data) use (&$captured) {
-                $captured = compact('recipients', 'type', 'data');
+            ->andReturnUsing(function ($subject, $recipients, string $type, array $data) use (&$captured) {
+                $captured = compact('subject', 'recipients', 'type', 'data');
             });
 
         (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
 
-        $this->assertNotNull($captured, 'NotificationService::send must be called');
+        $this->assertNotNull($captured, 'NotificationService::sendForSubject must be called');
+        $this->assertTrue($captured['subject']->is($vendor));
         $this->assertSame('purchasing.supplier_deterioration', $captured['type']);
         $this->assertStringContainsString('DropCo', $captured['data']['title'].$captured['data']['message']);
         $this->assertSame(
@@ -135,7 +136,7 @@ class SupplierDeteriorationTest extends TestCase
         ]);
 
         $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldNotReceive('send');
+        $notifications->shouldNotReceive('sendForSubject');
 
         (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
@@ -151,7 +152,7 @@ class SupplierDeteriorationTest extends TestCase
         ]);
 
         $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldNotReceive('send');
+        $notifications->shouldNotReceive('sendForSubject');
 
         (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
@@ -172,7 +173,7 @@ class SupplierDeteriorationTest extends TestCase
         ]);
 
         $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->andThrow(new \RuntimeException('boom'));
+        $notifications->shouldReceive('sendForSubject')->andThrow(new \RuntimeException('boom'));
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('boom');

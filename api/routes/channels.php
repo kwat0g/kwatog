@@ -2,8 +2,24 @@
 
 declare(strict_types=1);
 
+use App\Common\Services\ChainBroadcaster;
+use App\Common\Support\ApprovalSourceScope;
 use App\Common\Support\ChainDefinitions;
+use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Invoice;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
+use App\Modules\MRP\Models\Machine;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Support\Facades\Broadcast;
 
 /**
@@ -17,23 +33,46 @@ use Illuminate\Support\Facades\Broadcast;
  * Sprint 6 channels (production), Sprint 8 channels (payroll, inventory,
  * maintenance, user notifications).
  */
-Broadcast::channel('production.dashboard', fn (User $user): bool => $user->hasPermission('production.dashboard.view')
+$canViewSubject = static function (User $user, string $hashId, string $permission, string $model): bool {
+    if (! $user->hasPermission($permission)) {
+        return false;
+    }
+
+    $id = HashIdFilter::decode($hashId, $model);
+    if ($id === null) {
+        return false;
+    }
+
+    return ApprovalSourceScope::hasScopeFor($model, $user)
+        ? ApprovalSourceScope::visibleIds($model, [$id], $user) !== []
+        : $model::query()->whereKey($id)->exists();
+};
+
+Broadcast::channel('production.dashboard', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.production')
+    && $user->hasPermission('production.view')
+    && $user->hasPermission('production.dashboard.view')
 );
 
-Broadcast::channel('production.wo.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('production.work_orders.view')
-);
+Broadcast::channel('production.wo.{hashId}', function (User $user, string $hashId) use ($canViewSubject): bool {
+    return app(SettingsService::class)->requiredBool('modules.production')
+        && $user->hasPermission('production.view')
+        && $canViewSubject($user, $hashId, 'production.work_orders.view', WorkOrder::class);
+});
 
-Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('mrp.machines.view')
+Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => app(SettingsService::class)->requiredBool('modules.mrp')
+    && $canViewSubject($user, $hashId, 'mrp.machines.view', Machine::class)
 );
 
 /* Sprint 8 — Task 78. New channels. */
 
 // Payroll period progress contains company-wide run metadata.
-Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('payroll.periods.view')
+Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => app(SettingsService::class)->requiredBool('modules.payroll')
+    && $canViewSubject($user, $hashId, 'payroll.periods.view', PayrollPeriod::class)
 );
 
 // Maintenance dashboard — open WO updates push live
-Broadcast::channel('maintenance.dashboard', fn (User $user): bool => $user->hasPermission('maintenance.view')
+Broadcast::channel('maintenance.dashboard', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.maintenance')
+    && $user->hasPermission('maintenance.view')
 );
 
 // Per-user notifications channel — backs the SPA bell + toast updates.
@@ -59,6 +98,39 @@ Broadcast::channel(
             return false;
         }
 
-        return $user->hasPermission(ChainDefinitions::viewPermission($entityType));
+        [$feature, $model, $permissionGroups] = match ($entityType) {
+            'sales_order' => ['crm', SalesOrder::class, [['crm.sales_orders.view']]],
+            'work_order' => ['production', WorkOrder::class, [['production.view', 'production.work_orders.view']]],
+            'purchase_request' => ['purchasing', PurchaseRequest::class, [['purchasing.view']]],
+            'purchase_order' => ['purchasing', PurchaseOrder::class, [['purchasing.view'], ['purchasing.po.approve']]],
+            'delivery' => ['supply_chain', Delivery::class, [['supply_chain.view'], ['supply_chain.deliveries.view']]],
+            'grn' => ['inventory', GoodsReceiptNote::class, [['inventory.view']]],
+            'bill' => ['accounting', Bill::class, [['accounting.bills.view']]],
+            'invoice' => ['accounting', Invoice::class, [['accounting.invoices.view']]],
+            default => [null, null, []],
+        };
+
+        if ($feature === null || ! app(SettingsService::class)->requiredBool("modules.{$feature}")) {
+            return false;
+        }
+
+        $hasRoutePermission = collect($permissionGroups)->contains(
+            fn (array $group): bool => collect($group)->every(fn (string $permission): bool => $user->hasPermission($permission)),
+        );
+        if (! $hasRoutePermission) {
+            return false;
+        }
+
+        $id = $model::tryDecodeHash($hashId);
+        $record = $id === null ? null : $model::query()->find($id);
+        if ($record === null) {
+            return false;
+        }
+
+        return match ($entityType) {
+            'purchase_request' => app(PurchaseRequestAccessPolicy::class)->canView($user, $record),
+            'purchase_order' => app(PurchaseOrderAccessPolicy::class)->canView($user, $record),
+            default => true,
+        };
     }
 );

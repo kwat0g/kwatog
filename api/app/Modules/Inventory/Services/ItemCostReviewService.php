@@ -18,19 +18,25 @@ use Illuminate\Support\Facades\DB;
 
 class ItemCostReviewService
 {
-    public function capture(GrnItem $line, string $cost): ItemCostReview
+    public function capture(GrnItem $line, string $cost, bool $notify = true): ItemCostReview
     {
         $review = ItemCostReview::firstOrCreate(['grn_item_id' => $line->id], ['item_id' => $line->item_id, 'previous_cost' => $line->item->standard_cost, 'proposed_cost' => $cost, 'status' => Status::Pending]);
-        if ($review->wasRecentlyCreated) {
+        if ($review->wasRecentlyCreated && $notify) {
             app(PricingReviewService::class)->notifyCostReview($review, 'A supplier receipt cost needs Finance review.');
         }
 
         return $review;
     }
 
-    public function list(): LengthAwarePaginator
+    public function list(?string $reviewHashId = null): LengthAwarePaginator
     {
-        return ItemCostReview::with(['item', 'receiptLine.grn'])->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")->latest('id')->paginate(25);
+        $reviews = ItemCostReview::with(['item', 'receiptLine.grn']);
+        if ($reviewHashId !== null) {
+            $decoded = app('hashids')->decode($reviewHashId);
+            $reviews->whereKey($decoded[0] ?? 0);
+        }
+
+        return $reviews->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")->latest('id')->paginate(25);
     }
 
     public function renew(ItemCostReview $review, User $by, string $notes): ItemCostReview
@@ -91,11 +97,13 @@ class ItemCostReviewService
             }
             $row->forceFill(['status' => $target, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'notes' => $notes])->save();
 
-            $audience = app(NotificationService::class)->usersWithPermission('inventory.costs.review');
-            app(NotificationService::class)->send($audience, $target === Status::Approved ? 'approval.completed' : 'approval.rejected', [
+            $notifications = app(NotificationService::class);
+            $audience = $notifications->usersWithPermission('inventory.costs.review')
+                ->reject(fn (User $user): bool => $user->is($by));
+            $notifications->sendForSubject($row, $audience, $target === Status::Approved ? 'approval.completed' : 'approval.rejected', [
                 'title' => $target === Status::Approved ? 'Supplier cost review approved' : 'Supplier cost review rejected',
                 'message' => "The supplier cost review for {$item->code} was {$target->value}.",
-                'link_to' => '/crm/price-agreements/cost-reviews',
+                'link_to' => '/crm/price-agreements/cost-reviews?review='.$row->hash_id,
                 'entity_type' => 'item_cost_review',
                 'entity_id' => $row->hash_id,
             ], "cost-review:decision:{$row->id}:{$row->version}:{$target->value}");

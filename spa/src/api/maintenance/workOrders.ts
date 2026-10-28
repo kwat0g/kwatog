@@ -10,7 +10,7 @@ import type {
 } from '@/types/maintenance';
 
 export interface WorkOrderListParams extends ListParams {
-  queue?: 'unassigned' | 'critical' | 'blocked_by_production' | 'awaiting_verification' | 'in_progress' | 'overdue_preventive' | '';
+  queue?: 'open' | 'unassigned' | 'critical' | 'blocked_by_production' | 'awaiting_verification' | 'in_progress' | 'overdue_preventive' | '';
   maintainable_type?: string;
   type?: MaintenanceWorkOrderType;
   priority?: MaintenancePriority;

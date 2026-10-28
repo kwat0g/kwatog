@@ -54,7 +54,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     setKnownCustomers((current) => {
       const byId = new Map(current.map((customer) => [customer.id, customer]));
-      [...(data?.portal_customers ?? []), ...customerOptions].forEach((customer) => byId.set(customer.id, customer));
+      [...(data?.portal_customers ?? []), ...(customerOptions ?? [])].forEach((customer) => byId.set(customer.id, customer));
       return [...byId.values()];
     });
   }, [data?.portal_customers, customerOptions]);

@@ -34,13 +34,17 @@ use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Listeners\EmailCustomerOnDeliveryConfirmed;
 use App\Modules\SupplyChain\Mail\CustomerDeliveryConfirmedMail;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Common\Mail\EmailIntegrationTestMail;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\OutboxEventCodec;
+use App\Common\Services\SettingsService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -52,6 +56,7 @@ class FeatureEmailIntegrationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
         Mail::fake();
     }
 
@@ -207,6 +212,54 @@ class FeatureEmailIntegrationTest extends TestCase
         });
     }
 
+    public function test_missing_customer_delivery_email_fallback_carries_delivery_subject(): void
+    {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        $operator = User::factory()->withRole('system_admin')->create();
+        $customer = Customer::factory()->create(['email' => null]);
+        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id, 'created_by' => $operator->id]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DR-FALLBACK-001',
+            'sales_order_id' => $salesOrder->id,
+            'status' => 'confirmed',
+            'scheduled_date' => today(),
+            'created_by' => $operator->id,
+        ]);
+
+        app(EmailCustomerOnDeliveryConfirmed::class)->handle(new DeliveryConfirmed($delivery, null));
+
+        Mail::assertNothingQueued();
+        $notice = $operator->notifications()->where('type', 'email.delivery_failed')->firstOrFail();
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
+    }
+
+    public function test_queued_customer_delivery_email_failure_fallback_carries_delivery_subject(): void
+    {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        $operator = User::factory()->withRole('system_admin')->create();
+        $withoutView = User::factory()->create();
+        $customer = Customer::factory()->create();
+        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id, 'created_by' => $operator->id]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DR-QUEUE-FAIL-001',
+            'sales_order_id' => $salesOrder->id,
+            'status' => 'confirmed',
+            'scheduled_date' => today(),
+            'created_by' => $operator->id,
+        ]);
+
+        (new CustomerDeliveryConfirmedMail($delivery, null, [$operator->id, $withoutView->id]))
+            ->failed(new \RuntimeException('Mail transport failed.'));
+
+        $notice = $operator->notifications()->where('type', 'email.delivery_failed')->firstOrFail();
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
+        $this->assertSame(0, $withoutView->notifications()->where('type', 'email.delivery_failed')->count());
+    }
+
     public function test_customer_delivery_email_uses_confirmation_time_values_after_outbox_replay(): void
     {
         $this->seed(SettingsSeeder::class);
@@ -289,14 +342,15 @@ class FeatureEmailIntegrationTest extends TestCase
 
         Mail::assertQueued(CustomerInvoiceFinalizedMail::class, function (CustomerInvoiceFinalizedMail $mail) use ($invoice): bool {
             $html = $mail->render();
+            $amount = app(\App\Common\Services\CurrencyDisplayService::class)->format('1120.00');
+            $mail->assertSeeInText('Due date');
+            $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
 
             return $mail->hasTo('billing@example.test')
                 && $mail->invoice->is($invoice)
                 && str_contains($html, 'INV-EMAIL-001')
                 && str_contains($html, '<title>Invoice INV-EMAIL-001 is ready</title>')
-                && str_contains($html, 'PHP 1,120.00')
-                && $mail->assertSeeInText('Due date')
-                && $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id)
+                && str_contains($html, $amount)
                 && str_contains($mail->envelope()->subject, 'Invoice issued: INV-EMAIL-001');
         });
     }
@@ -394,7 +448,7 @@ class FeatureEmailIntegrationTest extends TestCase
         $this->assertStringContainsString('Molded component 10', $html);
         $this->assertStringNotContainsString('Molded component 11', $html);
         $this->assertStringContainsString('1 additional item(s)', $html);
-        $queued->assertSeeInText('PHP 1,120.00');
+        $queued->assertSeeInText(app(\App\Common\Services\CurrencyDisplayService::class)->format('1120.00'));
         $queued->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
         $this->assertStringNotContainsString("\r", $queued->envelope()->subject);
         $this->assertStringNotContainsString("\n", $queued->envelope()->subject);
@@ -441,14 +495,15 @@ class FeatureEmailIntegrationTest extends TestCase
             $this->assertStringNotContainsString('Changed customer', $html);
             $this->assertStringContainsString('OR-2026-001', $html);
             $this->assertStringNotContainsString('OR-CHANGED', $html);
-            $this->assertStringContainsString('PHP 15,000.00', $html);
+            $amount = app(\App\Common\Services\CurrencyDisplayService::class)->format('15000.00');
+            $this->assertStringContainsString($amount, $html);
             $this->assertStringNotContainsString('99,999.00', $html);
             $this->assertStringContainsString('INV-RECEIPT-001', $html);
             $this->assertStringNotContainsString('INV-CHANGED', $html);
             $this->assertStringContainsString('<title>Official receipt OR-2026-001 issued</title>', $html);
             $this->assertStringContainsString('View related invoice', $html);
             $this->assertStringContainsString('quote the receipt number', $html);
-            $this->assertStringContainsString('Official receipt issued: OR-2026-001 · PHP 15,000.00', $mail->envelope()->subject);
+            $this->assertStringContainsString('Official receipt issued: OR-2026-001 · '.$amount, $mail->envelope()->subject);
             $mail->assertSeeInText('/portal/customer/invoices/'.$mail->officialReceipt->invoice->hash_id);
 
             return true;
@@ -496,13 +551,14 @@ class FeatureEmailIntegrationTest extends TestCase
             $this->assertStringNotContainsString('Changed customer', $html);
             $this->assertStringContainsString('CN-2026-001', $html);
             $this->assertStringNotContainsString('CN-CHANGED', $html);
-            $this->assertStringContainsString('PHP 1,120.00', $html);
+            $amount = app(\App\Common\Services\CurrencyDisplayService::class)->format('1120.00');
+            $this->assertStringContainsString($amount, $html);
             $this->assertStringNotContainsString('9,999.00', $html);
             $this->assertStringNotContainsString('Changed reason', $html);
             $this->assertStringContainsString('<title>Customer Credit note CN-2026-001 finalized</title>', $html);
             $this->assertStringContainsString('Open customer portal', $html);
-            $this->assertStringContainsString('Customer credit note finalized: CN-2026-001 · PHP 1,120.00', $mail->envelope()->subject);
-            $mail->assertSeeInText('PHP 1,120.00');
+            $this->assertStringContainsString('Customer credit note finalized: CN-2026-001 · '.$amount, $mail->envelope()->subject);
+            $mail->assertSeeInText($amount);
 
             return true;
         });
@@ -531,6 +587,53 @@ class FeatureEmailIntegrationTest extends TestCase
             && str_contains($mail->render(), 'Supplier Credit note SCN-2026-001 finalized')
             && str_contains($mail->render(), 'Open supplier portal')
         );
+    }
+
+    public function test_credit_note_email_failure_fallbacks_require_credit_note_access(): void
+    {
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+        $invoiceOnlyRole = Role::create(['name' => 'Credit note invoice-only viewer', 'slug' => 'credit_note_invoice_only', 'is_system' => false]);
+        $invoiceOnlyRole->permissions()->sync([
+            Permission::query()->where('slug', 'accounting.invoices.view')->firstOrFail()->id,
+        ]);
+        $invoiceOnlyViewer = User::factory()->create(['role_id' => $invoiceOnlyRole->id, 'is_active' => true]);
+        $finance = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->firstOrFail()->id,
+            'is_active' => true,
+        ]);
+        $customer = Customer::factory()->create(['email' => 'invalid-email']);
+        $creditNote = CreditNote::create([
+            'credit_note_number' => 'CN-FAIL-001',
+            'type' => 'customer',
+            'customer_id' => $customer->id,
+            'date' => '2026-10-20',
+            'subtotal' => '1000.00',
+            'vat_amount' => '120.00',
+            'total_amount' => '1120.00',
+            'balance' => '1120.00',
+        ]);
+        $event = new CreditNoteFinalized($creditNote);
+
+        $this->actingAs($finance)->getJson('/api/v1/accounting/credit-notes/'.$creditNote->hash_id)->assertOk();
+        $this->actingAs($invoiceOnlyViewer)->getJson('/api/v1/accounting/credit-notes/'.$creditNote->hash_id)->assertForbidden();
+
+        app(\App\Modules\Accounting\Listeners\EmailPartyOnCreditNoteFinalized::class)->handle($event);
+        (new PartyCreditNoteMail($event->snapshot, [$finance->id, $invoiceOnlyViewer->id]))
+            ->failed(new \RuntimeException('Mail provider rejected message.'));
+
+        $notices = DB::table('notifications')->where('type', 'email.delivery_failed')->get();
+        $this->assertCount(2, $notices);
+        $this->assertSame(2, $notices->where('notifiable_id', $finance->id)->count());
+        $this->assertSame(0, $notices->where('notifiable_id', $invoiceOnlyViewer->id)->count());
+        $this->assertTrue($invoiceOnlyViewer->hasPermission('accounting.invoices.view'));
+        $this->assertFalse($invoiceOnlyViewer->hasPermission('accounting.credit_notes.view'));
+
+        foreach ($notices as $notice) {
+            $data = json_decode($notice->data, true);
+            $this->assertSame(CreditNote::class, $data['subject_type']);
+            $this->assertSame((string) $creditNote->id, $data['subject_id']);
+            $this->assertSame('/accounting/credit-notes/'.$creditNote->hash_id, $data['link_to']);
+        }
     }
 
     public function test_supplier_purchase_order_email_is_queued_with_supplier_data(): void

@@ -46,9 +46,9 @@ Proposed gutters for review: 16px below 640px, 24px from 640–1439px, and 32px 
 | Table/toolbar/footer | `DataTable`, `DataTableToolbar`, `DataTablePagination` | One shared table exists; 109 direct uses. Fix shared root once. 162 native `<table>` tags need classification before migration; many may be statement/entry layouts. |
 | Sections/details/forms | `Panel`, `Modal`, `FormActions`, `StickyActionBar`, `SearchableSelect` | Reuse existing components; form/detail grid is mainly route-authored. No shared `FormGrid` or `DetailLayout`. |
 | Dialogs/sheets/drawers | `Modal`, `ConfirmDialog`, `ReasonDialog`, `BottomSheet` | 127/153/24/3 direct occurrences. No named Drawer primitive; identify custom right panels in surface inventory before treating them as drawers. |
-| Density/settings | `tablePrefsStore`, table-key density and column visibility | Stored by table key in browser localStorage, not scoped by account. No global density default or settings control. |
+| Density/settings | `tablePrefsStore`, table-key density and column visibility | Preferences now hydrate and save per authenticated user. Unkeyed `DataTable` instances receive a route-scoped key so their density control works and persists too. |
 
-Existing `docs/DESIGN-SYSTEM.md` documents zebra colors as a table behavior, but current `DataTable` row renderer applies only dividers, hover, selected, and focus classes; zebra tokens are not applied. Keep this mismatch visible for the pilot decision rather than silently changing defaults.
+Existing `docs/DESIGN-SYSTEM.md` defines zebra tokens, but the shared `DataTable` row renderer had not applied them. The user asked to restore zebra striping after the pilot; Phase 3 now applies the existing theme token on alternating unselected rows in Light and Dark.
 
 ## Page families that need special layout review
 
@@ -62,20 +62,20 @@ Existing `docs/DESIGN-SYSTEM.md` documents zebra colors as a table behavior, but
 - **Floor/mobile/maintenance:** route-forced floor palette, touch targets, tablet/terminal use, offline/error states, and kiosk-like operations. No separate route named “kiosk” was found; deployment usage needs confirmation.
 - **Print:** one frontend `window.print()` marker at Inventory item stock card. Backend PDF exports are outside this frontend print-marker scan.
 
-## Pilot decisions requested
+## Pilot decisions approved
 
-The draft in [`02-spec.md`](02-spec.md) proposes concrete defaults while preserving Atelier colors and font families. Please approve or adjust these before any UI changes:
+The user approved these concrete defaults in [`02-spec.md`](02-spec.md) on 2026-10-25, preserving Atelier colors and font families:
 
-1. Zebra: default off with optional toggle, or default on for dense lists?
-2. Density: Comfortable 48px default, Compact 36px, Spacious 56px, or preserve current 32/28/40px office defaults?
-3. Gutters: proposed 16 / 24 / 32px at <640 / 640–1439 / ≥1440px?
-4. Table header case: sentence case at 13px, or retain uppercase with increased size/contrast?
-5. Mono: reserve for IDs/codes; show dates and ordinary numbers in Public Sans with tabular figures?
-6. Main CTA: use existing primary clay button variant for create/commit actions; keep danger red for destructive actions?
+1. Zebra is on by default after the user's follow-up request; no zebra toggle is included.
+2. Compact 36px is the default, with Comfortable 48px and Spacious 56px available.
+3. 16 / 24 / 32px gutters at <640 / 640–1439 / ≥1440px.
+4. Sentence-case sans table headers.
+5. Monospace for IDs/codes; dates and ordinary numbers use Public Sans with tabular figures.
+6. Existing clay primary for create/commit actions; red danger for destructive actions.
 
 ## Phase 2 pilot outcome
 
-The user authorized implementation of the spec and three-route pilot by saying “proceed.” The pilot and shared foundation are now implemented; Phase 3 foundation rollout and Phase 4 route migration remain gated on review of the evidence. Final reports cover the three pilot routes in light and dark at 375, 768, 1024, 1280, 1440, 1920, and 2560px, with 50 synthetic rows on the list route. Every route×viewport has zero strict findings. Additional list states cover 0/1/10/500 rows at 1440px in both themes.
+The user authorized the spec and three-route pilot with “proceed,” then approved Phase 3 on 2026-10-25. The pilot and shared foundation are implemented; Phase 3 foundation rollout is authorized, while Phase 4 route migration remains a later unit. Final reports cover the three pilot routes in light and dark at 375, 768, 1024, 1280, 1440, 1920, and 2560px, with 50 synthetic rows on the list route. Every route×viewport has zero strict findings. Additional list states cover 0/1/10/500 rows at 1440px in both themes.
 
 | Baseline finding | Pilot status | Remaining scope |
 |---|---|---|

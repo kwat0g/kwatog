@@ -48,6 +48,14 @@ interface PortalNavItem {
   icon: IconType;
 }
 
+interface PortalBadgeSignal {
+  key: 'overdue' | 'unpaid';
+  label: string;
+  count: number;
+  to: string;
+  tone: string;
+}
+
 interface PortalNavSection {
   label: string;
   items: PortalNavItem[];
@@ -127,34 +135,64 @@ function PortalNavLink({
   item,
   active,
   onNavigate,
+  badgeSignals = [],
 }: {
   item: PortalNavItem;
   active: boolean;
   onNavigate: () => void;
+  badgeSignals?: PortalBadgeSignal[];
 }) {
   const Icon = item.icon;
+  const visibleSignals = badgeSignals.filter((signal) => signal.count > 0);
+  const primary = visibleSignals[0];
+  const countLabel = (count: number) => count > 99 ? '99+' : count;
   return (
-    <Link
-      to={item.to}
-      onClick={onNavigate}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'relative flex items-center gap-3 px-3 py-2.5 mx-2 mb-0.5 rounded-md text-sm transition-colors duration-fast',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
-        active
-          ? 'text-accent font-medium bg-accent/15'
-          : 'text-secondary hover:bg-surface hover:text-primary',
+    <div>
+      <Link
+        to={primary?.to ?? item.to}
+        onClick={onNavigate}
+        aria-current={active ? 'page' : undefined}
+        aria-label={visibleSignals.length
+          ? `${item.label}: ${visibleSignals.map((signal) => `${signal.count} ${signal.label.toLowerCase()}`).join(', ')}`
+          : item.label}
+        className={cn(
+          'relative flex items-center gap-3 px-3 py-2.5 mx-2 mb-0.5 rounded-md text-sm transition-colors duration-fast',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+          active
+            ? 'text-accent font-medium bg-accent/15'
+            : 'text-secondary hover:bg-surface hover:text-primary',
+        )}
+      >
+        {active && (
+          <span
+            className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-md bg-accent"
+            aria-hidden
+          />
+        )}
+        <Icon size={16} className={cn('shrink-0', active ? 'text-accent' : 'text-muted')} />
+        <span className="truncate flex-1">{item.label}</span>
+        {primary && (
+          <span aria-hidden className={cn('rounded-full px-1.5 py-0.5 text-2xs font-medium tabular-nums', primary.tone)}>
+            {primary.label} {countLabel(primary.count)}
+          </span>
+        )}
+      </Link>
+      {visibleSignals.length > 1 && (
+        <div className="ml-11 mr-3 mb-1 flex flex-wrap gap-1">
+          {visibleSignals.slice(1).map((signal) => (
+            <Link
+              key={signal.key}
+              to={signal.to}
+              onClick={onNavigate}
+              aria-label={`${item.label}: ${signal.count} ${signal.label.toLowerCase()}`}
+              className={cn('rounded-full px-1.5 py-0.5 text-2xs font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', signal.tone)}
+            >
+              {signal.label} {countLabel(signal.count)}
+            </Link>
+          ))}
+        </div>
       )}
-    >
-      {active && (
-        <span
-          className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-md bg-accent"
-          aria-hidden
-        />
-      )}
-      <Icon size={16} className={cn('shrink-0', active ? 'text-accent' : 'text-muted')} />
-      <span className="truncate flex-1">{item.label}</span>
-    </Link>
+    </div>
   );
 }
 
@@ -165,6 +203,7 @@ function PortalSidebar({
   onLogout,
   mobileOpen,
   onNavigate,
+  invoiceSignals,
 }: {
   type: PortalType;
   sections: PortalNavSection[];
@@ -172,6 +211,7 @@ function PortalSidebar({
   onLogout: () => void;
   mobileOpen: boolean;
   onNavigate: () => void;
+  invoiceSignals?: { unpaid: number; overdue: number };
 }) {
   const brand = type === 'supplier' ? 'Supplier Portal' : 'Customer Portal';
 
@@ -258,11 +298,21 @@ function PortalSidebar({
                 {section.label}
               </div>
               <ul className="flex flex-col">
-                {section.items.map((item) => (
-                  <li key={item.to}>
-                    <PortalNavLink item={item} active={isActive(item.to)} onNavigate={onNavigate} />
-                  </li>
-                ))}
+                {section.items.map((item) => {
+                  const badgeSignals: PortalBadgeSignal[] = type === 'customer'
+                    && item.to === '/portal/customer/invoices'
+                    && invoiceSignals
+                    ? [
+                        { key: 'overdue', label: 'Overdue', count: invoiceSignals.overdue, to: `${item.to}?signal=overdue`, tone: 'bg-danger-bg text-danger-fg' },
+                        { key: 'unpaid', label: 'Unpaid', count: invoiceSignals.unpaid, to: `${item.to}?signal=unpaid`, tone: 'bg-warning-bg text-warning-fg' },
+                      ]
+                    : [];
+                  return (
+                    <li key={item.to}>
+                      <PortalNavLink item={item} active={isActive(item.to)} onNavigate={onNavigate} badgeSignals={badgeSignals} />
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           );
@@ -302,6 +352,14 @@ export default function PortalLayout({
     queryKey: ['landing', 'contact'],
     queryFn: landingApi.contact,
     staleTime: 300_000,
+  });
+  const { data: invoiceSignals } = useQuery({
+    queryKey: ['portal', 'customer', user?.id, 'invoice-signals'],
+    queryFn: customerPortalApi.invoiceSignals,
+    enabled: type === 'customer' && Boolean(user?.id),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
   const {
     data: businessPolicies,
@@ -358,6 +416,7 @@ export default function PortalLayout({
         onLogout={onLogout}
         mobileOpen={mobileOpen}
         onNavigate={() => setMobileOpen(false)}
+        invoiceSignals={type === 'customer' ? invoiceSignals : undefined}
       />
 
       <main

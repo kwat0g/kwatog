@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\OfficialReceipt;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class CustomerOfficialReceiptMail extends QueuedMailable
 {
@@ -67,6 +68,16 @@ class CustomerOfficialReceiptMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $this->officialReceipt->loadMissing('invoice');
+        $invoice = $this->officialReceipt->invoice;
+        if (! $invoice) {
+            Log::warning('Official receipt email fallback skipped: linked invoice is unavailable.', [
+                'official_receipt_id' => $this->officialReceipt->id,
+            ]);
+
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Official receipt email',
@@ -77,6 +88,7 @@ class CustomerOfficialReceiptMail extends QueuedMailable
                 'entity_id' => $this->snapshot['receipt_hash_id'],
                 'reason' => 'The customer email was unreachable or the email provider rejected the message.',
             ],
+            $invoice,
         );
     }
 

@@ -8,20 +8,12 @@ import { useSidebarStore } from '@/stores/sidebarStore';
 
 const badgeMock = vi.hoisted(() => ({
   getBadge: vi.fn(
-    (
-      _key?: string,
-    ):
-      | {
-          count: number;
-          severity: 'warning' | 'danger' | 'neutral';
-          label: string;
-          description: string;
-        }
-      | undefined => undefined,
+    (_key?: string): { count: number; severity: 'warning' | 'danger' | 'neutral'; label: string; description: string } | undefined => undefined,
   ),
 }));
 vi.mock('@/hooks/useBadges', () => ({ useBadges: () => ({ getBadge: badgeMock.getBadge }) }));
 vi.mock('@/api/auth', () => ({ authApi: { updatePreferences: vi.fn().mockResolvedValue({}) } }));
+import { authApi } from '@/api/auth';
 
 function Harness() {
   const navigate = useNavigate();
@@ -30,11 +22,155 @@ function Harness() {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.clearAllMocks();
   badgeMock.getBadge.mockReturnValue(undefined);
   useSidebarStore.getState().init(false);
   useSidebarStore.getState().setCollapsed(false);
 });
+
+it('persists the expand all preference and restores it after initialization', () => {
+  vi.stubGlobal('innerWidth', 1440);
+  render(<MemoryRouter initialEntries={['/mrp/plans']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+  expect(useSidebarStore.getState().expandAll).toBe(true);
+  expect(authApi.updatePreferences).toHaveBeenCalledWith({ sidebar_expand_all: true });
+
+  cleanup();
+  useSidebarStore.getState().init(false, true, true);
+  render(<MemoryRouter initialEntries={['/dashboard']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  expect(screen.getByRole('button', { name: 'Collapse all' })).toBeInTheDocument();
+  screen.getAllByRole('button').filter((button) => button.hasAttribute('aria-expanded'))
+    .forEach((button) => expect(button).toHaveAttribute('aria-expanded', 'true'));
+});
 afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+it('opens Bank Account Changes on the actionable profile-review queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'profile_requests'
+    ? { count: 2, severity: 'warning', label: 'Awaiting my action', description: 'Profile changes you can review' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/profile-update-requests']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  const bankChanges = screen.getByRole('link', { name: /Bank Account Changes/ });
+  expect(bankChanges).toHaveAttribute(
+    'href',
+    '/hr/profile-update-requests?signal=awaiting_my_action',
+  );
+  expect(within(bankChanges).getByText('2')).toBeVisible();
+  expect(within(screen.getByRole('link', { name: /Employees/ })).queryByText('2')).not.toBeInTheDocument();
+});
+
+it('opens Overtime on the actionable approval queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'overtime'
+    ? { count: 3, severity: 'warning', label: 'Overtime', description: 'Overtime requests awaiting your approval' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/attendance/overtime']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Overtime/ })).toHaveAttribute(
+    'href',
+    '/hr/attendance/overtime?signal=awaiting_my_approval',
+  );
+});
+
+it('opens Attendance on the missing-time-out list filter', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'missing_time_out'
+    ? {
+      count: 2,
+      severity: 'warning',
+      label: 'Missing time-outs',
+      description: 'Past attendance records with a time in but no time out',
+    }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/attendance']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Attendance & DTR/ })).toHaveAttribute(
+    'href',
+    '/hr/attendance?missing_time_out=1',
+  );
+});
+
+it('opens Supplier Listings on the pending-review queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'supplier_listings_pending'
+    ? { count: 2, severity: 'warning', label: 'Pending review', description: 'Supplier listings awaiting review' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/purchasing/supplier-listings']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Supplier Listings/ })).toHaveAttribute(
+    'href',
+    '/purchasing/supplier-listings?status=pending',
+  );
+});
+
+it('opens Delivery Fleet on the maintenance vehicle list', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'vehicles_maintenance'
+    ? { count: 1, severity: 'warning', label: 'In maintenance', description: 'Vehicles unavailable for delivery' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/supply-chain/fleet']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Delivery Fleet/ })).toHaveAttribute(
+    'href',
+    '/supply-chain/fleet?status=maintenance',
+  );
+});
+
+it('opens Leave Management on the current-stage approval queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'leaves'
+    ? { count: 3, severity: 'warning', label: 'Leaves', description: 'Leave requests awaiting your approval' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/leaves']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Leave Management/ })).toHaveAttribute(
+    'href',
+    '/hr/leaves?signal=awaiting_my_approval',
+  );
+});
+
+it('shows expired and upcoming employee training signals with matching filters', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'training_expiry') {
+      return { count: 2, severity: 'warning', label: 'Expired', description: 'Expired employee training' };
+    }
+    if (key === 'training_upcoming') {
+      return { count: 3, severity: 'danger', label: 'Upcoming / expiring', description: 'Upcoming or expiring employee training' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/hr/employee-trainings']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Employee Training Records/ })).toHaveAttribute(
+    'href',
+    '/hr/employee-trainings?signal=upcoming',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Employee Training Records signals/ }));
+  expect(screen.getByRole('link', { name: 'Expired employee training: 2' })).toHaveAttribute(
+    'href',
+    '/hr/employee-trainings?signal=expired',
+  );
+  expect(screen.getByRole('link', { name: 'Upcoming or expiring employee training: 3' })).toHaveAttribute(
+    'href',
+    '/hr/employee-trainings?signal=upcoming',
+  );
+});
 
 it('opens the awaiting-approval filter when purchase requests has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
@@ -55,6 +191,282 @@ it('opens the awaiting-approval filter when purchase requests has a positive bad
   expect(screen.getByRole('link', { name: /Purchase Requests/ })).toHaveAttribute(
     'href',
     '/purchasing/purchase-requests?signal=awaiting_my_approval',
+  );
+});
+
+it('opens only receipt-overdue purchase orders from the PO badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'overdue_purchase_orders'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Receipt overdue',
+          description: 'Open purchase orders past the expected receipt date with quantity remaining',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/purchasing/purchase-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Purchase Orders/ })).toHaveAttribute(
+    'href',
+    '/purchasing/purchase-orders?signal=receipt_overdue',
+  );
+});
+
+it('opens PO actions first and keeps receipt overdue as a separate signal', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'purchase_order_actions') {
+      return {
+        count: 1,
+        severity: 'warning',
+        label: 'Needs your action',
+        description: 'Purchase orders you can approve, send, or resolve a supplier response on',
+      };
+    }
+    if (key === 'overdue_purchase_orders') {
+      return {
+        count: 2,
+        severity: 'warning',
+        label: 'Receipt overdue',
+        description: 'Open purchase orders past the expected receipt date with quantity remaining',
+      };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/purchasing/purchase-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Purchase Orders/ })).toHaveAttribute(
+    'href',
+    '/purchasing/purchase-orders?signal=action',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Purchase Orders signals/ }));
+  expect(screen.getByRole('link', {
+    name: 'Purchase orders you can approve, send, or resolve a supplier response on: 1',
+  })).toHaveAttribute('href', '/purchasing/purchase-orders?signal=action');
+  expect(screen.getByRole('link', {
+    name: 'Open purchase orders past the expected receipt date with quantity remaining: 2',
+  })).toHaveAttribute('href', '/purchasing/purchase-orders?signal=receipt_overdue');
+});
+
+it('opens out-of-stock items first and keeps low stock as a separate signal', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'out_of_stock') {
+      return { count: 2, severity: 'danger', label: 'Out of Stock', description: 'Active items with no usable stock' };
+    }
+    if (key === 'low_stock') {
+      return { count: 4, severity: 'warning', label: 'Low Stock', description: 'Active items at or below reorder point' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/inventory/items']}>
+      <Sidebar roleSlug="warehouse_staff" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Inventory Items/ })).toHaveAttribute(
+    'href',
+    '/inventory/items?signal=out_of_stock',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Inventory Items signals/ }));
+  expect(screen.getByRole('link', { name: 'Active items with no usable stock: 2' })).toHaveAttribute(
+    'href',
+    '/inventory/items?signal=out_of_stock',
+  );
+  expect(screen.getByRole('link', { name: 'Active items at or below reorder point: 4' })).toHaveAttribute(
+    'href',
+    '/inventory/items?signal=low_stock',
+  );
+});
+
+it('opens Returns on the same non-terminal queue as its badge', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'pending_returns'
+    ? { count: 3, severity: 'warning', label: 'Returns (RMA)', description: 'Non-terminal return requests' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/return-management']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Returns \(RMA\)/ })).toHaveAttribute(
+    'href',
+    '/return-management?signal=pending',
+  );
+});
+
+it('shows calibration due and overdue as separate filtered signals', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'calibration_overdue') {
+      return { count: 2, severity: 'danger', label: 'Overdue calibration', description: 'Calibration instruments past their due date' };
+    }
+    if (key === 'calibration_due') {
+      return { count: 3, severity: 'warning', label: 'Calibration due', description: 'Calibration instruments inside the due window' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/quality/calibration']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Calibration Register/ })).toHaveAttribute(
+    'href',
+    '/quality/calibration?status=overdue',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Calibration Register signals/ }));
+  expect(screen.getByRole('link', { name: 'Calibration instruments past their due date: 2' })).toHaveAttribute(
+    'href',
+    '/quality/calibration?status=overdue',
+  );
+  expect(screen.getByRole('link', { name: 'Calibration instruments inside the due window: 3' })).toHaveAttribute(
+    'href',
+    '/quality/calibration?status=due',
+  );
+});
+
+it('links assigned CAPA effectiveness badges to the current user queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'effectiveness_due'
+    ? { count: 2, severity: 'warning', label: 'CAPA checks due', description: 'Effectiveness checks assigned to you due soon or overdue' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/quality/ncrs']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
+    'href',
+    '/quality/ncrs/effectiveness?signal=awaiting_my_action',
+  );
+});
+
+it('links open NCR badges to the open and in-progress NCR list', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'ncrs'
+    ? { count: 2, severity: 'warning', label: 'NCRs', description: 'Open non-conformance reports' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/quality/ncrs']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
+    'href',
+    '/quality/ncrs?signal=open',
+  );
+});
+
+it('links overdue NCR badges to the severity-SLA queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'overdue_ncrs'
+    ? { count: 2, severity: 'warning', label: 'Overdue NCRs', description: 'Open NCRs at or past their severity response SLA' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/quality/ncrs']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
+    'href',
+    '/quality/ncrs?signal=overdue',
+  );
+});
+
+it('opens the overdue filter when Production Work Orders has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'work_orders'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Overdue',
+          description: 'Overdue production work orders',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/production/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+});
+
+it('shows and routes the open and unassigned Maintenance work-order signals', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'maintenance_wo') {
+      return { count: 4, severity: 'warning', label: 'Maintenance Work Orders', description: 'Open maintenance work orders' };
+    }
+    if (key === 'maintenance_wo_unassigned') {
+      return { count: 2, severity: 'danger', label: 'Unassigned', description: 'Open maintenance work orders without an assignee' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/maintenance/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Maintenance Work Orders/ })).toHaveAttribute(
+    'href',
+    '/maintenance/work-orders?queue=unassigned',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Maintenance Work Orders signals/ }));
+  expect(screen.getByRole('link', { name: 'Open maintenance work orders: 4' })).toHaveAttribute(
+    'href',
+    '/maintenance/work-orders?queue=open',
+  );
+  expect(screen.getByRole('link', { name: 'Open maintenance work orders without an assignee: 2' })).toHaveAttribute(
+    'href',
+    '/maintenance/work-orders?queue=unassigned',
+  );
+});
+
+it('shows the due-soon Work Orders filter alongside overdue', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'work_orders_awaiting_confirmation') {
+      return { count: 3, severity: 'warning', label: 'Awaiting confirmation', description: 'Planned production work orders awaiting confirmation' };
+    }
+    if (key === 'work_orders') {
+      return { count: 2, severity: 'danger', label: 'Overdue', description: 'Overdue production work orders' };
+    }
+    if (key === 'work_orders_due_soon') {
+      return { count: 4, severity: 'warning', label: 'Due soon', description: 'Production work orders due soon' };
+    }
+    if (key === 'work_orders_paused') {
+      return { count: 1, severity: 'warning', label: 'Paused', description: 'Production work orders awaiting resume or cancellation' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/production/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Production Work Orders signals/ }));
+  expect(screen.getByRole('link', { name: 'Planned production work orders awaiting confirmation: 3' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=release',
+  );
+  expect(screen.getByRole('link', { name: 'Overdue production work orders: 2' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+  expect(screen.getByRole('link', { name: 'Production work orders due soon: 4' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=due_soon',
+  );
+  expect(screen.getByRole('link', { name: 'Production work orders awaiting resume or cancellation: 1' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=paused',
   );
 });
 
@@ -80,26 +492,219 @@ it('opens the pending-QC filter when GRN has a positive badge', () => {
   );
 });
 
-it('opens overdue bills when the AP badge is positive', () => {
+it('opens held material-review records from the MRB badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
-    key === 'overdue_bills'
+    key === 'mrb_holds'
       ? {
           count: 2,
           severity: 'warning',
-          label: 'Bills (AP)',
-          description: 'Overdue bills payable',
+          label: 'MRB / Quarantine',
+          description: 'Lots on hold in quarantine',
         }
       : undefined,
   );
+  render(
+    <MemoryRouter initialEntries={['/inventory/mrb']}>
+      <Sidebar roleSlug="warehouse_staff" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /MRB \/ Quarantine/ })).toHaveAttribute(
+    'href',
+    '/inventory/mrb?status=held',
+  );
+});
+
+it('opens the confirmation queue when Sales Orders has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_so'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Confirmation queue',
+          description: 'Sales orders awaiting confirmation or response',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/crm/sales-orders']}>
+      <Sidebar roleSlug="sales_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Sales Orders/ })).toHaveAttribute(
+    'href',
+    '/crm/sales-orders?signal=awaiting_confirmation',
+  );
+});
+
+it('opens all active shipment stages from the inbound shipment badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'shipments'
+      ? {
+          count: 3,
+          severity: 'warning',
+          label: 'Shipments',
+          description: 'Inbound shipments in transit, customs, or cleared',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/supply-chain/shipments']}>
+      <Sidebar roleSlug="purchasing_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Inbound Shipments/ })).toHaveAttribute(
+    'href',
+    '/supply-chain/shipments?status=mid_pipe',
+  );
+});
+
+it('opens only new inquiries from the actionable inquiry badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'inquiries'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'New inquiries',
+          description: 'New contact-form inquiries awaiting triage',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/crm/inquiries']}>
+      <Sidebar roleSlug="customer_service_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Customer Inquiries/ })).toHaveAttribute(
+    'href',
+    '/crm/inquiries?status=new',
+  );
+});
+
+it('shows AP signals and sends the main link to the highest-severity queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'overdue_bills') {
+      return {
+        count: 2,
+        severity: 'warning',
+        label: 'Overdue',
+        description: 'Overdue bills payable',
+      };
+    }
+    if (key === 'unpaid_bills') {
+      return {
+        count: 5,
+        severity: 'danger',
+        label: 'Unpaid',
+        description: 'Open bills with an unpaid balance',
+      };
+    }
+    if (key === 'due_soon_bills') {
+      return {
+        count: 2,
+        severity: 'warning',
+        label: 'Due soon',
+        description: 'Open bills due within 3 days',
+      };
+    }
+    return undefined;
+  });
   render(
     <MemoryRouter initialEntries={['/accounting/bills']}>
       <Sidebar roleSlug="finance_officer" />
     </MemoryRouter>,
   );
-  fireEvent.click(screen.getByRole('button', { name: /Finance:/ }));
+  const financeSection = screen.getByRole('button', { name: /^Finance/ });
+  if (financeSection.getAttribute('aria-expanded') === 'false') fireEvent.click(financeSection);
   expect(screen.getByRole('link', { name: /Accounts Payable Bills/ })).toHaveAttribute(
     'href',
+    '/accounting/bills?signal=unpaid',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Accounts Payable Bills signals/ }));
+  expect(screen.getByRole('link', { name: 'Overdue bills payable: 2' })).toHaveAttribute(
+    'href',
     '/accounting/bills?overdue=1',
+  );
+  expect(screen.getByRole('link', { name: 'Open bills with an unpaid balance: 5' })).toHaveAttribute(
+    'href',
+    '/accounting/bills?signal=unpaid',
+  );
+  expect(screen.getByRole('link', { name: 'Open bills due within 3 days: 2' })).toHaveAttribute(
+    'href',
+    '/accounting/bills?signal=due_soon',
+  );
+  const signalButton = screen.getByRole('button', { name: /View all Accounts Payable Bills signals/ });
+  fireEvent.mouseEnter(signalButton);
+  expect(screen.getByRole('link', { name: 'Overdue bills payable: 2' })).toBeVisible();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Accounts Payable Bills signals' })).not.toBeInTheDocument();
+  fireEvent.blur(signalButton);
+  fireEvent.focus(signalButton);
+  expect(screen.getByRole('dialog', { name: 'Accounts Payable Bills signals' })).toBeVisible();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  act(() => useSidebarStore.getState().setCollapsed(true));
+  fireEvent.click(signalButton);
+  expect(screen.getByRole('link', { name: 'Open bills with an unpaid balance: 5' })).toBeVisible();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(signalButton).toHaveFocus();
+});
+
+it('shows AR signals and links each chip to its matching invoice filter', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    const signals = {
+      overdue_invoices: {
+        count: 2,
+        severity: 'warning' as const,
+        label: 'Overdue',
+        description: 'Open invoices past their due date',
+      },
+      unpaid_invoices: {
+        count: 5,
+        severity: 'danger' as const,
+        label: 'Unpaid',
+        description: 'Open invoices with an unpaid balance',
+      },
+      payment_review_invoices: {
+        count: 1,
+        severity: 'warning' as const,
+        label: 'Payment review',
+        description: 'Customer payments awaiting Finance verification',
+      },
+      draft_invoices: {
+        count: 3,
+        severity: 'neutral' as const,
+        label: 'Draft invoices',
+        description: 'Your draft invoices awaiting posting',
+      },
+    };
+    return signals[key as keyof typeof signals];
+  });
+  render(
+    <MemoryRouter initialEntries={['/accounting/invoices']}>
+      <Sidebar roleSlug="finance_officer" />
+    </MemoryRouter>,
+  );
+  const financeSection = screen.getByRole('button', { name: /^Finance/ });
+  if (financeSection.getAttribute('aria-expanded') === 'false') fireEvent.click(financeSection);
+  expect(screen.getByRole('link', { name: /Accounts Receivable Invoices/ })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=unpaid',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Accounts Receivable Invoices signals/ }));
+  expect(screen.getByRole('link', { name: 'Open invoices past their due date: 2' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=overdue',
+  );
+  expect(screen.getByRole('link', { name: 'Open invoices with an unpaid balance: 5' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=unpaid',
+  );
+  expect(screen.getByRole('link', { name: 'Customer payments awaiting Finance verification: 1' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=payment_review',
+  );
+  expect(screen.getByRole('link', { name: 'Your draft invoices awaiting posting: 3' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=draft',
   );
 });
 
@@ -125,26 +730,30 @@ it('opens the to-inspect queue when inspections has a positive badge', () => {
   );
 });
 
-it('shows the full module label on keyboard focus when the sidebar truncates it', () => {
+it('opens the current-user review queue when inspection reviews have a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_inspections'
+      ? { count: 4, severity: 'warning', label: 'Inspections to complete', description: 'Inspections awaiting completion' }
+      : key === 'inspection_reviews'
+        ? { count: 2, severity: 'danger', label: 'Inspection reviews', description: 'Inspections awaiting your review' }
+        : undefined,
+  );
   render(
-    <MemoryRouter>
-      <Sidebar roleSlug="system_admin" />
+    <MemoryRouter initialEntries={['/quality/inspections']}>
+      <Sidebar roleSlug="qc_inspector" />
     </MemoryRouter>,
   );
-
-  const section = screen.getByRole('button', { name: 'Production Planning (MRP)' });
-  fireEvent.focus(section);
-
-  expect(screen.getByRole('tooltip')).toHaveTextContent(
-    'Production Planning (MRP) — Material requirements planning',
+  expect(screen.getByRole('link', { name: /Quality Inspections/ })).toHaveAttribute(
+    'href',
+    '/quality/inspections?status=awaiting_review&signal=awaiting_my_review',
   );
 });
 
-it('opens the open-complaints filter when complaints has a positive badge', () => {
+it('opens the assigned complaint queue when complaints has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'open_complaints'
       ? {
-          count: 2,
+          count: 1,
           severity: 'warning',
           label: 'Complaints',
           description: 'Open complaints assigned to you',
@@ -160,6 +769,14 @@ it('opens the open-complaints filter when complaints has a positive badge', () =
     'href',
     '/crm/complaints?signal=open',
   );
+});
+
+it('keeps the narrow-screen sidebar rail collapsed while restoring expand all separately', () => {
+  vi.stubGlobal('innerWidth', 1024);
+  useSidebarStore.getState().init(false, true, true);
+  expect(useSidebarStore.getState().collapsed).toBe(true);
+  expect(useSidebarStore.getState().expandAll).toBe(true);
+  vi.unstubAllGlobals();
 });
 
 it('opens the actionable pending-transfer list when transfers have a positive badge', () => {
@@ -184,6 +801,28 @@ it('opens the actionable pending-transfer list when transfers have a positive ba
   );
 });
 
+it('opens budgets filtered to approvals waiting on the current user', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_budgets'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Budgets',
+          description: 'Budgets awaiting your approval',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/budgeting']}>
+      <Sidebar roleSlug="vice_president" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Budgeting/ })).toHaveAttribute(
+    'href',
+    '/budgeting?signal=awaiting_my_approval',
+  );
+});
+
 it('expands the active module, expires unvisited peeks, and keeps visited modules open', () => {
   render(<MemoryRouter initialEntries={['/mrp/plans']}><Harness /></MemoryRouter>);
   expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'true');
@@ -203,6 +842,13 @@ it('expands the active module, expires unvisited peeks, and keeps visited module
   expect(production).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('checkbox', { name: 'Peek sidebar' })).not.toBeInTheDocument();
+});
+
+it('keeps a filtered sidebar destination active', () => {
+  render(<MemoryRouter initialEntries={['/crm/inquiries?status=new']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  const link = screen.getByRole('link', { name: 'Customer Inquiries' });
+  expect(link).toHaveAttribute('href', '/crm/inquiries?status=new');
+  expect(link).toHaveAttribute('aria-current', 'page');
 });
 
 it('widens the rail after 150ms and reveals labels on keyboard focus', () => {

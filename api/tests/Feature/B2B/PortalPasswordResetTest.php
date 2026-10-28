@@ -6,6 +6,8 @@ namespace Tests\Feature\B2B;
 
 use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Mail\PortalPasswordResetMail;
@@ -13,7 +15,11 @@ use App\Modules\B2B\Mail\PortalAccessInvitationMail;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Services\PortalInvitationService;
+use App\Modules\B2B\Services\PortalPasswordResetService;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -228,7 +234,7 @@ class PortalPasswordResetTest extends TestCase
         Mail::assertQueued(PortalAccessInvitationMail::class, function (PortalAccessInvitationMail $queued) use (&$mail): bool {
             $mail = $queued;
 
-            return $queued->portalType === 'customer' && $queued->recipientName === 'Invited <img src=x onerror=alert(1)>';
+            return $queued->portalType === 'customer' && (string) $queued->recipientName === 'Invited';
         });
         self::assertNotNull($mail);
         $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
@@ -244,8 +250,8 @@ class PortalPasswordResetTest extends TestCase
         )->isFuture());
         $html = $mail->render();
         self::assertStringContainsString('/portal/password-reset?type=customer&amp;token='.$mail->token, $html);
-        self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
-        self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
+        self::assertStringContainsString('Hello Invited,', $html);
+        self::assertStringNotContainsString('onerror=alert(1)', $html);
         self::assertStringNotContainsString('temporary password', strtolower($html));
         $mail->assertSeeInText('/portal/password-reset?type=customer&token='.$mail->token);
     }
@@ -268,6 +274,21 @@ class PortalPasswordResetTest extends TestCase
         });
     }
 
+    public function test_password_reset_and_invitation_display_names_are_inert_markdown(): void
+    {
+        $name = '[Billing](https://evil.example)<script>alert(1)</script>';
+        $resetMail = new PortalPasswordResetMail('customer', 'token', $name, 1, '/accounting/customers/customer-hash');
+        $invitationMail = new PortalAccessInvitationMail('customer', $name, 'token', 1, '/accounting/customers/customer-hash');
+
+        foreach ([$resetMail, $invitationMail] as $mail) {
+            $html = $mail->render();
+
+            $this->assertStringNotContainsString('href="https://evil.example"', $html);
+            $this->assertStringNotContainsString('<script>', $html);
+            $this->assertStringContainsString('Billing', $html);
+        }
+    }
+
     public function test_supplier_invitation_uses_the_supplier_password_setup_route(): void
     {
         Mail::fake();
@@ -284,6 +305,133 @@ class PortalPasswordResetTest extends TestCase
         $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
         $this->assertSame('['.$brandName.'] Set up Supplier portal access', $mail->envelope()->subject);
         self::assertStringContainsString('/portal/password-reset?type=supplier&amp;token='.$mail->token, $mail->render());
+    }
+
+    public function test_portal_invitation_failures_only_notify_users_who_can_open_the_master_record(): void
+    {
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
+        Mail::fake();
+
+        $authorized = User::factory()->withRole('sales_officer')->create();
+        $restricted = User::factory()->withRole('employee')->create();
+        $grant = fn (User $user, string $slug) => DB::table('user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => Permission::query()->where('slug', $slug)->value('id'),
+            'type' => 'grant',
+            'granted_by' => $authorized->id,
+            'reason' => 'Portal invitation fallback access test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $grant($authorized, 'accounting.vendors.view');
+        $grant($authorized, 'b2b.portal_access.manage');
+        $grant($restricted, 'accounting.customers.manage');
+        $grant($restricted, 'b2b.portal_access.manage');
+
+        $customer = Customer::factory()->create();
+        app(PortalInvitationService::class)->inviteCustomer($customer, 'Customer contact', 'invalid-email');
+
+        $customerNotice = DB::table('notifications')->where('notifiable_id', $authorized->id)
+            ->where('type', 'email.delivery_failed')->first();
+        $this->assertNotNull($customerNotice);
+        $customerData = json_decode((string) $customerNotice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/accounting/customers/'.$customer->hash_id, $customerData['link_to']);
+        $this->assertSame(Customer::class, $customerData['subject_type']);
+        $this->assertSame((string) $customer->id, $customerData['subject_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $restricted->id,
+            'type' => 'email.delivery_failed',
+        ]);
+
+        $vendor = Vendor::factory()->create();
+        app(PortalInvitationService::class)->inviteSupplier($vendor, 'Supplier contact', 'supplier@example.test');
+        $supplierMail = null;
+        Mail::assertQueued(PortalAccessInvitationMail::class, function (PortalAccessInvitationMail $mail) use (&$supplierMail): bool {
+            if ($mail->portalType !== 'supplier') {
+                return false;
+            }
+
+            $supplierMail = $mail;
+
+            return true;
+        });
+        $this->assertNotNull($supplierMail);
+        $this->assertSame($vendor->id, $supplierMail->subjectId);
+        $this->assertSame('/accounting/vendors/'.$vendor->hash_id, $supplierMail->subjectLink);
+
+        $supplierMail->failed(new \RuntimeException('SMTP unavailable'));
+
+        $supplierNotice = DB::table('notifications')->where('notifiable_id', $authorized->id)
+            ->where('type', 'email.delivery_failed')
+            ->whereRaw("data->>'subject_type' = ?", [Vendor::class])->first();
+        $this->assertNotNull($supplierNotice);
+        $supplierData = json_decode((string) $supplierNotice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/accounting/vendors/'.$vendor->hash_id, $supplierData['link_to']);
+        $this->assertSame(Vendor::class, $supplierData['subject_type']);
+        $this->assertSame((string) $vendor->id, $supplierData['subject_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $restricted->id,
+            'type' => 'email.delivery_failed',
+        ]);
+    }
+
+    public function test_password_reset_failure_rechecks_master_record_access_before_notifying(): void
+    {
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
+        Mail::fake();
+
+        $authorized = User::factory()->withRole('sales_officer')->create();
+        $revoked = User::factory()->withRole('sales_officer')->create();
+        $customer = Customer::factory()->create();
+        $portalUser = CustomerPortalUser::create([
+            'customer_id' => $customer->id,
+            'name' => 'Billing contact',
+            'email' => 'billing-contact@example.test',
+            'password' => Hash::make('OldPassword-1!'),
+            'is_active' => true,
+        ]);
+
+        app(PortalPasswordResetService::class)->requestReset(
+            'customer',
+            $portalUser->email,
+            Request::create('/api/v1/b2b/customer/forgot-password', 'POST'),
+        );
+
+        $mail = null;
+        Mail::assertQueued(PortalPasswordResetMail::class, function (PortalPasswordResetMail $queued) use (&$mail): bool {
+            $mail = $queued;
+
+            return $queued->portalType === 'customer';
+        });
+        $this->assertNotNull($mail);
+        $this->assertSame($customer->id, $mail->subjectId);
+        $this->assertSame('/accounting/customers/'.$customer->hash_id, $mail->subjectLink);
+        $this->assertContains((int) $revoked->id, $mail->fallbackUserIds);
+
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => Permission::query()->where('slug', 'accounting.customers.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $authorized->id,
+            'reason' => 'Access changed before delivery failure fallback.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $mail->failed(new \RuntimeException('SMTP unavailable'));
+
+        $notice = DB::table('notifications')->where('notifiable_id', $authorized->id)
+            ->where('type', 'email.delivery_failed')->first();
+        $this->assertNotNull($notice);
+        $data = json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/accounting/customers/'.$customer->hash_id, $data['link_to']);
+        $this->assertSame(Customer::class, $data['subject_type']);
+        $this->assertSame((string) $customer->id, $data['subject_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revoked->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 
     public function test_portal_reset_clears_first_login_requirement(): void

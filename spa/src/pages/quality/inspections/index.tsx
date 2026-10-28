@@ -151,7 +151,7 @@ export default function InspectionsListPage() {
   const queues = [
     { label: 'To inspect', count: counts?.to_inspect, status: '', work_queue: 'to_inspect' },
     {
-      label: 'Awaiting review',
+      label: filters.signal === 'awaiting_my_review' ? 'Awaiting my review' : 'Awaiting review',
       count: counts?.awaiting_review,
       status: 'awaiting_review',
       work_queue: '',
@@ -206,6 +206,7 @@ export default function InspectionsListPage() {
                 page: 1,
                 status: queue.status,
                 work_queue: queue.work_queue,
+                signal: '',
               }))
             }
           >

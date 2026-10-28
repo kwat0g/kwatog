@@ -12,7 +12,7 @@ interface PaginatedRuns {
 }
 
 export const mrpRunsApi = {
- list: (params?: { status?: string; per_page?: number; page?: number }) =>
+ list: (params?: { status?: string; per_page?: number; page?: number; run?: string }) =>
  client.get<PaginatedRuns>('/mrp/runs', { params }).then((r) => r.data),
 
  latest: () =>

@@ -15,6 +15,7 @@ use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NcrEffectivenessNotification;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Support\NcrEffectivenessStateMachine;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,10 +29,39 @@ use Illuminate\Support\Facades\DB;
  */
 class EffectivenessService
 {
+    private const DEFAULT_DUE_SOON_DAYS = 3;
+
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
     ) {}
+
+    public function dueChecksQuery(?int $ownerId = null, bool $includeDueSoon = false): Builder
+    {
+        $dueSoonDays = 0;
+        if ($includeDueSoon) {
+            $configuredDays = $this->settings->get('quality.effectiveness.due_soon_days', self::DEFAULT_DUE_SOON_DAYS);
+            $dueSoonDays = is_numeric($configuredDays)
+                ? min(365, max(0, (int) $configuredDays))
+                : self::DEFAULT_DUE_SOON_DAYS;
+        }
+
+        $query = NcrAction::query()
+            ->whereIn('action_type', [NcrActionType::Corrective->value, NcrActionType::Preventive->value])
+            ->whereHas('ncr', fn ($q) => $q->where('status', NcrStatus::Closed->value))
+            ->whereIn('effectiveness_status', [
+                EffectivenessStatus::PendingVerification->value,
+                EffectivenessStatus::Ineffective->value,
+            ])
+            ->whereNotNull('next_effectiveness_check_at')
+            ->whereDate(
+                'next_effectiveness_check_at',
+                '<=',
+                now()->addDays($dueSoonDays)->toDateString(),
+            );
+
+        return $ownerId === null ? $query : $query->where('owner_id', $ownerId);
+    }
 
     /**
      * On NCR close: schedule a verification check for every corrective and
@@ -280,7 +310,7 @@ class EffectivenessService
                 return;
             }
 
-            $this->notifications->send($recipient, $type, [
+            $this->notifications->sendForSubject($ncr, $recipient, $type, [
                 'title'       => $title,
                 'message'     => $message,
                 'link_to'     => "/quality/ncrs/{$ncr->hash_id}",

@@ -88,8 +88,7 @@ class CustomerPortalService
             DeliveryStatus::InTransit->value,
         ])->count();
 
-        $openInvoices = Invoice::where('customer_id', $customerId)
-            ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial]);
+        $openInvoices = Invoice::query()->where('customer_id', $customerId)->unpaid();
         $openInvoiceCount = (clone $openInvoices)->count();
 
         $totalOutstanding = (clone $openInvoices)
@@ -322,7 +321,7 @@ class CustomerPortalService
                 return;
             }
 
-            $this->notifications->send($audience, 'portal.order_awaiting_review', [
+            $this->notifications->sendForSubject($so, $audience, 'portal.order_awaiting_review', [
                 'title'       => "Portal order {$so->so_number} awaits review",
                 'message'     => "{$portalUser->name} placed a sales order for {$so->customer?->name} via the customer portal. Review and confirm it to start MRP planning.",
                 'link_to'     => "/crm/sales-orders/{$so->hash_id}",
@@ -638,10 +637,26 @@ class CustomerPortalService
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
+        match ($filters['signal'] ?? null) {
+            'unpaid' => $query->unpaid(),
+            'overdue' => $query->overdue(),
+            default => null,
+        };
 
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
 
         return $query->paginate($perPage);
+    }
+
+    /** @return array{unpaid: int, overdue: int} */
+    public function invoiceSignals(int $customerId): array
+    {
+        $counts = DB::query()
+            ->selectSub(Invoice::query()->where('customer_id', $customerId)->unpaid()->selectRaw('COUNT(*)'), 'unpaid')
+            ->selectSub(Invoice::query()->where('customer_id', $customerId)->overdue()->selectRaw('COUNT(*)'), 'overdue')
+            ->first();
+
+        return ['unpaid' => (int) ($counts->unpaid ?? 0), 'overdue' => (int) ($counts->overdue ?? 0)];
     }
 
     public function invoiceDetail(int $customerId, Invoice $invoice): Invoice

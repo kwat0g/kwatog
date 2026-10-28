@@ -50,6 +50,7 @@ const TrainingMatrixPage = lazy(() => import('@/pages/hr/training/matrix'));
 const TrainingListPage = lazy(() => import('@/pages/hr/training/list'));
 const TrainingFormPage = lazy(() => import('@/pages/hr/training/form'));
 const TrainingRecordDetailPage = lazy(() => import('@/pages/hr/training/record-detail'));
+const EmployeeTrainingRecordsPage = lazy(() => import('@/pages/hr/training/employee-records'));
 
 // Skills
 const SkillsListPage = lazy(() => import('@/pages/hr/skills'));
@@ -92,6 +93,10 @@ export const hrRoutes = (
  element={<PermissionGuard permission="hr.employees.edit"><EditEmployeePage /></PermissionGuard>}
  />
  <Route
+ path="/hr/employee-trainings"
+ element={<PermissionGuard permission="hr.employees.trainings.view"><EmployeeTrainingRecordsPage /></PermissionGuard>}
+ />
+ <Route
  path="/hr/employee-trainings/:id"
  element={<PermissionGuard permission="hr.employees.trainings.view"><TrainingRecordDetailPage /></PermissionGuard>}
  />
@@ -105,7 +110,13 @@ export const hrRoutes = (
  <Route element={<ModuleGuard module="attendance" />}>
  <Route
  path="/hr/attendance"
- element={<PermissionGuard anyOf={['attendance.edit', 'attendance.import', 'attendance.ot.approve']}><AttendancePage /></PermissionGuard>}
+ element={
+  <PermissionGuard permission="attendance.view">
+   <PermissionGuard anyOf={['attendance.edit', 'attendance.import', 'attendance.ot.approve']}>
+    <AttendancePage />
+   </PermissionGuard>
+  </PermissionGuard>
+ }
  />
  <Route
  path="/hr/attendance/import"
@@ -125,7 +136,7 @@ export const hrRoutes = (
  />
  <Route
  path="/hr/attendance/overtime"
- element={<PermissionGuard permission="attendance.ot.approve"><OvertimeListPage /></PermissionGuard>}
+ element={<PermissionGuard approvalAnyOf={['attendance.ot.approve']}><OvertimeListPage /></PermissionGuard>}
  />
  <Route
  path="/hr/attendance/overtime/create"
@@ -141,7 +152,7 @@ export const hrRoutes = (
  <Route element={<ModuleGuard module="leave" />}>
  <Route
  path="/hr/leaves"
- element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage']}><LeavesPage /></PermissionGuard>}
+ element={<PermissionGuard permission="leave.view"><PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage']}><LeavesPage /></PermissionGuard></PermissionGuard>}
  />
  <Route
  path="/hr/leaves/calendar"

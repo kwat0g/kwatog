@@ -33,4 +33,13 @@ enum ReturnRequestStatus: string
     {
         return ! in_array($this, [self::Completed, self::Rejected, self::Cancelled], true);
     }
+
+    /** @return list<string> */
+    public static function activeValues(): array
+    {
+        return array_map(
+            static fn (self $status): string => $status->value,
+            array_values(array_filter(self::cases(), static fn (self $status): bool => $status->isActive())),
+        );
+    }
 }

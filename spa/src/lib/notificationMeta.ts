@@ -81,6 +81,10 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'chain.in_process_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'production.wo_completed': { icon: LuFactory, group: 'system', label: 'Production' },
   'production.wo_paused': { icon: LuTriangleAlert, group: 'alerts', label: 'Production' },
+  'production.rework.required': { icon: LuFactory, group: 'approvals', label: 'Production rework' },
+  'production.rework.qc_failed': { icon: LuShieldAlert, group: 'alerts', label: 'Production rework' },
+  'production.rework.awaiting_qc': { icon: LuShieldCheck, group: 'approvals', label: 'Production rework' },
+  'production.rework.closed': { icon: LuCircleCheck, group: 'system', label: 'Production rework' },
   'production.assignment.review': { icon: LuCalendar, group: 'approvals', label: 'Production' },
   'production.crew.assigned': { icon: LuUsers, group: 'system', label: 'Production' },
   'production.crew.changed': { icon: LuUsers, group: 'system', label: 'Production' },
@@ -88,12 +92,14 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'chain.outgoing_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'chain.outgoing_qc_missing': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
   'quality.inspection_failed': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
+  'quality.late_incoming': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
   'quality.inspection_awaiting_review': {
     icon: LuShieldCheck,
     group: 'approvals',
     label: 'Quality',
   },
   'chain.delivery_drafted': { icon: LuTruck, group: 'system', label: 'Logistics' },
+  'delivery.source_review_required': { icon: LuTriangleAlert, group: 'alerts', label: 'Delivery' },
   'chain.delivery_confirmed': { icon: LuTruck, group: 'system', label: 'Logistics' },
   // A driver-reported delivery exception needs a physical depot count before
   // the return can be reconciled, so it is an alert rather than a status ping.
@@ -124,6 +130,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
     label: 'Purchasing',
   },
   supplier_listing_submitted: { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
+  'supplier.shipment_late': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
   'supplier.dispatch_action_required': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
   'supplier.schedule_cancelled': { icon: LuCalendar, group: 'alerts', label: 'Purchasing' },
   'invoice.payment_submitted': { icon: LuReceipt, group: 'approvals', label: 'Payment review' },

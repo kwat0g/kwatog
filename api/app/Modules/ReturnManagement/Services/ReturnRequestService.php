@@ -325,13 +325,13 @@ class ReturnRequestService
                 ]))
                 ->get();
             if ($recipients->isNotEmpty()) {
-                $this->notifications->sendInApp($recipients, 'return.truck_return_received', [
+                $this->notifications->sendForSubject($updated, $recipients, 'return.truck_return_received', [
                     'title' => 'Truck return received — '.$updated->rma_number,
                     'message' => 'The depot count is complete. Review the quarantined goods and stage Quality inspection.',
                     'link_to' => '/return-management/'.$updated->hash_id,
                     'entity_type' => 'return_request',
                     'entity_id' => $updated->hash_id,
-                ], 'truck-return:'.$receipt->id.':received');
+                ], 'truck-return:'.$receipt->id.':received', emailEnabled: false);
             }
             DB::afterCommit(static fn () => event(new ReturnRequestUpdated($updated, 'received')));
 
@@ -655,7 +655,7 @@ class ReturnRequestService
                 return;
             }
 
-            $this->notifications->send($audience, 'customer.rma_created', [
+            $this->notifications->sendForSubject($rma, $audience, 'customer.rma_created', [
                 'title' => "RMA {$rma->rma_number} submitted by a customer",
                 'message' => 'A customer return was submitted through the customer portal and is awaiting review.',
                 'link_to' => '/return-management/'.$rma->hash_id,
@@ -841,13 +841,13 @@ class ReturnRequestService
             $audience = User::query()->where('is_active', true)
                 ->whereHas('role', fn ($query) => $query->where('slug', 'purchasing_officer'))
                 ->get()->filter(fn (User $user): bool => $user->hasPermission('return_management.view'));
-            $this->notifications->sendInApp($audience, 'return.supplier_defect', [
+            $this->notifications->sendForSubject($rma, $audience, 'return.supplier_defect', [
                 'title' => "Supplier return {$rma->rma_number} needs review",
                 'message' => "Incoming QC separated defective goods. Review {$rma->rma_number}, arrange the supplier return, and decide replacement instructions.",
                 'link_to' => "/return-management/{$rma->hash_id}",
                 'entity_type' => 'return_request',
                 'entity_id' => $rma->hash_id,
-            ], 'supplier-defect-rma:'.$rma->id);
+            ], 'supplier-defect-rma:'.$rma->id, emailEnabled: false);
         }
 
         return $rma;
@@ -3274,7 +3274,7 @@ class ReturnRequestService
             'return.shipped_to_vendor',
             'Returned goods shipped to vendor',
             'were shipped back to the vendor. Track the shipment and follow up on the credit.',
-            'purchasing.po.view',
+            'purchasing.view',
         );
     }
 
@@ -3302,7 +3302,7 @@ class ReturnRequestService
 
             $label = rtrim(rtrim($quantity, '0'), '.');
 
-            $this->notifications->send($recipients, $type, [
+            $this->notifications->sendForSubject($rma, $recipients, $type, [
                 'title' => $title,
                 'message' => "RMA {$rma->rma_number}: {$label} unit(s) {$messageSuffix}",
                 'link_to' => '/return-management/'.$rma->hash_id,

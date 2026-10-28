@@ -9,6 +9,7 @@ use App\Common\Models\OutboxMessage;
 use App\Common\Services\OutboxDispatcher;
 use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\OutboxService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
@@ -49,6 +50,7 @@ class OutboxFactEventToleranceTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
         Bus::fake([DispatchOutboxMessage::class, RunAutomaticMrpJob::class]);
         Mail::fake();
         $this->ppc = User::factory()->create(['is_active' => true, 'role_id' => Role::query()->where('slug', 'ppc_head')->value('id')]);

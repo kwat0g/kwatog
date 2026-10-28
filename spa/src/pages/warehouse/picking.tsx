@@ -13,6 +13,8 @@ import { FilterBar } from '@/components/ui/FilterBar';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
+import { formatInt, formatQuantity } from '@/lib/formatNumber';
 import { usePermission } from '@/hooks/usePermission';
 import { productionDateTime as formatDateTime } from '@/components/production/scheduleDates';
 import type { MaterialHandoverTask, MaterialHandoverTaskDetail } from '@/types/inventory';
@@ -115,12 +117,12 @@ function HandoverDetails({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-medium">{data.label} · Issued materials</h2>
         <span className="text-xs text-muted">
-          {data.pending_lines} pending · {data.handed_over_lines} handed over ·{' '}
-          {
+          {formatInt(data.pending_lines)} pending · {formatInt(data.handed_over_lines)} handed over ·{' '}
+          {formatInt(
             data.sources.filter(
               (source) => Number(source.remaining_quantity) <= 0 && !source.handover,
-            ).length
-          }{' '}
+            ).length,
+          )}{' '}
           fully returned
         </span>
       </div>
@@ -138,11 +140,7 @@ function HandoverDetails({
           Select a batch of up to 100 lines. No lines were selected automatically.
         </p>
       )}
-      <div
-        className="max-h-96 overflow-y-auto overscroll-contain divide-y divide-default border-y border-default"
-        tabIndex={0}
-        aria-label="Issued material sources"
-      >
+      <div className="divide-y divide-default border-y border-default">
         {data.sources.map((source) => {
           const eligible =
             source.eligible && !source.handover && Number(source.remaining_quantity) > 0;
@@ -209,19 +207,19 @@ function HandoverDetails({
                 <div>
                   <dt className="text-muted">Issued</dt>
                   <dd className="tabular-nums">
-                    {source.issued_quantity} {unit}
+                    {formatQuantity(source.issued_quantity)} {unit}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-muted">Returned</dt>
                   <dd className="tabular-nums">
-                    {source.returned_quantity} {unit}
+                    {formatQuantity(source.returned_quantity)} {unit}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-muted">Remaining</dt>
                   <dd className="tabular-nums font-medium">
-                    {source.remaining_quantity} {unit}
+                    {formatQuantity(source.remaining_quantity)} {unit}
                   </dd>
                 </div>
               </dl>
@@ -229,7 +227,7 @@ function HandoverDetails({
                 <p className="text-xs text-muted">
                   Received by {source.handover.recipient_name} ·{' '}
                   {formatDateTime(source.handover.handed_over_at)} · Quantity{' '}
-                  {source.handover.quantity} {unit} · Recorded by{' '}
+                  {formatQuantity(source.handover.quantity)} {unit} · Recorded by{' '}
                   {source.handover.recorded_by ?? 'Warehouse'}
                 </p>
               )}
@@ -288,7 +286,7 @@ function HandoverDetails({
               }
               onClick={() => record.mutate()}
             >
-              Confirm handover ({selected.length} lines)
+              Confirm handover ({formatInt(selected.length)} lines)
             </Button>
           </div>
         </div>
@@ -306,6 +304,7 @@ export default function PickingListPage() {
   const maintenanceId = params.get('maintenance_work_order_id');
   const workOrderId = params.get('work_order_id');
   const slipId = workOrderId ? null : params.get('material_issue_id');
+  const directLookup = Boolean(maintenanceId || workOrderId || slipId);
   const [filters, setFilters] = useState({
     status: maintenanceId || workOrderId || slipId ? '' : 'pending',
     search: '',
@@ -340,30 +339,59 @@ export default function PickingListPage() {
     {
       key: 'label',
       header: 'WO / Slip',
-      cell: (row) => <span className="font-medium">{row.label}</span>,
+      width: 340,
+      minWidth: 280,
+      maxWidth: 420,
+      pinned: 'left',
+      cell: (row) => (
+        <span className="block truncate font-medium text-link" title={row.label}>
+          {row.label}
+        </span>
+      ),
     },
-    { key: 'lines', header: 'Material lines', align: 'right', cell: (row) => row.total_lines },
+    {
+      key: 'lines',
+      header: 'Material lines',
+      align: 'right',
+      width: 100,
+      minWidth: 96,
+      maxWidth: 130,
+      cell: (row) => formatInt(row.total_lines),
+    },
     {
       key: 'status',
       header: 'Handover status',
+      width: 200,
+      minWidth: 180,
+      maxWidth: 240,
       cell: (row) => (
         <Chip variant={row.status === 'handed_over' ? 'success' : 'warning'}>
           {row.status === 'handed_over' && row.handed_over_lines === 0
             ? 'Fully returned'
             : statusLabels[row.status]}
-          {row.status === 'pending' ? ` · ${row.pending_lines} lines` : ''}
+          {row.status === 'pending' ? ` · ${formatInt(row.pending_lines)} lines` : ''}
         </Chip>
       ),
     },
     {
       key: 'latest',
       header: 'Latest issue',
-      cell: (row) => (row.latest_issue_at ? formatDateTime(row.latest_issue_at) : '—'),
+      width: 190,
+      minWidth: 180,
+      maxWidth: 220,
+      cell: (row) => (
+        <span className="whitespace-nowrap tabular-nums">
+          {row.latest_issue_at ? formatDateTime(row.latest_issue_at) : '—'}
+        </span>
+      ),
     },
     {
       key: 'review',
       header: 'Review',
-      cell: () => <span className="text-link">Review handover</span>,
+      width: 150,
+      minWidth: 140,
+      maxWidth: 180,
+      cell: () => <span className="whitespace-nowrap text-link">Review handover</span>,
     },
   ];
   const rows = (tasks.data?.data ?? []).map((row) => reviewed[row.id] ?? row);
@@ -371,9 +399,10 @@ export default function PickingListPage() {
     (row) => !rows.some((task) => task.id === row.id),
   );
   return (
-    <div>
+    <PageShell viewport={!directLookup}>
       <PageHeader
         title="Material Handover"
+        inset={false}
         subtitle={
           tasks.data
             ? `${tasks.data.meta.total} ${filters.status === 'pending' ? 'pending handover tasks' : 'handover tasks'}`
@@ -381,6 +410,7 @@ export default function PickingListPage() {
         }
       />
       <FilterBar
+        inset={false}
         filters={[
           {
             key: 'status',
@@ -401,7 +431,7 @@ export default function PickingListPage() {
         searchPlaceholder="Search WO, slip, material code or name…"
         onSearch={(search) => changeFilters({ ...filters, search, page: 1 })}
       />
-      <div className="px-5 py-4 space-y-4 min-w-0">
+      <div className={directLookup ? 'py-4 space-y-4 min-w-0' : 'pt-4 min-h-0 flex-1 flex flex-col'}>
         {(maintenanceId || workOrderId || slipId) && (
           <div className="border border-default rounded-md">
             <HandoverDetails
@@ -427,6 +457,8 @@ export default function PickingListPage() {
           <DataTable
             tableKey="material-handovers"
             columns={columns}
+            fixedColumnLayout
+            fillHeight={!directLookup}
             data={rows}
             meta={tasks.data.meta}
             expandOnRowClick
@@ -477,6 +509,6 @@ export default function PickingListPage() {
           </div>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Models;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Support\Money;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Enums\BudgetStatus;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -59,6 +62,29 @@ class Budget extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(BudgetLineItem::class);
+    }
+
+    public function scopeAwaitingApprovalFor(Builder $query, User $approver): Builder
+    {
+        $roleIds = ApprovalDelegation::permissionRoleIds($approver, 'budgeting.approve');
+        if ($roleIds === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $onlyApprovalRole = count($roleIds) === 1 ? $roleIds[0] : null;
+
+        return $query->where('status', BudgetStatus::Submitted->value)
+            ->where(function (Builder $query) use ($approver, $onlyApprovalRole): void {
+                $query->whereDoesntHave('submittedBy')
+                    ->orWhereHas('submittedBy', function (Builder $submitter) use ($approver, $onlyApprovalRole): void {
+                        $submitter->whereKeyNot($approver->getKey());
+                        if ($onlyApprovalRole !== null) {
+                            $submitter->where(function (Builder $query) use ($onlyApprovalRole): void {
+                                $query->whereNull('role_id')->orWhere('role_id', '<>', $onlyApprovalRole);
+                            });
+                        }
+                    });
+            });
     }
 
 

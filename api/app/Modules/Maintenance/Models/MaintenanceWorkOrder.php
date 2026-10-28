@@ -149,4 +149,12 @@ class MaintenanceWorkOrder extends Model
             MaintenanceWorkOrderStatus::InProgress->value,
         ]);
     }
+
+    public function scopeUnassigned(Builder $q): Builder
+    {
+        return $q->whereNotIn('status', [
+            MaintenanceWorkOrderStatus::Completed->value,
+            MaintenanceWorkOrderStatus::Cancelled->value,
+        ])->whereNull('assigned_to');
+    }
 }

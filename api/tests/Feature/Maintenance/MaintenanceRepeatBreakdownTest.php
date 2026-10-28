@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Maintenance;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use Database\Seeders\RolePermissionSeeder;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Models\MachineDowntime;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -23,6 +25,7 @@ class MaintenanceRepeatBreakdownTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(SettingsSeeder::class);
     }
 
     public function test_distinct_breakdown_incidents_notify_once_per_threshold_crossing(): void
@@ -42,6 +45,14 @@ class MaintenanceRepeatBreakdownTest extends TestCase
         $incident(now()->subDay(), false);
         $this->artisan('maintenance:check-repeat-breakdowns')->assertSuccessful();
         $this->assertSame(1, DB::table('notifications')->where('type', 'maintenance.repeat_breakdown')->count());
+        $notice = $actor->notifications()->where('type', 'maintenance.repeat_breakdown')->firstOrFail();
+        $this->assertSame(Machine::class, $notice->data['subject_type']);
+        $this->assertSame((string) $machine->id, $notice->data['subject_id']);
+        $this->assertSame('/maintenance/downtime?search='.rawurlencode($machine->machine_code), $notice->data['link_to']);
+        $this->actingAs($actor)
+            ->getJson('/api/v1/maintenance/downtime-analytics/summary?search='.rawurlencode($machine->machine_code))
+            ->assertOk()
+            ->assertJsonPath('data.breakdown_count', 3);
         $incident(now()->subDays(5));
         $this->artisan('maintenance:check-repeat-breakdowns')->assertSuccessful();
         $this->artisan('maintenance:check-repeat-breakdowns')->assertSuccessful();
@@ -100,5 +111,36 @@ class MaintenanceRepeatBreakdownTest extends TestCase
             'notifiable_id' => $supervisor->id,
             'type' => 'maintenance.repeat_breakdown',
         ]);
+    }
+
+    public function test_repeat_breakdown_notice_is_suppressed_when_maintenance_is_disabled(): void
+    {
+        $this->travelTo(now()->startOfMinute());
+        $role = Role::where('slug', 'maintenance_supervisor')->firstOrFail();
+        $supervisor = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $machine = Machine::factory()->create();
+        $order = MaintenanceWorkOrder::create([
+            'mwo_number' => 'REPEAT-DISABLED',
+            'maintainable_type' => 'machine',
+            'maintainable_id' => $machine->id,
+            'type' => 'corrective',
+            'priority' => 'medium',
+            'description' => 'Repeated incident test',
+            'status' => 'open',
+            'created_by' => $supervisor->id,
+        ]);
+        foreach ([now()->subDays(5), now()->subDay()] as $at) {
+            MachineDowntime::create([
+                'machine_id' => $machine->id,
+                'maintenance_order_id' => $order->id,
+                'category' => 'breakdown',
+                'start_time' => $at,
+            ]);
+        }
+        app(SettingsService::class)->set('modules.maintenance', false, 'modules');
+
+        $this->artisan('maintenance:check-repeat-breakdowns')->assertSuccessful();
+
+        $this->assertSame(0, DB::table('notifications')->where('type', 'maintenance.repeat_breakdown')->count());
     }
 }

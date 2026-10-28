@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { woOperationsApi } from '@/api/production/routings';
 import { Button } from '@/components/ui/Button';
+import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Chip } from '@/components/ui/Chip';
 import { productionDateTime, scheduleDate } from '@/components/production/scheduleDates';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -31,16 +32,17 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
-import { formatInt, formatPeso } from '@/lib/formatNumber';
+import { formatInt, formatPeso, formatPreciseQuantity } from '@/lib/formatNumber';
 import { formatDate, formatDateIso } from '@/lib/formatDate';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import type { MachineDowntimeCategory } from '@/types/production';
-import type { WoOperationStatus } from '@/types/production/routing';
+import type { WoOperation, WoOperationStatus } from '@/types/production/routing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
 import { AssignmentReview, CrewPanel } from './CrewPanel';
@@ -144,7 +146,6 @@ export default function WorkOrderDetailPage() {
     queryFn: () => woOperationsApi.list(id!),
     enabled: !!id && tab === 'operations',
   });
-
   // Live updates from output recordings.
   useEcho(`production.wo.${id}`, '.output.recorded', () => {
     qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
@@ -320,16 +321,15 @@ export default function WorkOrderDetailPage() {
 
   if (isLoading)
     return (
-      <div>
-        {' '}
-        <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
-        <SkeletonDetail />
-      </div>
+      <PageShell variant="grid">
+        <PageHeader inset={false} title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
+        <SkeletonDetail className="px-0 py-0" />
+      </PageShell>
     );
   if (isError || !data)
     return (
-      <div>
-        <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
+      <PageShell variant="grid">
+        <PageHeader inset={false} title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
         <EmptyState
           icon="alert-circle"
           title="Failed to load work order"
@@ -339,8 +339,172 @@ export default function WorkOrderDetailPage() {
             </Button>
           }
         />
-      </div>
+      </PageShell>
     );
+
+  const operationColumns: Column<WoOperation>[] = [
+    {
+      key: 'sequence', header: '#', align: 'right', width: 56, minWidth: 56, maxWidth: 80,
+      resizable: false, cell: (op) => <span className="tabular-nums">{op.sequence}</span>,
+    },
+    {
+      key: 'operation', header: 'Operation', width: 192, minWidth: 192, maxWidth: 400,
+      cell: (op) => (
+        <>
+          <span className="block truncate" title={op.operation_name}>{op.operation_name}</span>
+          {op.logs?.filter((log) => log.material_handover_exception).map((log) => (
+            <MaterialHandoverExceptionDetails
+              key={log.id}
+              exception={log.material_handover_exception}
+            />
+          ))}
+        </>
+      ),
+    },
+    {
+      key: 'status', header: 'Status', width: 112, minWidth: 96, maxWidth: 200,
+      cell: (op) => (
+        <Chip variant={OP_STATUS_CHIP[op.status]}>
+          {operationStatusLabels.get(op.status) ?? op.status}
+        </Chip>
+      ),
+    },
+    {
+      key: 'operator', header: 'Operator', width: 160, minWidth: 144, maxWidth: 320,
+      cell: (op) => op.operator
+        ? `${op.operator.first_name} ${op.operator.last_name}`
+        : <span className="text-muted">—</span>,
+    },
+    {
+      key: 'machine', header: 'Machine', width: 144, minWidth: 128, maxWidth: 280,
+      cell: (op) => op.machine?.machine_code
+        ? <span className="block truncate font-mono" title={op.machine.machine_code}>{op.machine.machine_code}</span>
+        : <span className="text-muted">—</span>,
+    },
+    {
+      key: 'quantity', header: 'Qty progress', align: 'right', width: 300, minWidth: 280, maxWidth: 400,
+      cell: (op) => (
+        <span className="whitespace-nowrap tabular-nums">
+          {formatPreciseQuantity(op.qty_completed)} / {formatPreciseQuantity(op.qty_planned)}
+        </span>
+      ),
+    },
+    {
+      key: 'start', header: 'Start', width: 176, minWidth: 160, maxWidth: 240,
+      cell: (op) => <span className="whitespace-nowrap tabular-nums">{formatDateTime(op.actual_start)}</span>,
+    },
+    {
+      key: 'end', header: 'End', width: 176, minWidth: 160, maxWidth: 240,
+      cell: (op) => <span className="whitespace-nowrap tabular-nums">{formatDateTime(op.actual_end)}</span>,
+    },
+    {
+      key: 'actions', header: 'Actions', align: 'right', width: 192, minWidth: 180, maxWidth: 360,
+      cell: (op) => data.status !== 'in_progress' ? (
+        <span className="text-xs text-muted">Available after WO start</span>
+      ) : (
+        <div className="flex flex-wrap justify-end gap-1">
+          {op.status === 'pending' && canLifecycle && (
+            <>
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={!employeeId || operationMut.isPending || setupBlocked}
+                onClick={() => operationMut.mutate({ action: 'startSetup', operationId: op.id })}
+              >
+                Setup
+              </Button>
+              <Button
+                size="xs"
+                variant="primary"
+                disabled={!employeeId || operationMut.isPending || processQcBlocked}
+                onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}
+              >
+                Start
+              </Button>
+            </>
+          )}
+          {op.status === 'setup' && canLifecycle && (
+            <>
+              <Button
+                size="xs"
+                variant="secondary"
+                disabled={operationMut.isPending || setupBlocked}
+                onClick={() => operationMut.mutate({ action: 'endSetup', operationId: op.id })}
+              >
+                End setup
+              </Button>
+              <Button
+                size="xs"
+                variant="primary"
+                disabled={!employeeId || operationMut.isPending || processQcBlocked}
+                onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}
+              >
+                Start
+              </Button>
+            </>
+          )}
+          {op.status === 'in_progress' && (
+            <>
+              {canLifecycle && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={operationMut.isPending}
+                  onClick={() => operationMut.mutate({ action: 'pause', operationId: op.id })}
+                >
+                  Pause
+                </Button>
+              )}
+              {canRecord && (
+                <Button
+                  size="xs"
+                  variant="primary"
+                  disabled={!employeeId || operationDialogMut.isPending || processQcBlocked}
+                  onClick={() => {
+                    setOperationHandoverAcknowledged(false);
+                    setOperationHandoverReason('');
+                    setOperationDialog({ kind: 'record', operation: op });
+                  }}
+                >
+                  Output
+                </Button>
+              )}
+              {canLifecycle && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={operationMut.isPending || processQcBlocked}
+                  onClick={() => operationMut.mutate({ action: 'complete', operationId: op.id })}
+                >
+                  Complete
+                </Button>
+              )}
+            </>
+          )}
+          {op.status === 'paused' && canLifecycle && (
+            <Button
+              size="xs"
+              variant="primary"
+              disabled={!employeeId || operationMut.isPending || processQcBlocked}
+              onClick={() => operationMut.mutate({ action: 'resume', operationId: op.id })}
+            >
+              Resume
+            </Button>
+          )}
+          {canLifecycle && !['completed', 'skipped'].includes(op.status) && (
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={!employeeId || operationDialogMut.isPending || processQcBlocked}
+              onClick={() => setOperationDialog({ kind: 'skip', operation: op })}
+            >
+              Skip
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   const pendingRepair = data.rework?.find(
     (repair) => !['closed', 'cancelled'].includes(repair.status),
@@ -373,8 +537,9 @@ export default function WorkOrderDetailPage() {
     scheduleStatus?.kind === 'awaiting_confirmation' || scheduleStatus?.kind === 'start_available';
 
   return (
-    <div>
+    <PageShell variant="grid">
       <PageHeader
+        inset={false}
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{data.wo_number}</span>
@@ -505,7 +670,7 @@ export default function WorkOrderDetailPage() {
         Date.parse(operationCrew.data.schedule.scheduled_end) <= Date.now() && (
           <div
             role="alert"
-            className="mx-5 mt-4 rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
+            className="rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
           >
             Run reservation ended. Use Extend run to check remaining time and restore recorder
             access.
@@ -514,7 +679,7 @@ export default function WorkOrderDetailPage() {
       {!!data.staffing_warning?.length && (
         <div
           role="alert"
-          className="mx-5 mt-4 rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
+          className="rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
         >
           <p className="text-sm font-medium">
             Crew needs review. Change workers before starting new operations.
@@ -527,7 +692,7 @@ export default function WorkOrderDetailPage() {
         </div>
       )}
       {scheduleStatus && (
-        <div className="px-5 pt-4">
+        <div>
           <div
             role="status"
             className={`flex items-start gap-2 rounded border p-3 ${informationalSchedule ? 'border-info-fg/30 bg-info-bg text-info-fg' : 'border-warning-fg/30 bg-warning-bg text-warning-fg'}`}
@@ -551,7 +716,7 @@ export default function WorkOrderDetailPage() {
       )}
 
       {chain.isError && (
-        <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+        <div role="alert" className="py-3 text-sm text-danger-fg">
           Work order progress could not be loaded.{' '}
           <Button variant="secondary" size="sm" onClick={() => chain.refetch()}>
             Retry work order progress
@@ -560,21 +725,20 @@ export default function WorkOrderDetailPage() {
       )}
 
       {data.production_completion_blocker && (
-        <div role="alert" className="mx-5 mt-4 rounded-md border border-default bg-warning-bg p-3 text-warning-fg">
+        <div role="alert" className="rounded-md border border-default bg-warning-bg p-3 text-warning-fg">
           <p className="text-sm font-medium">Target produced. Completion pending.</p>
           <p className="mt-1 text-sm">{data.production_completion_blocker}</p>
         </div>
       )}
 
       {canLifecycle && canRecord && (
-        <div className="px-5 pt-4">
+        <div>
           <LateProductionReviewQueue workOrderId={id!} workOrderStatus={data.status} />
         </div>
       )}
 
       {/* Tabs */}
       <Tabs
-        className="px-5"
         label="Work order sections"
         value={tab}
         onChange={setTab}
@@ -584,12 +748,12 @@ export default function WorkOrderDetailPage() {
         ]}
       />
 
-      {finishFirst && ['completed', 'closed'].includes(data.status) && <div className="px-5 pt-4"><Panel title="Final quality inspection">
+      {finishFirst && ['completed', 'closed'].includes(data.status) && <div><Panel title="Final quality inspection">
         <p className="text-sm">{data.produced_quantity ?? data.quantity_produced} produced · {data.qc_accepted_quantity ?? 0} QC accepted · {data.awaiting_qc_quantity ?? 0} awaiting QC.</p>
         {can('quality.inspections.view') && <Button className="mt-3" variant="secondary" onClick={() => navigate(`/quality/work-orders/${data.id}/final-inspection`)}>Open final inspection</Button>}
       </Panel></div>}
       {data.status === 'in_progress' && processQcBlocked && (
-        <div className="px-5 pt-4">
+        <div>
           <Panel title="Production blocked by quality">
             <p role="alert" className="text-sm text-warning-fg">
               {data.process_quality_blocker ?? 'QC approval is required before normal production.'}
@@ -617,7 +781,7 @@ export default function WorkOrderDetailPage() {
       )}
 
       {tab === 'details' && (
-        <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2 min-w-0 space-y-4">
             {['completed', 'closed'].includes(data.status) && (
               <Panel
@@ -731,7 +895,7 @@ export default function WorkOrderDetailPage() {
                 <div className="mt-3 text-xs">
                   <Link
                     to={`/quality/traceability?term=${encodeURIComponent(data.batch_number)}`}
-                    className="text-accent hover:underline"
+                    className="inline-flex min-h-11 items-center text-accent hover:underline xl:min-h-0"
                   >
                     View full traceability →
                   </Link>
@@ -1358,7 +1522,7 @@ export default function WorkOrderDetailPage() {
       )}
 
       {tab === 'operations' && (
-        <div className="px-5 py-4">
+        <div>
           <p className="mb-3 text-sm text-muted">
             Operation operator:{' '}
             {operationCrew.data?.current?.members.find((member) => member.id === employeeId)
@@ -1392,206 +1556,12 @@ export default function WorkOrderDetailPage() {
               </div>
             )}
             {operations.data && operations.data.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className={`${tableCls} min-w-[980px]`}>
-                  <thead>
-                    <tr className={theadTrCls}>
-                      <Th align="right" className="w-14">
-                        #
-                      </Th>
-                      <Th>Operation</Th>
-                      <Th>Status</Th>
-                      <Th>Operator</Th>
-                      <Th>Machine</Th>
-                      <Th align="right">Qty progress</Th>
-                      <Th>Start</Th>
-                      <Th>End</Th>
-                      <Th>Actions</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {operations.data.map((op) => (
-                      <tr key={op.id} className={trCls}>
-                        <Td align="right" mono>
-                          {op.sequence}
-                        </Td>
-                        <Td>{op.operation_name}{op.logs?.filter((log) => log.material_handover_exception).map((log) => <MaterialHandoverExceptionDetails key={log.id} exception={log.material_handover_exception} />)}</Td>
-                        <Td>
-                          <Chip variant={OP_STATUS_CHIP[op.status]}>
-                            {operationStatusLabels.get(op.status) ?? op.status}
-                          </Chip>
-                        </Td>
-                        <Td>
-                          {op.operator ? (
-                            `${op.operator.first_name} ${op.operator.last_name}`
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
-                        </Td>
-                        <Td mono>
-                          {op.machine?.machine_code ?? <span className="text-muted">—</span>}
-                        </Td>
-                        <Td align="right" mono>
-                          {formatInt(op.qty_completed)} / {formatInt(op.qty_planned)}
-                        </Td>
-                        <Td mono>{formatDateTime(op.actual_start)}</Td>
-                        <Td mono>{formatDateTime(op.actual_end)}</Td>
-                        <Td>
-                          {data.status !== 'in_progress' ? (
-                            <span className="text-xs text-muted">Available after WO start</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1">
-                              {op.status === 'pending' && (
-                                <>
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={
-                                        !employeeId || operationMut.isPending || setupBlocked
-                                      }
-                                      onClick={() =>
-                                        operationMut.mutate({
-                                          action: 'startSetup',
-                                          operationId: op.id,
-                                        })
-                                      }
-                                    >
-                                      Setup
-                                    </Button>
-                                  )}
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="primary"
-                                      disabled={
-                                        !employeeId || operationMut.isPending || processQcBlocked
-                                      }
-                                      onClick={() =>
-                                        operationMut.mutate({ action: 'start', operationId: op.id })
-                                      }
-                                    >
-                                      Start
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {op.status === 'setup' && (
-                                <>
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={operationMut.isPending || setupBlocked}
-                                      onClick={() =>
-                                        operationMut.mutate({
-                                          action: 'endSetup',
-                                          operationId: op.id,
-                                        })
-                                      }
-                                    >
-                                      End setup
-                                    </Button>
-                                  )}
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="primary"
-                                      disabled={
-                                        !employeeId || operationMut.isPending || processQcBlocked
-                                      }
-                                      onClick={() =>
-                                        operationMut.mutate({ action: 'start', operationId: op.id })
-                                      }
-                                    >
-                                      Start
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {op.status === 'in_progress' && (
-                                <>
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={operationMut.isPending}
-                                      onClick={() =>
-                                        operationMut.mutate({ action: 'pause', operationId: op.id })
-                                      }
-                                    >
-                                      Pause
-                                    </Button>
-                                  )}
-                                  {canRecord && (
-                                    <Button
-                                      size="xs"
-                                      variant="primary"
-                                      disabled={
-                                        !employeeId ||
-                                        operationDialogMut.isPending ||
-                                        processQcBlocked
-                                      }
-                                      onClick={() =>
-                                        { setOperationHandoverAcknowledged(false); setOperationHandoverReason(''); setOperationDialog({ kind: 'record', operation: op }); }
-                                      }
-                                    >
-                                      Output
-                                    </Button>
-                                  )}
-                                  {canLifecycle && (
-                                    <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      disabled={operationMut.isPending || processQcBlocked}
-                                      onClick={() =>
-                                        operationMut.mutate({
-                                          action: 'complete',
-                                          operationId: op.id,
-                                        })
-                                      }
-                                    >
-                                      Complete
-                                    </Button>
-                                  )}
-                                </>
-                              )}
-                              {op.status === 'paused' && canLifecycle && (
-                                <Button
-                                  size="xs"
-                                  variant="primary"
-                                  disabled={
-                                    !employeeId || operationMut.isPending || processQcBlocked
-                                  }
-                                  onClick={() =>
-                                    operationMut.mutate({ action: 'resume', operationId: op.id })
-                                  }
-                                >
-                                  Resume
-                                </Button>
-                              )}
-                              {canLifecycle && !['completed', 'skipped'].includes(op.status) && (
-                                <Button
-                                  size="xs"
-                                  variant="ghost"
-                                  disabled={
-                                    !employeeId || operationDialogMut.isPending || processQcBlocked
-                                  }
-                                  onClick={() =>
-                                    setOperationDialog({ kind: 'skip', operation: op })
-                                  }
-                                >
-                                  Skip
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={operationColumns}
+                data={operations.data}
+                tableKey="work-order-operations"
+                fixedColumnLayout
+              />
             )}
           </Panel>
         </div>
@@ -1904,6 +1874,6 @@ export default function WorkOrderDetailPage() {
           !shortCompletionReason.trim()
         }
       />
-    </div>
+    </PageShell>
   );
 }

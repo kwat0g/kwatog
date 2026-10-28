@@ -7,21 +7,30 @@ namespace App\Modules\B2B\Mail;
 use App\Common\Mail\QueuedMailable;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Support\HtmlString;
 use Illuminate\Queue\SerializesModels;
 
 class PortalAccessInvitationMail extends QueuedMailable
 {
     use SerializesModels;
 
+    public readonly HtmlString $recipientName;
+
     /** @param list<int> $fallbackUserIds */
     public function __construct(
         public readonly string $portalType,
-        public readonly string $recipientName,
+        string $recipientName,
         public readonly string $token,
+        public readonly int $subjectId,
+        public readonly string $subjectLink,
         public readonly array $fallbackUserIds = [],
     ) {
+        $this->recipientName = $this->safeMarkdownText($recipientName);
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 
@@ -46,7 +55,7 @@ class PortalAccessInvitationMail extends QueuedMailable
                 'brand' => $brand,
                 'preheader' => 'Set a private password to activate your '.$this->portalType.' portal access.',
                 'portalType' => $this->portalType,
-                'recipientName' => $this->safeMarkdownText($this->recipientName),
+                'safeRecipientName' => $this->recipientName,
                 'setupUrl' => $url,
             ],
         );
@@ -54,26 +63,40 @@ class PortalAccessInvitationMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $subject = match ($this->portalType) {
+            'customer' => Customer::query()->find($this->subjectId),
+            'supplier' => Vendor::query()->find($this->subjectId),
+            default => null,
+        };
+
+        if ($subject === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Portal access invitation',
             "A {$this->portalType} portal invitation could not be delivered. Resend the invitation after verifying the contact's email address.",
             [
-                'link_to' => '/'.($this->portalType === 'supplier' ? 'purchasing/vendors' : 'accounting/customers'),
+                'link_to' => $this->subjectLink,
                 'entity_type' => $this->portalType.'_portal_user',
                 'reason' => 'The email provider rejected or could not deliver the portal invitation.',
             ],
+            $subject,
         );
     }
 
-    private function safeMarkdownText(string $value): string
+    private function safeMarkdownText(string $value): HtmlString
     {
         $text = trim(preg_replace('/[\r\n\t]+/u', ' ', strip_tags($value)) ?? '');
         if ($text === '') {
-            return 'there';
+            return new HtmlString('there');
         }
 
-        return preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? 'there';
+        $text = preg_replace('/\[([^\]]*)\]\([^)]+\)/u', '$1', $text) ?? '';
+        $escaped = preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? 'there';
+
+        return new HtmlString(htmlspecialchars($escaped, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
     }
 
     private function safeHeaderText(string $value): string

@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Mail;
 
-use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Common\Services\EmailBrandingService;
-use App\Modules\HR\Enums\ApplicationStage;
 use App\Common\Mail\QueuedMailable;
+use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\HR\Enums\ApplicationStage;
+use App\Modules\HR\Models\JobApplication;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -62,6 +63,11 @@ class ApplicationStatusUpdatedMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $application = JobApplication::query()->whereHash($this->applicationHashId)->first();
+        if ($application === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment application update',
@@ -69,8 +75,10 @@ class ApplicationStatusUpdatedMail extends QueuedMailable
             [
                 'link_to' => '/hr/recruitment/applications/'.$this->applicationHashId,
                 'entity_type' => 'job_application',
+                'entity_id' => $this->applicationHashId,
                 'reason' => 'The candidate application update email job failed in the queue.',
             ],
+            $application,
         );
     }
 

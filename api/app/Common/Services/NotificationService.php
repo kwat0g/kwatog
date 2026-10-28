@@ -6,17 +6,22 @@ namespace App\Common\Services;
 
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Mail\UserNotificationMail;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Notification as LaravelNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Str;
 
 /**
- * Single entry point for in-app + email notifications.
+ * Central entry point for structured in-app notices and preference-controlled email copies.
+ * Mail-only authentication, report, and critical-alert flows use Laravel notifications.
  *
  * Three properties this class guarantees, in order of importance:
  *
@@ -151,6 +156,84 @@ class NotificationService
     }
 
     /**
+     * Send only to recipients who can open a registered subject.
+     * Unknown subject types fail closed until their module access rule is registered.
+     *
+     * @param  User|Collection<int, User>|array<int, User>  $recipients
+     * @param  array<string, mixed>  $data
+     * @param  array<int, string>  $recipientReasons
+     */
+    public function sendForSubject(
+        Model $subject,
+        User|Collection|array $recipients,
+        string $type,
+        array $data,
+        ?string $dedupeKey = null,
+        array $recipientReasons = [],
+        bool $emailEnabled = true,
+    ): void {
+        $class = $subject->getMorphClass();
+        if (! $subject->exists || $subject->getKey() === null
+            || ! $subject->newQuery()->whereKey($subject->getKey())->exists()) {
+            Log::warning('Notification delivery skipped: subject is unavailable.', [
+                'type' => $type,
+                'subject_type' => $class,
+                'subject_id' => $subject->getKey(),
+            ]);
+
+            return;
+        }
+        if (! NotificationSubjectAccessRegistry::supports($class)) {
+            Log::warning('Notification delivery skipped: subject has no registered access rule.', [
+                'type' => $type,
+                'subject_type' => $class,
+                'subject_id' => $subject->getKey(),
+            ]);
+
+            return;
+        }
+
+        $eligible = [];
+        $deniedUserIds = [];
+        $linkTo = is_string($data['link_to'] ?? null) ? $data['link_to'] : null;
+        foreach ($this->normaliseRecipients($recipients) as $userId => $user) {
+            if (NotificationSubjectAccessRegistry::userCanViewRecord($user, $subject, $linkTo)) {
+                $eligible[$userId] = $user;
+            } else {
+                $deniedUserIds[] = $userId;
+            }
+        }
+
+        if ($deniedUserIds !== []) {
+            Log::warning('Notification recipients lack subject access; delivery suppressed.', [
+                'type' => $type,
+                'subject_type' => $class,
+                'subject_id' => $subject->getKey(),
+                'user_ids' => $deniedUserIds,
+            ]);
+        }
+
+        $data['subject_type'] = $class;
+        $data['subject_id'] = (string) $subject->getKey();
+        $this->dispatch($eligible, $type, $data, $emailEnabled, $dedupeKey, $recipientReasons, $subject);
+    }
+
+    /** Deliver an existing Laravel notification through the central dispatcher. */
+    public function sendLaravelNotification(User|Collection|array $recipients, LaravelNotification $notification): void
+    {
+        $users = $this->normaliseRecipients($recipients);
+        if ($users === []) {
+            Log::warning('Laravel notification delivery skipped: no eligible recipients.', [
+                'notification_class' => $notification::class,
+            ]);
+
+            return;
+        }
+
+        NotificationFacade::send($users, $notification);
+    }
+
+    /**
      * Deliver one DSS recommendation notice under the per-user daily cap.
      * The caller must pass a stable occurrence/change identity; existing
      * notification uniqueness makes retries safe across workers.
@@ -174,7 +257,14 @@ class NotificationService
             if ((clone $notifications)->where('dedupe_key', $dedupeKey)->exists()) {
                 return true;
             }
-            if ($lockedRecipient === null || ! $lockedRecipient->is_active || $cap < 1) {
+            if ($lockedRecipient === null || ! $lockedRecipient->is_active) {
+                Log::warning('DSS recommendation delivery skipped: no active recipient.', [
+                    'type' => 'dss.recommendation',
+                ]);
+
+                return false;
+            }
+            if ($cap < 1) {
                 return false;
             }
 
@@ -208,10 +298,15 @@ class NotificationService
         bool $emailEnabled,
         ?string $dedupeKey,
         array $recipientReasons = [],
+        ?Model $failureSubject = null,
     ): void {
         $users = $this->normaliseRecipients($recipients);
 
         if ($users === []) {
+            Log::warning('Notification delivery skipped: no eligible recipients.', [
+                'type' => $type,
+            ]);
+
             return;
         }
 
@@ -300,7 +395,7 @@ class NotificationService
 
         // Deferred: a rollback after this point must not leave a broadcast or
         // an email behind. Runs inline when no transaction is open.
-        DB::afterCommit(function () use ($events, $emails, $type, $data, $dedupeKey): void {
+        DB::afterCommit(function () use ($events, $emails, $type, $data, $dedupeKey, $failureSubject): void {
             foreach ($events as $notificationEvent) {
                 try {
                     // The notification row is the durable business result.
@@ -323,33 +418,9 @@ class NotificationService
                 $deliveryKey = $dedupeKey === null
                     ? null
                     : hash('sha256', $type.'|'.$dedupeKey.'|'.strtolower($email['address']));
-                $this->queueEmail($email['address'], $recipientUserIds, $name, $type, $data, $deliveryKey);
+                $this->queueEmail($email['address'], $recipientUserIds, $name, $type, $data, $deliveryKey, $failureSubject);
             }
         });
-    }
-
-    /**
-     * Legacy wrapper — delegates to Laravel's notification system.
-     * Kept for backward compat with NcrService and MaintenanceWorkOrderService
-     * that pass Notification objects. Will be removed once all callers migrate to send().
-     */
-    public function notify(User|Collection|array $recipients, $notification, string $type): void
-    {
-        $users = $this->normaliseRecipients($recipients);
-
-        if ($users === []) {
-            return;
-        }
-
-        $prefs = $this->channelPreferences(array_keys($users), $type);
-
-        foreach ($users as $userId => $user) {
-            if (($prefs["{$userId}:in_app"] ?? true) === false) {
-                continue;
-            }
-
-            $user->notify($notification);
-        }
     }
 
     /**
@@ -373,7 +444,7 @@ class NotificationService
         $users = [];
 
         foreach ($list as $user) {
-            if (! $user instanceof User || $user->id === null) {
+            if (! $user instanceof User || $user->id === null || ! $user->is_active || $user->trashed()) {
                 continue;
             }
 
@@ -471,10 +542,11 @@ class NotificationService
         string $type,
         array $data,
         ?string $deliveryKey,
+        ?Model $failureSubject = null,
     ): void {
         if (filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
             Log::warning('Notification email skipped: invalid recipient address', [
-                'user_id' => $userId,
+                'user_id' => $recipientUserIds[0] ?? null,
                 'type' => $type,
             ]);
 
@@ -489,6 +561,7 @@ class NotificationService
                 $recipientUserIds[0] ?? null,
                 $recipientUserIds,
                 deliveryKey: $deliveryKey,
+                failureSubject: $failureSubject,
             ));
         } catch (\Throwable $e) {
             Log::warning('Notification email dispatch failed', [

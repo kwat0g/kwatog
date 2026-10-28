@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -21,10 +21,12 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { FilterBar } from '@/components/ui/FilterBar';
+import { PageShell } from '@/components/layout/PageShell';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
+import { formatQuantity } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import type { MrbRecord, MrbStatus } from '@/types/inventory';
@@ -70,21 +72,41 @@ export default function MrbListPage() {
     queryFn: () => mrbApi.options(),
     staleTime: 5 * 60 * 1000,
   });
-  const statusFilters = [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])];
+  const filterConfig: FilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])],
+    },
+  ];
 
   const columns: Column<MrbRecord>[] = [
     {
       key: 'mrb',
       header: 'MRB #',
-      cell: (r) => <span className="font-mono">{r.mrb_number}</span>,
+      width: 160,
+      minWidth: 150,
+      maxWidth: 180,
+      cell: (r) => (
+        <Link
+          to={`/inventory/mrb/${r.id}`}
+          className="font-mono text-link hover:text-link-hover hover:underline"
+        >
+          {r.mrb_number}
+        </Link>
+      ),
     },
     {
       key: 'item',
       header: 'Item',
+      width: 205,
+      minWidth: 180,
+      maxWidth: 240,
       cell: (r) => (
-        <div>
-          <div className="font-mono">{r.item?.code ?? '—'}</div>
-          <div className="text-muted">{r.item?.name ?? '—'}</div>
+        <div className="min-w-0">
+          <div className="truncate font-mono" title={r.item?.code ?? '—'}>{r.item?.code ?? '—'}</div>
+          <div className="truncate text-caption text-muted" title={r.item?.name ?? '—'}>{r.item?.name ?? '—'}</div>
         </div>
       ),
     },
@@ -92,39 +114,56 @@ export default function MrbListPage() {
       key: 'qty',
       header: 'Qty',
       align: 'right',
+      width: 145,
+      minWidth: 130,
+      maxWidth: 170,
       cell: (r) => (
-        <span className="font-mono tabular-nums">
-          {r.quantity} {r.item?.unit_of_measure ?? ''}
+        <span className="tabular-nums">
+          {formatQuantity(r.quantity)} {r.item?.unit_of_measure ?? ''}
         </span>
       ),
     },
     {
       key: 'status',
       header: 'Status',
+      width: 120,
+      minWidth: 110,
+      maxWidth: 150,
       cell: (r) => <Chip variant={mrbStatusVariant(r.status)}>{r.status_label}</Chip>,
     },
     {
       key: 'location',
       header: 'Location',
+      width: 165,
+      minWidth: 150,
+      maxWidth: 200,
       cell: (r) => (
-        <span className="font-mono text-xs">
-          {r.source_location?.full_code ?? '—'} → {r.quarantine_location?.full_code ?? '—'}
+        <span className="text-caption">
+          <span className="font-mono">{r.source_location?.full_code ?? '—'}</span>{' '}
+          <span className="font-sans text-muted">to</span>{' '}
+          <span className="font-mono">{r.quarantine_location?.full_code ?? '—'}</span>
         </span>
       ),
     },
     {
       key: 'held',
       header: 'Held',
+      width: 180,
+      minWidth: 160,
+      maxWidth: 220,
       cell: (r) => (
-        <div>
-          <div>{r.held_by ?? '—'}</div>
-          <div className="text-muted font-mono">{formatDate(r.held_at)}</div>
+        <div className="min-w-0">
+          <div className="truncate" title={r.held_by ?? '—'}>{r.held_by ?? '—'}</div>
+          <div className="text-caption text-muted tabular-nums">{formatDate(r.held_at)}</div>
         </div>
       ),
     },
     {
       key: 'ncr',
       header: 'NCR',
+      width: 140,
+      minWidth: 130,
+      maxWidth: 170,
       cell: (r) =>
         r.ncr ? (
           <span className="font-mono">{r.ncr.ncr_number}</span>
@@ -135,8 +174,9 @@ export default function MrbListPage() {
   ];
 
   return (
-    <div>
+    <PageShell viewport className="flex flex-col gap-3">
       <PageHeader
+        inset={false}
         title="MRB / Quarantine"
         subtitle={data ? `${data.meta.total} records` : undefined}
         actions={
@@ -152,67 +192,61 @@ export default function MrbListPage() {
         }
       />
 
-      <div className="px-5 pt-3 flex flex-wrap items-end gap-3">
-        <FilterBar
-          values={filters}
-          onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-          searchPlaceholder="Search MRB ticket..."
-        />
-        <Select
-          label="Status"
-          className="max-w-xs"
-          value={filters.status ?? ''}
-          onChange={(e) => {
-            setFilters((f) => ({ ...f, status: e.target.value, page: 1 }));
-          }}
-        >
-          {statusFilters.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <FilterBar
+        inset={false}
+        filters={filterConfig}
+        values={filters}
+        onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value ?? '', page: 1 }))}
+        searchPlaceholder="Search MRB ticket…"
+      />
 
       {isLoading && !data && (
-        <div className="px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-auto">
           <SkeletonTable rows={6} columns={7} />
         </div>
       )}
       {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load MRB records"
-          action={<Button onClick={() => refetch()}>Retry</Button>}
-        />
+        <div className="min-h-0 flex-1 flex items-center justify-center">
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load MRB records"
+            action={<Button onClick={() => refetch()}>Retry</Button>}
+          />
+        </div>
       )}
       {!isError && data && data.data.length === 0 && (
-        <EmptyState
-          icon="inbox"
-          title={
-            filters.search || filters.status
-              ? 'No MRB records match these filters'
-              : 'No MRB records'
-          }
-          description={
-            filters.search || filters.status
-              ? 'Try a different search or clear the filters.'
-              : 'Place nonconforming stock on hold to move it into a quarantine location.'
-          }
-          action={
-            canManage ? (
-              <Button variant="primary" onClick={() => setHoldOpen(true)}>
-                Raise hold
-              </Button>
-            ) : undefined
-          }
-        />
+        <div className="min-h-0 flex-1 flex items-center justify-center">
+          <EmptyState
+            icon="inbox"
+            title={
+              filters.search || filters.status
+                ? 'No MRB records match these filters'
+                : 'No MRB records'
+            }
+            description={
+              filters.search || filters.status
+                ? 'Try a different search or clear the filters.'
+                : 'Place nonconforming stock on hold to move it into a quarantine location.'
+            }
+            action={
+              canManage ? (
+                <Button variant="primary" onClick={() => setHoldOpen(true)}>
+                  Raise hold
+                </Button>
+              ) : undefined
+            }
+          />
+        </div>
       )}
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
+        <div className="min-h-0 flex-1 flex flex-col">
           <DataTable
+            tableKey="inventory-mrb"
+            fillHeight
             onRowClick={(r) => navigate(`/inventory/mrb/${r.id}`)}
             columns={columns}
+            fixedColumnLayout
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
@@ -231,7 +265,7 @@ export default function MrbListPage() {
           }}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 

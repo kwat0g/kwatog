@@ -453,7 +453,7 @@ class NotificationServiceHardeningTest extends TestCase
 
             return true;
         });
-        $this->assertSame(4, DB::table('notifications')->where('type', 'test.recipient_safety')->count());
+        $this->assertSame(3, DB::table('notifications')->where('type', 'test.recipient_safety')->count());
     }
 
     public function test_replayed_deduplicated_notification_reuses_delivery_key(): void

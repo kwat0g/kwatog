@@ -90,14 +90,14 @@ function page<T>(data: T[]): PaginatedResponse<T> {
  };
 }
 
-function renderPage(): void {
+function renderPage(path = '/hr/attendance'): void {
  const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
  });
 
  render(
   <QueryClientProvider client={queryClient}>
-   <MemoryRouter initialEntries={['/hr/attendance']}>
+   <MemoryRouter initialEntries={[path]}>
     <AttendancePage />
    </MemoryRouter>
   </QueryClientProvider>,
@@ -137,5 +137,15 @@ describe('attendance correction clearing', () => {
    time_in: null,
    time_out: null,
   }));
+ });
+
+ it('uses the linked missing-timeout date range on initial load', async () => {
+  renderPage('/hr/attendance?missing_time_out=1&from=2026-10-07&to=2026-10-07');
+
+  await waitFor(() => expect(attendancesApi.list).toHaveBeenCalledWith(expect.objectContaining({
+   missing_time_out: '1',
+   from: '2026-10-07',
+   to: '2026-10-07',
+  })));
  });
 });

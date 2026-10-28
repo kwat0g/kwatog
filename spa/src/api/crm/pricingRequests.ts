@@ -3,9 +3,9 @@ import type { PaginatedResponse } from '@/types';
 import type { PriceOffer, PriceRequest, ItemCostReview } from '@/types/pricing';
 
 export const pricingRequestsApi = {
-  list: (page = 1) =>
+  list: (page = 1, request?: string) =>
     client
-      .get<PaginatedResponse<PriceRequest>>('/crm/price-requests', { params: { page } })
+      .get<PaginatedResponse<PriceRequest>>('/crm/price-requests', { params: { page, request } })
       .then((r) => r.data),
   show: (id: string) =>
     client.get<{ data: PriceRequest }>(`/crm/price-requests/${id}`).then((r) => r.data.data),
@@ -17,9 +17,11 @@ export const pricingRequestsApi = {
     client.post(`/crm/price-requests/${id}/approve`, { notes, version, cost_signature }),
   withdraw: (id: string, notes: string) =>
     client.post(`/crm/price-requests/${id}/withdraw`, { notes }),
-  costs: (page = 1) =>
+  costs: (page = 1, review?: string) =>
     client
-      .get<PaginatedResponse<ItemCostReview>>('/inventory/cost-reviews', { params: { page } })
+      .get<
+        PaginatedResponse<ItemCostReview>
+      >('/inventory/cost-reviews', { params: { page, review } })
       .then((r) => r.data),
   decideCost: (id: string, decision: 'approve' | 'reject', notes: string, version: number) =>
     client.post(`/inventory/cost-reviews/${id}/decide`, { decision, notes, version }),

@@ -24,6 +24,7 @@ use App\Modules\ReturnManagement\Enums\ReturnInspectionHandoffStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\SupplyChain\Models\DeliveryAttemptOutcome;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -103,6 +104,11 @@ class ReturnRequest extends Model
         'rejected_at' => 'datetime',
         'cancelled_at' => 'datetime',
     ];
+
+    public function scopeAwaitingProcessing(Builder $query): Builder
+    {
+        return $query->whereIn('status', ReturnRequestStatus::activeValues());
+    }
 
     public function items(): HasMany
     {

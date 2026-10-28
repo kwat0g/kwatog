@@ -85,6 +85,11 @@ class BillService
         if (! empty($filters['overdue'])) {
             $q->overdue();
         }
+        if (($filters['signal'] ?? null) === 'unpaid') {
+            $q->unpaid();
+        } elseif (($filters['signal'] ?? null) === 'due_soon') {
+            $q->dueSoon();
+        }
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
@@ -264,38 +269,6 @@ class BillService
                         );
                     }
                     if ($result->overallStatus === 'blocked' && $postToLedger) {
-                        throw new ThreeWayMatchException('3-way match blocked by variance.', $result->toArray());
-                    }
-                    $hasVariances = $result->overallStatus !== 'matched';
-                    $matchSnapshot = $result->toArray();
-                }
-            }
-
-            // Optional PO link + three-way match.
-            $poId = null;
-            $hasVariances = false;
-            $matchSnapshot = null;
-            if (! empty($data['purchase_order_id'])) {
-                $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
-                    ?? (int) $data['purchase_order_id'];
-                if ($this->threeWayMatch && $poId) {
-                    $po = PurchaseOrder::query()->with(['items.item'])->findOrFail($poId);
-                    [$itemsForMatch] = $this->normalizeItems($data['items'] ?? []);
-                    // Reshape lines for three-way matcher.
-                    $billLines = [];
-                    foreach ($po->items as $idx => $poi) {
-                        $li = $itemsForMatch[$idx] ?? null;
-                        if (! $li) continue;
-                        $billLines[(string) $poi->item_id] = [
-                            'item_id'     => null,
-                            'description' => $li['description'],
-                            'quantity'    => $li['quantity'] ?? '0',
-                            'unit_price'  => $li['unit_price'] ?? '0',
-                        ];
-                    }
-                    $result = $this->threeWayMatch->matchForPo($po, array_values($billLines));
-                    $allowOverride = (bool) ($data['allow_override'] ?? false);
-                    if ($result->overallStatus === 'blocked' && ! $allowOverride) {
                         throw new ThreeWayMatchException('3-way match blocked by variance.', $result->toArray());
                     }
                     $hasVariances = $result->overallStatus !== 'matched';
@@ -1065,8 +1038,8 @@ class BillService
         app(ChainBroadcaster::class)->broadcastFor($fresh, (string) $fresh->status?->value, $by);
 
         $requester = User::query()->whereKey($payment->created_by)->where('is_active', true)->first();
-        if ($requester && $requester->hasPermission('accounting.bills.view')) {
-            app(NotificationService::class)->send($requester, 'bill_payment.posted', [
+        if ($requester && (int) $requester->id !== (int) $by->id && $requester->hasPermission('accounting.bills.view')) {
+            app(NotificationService::class)->sendForSubject($bill, $requester, 'bill_payment.posted', [
                 'title' => 'Bill payment posted',
                 'message' => "Payment for bill {$bill->bill_number} was posted to the ledger.",
                 'link_to' => "/accounting/bills/{$bill->hash_id}",

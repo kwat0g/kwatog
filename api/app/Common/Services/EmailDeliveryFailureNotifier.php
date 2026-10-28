@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use App\Modules\Auth\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -22,26 +23,33 @@ class EmailDeliveryFailureNotifier
     /**
      * @param  User|Collection<int, User>|array<int, User>|null  $recipients
      * @param  array{link_to?: string, entity_type?: string, entity_id?: string, reason?: string}  $context
+     * @param  Model|null  $subject  When present, recipients must still be able to open it.
      */
     public function notify(
         User|Collection|array|null $recipients,
         string $feature,
         string $message,
         array $context = [],
+        ?Model $subject = null,
     ): void {
         if ($recipients === null || $recipients === [] || ($recipients instanceof Collection && $recipients->isEmpty())) {
             return;
         }
 
         try {
-            $this->notifications->sendInApp($recipients, 'email.delivery_failed', [
+            $data = [
                 'title' => 'Email delivery failed',
                 'message' => $feature.': '.$message,
                 'link_to' => $context['link_to'] ?? null,
                 'entity_type' => $context['entity_type'] ?? null,
                 'entity_id' => $context['entity_id'] ?? null,
                 'failure_reason' => $context['reason'] ?? null,
-            ]);
+            ];
+            if ($subject !== null && $recipients !== null) {
+                $this->notifications->sendForSubject($subject, $recipients, 'email.delivery_failed', $data, emailEnabled: false);
+            } else {
+                $this->notifications->sendInApp($recipients, 'email.delivery_failed', $data);
+            }
         } catch (\Throwable $e) {
             // A fallback must never replace the original business failure or
             // cause a queue worker to retry forever just because the inbox is
@@ -56,12 +64,14 @@ class EmailDeliveryFailureNotifier
     /**
      * @param  array<int, int|string>  $userIds
      * @param  array{link_to?: string, entity_type?: string, entity_id?: string, reason?: string}  $context
+     * @param  Model|null  $subject  When present, recipients must still be able to open it.
      */
     public function notifyUserIds(
         array $userIds,
         string $feature,
         string $message,
         array $context = [],
+        ?Model $subject = null,
     ): void {
         $ids = array_values(array_unique(array_filter(
             array_map('intval', $userIds),
@@ -77,19 +87,26 @@ class EmailDeliveryFailureNotifier
             $feature,
             $message,
             $context,
+            $subject,
         );
     }
 
     /**
      * @param  array{link_to?: string, entity_type?: string, entity_id?: string, reason?: string}  $context
+     * @param  Model|null  $subject  When present, recipients must still be able to open it.
      */
-    public function notifyUserId(?int $userId, string $feature, string $message, array $context = []): void
-    {
+    public function notifyUserId(
+        ?int $userId,
+        string $feature,
+        string $message,
+        array $context = [],
+        ?Model $subject = null,
+    ): void {
         if ($userId === null) {
             return;
         }
 
-        $this->notifyUserIds([$userId], $feature, $message, $context);
+        $this->notifyUserIds([$userId], $feature, $message, $context, $subject);
     }
 
     /**
@@ -98,18 +115,21 @@ class EmailDeliveryFailureNotifier
      * when the customer or supplier has no portal account.
      *
      * @param  array{link_to?: string, entity_type?: string, entity_id?: string, reason?: string}  $context
+     * @param  Model|null  $subject  When present, recipients must still be able to open it.
      */
     public function notifyPermission(
         string $permission,
         string $feature,
         string $message,
         array $context = [],
+        ?Model $subject = null,
     ): void {
         $this->notify(
             $this->notifications->usersWithPermission($permission),
             $feature,
             $message,
             $context,
+            $subject,
         );
     }
 

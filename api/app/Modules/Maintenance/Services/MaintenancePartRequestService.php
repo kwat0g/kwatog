@@ -67,7 +67,7 @@ class MaintenancePartRequestService
             $recipients = $notifications->usersWithPermission('inventory.issue.create')
                 ->filter(fn (User $user): bool => $user->hasPermission('inventory.picking.view'))
                 ->values();
-            $notifications->send($recipients,
+            $notifications->sendForSubject($request, $recipients,
                 'maintenance.parts_requested', ['title' => 'Spare parts requested', 'message' => $order->mwo_number.' requires '.$quantity.' '.$item->unit_of_measure.' of '.$item->code.'.',
                     'link_to' => '/inventory/picking?maintenance_work_order_id='.$order->hash_id], 'maintenance-part-request:'.$request->id);
 
@@ -124,7 +124,7 @@ class MaintenancePartRequestService
             $request->update(['status' => 'handed_over', 'handed_over_at' => now()]);
             $user = $recipient->user;
             if ($user) {
-                app(NotificationService::class)->send($user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',
+                app(NotificationService::class)->sendForSubject($order, $user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',
                     'message' => 'Warehouse confirmed parts for '.$order->mwo_number.'. Repair can continue.',
                     'link_to' => ($user->role?->slug === 'employee' ? '/self-service/maintenance-work-orders/' : '/maintenance/work-orders/').$order->hash_id]);
             }

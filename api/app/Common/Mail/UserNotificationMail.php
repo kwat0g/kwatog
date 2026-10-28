@@ -6,6 +6,7 @@ namespace App\Common\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\EmailBrandingService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -34,6 +35,7 @@ class UserNotificationMail extends QueuedMailable
         public readonly array $fallbackUserIds = [],
         public readonly ?string $fallbackPermission = null,
         ?string $deliveryKey = null,
+        public readonly ?Model $failureSubject = null,
     ) {
         $this->onQueue('mail');
         $this->deliveryKey = $deliveryKey;
@@ -135,23 +137,23 @@ class UserNotificationMail extends QueuedMailable
         ];
 
         if ($this->fallbackPermission !== null) {
-            $failureNotifier->notifyPermission($this->fallbackPermission, 'Customer delivery-date proposal', $message, $context);
+            $failureNotifier->notifyPermission($this->fallbackPermission, 'Customer delivery-date proposal', $message, $context, $this->failureSubject);
 
             return;
         }
 
         if ($this->fallbackUserIds !== []) {
-            $failureNotifier->notifyUserIds($this->fallbackUserIds, 'Customer delivery-date proposal', $message, $context);
+            $failureNotifier->notifyUserIds($this->fallbackUserIds, 'Customer delivery-date proposal', $message, $context, $this->failureSubject);
 
             return;
         }
 
         if ($this->recipientUserIds !== []) {
-            $failureNotifier->notifyUserIds($this->recipientUserIds, 'Internal notification', $message, $context);
+            $failureNotifier->notifyUserIds($this->recipientUserIds, 'Internal notification', $message, $context, $this->failureSubject);
 
             return;
         }
 
-        $failureNotifier->notifyUserId($this->recipientUserId, 'Internal notification', $message, $context);
+        $failureNotifier->notifyUserId($this->recipientUserId, 'Internal notification', $message, $context, $this->failureSubject);
     }
 }

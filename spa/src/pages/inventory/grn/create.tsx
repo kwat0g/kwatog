@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
+import { TableScrollRegion } from '@/components/ui/TableScrollRegion';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError, ApiSuccess } from '@/types';
 import { reportMutationError } from '@/lib/formErrors';
@@ -19,7 +21,7 @@ import type { CreateGrnData } from '@/types/inventory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 import { localIsoDate } from '@/lib/formatDate';
-import { formatQuantity } from '@/lib/formatNumber';
+import { formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 
 interface Line {
   purchase_order_item_id: string;
@@ -195,9 +197,9 @@ export default function CreateGrnPage() {
   };
 
   return (
-    <div>
-      <PageHeader title="New GRN" backTo="/inventory/grn" backLabel="GRNs" />
-      <div className="min-w-0 w-full px-5 py-4 space-y-4">
+    <PageShell variant="grid">
+      <PageHeader inset={false} title="New GRN" backTo="/inventory/grn" backLabel="GRNs" />
+      <div className="min-w-0 space-y-4">
         {lookupFailed && <div role="alert" className="text-sm text-danger-fg">
           Receiving options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
             if (ordersError) void refetchOrders();
@@ -246,7 +248,8 @@ export default function CreateGrnPage() {
             {items.length === 0 ? (
               <div className="text-sm text-muted">No outstanding lines on this PO.</div>
             ) : (
-              <table className={tableCls}>
+              <TableScrollRegion label="Goods receipt line items">
+              <table className={cn(tableCls, 'min-w-max')}>
                 <thead>
                   <tr className={theadTrCls}>
                     <Th>Item</Th>
@@ -292,7 +295,7 @@ export default function CreateGrnPage() {
                           />
                         </Td>
                         <Td align="right" mono>
-                          <span className="font-mono tabular-nums">{line.unit_cost}</span>
+                          <span className="tabular-nums">{formatUnitCost(line.unit_cost)}</span>
                         </Td>
                         <Td>
                           <Select
@@ -425,6 +428,7 @@ export default function CreateGrnPage() {
                   ))}
                 </tbody>
               </table>
+              </TableScrollRegion>
             )}
           </Panel>
         )}
@@ -467,6 +471,6 @@ export default function CreateGrnPage() {
         variant="primary"
         pending={m.isPending}
       />
-    </div>
+    </PageShell>
   );
 }

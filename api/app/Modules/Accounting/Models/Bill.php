@@ -139,6 +139,21 @@ class Bill extends Model
         return $q->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial]);
     }
 
+    public function scopeUnpaid(Builder $q): Builder
+    {
+        return $q->open()->where('balance', '>', 0);
+    }
+
+    public function scopeDueSoon(Builder $q): Builder
+    {
+        $today = today();
+
+        return $q->unpaid()->whereBetween('due_date', [
+            $today->toDateString(),
+            $today->copy()->addDays(3)->toDateString(),
+        ]);
+    }
+
     public function scopeOverdue(Builder $q): Builder
     {
         return $q->open()->whereDate('due_date', '<', today()->toDateString());
@@ -169,8 +184,9 @@ class Bill extends Model
 
     public function isOverdue(): bool
     {
-        if ($this->status === BillStatus::Paid || $this->status === BillStatus::Cancelled || $this->status === BillStatus::Draft) return false;
-        return $this->due_date && $this->due_date->isPast();
+        return in_array($this->status, [BillStatus::Unpaid, BillStatus::Partial], true)
+            && $this->due_date !== null
+            && $this->due_date->lt(today());
     }
 
     public function agingBucket(?\Carbon\Carbon $asOf = null): string

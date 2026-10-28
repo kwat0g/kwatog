@@ -33,7 +33,7 @@ export function Panel({
   scrollBody,
 }: PanelProps) {
   return (
-    <div className={cn('bg-canvas border border-default rounded-md overflow-hidden', className)}>
+    <div data-layout="section" className={cn('bg-canvas border border-default rounded-md overflow-hidden', className)}>
       {/*
        * `min-w-0` on both the title cluster and the meta slot is what lets a
        * wide `meta` actually use a narrow-width control (F-010's `/budgeting`

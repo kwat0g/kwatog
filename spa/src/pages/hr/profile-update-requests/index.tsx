@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Avatar } from '@/components/ui/Avatar';
@@ -42,21 +42,31 @@ const STATUS_CHIP: Record<ProfileUpdateRequestStatus, 'warning' | 'info' | 'succ
 export default function ProfileUpdateRequestsPage() {
   const queryClient = useQueryClient();
   const { can } = usePermission();
+  const [searchParams] = useSearchParams();
+  const awaitingMyAction = searchParams.get('signal') === 'awaiting_my_action';
   const canFinance = can('hr.profile_updates.finance_review');
   const canViewEmployees = can('hr.employees.view');
   const canReviewHr = can('hr.employees.edit');
   const financeOnly = canFinance && !canViewEmployees;
   const defaultStatus: ProfileUpdateRequestStatus = financeOnly ? 'pending_finance' : 'pending';
-  const [status, setStatus] = useState<ProfileUpdateRequestStatus>(defaultStatus);
+  const [status, setStatus] = useState<ProfileUpdateRequestStatus | undefined>(
+    awaitingMyAction ? undefined : defaultStatus,
+  );
   const [page, setPage] = useState(1);
+  useEffect(() => {
+    setStatus(awaitingMyAction ? undefined : defaultStatus);
+    setPage(1);
+  }, [awaitingMyAction, defaultStatus]);
   const [confirm, setConfirm] = useState<
     | null
     | { kind: 'approve' | 'reject'; stage: 'hr' | 'finance'; row: ProfileUpdateReviewItem }
   >(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['hr', 'profile-update-requests', status, page],
-    queryFn: () => profileUpdateRequestsApi.list({ status, ...(page > 1 ? { page } : {}) }),
+    queryKey: ['hr', 'profile-update-requests', awaitingMyAction ? undefined : status, page, awaitingMyAction],
+    queryFn: () => profileUpdateRequestsApi.list(awaitingMyAction
+      ? { signal: 'awaiting_my_action' }
+      : { status: status ?? defaultStatus, ...(page > 1 ? { page } : {}) }),
     placeholderData: (prev) => prev,
   });
   const { data: options } = useQuery({
@@ -158,17 +168,17 @@ export default function ProfileUpdateRequestsPage() {
   return (
     <div>
       <PageHeader
-        title={financeOnly ? 'Bank Account Changes' : 'Profile Change Requests'}
+        title={awaitingMyAction ? 'Profile Changes Awaiting My Action' : financeOnly ? 'Bank Account Changes' : 'Profile Change Requests'}
         subtitle={data ? `${data.meta.total} requests` : undefined}
       />
 
-      <FilterBar
+      {!awaitingMyAction && <FilterBar
         searchable={false}
         resultCount={data?.meta.total}
         actions={(
           <Select
             aria-label="Status"
-            value={status}
+            value={status ?? defaultStatus}
             searchable
             fieldSize="md"
             containerClassName="min-w-[190px]"
@@ -179,7 +189,7 @@ export default function ProfileUpdateRequestsPage() {
             ))}
           </Select>
         )}
-      />
+      />}
 
       <div className="p-5 pt-4">
         {isError && !data ? (
@@ -259,7 +269,7 @@ export default function ProfileUpdateRequestsPage() {
                 size="compact"
                 icon="inbox"
                 title="No requests"
-                description={`There are no ${statusLabels.get(status)?.toLowerCase() ?? status} profile update requests.`}
+                description={`There are no ${statusLabels.get(status ?? '')?.toLowerCase() ?? status ?? defaultStatus} profile update requests.`}
               />
             )}
           />

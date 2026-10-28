@@ -8,6 +8,7 @@ use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Events\SeparationInitiated;
+use App\Modules\HR\Services\SeparationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
@@ -16,6 +17,7 @@ class NotifyOnSeparationInitiated implements ShouldQueue
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
+        private readonly SeparationService $separations,
     ) {}
 
     public function handle(SeparationInitiated $event): void
@@ -28,10 +30,12 @@ class NotifyOnSeparationInitiated implements ShouldQueue
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('hr.separation.view'))
+                ->filter(fn (User $user): bool => $user->id !== $clearance->initiated_by
+                    && $user->hasPermission('hr.separation.view')
+                    && $this->separations->canView($clearance, $user))
                 ->values();
 
-            $this->notifications->send($audience, 'chain.separation_initiated', [
+            $this->notifications->sendForSubject($clearance, $audience, 'chain.separation_initiated', [
                 'title'       => 'Separation Initiated',
                 'message'     => "Separation initiated for {$clearance->employee?->full_name}.",
                 'link_to'     => "/hr/separations/{$clearance->hash_id}",

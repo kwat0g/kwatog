@@ -4,6 +4,7 @@ import type { OvertimeRequest, OvertimeOptions } from '@/types/attendance';
 
 export interface OvertimeListParams extends ListParams {
  employee_id?: string;
+ signal?: '' | 'awaiting_my_approval';
  status?: string;
  from?: string;
  to?: string;

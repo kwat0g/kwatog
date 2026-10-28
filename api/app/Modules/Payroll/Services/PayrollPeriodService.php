@@ -1005,7 +1005,7 @@ class PayrollPeriodService
                 && $user->hasPermission('payroll.periods.view'));
         $audience = $candidates->reject(fn (User $user): bool => in_array((int) $user->id, $makers, true));
 
-        app(\App\Common\Services\NotificationService::class)->send($audience, 'approval.action_required', [
+        app(\App\Common\Services\NotificationService::class)->sendForSubject($period, $audience, 'approval.action_required', [
             'title' => 'Payroll period needs approval',
             'message' => "Payroll {$period->period_start->toDateString()}–{$period->period_end->toDateString()} is computed and waiting for review.",
             'link_to' => "/payroll/periods/{$period->hash_id}",

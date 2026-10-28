@@ -7,7 +7,7 @@ vi.mock('@/hooks/useBadges', () => ({
 import { SECTIONS, isNavItemVisible, navItemForPermissions } from './Sidebar';
 
 function item(path: string) {
-  const found = SECTIONS.flatMap((section) => section.items).find((entry) => entry.to === path);
+  const found = SECTIONS.flatMap((section) => section.items).find((entry) => entry.to.split('?')[0] === path);
   if (!found) throw new Error(`Missing sidebar item ${path}`);
   return found;
 }
@@ -52,11 +52,43 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(transfers, { permissions: new Set() })).toBe(false);
   });
 
+  it('shows overtime approvals to direct approvers and active delegates only', () => {
+    const overtime = item('/hr/attendance/overtime');
+    expect(isNavItemVisible(overtime, { permissions: new Set(['attendance.ot.approve']) })).toBe(true);
+    expect(isNavItemVisible(overtime, {
+      permissions: new Set(['attendance.view']),
+      delegatedApprovals: ['attendance.ot.approve'],
+    })).toBe(true);
+    expect(isNavItemVisible(overtime, { permissions: new Set(['attendance.view']) })).toBe(false);
+  });
+
+  it('shows Leave Management only when the API read and workflow permissions both exist', () => {
+    const leaves = item('/hr/leaves');
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.approve_dept']) })).toBe(false);
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.view']) })).toBe(false);
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.view', 'leave.approve_dept']) })).toBe(true);
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.view', 'leave.types.manage']) })).toBe(true);
+  });
+
+  it('shows the budget approval queue to viewers and approvers only', () => {
+    const budgets = item('/budgeting');
+    expect(isNavItemVisible(budgets, { permissions: new Set(['budgeting.view']) })).toBe(true);
+    expect(isNavItemVisible(budgets, { permissions: new Set(['budgeting.approve']) })).toBe(true);
+    expect(isNavItemVisible(budgets, { permissions: new Set() })).toBe(false);
+  });
+
   it('shows the chain tracker to sales-order or bottleneck viewers only', () => {
     const tracker = item('/chains');
     expect(isNavItemVisible(tracker, { permissions: new Set(['crm.sales_orders.view']) })).toBe(true);
     expect(isNavItemVisible(tracker, { permissions: new Set(['dashboard.view_bottlenecks']) })).toBe(true);
     expect(isNavItemVisible(tracker, { permissions: new Set() })).toBe(false);
+  });
+
+  it('shows Production Work Orders only when the module and list permissions both exist', () => {
+    const workOrders = item('/production/work-orders');
+    expect(isNavItemVisible(workOrders, { permissions: new Set(['production.work_orders.view']), features: allFeatures })).toBe(false);
+    expect(isNavItemVisible(workOrders, { permissions: new Set(['production.view']), features: allFeatures })).toBe(false);
+    expect(isNavItemVisible(workOrders, { permissions: new Set(['production.view', 'production.work_orders.view']), features: allFeatures })).toBe(true);
   });
 
   it('shows supervisor machine and maintenance navigation through explicit read permissions', () => {
@@ -85,10 +117,28 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(item('/payroll/statutory'), context)).toBe(false);
   });
 
+  it('requires Attendance list access plus a back-office permission', () => {
+    const attendance = item('/hr/attendance');
+    expect(isNavItemVisible(attendance, {
+      permissions: new Set(['attendance.edit']),
+      features: allFeatures,
+    })).toBe(false);
+    expect(isNavItemVisible(attendance, {
+      permissions: new Set(['attendance.view']),
+      features: allFeatures,
+    })).toBe(false);
+    expect(isNavItemVisible(attendance, {
+      permissions: new Set(['attendance.view', 'attendance.edit']),
+      features: allFeatures,
+    })).toBe(true);
+  });
+
   it('shows operational HR links only to users with the matching responsibility', () => {
     const hr = {
       permissions: new Set([
+        'attendance.view',
         'attendance.edit',
+        'leave.view',
         'leave.approve_hr',
         'payroll.periods.view',
         'payroll.statutory.export',
@@ -122,7 +172,7 @@ describe('role-aligned sidebar permissions', () => {
   });
 
   it('keeps secondary pages out of the shared navigation sitemap', () => {
-    const paths = new Set(SECTIONS.flatMap((section) => section.items).map((entry) => entry.to));
+    const paths = new Set(SECTIONS.flatMap((section) => section.items).map((entry) => entry.to.split('?')[0]));
 
     expect(paths).not.toContain('/calendar');
     expect(paths).not.toContain('/hr/training/matrix');
@@ -131,12 +181,25 @@ describe('role-aligned sidebar permissions', () => {
     expect(paths).not.toContain('/quality/capability');
     expect(paths).not.toContain('/maintenance/downtime');
     expect(paths).toContain('/crm/inquiries');
+    expect(paths).toContain('/inventory/mrb');
     expect(paths).not.toContain('/quality/calibration');
     expect(paths).toContain('/hr/recruitment');
     expect(paths).not.toContain('/admin/sod');
     expect(paths).not.toContain('/inventory/scanner');
-    expect(paths).not.toContain('/supply-chain/shipments');
-    expect(paths).not.toContain('/inventory/mrb');
+    expect(paths).toContain('/supply-chain/shipments');
+  });
+
+  it('shows MRB only to users with its record-view permission', () => {
+    const mrb = item('/inventory/mrb');
+    expect(isNavItemVisible(mrb, { permissions: new Set(['inventory.view']), features: allFeatures })).toBe(false);
+    expect(isNavItemVisible(mrb, { permissions: new Set(['inventory.mrb.view']), features: allFeatures })).toBe(true);
+  });
+
+  it('shows inbound shipments to broad or shipment-specific viewers only', () => {
+    const shipments = item('/supply-chain/shipments');
+    expect(isNavItemVisible(shipments, { permissions: new Set(['supply_chain.view']), features: allFeatures })).toBe(true);
+    expect(isNavItemVisible(shipments, { permissions: new Set(['supply_chain.shipments.view']), features: allFeatures })).toBe(true);
+    expect(isNavItemVisible(shipments, { permissions: new Set(['supply_chain.deliveries.view']), features: allFeatures })).toBe(false);
   });
 
   it('uses labels that describe each primary destination', () => {
@@ -150,11 +213,13 @@ describe('role-aligned sidebar permissions', () => {
     expect(item('/mrp/molds').label).toBe('Production Molds');
     expect(item('/inventory/items').label).toBe('Inventory Items');
     expect(item('/inventory/grn').label).toBe('Goods Receipts (GRN)');
+    expect(item('/inventory/mrb').label).toBe('MRB / Quarantine');
     expect(item('/inventory/material-issues').label).toBe('Material Issues');
     expect(item('/inventory/stock-levels').label).toBe('Inventory Stock Levels');
     expect(item('/inventory/transfer-orders').label).toBe('Inventory Transfers');
     expect(item('/inventory/picking').label).toBe('Material Handover');
     expect(item('/supply-chain/deliveries').label).toBe('Outbound Deliveries');
+    expect(item('/supply-chain/shipments').label).toBe('Inbound Shipments');
     expect(item('/supply-chain/fleet').label).toBe('Delivery Fleet');
     expect(item('/quality/inspection-specs').label).toBe('Inspection Specifications');
     expect(item('/quality/inspections').label).toBe('Quality Inspections');
@@ -197,7 +262,7 @@ describe('role-aligned sidebar permissions', () => {
 
   it('shows department approval pages without granting HR or payroll administration', () => {
     const departmentHead = {
-      permissions: new Set(['attendance.ot.approve', 'leave.approve_dept', 'payroll.view']),
+      permissions: new Set(['attendance.view', 'attendance.ot.approve', 'leave.view', 'leave.approve_dept', 'payroll.view']),
       features: allFeatures,
       roleSlug: 'department_head',
     };
@@ -313,6 +378,7 @@ describe('role-aligned sidebar permissions', () => {
         'purchasing.pr.create',
         'purchasing.po.create',
         'purchasing.rfq.view',
+        'purchasing.supplier_listings.view',
         'purchasing.supplier_listings.review',
       ],
       warehouse_staff: [],
@@ -341,6 +407,28 @@ describe('role-aligned sidebar permissions', () => {
       const visible = procurementPaths.filter((path) => isNavItemVisible(item(path), context));
       expect(visible, `${roleSlug} Procurement navigation`).toEqual(expected[roleSlug] ?? []);
     }
+  });
+
+  it('gates Supplier Listings navigation by list-view permission', () => {
+    const supplierListings = item('/purchasing/supplier-listings');
+
+    expect(
+      isNavItemVisible(supplierListings, { permissions: new Set(['purchasing.supplier_listings.review']) }),
+    ).toBe(false);
+    expect(
+      isNavItemVisible(supplierListings, { permissions: new Set(['purchasing.supplier_listings.view']) }),
+    ).toBe(true);
+    expect(isNavItemVisible(supplierListings, {
+      permissions: new Set(['purchasing.supplier_listings.view', 'purchasing.supplier_listings.review']),
+    })).toBe(true);
+    expect(supplierListings.badgeKey).toBe('supplier_listings_pending');
+  });
+
+  it('gates Delivery Fleet and its status badge by supply-chain view permission', () => {
+    const fleet = item('/supply-chain/fleet');
+    expect(isNavItemVisible(fleet, { permissions: new Set() })).toBe(false);
+    expect(isNavItemVisible(fleet, { permissions: new Set(['supply_chain.view']) })).toBe(true);
+    expect(fleet.badgeKey).toBe('vehicles_maintenance');
   });
 
   it('uses shared Dashboard and permission-gates Finance pricing reviews', () => {
@@ -418,6 +506,16 @@ describe('approval navigation boundaries', () => {
     expect(navItemForPermissions(item('/hr/employees'), new Set(['hr.employees.view'])).label).toBe('Employees');
     expect(navItemForPermissions(item('/hr/profile-update-requests'), new Set(['hr.employees.view'])).label).toBe('Profile Change Requests');
     expect(navItemForPermissions(item('/hr/profile-update-requests'), new Set(['hr.profile_updates.finance_review'])).label).toBe('Bank Account Changes');
+  });
+
+  it('attaches the profile-request badge to its review queue', () => {
+    expect(item('/hr/profile-update-requests').badgeKey).toBe('profile_requests');
+    expect(item('/hr/employees').badgeKey).toBeUndefined();
+  });
+
+  it('routes the inquiry badge to the new triage filter', () => {
+    expect(item('/crm/inquiries').badgeKey).toBe('inquiries');
+    expect(item('/crm/inquiries').to).toBe('/crm/inquiries?status=new');
   });
 
   it('keeps default labels while permission data is unavailable', () => {

@@ -133,7 +133,8 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         DB::table('settings')->where('key', 'accounting.default_sales_revenue_account_code')->delete();
         DB::table('accounts')->where('code', '4010')->delete();
 
-        $arClerk = $this->makeArClerk();
+        $arClerk = $this->makeArClerk(canViewDelivery: true);
+        $financeWithoutDeliveryAccess = $this->makeArClerk();
         $user = $this->makeUser();
 
         [$delivery] = $this->seedDeliveryWithLine(
@@ -211,24 +212,51 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
 
         $this->assertNotNull($note, 'AR clerk must receive an invoice.auto_failed notification.');
         $data = json_decode($note->data, true);
-        $this->assertSame('Auto-invoice failed', $data['title']);
-        $this->assertSame('/accounting/invoices/create', $data['link_to']);
-        $this->assertStringNotContainsString($confirmed->delivery_number, $note->data);
-        $this->assertArrayNotHasKey('entity_id', $data);
+        $this->assertSame("Auto-invoice failed: {$confirmed->delivery_number}", $data['title']);
+        $this->assertSame("/supply-chain/deliveries/{$confirmed->hash_id}", $data['link_to']);
+        $this->assertSame('delivery', $data['entity_type']);
+        $this->assertSame($confirmed->hash_id, $data['entity_id']);
+        $this->assertSame(Delivery::class, $data['subject_type']);
+        $this->assertSame((string) $confirmed->id, $data['subject_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'invoice.auto_failed',
+            'notifiable_id' => $financeWithoutDeliveryAccess->id,
+        ]);
+
+        $this->actingAs($arClerk)
+            ->getJson("/api/v1/supply-chain/deliveries/{$confirmed->hash_id}")
+            ->assertOk();
+        $this->actingAs($financeWithoutDeliveryAccess)
+            ->getJson("/api/v1/supply-chain/deliveries/{$confirmed->hash_id}")
+            ->assertForbidden();
 
         app(\App\Common\Services\SettingsService::class)->set(
             'accounting.delivery_confirmed.notification_roles',
-            [$arClerk->role->slug],
+            [$arClerk->role->slug, $financeWithoutDeliveryAccess->role->slug],
         );
         app(NotifyFinanceOnDeliveryConfirmed::class)->handle(new DeliveryConfirmed($confirmed));
         $financeNotice = DB::table('notifications')
-            ->where('type', 'chain.delivery_confirmed')
+            ->where('type', 'invoice.auto_failed')
             ->where('notifiable_id', $arClerk->id)
             ->first();
         $this->assertNotNull($financeNotice);
+        $this->assertSame(1, DB::table('notifications')
+            ->where('type', 'invoice.auto_failed')
+            ->where('notifiable_id', $arClerk->id)
+            ->count());
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.delivery_confirmed',
+            'notifiable_id' => $arClerk->id,
+        ]);
         $financeData = json_decode($financeNotice->data, true);
-        $this->assertSame('/accounting/invoices/create', $financeData['link_to']);
-        $this->assertStringNotContainsString($confirmed->delivery_number, $financeNotice->data);
+        $this->assertSame("/supply-chain/deliveries/{$confirmed->hash_id}", $financeData['link_to']);
+        $this->assertSame('delivery', $financeData['entity_type']);
+        $this->assertSame(Delivery::class, $financeData['subject_type']);
+        $this->assertSame((string) $confirmed->id, $financeData['subject_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.delivery_confirmed',
+            'notifiable_id' => $financeWithoutDeliveryAccess->id,
+        ]);
     }
 
     public function test_invoice_handoff_replay_recovers_after_accounting_is_fixed_without_duplication(): void
@@ -334,7 +362,7 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         return User::factory()->create(['role_id' => $role->id]);
     }
 
-    private function makeArClerk(): User
+    private function makeArClerk(bool $canViewDelivery = false): User
     {
         $role = Role::create([
             'name' => 'AR Clerk Test '.uniqid(),
@@ -346,6 +374,13 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
             ['name' => 'Create Invoices', 'module' => 'accounting'],
         );
         $role->permissions()->syncWithoutDetaching([$perm->id]);
+        if ($canViewDelivery) {
+            $deliveryPermission = Permission::firstOrCreate(
+                ['slug' => 'supply_chain.deliveries.view'],
+                ['name' => 'View Deliveries', 'module' => 'supply_chain'],
+            );
+            $role->permissions()->syncWithoutDetaching([$deliveryPermission->id]);
+        }
 
         return User::factory()->create(['role_id' => $role->id]);
     }

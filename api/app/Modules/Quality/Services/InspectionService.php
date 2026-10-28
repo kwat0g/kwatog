@@ -74,7 +74,7 @@ class InspectionService
         private readonly SettingsService $settings,
     ) {}
 
-    private function listQuery(array $filters): Builder
+    private function listQuery(array $filters, ?User $user = null): Builder
     {
         $q = Inspection::query()
             ->with([
@@ -97,6 +97,13 @@ class InspectionService
         }
         if (($filters['work_queue'] ?? null) === 'to_inspect') {
             $q->toInspect();
+        }
+        if (($filters['signal'] ?? null) === 'awaiting_my_review') {
+            if (! $user?->hasPermission('quality.inspections.review')) {
+                $q->whereRaw('1 = 0');
+            } else {
+                $q->awaitingReviewBy((int) $user->id);
+            }
         }
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -172,9 +179,9 @@ class InspectionService
         return $q;
     }
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
-        $page = $this->listQuery($filters)->orderByDesc('id')
+        $page = $this->listQuery($filters, $user)->orderByDesc('id')
             ->paginate(max(1, min((int) ($filters['per_page'] ?? 20), 100)));
         $finalInspections = $page->getCollection()->filter(fn ($row) => $row->usesFullPieceCapture());
         $summaries = app(WorkOrderFinalInspectionService::class)->summariesForWorkOrders(
@@ -185,10 +192,10 @@ class InspectionService
         return $page;
     }
 
-    public function statusCounts(array $filters): array
+    public function statusCounts(array $filters, ?User $user = null): array
     {
         unset($filters['status'], $filters['work_queue']);
-        $counts = $this->listQuery($filters)->reorder()->selectRaw('status, COUNT(*) AS aggregate')->groupBy('status')->pluck('aggregate', 'status');
+        $counts = $this->listQuery($filters, $user)->reorder()->selectRaw('status, COUNT(*) AS aggregate')->groupBy('status')->pluck('aggregate', 'status');
 
         return [
             'to_inspect' => (int) ($counts['draft'] ?? 0) + (int) ($counts['in_progress'] ?? 0),
@@ -2379,7 +2386,11 @@ class InspectionService
      */
     private function notifyReviewers(Inspection $inspection, User $by): void
     {
-        $makers = array_values(array_unique(array_filter([(int) $by->id, (int) $inspection->inspector_id])));
+        $makers = array_values(array_unique(array_filter([
+            (int) $by->id,
+            (int) $inspection->inspector_id,
+            ...$inspection->resultAuthors()->pluck('user_id')->map(fn ($id): int => (int) $id)->all(),
+        ])));
         $reviewers = app(NotificationService::class)->usersWithPermission('quality.inspections.review')
             ->filter(fn (User $user): bool => $user->hasPermission('quality.inspections.view'))
             ->whereNotIn('id', $makers)
@@ -2389,7 +2400,7 @@ class InspectionService
         $proposed = $inspection->proposed_result instanceof \BackedEnum
             ? $inspection->proposed_result->value
             : (string) $inspection->proposed_result;
-        app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [
+        app(NotificationService::class)->sendForSubject($inspection, $reviewers, 'quality.inspection_awaiting_review', [
             'title' => "Inspection {$inspection->inspection_number} awaits your review",
             'message' => ucfirst(str_replace('_', '-', $stage))." inspection proposes {$proposed}."
                 .' A second person must check it before the result is final.',

@@ -51,10 +51,10 @@ class ShipmentService
 
         TrashedFilter::apply($q, $filters);
 
-        foreach (['status'] as $f) {
-            if (! empty($filters[$f])) {
-                $q->where($f, $filters[$f]);
-            }
+        if (($filters['status'] ?? null) === 'mid_pipe') {
+            $q->midPipe();
+        } elseif (! empty($filters['status'])) {
+            $q->where('status', $filters['status']);
         }
         if (! empty($filters['purchase_order_id'])) {
             // ShipmentController::index() forwards the raw query bag. A (int) cast

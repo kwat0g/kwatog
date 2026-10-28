@@ -33,6 +33,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReturnRequestController extends Controller
@@ -261,6 +262,8 @@ class ReturnRequestController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
+        $request->validate(['signal' => ['sometimes', Rule::in(['pending'])]]);
+
         $q = ReturnRequest::query()
             ->with([
                 'customer:id,name',
@@ -274,6 +277,10 @@ class ReturnRequestController extends Controller
 
         if (ReturnManagementAccess::customerReturnsOnly($request->user())) {
             $q->where('type', ReturnRequestType::CustomerReturn->value);
+        }
+
+        if ($request->query('signal') === 'pending') {
+            $q->awaitingProcessing();
         }
 
         // Filters

@@ -1,0 +1,1030 @@
+{
+  "generatedAt": "2026-10-27T16:02:29.908Z",
+  "baseUrl": "http://127.0.0.1:5174",
+  "role": "admin",
+  "theme": "light",
+  "fixtureRowsRequested": 50,
+  "widths": [
+    375
+  ],
+  "routes": [
+    "/inventory/transfer-orders"
+  ],
+  "serial": true,
+  "rankingMethod": "edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport",
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.",
+  "rankedIssues": [
+    {
+      "route": "/inventory/transfer-orders",
+      "role": "admin",
+      "width": 375,
+      "score": 0,
+      "issues": []
+    }
+  ],
+  "rows": [
+    {
+      "route": "/inventory/transfer-orders",
+      "role": "admin",
+      "theme": "light",
+      "status": 200,
+      "screenshot": "docs/layout/screenshots/before/inventory-transfer-orders/light/dialogs/inventory-transfer-orders-375.png",
+      "tableSampleScreenshots": [],
+      "longTableScreenshots": [],
+      "resizeSample": null,
+      "dialogSample": null,
+      "scheduleDialogSample": null,
+      "inventoryDialogSamples": [
+        {
+          "label": "transfer-create",
+          "screenshot": "docs/layout/screenshots/before/inventory-transfer-orders/light/dialogs/inventory-transfer-orders-375-transfer-create-dialog.png",
+          "visible": true,
+          "theme": "light",
+          "contrastFailures": 0
+        },
+        {
+          "label": "transfer-execute-confirmation",
+          "screenshot": "docs/layout/screenshots/before/inventory-transfer-orders/light/dialogs/inventory-transfer-orders-375-transfer-execute-confirmation-dialog.png",
+          "visible": true,
+          "theme": "light",
+          "contrastFailures": 0
+        },
+        {
+          "label": "transfer-cancel-confirmation",
+          "screenshot": "docs/layout/screenshots/before/inventory-transfer-orders/light/dialogs/inventory-transfer-orders-375-transfer-cancel-confirmation-dialog.png",
+          "visible": true,
+          "theme": "light",
+          "contrastFailures": 0
+        }
+      ],
+      "scheduleBottomSample": null,
+      "url": "/inventory/transfer-orders",
+      "title": "Transfer Orders · Warehouse · ERP",
+      "h1": "Transfer Orders",
+      "browserTimeZone": "UTC",
+      "appliedTheme": "light",
+      "colorScheme": "light",
+      "canvasColor": "#fdfcfa",
+      "bodyTypography": {
+        "fontFamily": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+        "fontSize": 14,
+        "fontWeight": 400,
+        "lineHeight": "21px"
+      },
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "counts": {
+        "buttons": 57,
+        "links": 0,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "tabs": 0
+      },
+      "main": {
+        "left": 0,
+        "right": 375,
+        "top": 48,
+        "bottom": 4318.5625,
+        "width": 375,
+        "height": 4270.5625
+      },
+      "mainContent": {
+        "textLength": 3839,
+        "textSample": "Transfer Orders 50 transfers New transfer 1–50 of 50 Page 1 of 1 TRANSFERS (50) TO-202610-00001 MW-RM-A-01-01 → MW-QC-B-02-03 Pending Oct 1, 2026 TO-202610-0000",
+        "documentTables": 0,
+        "mainTables": 0
+      },
+      "sidebar": {
+        "left": 0,
+        "right": 0,
+        "width": 0
+      },
+      "sidebarClearance": null,
+      "sidebarClearanceByBlock": {
+        "header": null,
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "blocks": {
+        "header": {
+          "left": 20,
+          "right": 355,
+          "top": 48,
+          "bottom": 177,
+          "width": 375,
+          "height": 129
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "flowBlocks": [
+        {
+          "index": 0,
+          "tag": "div",
+          "className": "py-4 border-b border-default bg-canvas px-5",
+          "heading": "Transfer Orders",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 48,
+            "bottom": 177,
+            "width": 375,
+            "height": 129
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": 0,
+          "touchesNext": true,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        },
+        {
+          "index": 1,
+          "tag": "div",
+          "className": "px-5 py-4",
+          "heading": "TO-202610-00001 — RAW-MATERIAL-REFERENCE-000001",
+          "bounds": {
+            "left": 20,
+            "right": 355,
+            "top": 177,
+            "bottom": 4318.5625,
+            "width": 375,
+            "height": 4141.5625
+          },
+          "margin": {
+            "top": "0px",
+            "right": "0px",
+            "bottom": "0px",
+            "left": "0px"
+          },
+          "padding": {
+            "top": "16px",
+            "right": "20px",
+            "bottom": "16px",
+            "left": "20px"
+          },
+          "gapAfter": null,
+          "touchesNext": false,
+          "overlapsNext": false,
+          "horizontalOverflow": false,
+          "verticalOverflow": false
+        }
+      ],
+      "sections": [],
+      "edgeAlignment": {
+        "header": {
+          "reference": "page-content",
+          "leftDelta": 0,
+          "rightDelta": 0,
+          "aligned": true
+        },
+        "filters": null,
+        "toolbar": null,
+        "table": null,
+        "pagination": null
+      },
+      "verticalGaps": {
+        "headerToFilters": null,
+        "filtersToToolbar": null,
+        "toolbarToTable": null,
+        "tableToPagination": null
+      },
+      "horizontalPageOverflow": false,
+      "horizontalPageMaxScroll": 0,
+      "layoutContext": [
+        {
+          "tag": "html",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "body",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-shell min-h-screen bg-canvas text-primary flex flex-col",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "app-content flex flex-1",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "aside",
+          "className": "shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none hidden md:flex w-14",
+          "left": 0,
+          "right": 0,
+          "width": 0,
+          "scrollWidth": 0,
+          "clientWidth": 0,
+          "scrollLeft": 0,
+          "overflowX": "hidden"
+        },
+        {
+          "tag": "main",
+          "className": "app-main flex-1 min-w-0 outline-none",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        },
+        {
+          "tag": "div",
+          "className": "route-transition",
+          "left": 0,
+          "right": 375,
+          "width": 375,
+          "scrollWidth": 375,
+          "clientWidth": 375,
+          "scrollLeft": 0,
+          "overflowX": "visible"
+        }
+      ],
+      "elementsPastViewport": [],
+      "uncontainedElementsPastViewport": [],
+      "rootPseudoElements": [
+        {
+          "pseudo": "::before",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        },
+        {
+          "pseudo": "::after",
+          "content": "none",
+          "position": "static",
+          "left": "auto",
+          "right": "auto",
+          "width": "auto"
+        }
+      ],
+      "horizontalOverflow": [
+        {
+          "tag": "a",
+          "className": "sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-md focus:bg-accent focus:text-accent-fg focus:text-sm",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": false,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 97,
+          "clientWidth": 1,
+          "scrollHeight": 21,
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 97,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
+        },
+        {
+          "tag": "div",
+          "className": "truncate text-2xs text-muted",
+          "horizontal": true,
+          "intentionalHorizontal": true,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "hidden",
+          "overflowY": "hidden",
+          "scrollWidth": 499,
+          "clientWidth": 317,
+          "scrollHeight": 17,
+          "clientHeight": 17,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 499,
+          "maxClientWidth": 317,
+          "maxScrollHeight": 17,
+          "maxClientHeight": 17
+        },
+        {
+          "tag": "div",
+          "className": "flex min-w-0 items-baseline gap-2",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 196,
+          "clientWidth": 110,
+          "scrollHeight": 144,
+          "clientHeight": 144,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 196,
+          "maxClientWidth": 110,
+          "maxScrollHeight": 144,
+          "maxClientHeight": 144
+        },
+        {
+          "tag": "span",
+          "className": "min-w-0 text-caption text-muted",
+          "horizontal": true,
+          "intentionalHorizontal": false,
+          "vertical": false,
+          "insideMain": true,
+          "insideSidebar": false,
+          "overflowX": "visible",
+          "overflowY": "visible",
+          "scrollWidth": 87,
+          "clientWidth": 1,
+          "scrollHeight": 90,
+          "clientHeight": 90,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 87,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 90,
+          "maxClientHeight": 90
+        }
+      ],
+      "verticalScrollContainers": [],
+      "sidebarVerticalScroll": false,
+      "pageVerticalScroll": true,
+      "doubleVerticalScroll": false,
+      "scheduleScrollRegion": null,
+      "table": null,
+      "typography": {
+        "samples": [
+          {
+            "tag": "h1",
+            "className": "font-display text-page-title text-primary break-words",
+            "text": "Transfer Orders",
+            "font": "\"Instrument Serif\", Georgia, serif",
+            "size": 28,
+            "weight": "400",
+            "lineHeight": "36px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Transfer Orders"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted",
+            "text": "50 transfers",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "50 transfers"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
+            "text": "New transfer",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.705882 0.329412 0.164706)",
+            "contrast": 4.83,
+            "count": 2,
+            "examples": [
+              "New transfer",
+              "Execute"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-caption text-muted font-sans tabular-nums",
+            "text": "1–50 of 50",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "1–50 of 50"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
+            "text": "",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 4,
+            "examples": []
+          },
+          {
+            "tag": "span",
+            "className": "text-caption font-sans tabular-nums px-2 text-muted",
+            "text": "Page 1 of 1",
+            "font": "\"Public Sans Variable\", system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Page 1 of 1"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1",
+            "text": "Transfers (50)",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Transfers (50)"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset bg-accent/10 text-accent border border-accent/30 shadow-sm",
+            "text": "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.705882 0.329412 0.164706)",
+            "background": "oklab(0.558905 0.100737 0.0923417 / 0.1)",
+            "contrast": 4.83,
+            "count": 1,
+            "examples": [
+              "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "truncate text-2xs text-muted",
+            "text": "MW-RM-A-01-01 → MW-QC-B-02-03",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "MW-RM-A-01-01 → MW-QC-B-02-03"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Oct 1, 2026",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Oct 1, 2026"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset bg-surface border border-default text-secondary hover:border-subtle hover:text-primary hover:bg-elevated",
+            "text": "TO-202610-00002MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFE",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.290196 0.258824 0.223529)",
+            "background": "color(srgb 0.968627 0.956863 0.937255)",
+            "contrast": 8.99,
+            "count": 49,
+            "examples": [
+              "TO-202610-00002MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFE",
+              "TO-202610-00003MW-RM-A-01-01 → MW-QC-B-02-03CancelledOct 3, 2026",
+              "TO-202610-00004MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 4, 2026"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "truncate text-2xs text-muted",
+            "text": "MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFERENCE",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.44,
+            "count": 49,
+            "examples": [
+              "MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFERENCE",
+              "MW-RM-A-01-01 → MW-QC-B-02-03"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "text-2xs text-muted",
+            "text": "Oct 2, 2026",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.44,
+            "count": 49,
+            "examples": [
+              "Oct 2, 2026",
+              "Oct 3, 2026",
+              "Oct 4, 2026"
+            ]
+          },
+          {
+            "tag": "h3",
+            "className": "text-subsection font-semibold text-primary",
+            "text": "TO-202610-00001 — RAW-MATERIAL-REFERENCE-000001",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 16,
+            "weight": "600",
+            "lineHeight": "24px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.121569 0.105882 0.0862745)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "TO-202610-00001 — RAW-MATERIAL-REFERENCE-000001"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "min-w-0 text-caption text-muted",
+            "text": "Premium injection-grade polypropylene resin",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "400",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Premium injection-grade polypropylene resin"
+            ]
+          },
+          {
+            "tag": "button",
+            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption bg-danger text-accent-fg font-medium border-hairline border-transparent hover:bg-danger/90 active:scale-[0.98] transition-colors",
+            "text": "Cancel",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 13,
+            "weight": "500",
+            "lineHeight": "18px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.992157 0.988235 0.980392)",
+            "background": "color(srgb 0.658824 0.223529 0.184314)",
+            "contrast": 6.22,
+            "count": 1,
+            "examples": [
+              "Cancel"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-2xs uppercase tracking-wider text-muted font-medium mb-1",
+            "text": "From",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "500",
+            "lineHeight": "16.8px",
+            "letterSpacing": "0.6px",
+            "textTransform": "uppercase",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "From",
+              "To"
+            ]
+          },
+          {
+            "tag": "span",
+            "className": "text-muted",
+            "text": "Item: RAW-MATERIAL-REFERENCE-000001 — Premium injection-grade polypropylene resi",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 3,
+            "examples": [
+              "Item: RAW-MATERIAL-REFERENCE-000001 — Premium injection-grade polypropylene resi",
+              "Quantity: 12.500",
+              "Status: Pending"
+            ]
+          },
+          {
+            "tag": "div",
+            "className": "text-muted",
+            "text": "Reason: Replenish location 1",
+            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+            "size": 12,
+            "weight": "400",
+            "lineHeight": "16.8px",
+            "letterSpacing": "normal",
+            "textTransform": "none",
+            "color": "color(srgb 0.419608 0.384314 0.34902)",
+            "background": "rgba(0, 0, 0, 0)",
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Reason: Replenish location 1"
+            ]
+          }
+        ],
+        "combinations": [
+          "\"Instrument Serif\", Georgia, serif|28|400|36px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|13|500|18px|normal|none",
+          "\"Public Sans Variable\", system-ui, sans-serif|13|400|18px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|500|16.8px|0.6px|uppercase",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|12|400|16.8px|normal|none",
+          "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif|16|600|24px|normal|none"
+        ],
+        "below13px": [
+          {
+            "tag": "div",
+            "size": 12,
+            "text": "Transfers (50)",
+            "count": 54,
+            "examples": [
+              "Transfers (50)",
+              "MW-RM-A-01-01 → MW-QC-B-02-03",
+              "MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFERENCE"
+            ]
+          },
+          {
+            "tag": "button",
+            "size": 12,
+            "text": "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026",
+            "count": 50,
+            "examples": [
+              "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026",
+              "TO-202610-00002MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFE",
+              "TO-202610-00003MW-RM-A-01-01 → MW-QC-B-02-03CancelledOct 3, 2026"
+            ]
+          },
+          {
+            "tag": "span",
+            "size": 12,
+            "text": "Oct 1, 2026",
+            "count": 53,
+            "examples": [
+              "Oct 1, 2026",
+              "Oct 2, 2026",
+              "Oct 3, 2026"
+            ]
+          }
+        ],
+        "below12px": [],
+        "contrastBelowAA": []
+      },
+      "buttons": [
+        {
+          "label": "New transfer",
+          "width": 127,
+          "height": 28,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 2,
+          "examples": [
+            "New transfer",
+            "Execute"
+          ],
+          "minWidth": 97,
+          "maxWidth": 127,
+          "minHeight": 28,
+          "maxHeight": 28
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 4,
+          "examples": [
+            "First page",
+            "Previous page",
+            "Next page"
+          ],
+          "minWidth": 28,
+          "maxWidth": 28,
+          "minHeight": 28,
+          "maxHeight": 28
+        },
+        {
+          "label": "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026",
+          "width": 335,
+          "height": 70,
+          "background": "oklab(0.558905 0.100737 0.0923417 / 0.1)",
+          "color": "color(srgb 0.705882 0.329412 0.164706)",
+          "count": 1,
+          "examples": [
+            "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026"
+          ],
+          "minWidth": 335,
+          "maxWidth": 335,
+          "minHeight": 70,
+          "maxHeight": 70
+        },
+        {
+          "label": "TO-202610-00002MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFERENCETransferredOct 2, 2026",
+          "width": 335,
+          "height": 70,
+          "background": "color(srgb 0.968627 0.956863 0.937255)",
+          "color": "color(srgb 0.290196 0.258824 0.223529)",
+          "count": 49,
+          "examples": [
+            "TO-202610-00002MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFERENCETransferredOct 2, 2026",
+            "TO-202610-00003MW-RM-A-01-01 → MW-QC-B-02-03CancelledOct 3, 2026",
+            "TO-202610-00004MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 4, 2026"
+          ],
+          "minWidth": 335,
+          "maxWidth": 335,
+          "minHeight": 70,
+          "maxHeight": 70
+        },
+        {
+          "label": "Cancel",
+          "width": 90,
+          "height": 28,
+          "background": "color(srgb 0.658824 0.223529 0.184314)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Cancel"
+          ],
+          "minWidth": 90,
+          "maxWidth": 90,
+          "minHeight": 28,
+          "maxHeight": 28
+        }
+      ],
+      "recordLinks": [],
+      "dropdowns": [],
+      "buttonTargetsBelow44": [
+        {
+          "label": "New transfer",
+          "width": 127,
+          "height": 28,
+          "background": "color(srgb 0.705882 0.329412 0.164706)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 2,
+          "examples": [
+            "New transfer",
+            "Execute"
+          ],
+          "minWidth": 97,
+          "maxWidth": 127,
+          "minHeight": 28,
+          "maxHeight": 28
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "background": "rgba(0, 0, 0, 0)",
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 4,
+          "examples": [
+            "First page",
+            "Previous page",
+            "Next page"
+          ],
+          "minWidth": 28,
+          "maxWidth": 28,
+          "minHeight": 28,
+          "maxHeight": 28
+        },
+        {
+          "label": "Cancel",
+          "width": 90,
+          "height": 28,
+          "background": "color(srgb 0.658824 0.223529 0.184314)",
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "Cancel"
+          ],
+          "minWidth": 90,
+          "maxWidth": 90,
+          "minHeight": 28,
+          "maxHeight": 28
+        }
+      ],
+      "controls": [
+        {
+          "label": "New transfer",
+          "width": 127,
+          "height": 28,
+          "count": 3,
+          "examples": [
+            "New transfer",
+            "Execute",
+            "Cancel"
+          ],
+          "minWidth": 90,
+          "maxWidth": 127,
+          "minHeight": 28,
+          "maxHeight": 28
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "count": 4,
+          "examples": [
+            "First page",
+            "Previous page",
+            "Next page"
+          ],
+          "minWidth": 28,
+          "maxWidth": 28,
+          "minHeight": 28,
+          "maxHeight": 28
+        },
+        {
+          "label": "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026",
+          "width": 335,
+          "height": 70,
+          "count": 50,
+          "examples": [
+            "TO-202610-00001MW-RM-A-01-01 → MW-QC-B-02-03PendingOct 1, 2026",
+            "TO-202610-00002MW-RAW-MATERIALS-A-01-01-REFERENCE → MW-QUALITY-HOLD-B-02-03-REFERENCETransferredOct 2, 2026",
+            "TO-202610-00003MW-RM-A-01-01 → MW-QC-B-02-03CancelledOct 3, 2026"
+          ],
+          "minWidth": 335,
+          "maxWidth": 335,
+          "minHeight": 70,
+          "maxHeight": 70
+        }
+      ],
+      "controlsBelow44": [
+        {
+          "label": "New transfer",
+          "width": 127,
+          "height": 28,
+          "count": 3,
+          "examples": [
+            "New transfer",
+            "Execute",
+            "Cancel"
+          ],
+          "minWidth": 90,
+          "maxWidth": 127,
+          "minHeight": 28,
+          "maxHeight": 28
+        },
+        {
+          "label": "First page",
+          "width": 28,
+          "height": 28,
+          "count": 4,
+          "examples": [
+            "First page",
+            "Previous page",
+            "Next page"
+          ],
+          "minWidth": 28,
+          "maxWidth": 28,
+          "minHeight": 28,
+          "maxHeight": 28
+        }
+      ],
+      "scrollContextCount": 1
+    }
+  ]
+}

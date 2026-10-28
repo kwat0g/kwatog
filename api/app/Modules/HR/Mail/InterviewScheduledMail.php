@@ -16,12 +16,13 @@ use Illuminate\Queue\SerializesModels;
 
 class InterviewScheduledMail extends QueuedMailable
 {
+    use SerializesModels;
+
     public readonly string $applicantName;
     public readonly string $positionTitle;
     public readonly string $scheduledAt;
     public readonly string $location;
     public readonly string $interviewerName;
-    public readonly string $companyAddress;
     public readonly string $trackingCode;
     private readonly string $applicationHashId;
 
@@ -29,14 +30,23 @@ class InterviewScheduledMail extends QueuedMailable
     public array $snapshot = [];
 
     public function __construct(
-        JobApplication $application,
-        ApplicationInterview $interview,
+        private readonly JobApplication $application,
+        private readonly ApplicationInterview $interview,
         /** @var list<int> */
         public readonly array $fallbackUserIds = [],
     ) {
         $this->onQueue('mail');
         $this->afterCommit();
-        $this->snapshot = self::snapshotForEmail($application, $interview);
+        $this->snapshot = $snapshot = self::snapshotForEmail($application, $interview);
+        $this->applicantName = (string) $snapshot['applicant_name'];
+        $this->positionTitle = (string) $snapshot['position_title'];
+        $this->scheduledAt = $snapshot['scheduled_at']
+            ? Carbon::parse($snapshot['scheduled_at'])->timezone(config('app.timezone'))->format('F j, Y g:i A')
+            : 'To be confirmed';
+        $this->location = (string) $snapshot['location'];
+        $this->interviewerName = (string) $snapshot['interviewer_name'];
+        $this->trackingCode = (string) $snapshot['tracking_code'];
+        $this->applicationHashId = (string) $snapshot['application_hash_id'];
     }
 
     public function envelope(): Envelope
@@ -76,16 +86,23 @@ class InterviewScheduledMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        $snapshot = $this->snapshotData();
+        $application = JobApplication::query()->whereHash($snapshot['application_hash_id'])->first();
+        if ($application === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment interview notification',
-            "The interview email for {$this->applicantName} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+            "The interview email for {$snapshot['applicant_name']} could not be delivered. Review the interview and contact the candidate through an approved channel.",
             [
-                'link_to' => '/hr/recruitment/applications/'.$this->applicationHashId,
+                'link_to' => '/hr/recruitment/applications/'.$snapshot['application_hash_id'],
                 'entity_type' => 'job_application',
-                'entity_id' => $this->applicationHashId,
+                'entity_id' => $snapshot['application_hash_id'],
                 'reason' => 'The candidate interview email job failed in the queue.',
             ],
+            $application,
         );
     }
 

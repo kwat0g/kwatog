@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\CRM;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -500,12 +502,29 @@ class SalesOrderStockFulfillmentTest extends TestCase
         try { app(SalesOrderService::class)->cancel($so, 'Customer changed order.'); $this->fail('Assigned shipment must remain protected.'); }
         catch (BusinessRuleException $error) { $this->assertNotEmpty($error->getMessage()); }
         $this->assertSame('scheduled', $delivery->fresh()->status->value);
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        $deliveryViewerRole = Role::firstOrCreate(['slug' => 'notification_invalid_supply_viewer'], ['name' => 'Notification Invalid Supply Viewer']);
+        $deliveryViewerRole->permissions()->syncWithoutDetaching([
+            Permission::query()->where('slug', 'supply_chain.deliveries.create')->value('id'),
+            Permission::query()->where('slug', 'supply_chain.deliveries.view')->value('id'),
+        ]);
+        $createOnlyRole = Role::firstOrCreate(['slug' => 'notification_invalid_supply_creator'], ['name' => 'Notification Invalid Supply Creator']);
+        $createOnlyRole->permissions()->syncWithoutDetaching([
+            Permission::query()->where('slug', 'supply_chain.deliveries.create')->value('id'),
+        ]);
+        $deliveryViewer = User::factory()->withRole($deliveryViewerRole->slug)->create(['is_active' => true]);
+        $createOnly = User::factory()->withRole($createOnlyRole->slug)->create(['is_active' => true]);
         $inspection->update(['status' => 'failed', 'accepted_quantity' => 0]);
         $result = DB::transaction(fn () => app(DeliveryService::class)->reconcileAutomaticSupply($so, $actor));
         $this->assertCount(1, $result['blockers']);
         $this->assertSame([], $result['retired_delivery_ids']);
         $this->assertSame('scheduled', $delivery->fresh()->status->value);
         $this->assertSame('0.000', app(SalesOrderSupplyService::class)->lineCoverage($line->fresh())['ready_quantity']);
+        $notice = $deliveryViewer->notifications()->where('type', 'delivery.source_review_required')->firstOrFail();
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
+        $this->assertSame(0, $createOnly->notifications()->where('type', 'delivery.source_review_required')->count());
     }
 
     public function test_safety_incoming_budget_is_shared_once_and_stable_on_both_replay_orders(): void

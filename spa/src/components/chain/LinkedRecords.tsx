@@ -23,7 +23,7 @@ export function LinkedRecords({ groups, className }: LinkedRecordsProps) {
  {item.href ? (
  <Link
  to={item.href}
- className="text-sm font-mono tabular-nums text-link hover:text-link-hover hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm"
+ className="inline-flex min-h-11 min-w-11 items-center text-sm font-mono tabular-nums text-link hover:text-link-hover hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm xl:min-h-0 xl:min-w-0"
  >
  {item.id}
  </Link>

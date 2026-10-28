@@ -53,7 +53,12 @@ class SupplierListingService
         $q = SupplierItemListing::query()
             ->with(['item:id,code,name,unit_of_measure', 'vendor:id,name', 'reviewer:id,name']);
 
-        if (! empty($filters['status'])) {
+        if (($filters['id'] ?? null) !== null) {
+            $q->whereKey((int) $filters['id']);
+        }
+        if (($filters['status'] ?? null) === SupplierListingStatus::Pending->value) {
+            $q->pending();
+        } elseif (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['search'])) {
@@ -347,7 +352,7 @@ class SupplierListingService
                 ->filter(fn (User $user): bool => $user->hasPermission('purchasing.supplier_listings.view'))
                 ->values();
 
-            app(NotificationService::class)->send($reviewers, 'supplier_listing_submitted', [
+            app(NotificationService::class)->sendForSubject($listing, $reviewers, 'supplier_listing_submitted', [
                 'title' => 'Supplier listing awaiting review',
                 'message' => "{$vendor?->name} submitted an item listing for {$item?->code}.",
                 'link_to' => '/purchasing/supplier-listings',

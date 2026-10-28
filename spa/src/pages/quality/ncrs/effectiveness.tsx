@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ncrsApi } from '@/api/quality/ncrs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -14,10 +14,12 @@ import type { NcrAction } from '@/types/quality';
 /** CAPA due/overdue queue. The detail page owns the actual verdict form. */
 export default function NcrEffectivenessPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const signal = searchParams.get('signal') === 'awaiting_my_action' ? 'awaiting_my_action' : undefined;
   const [page, setPage] = useState(1);
   const query = useQuery({
-    queryKey: ['quality', 'ncr-effectiveness', page],
-    queryFn: () => ncrsApi.due({ page, per_page: 25 }),
+    queryKey: ['quality', 'ncr-effectiveness', signal, page],
+    queryFn: () => ncrsApi.due({ page, per_page: 25, signal }),
     placeholderData: (previous) => previous,
   });
 
@@ -71,7 +73,7 @@ export default function NcrEffectivenessPage() {
     <div>
       <PageHeader
         title="CAPA effectiveness"
-        subtitle={query.data ? `${query.data.meta.total} due check${query.data.meta.total === 1 ? '' : 's'}` : 'Due and overdue verification checks'}
+        subtitle={query.data ? `${query.data.meta.total} due check${query.data.meta.total === 1 ? '' : 's'}` : signal ? 'Your checks due soon or overdue' : 'Due and overdue verification checks'}
         actions={<Button size="sm" variant="secondary" onClick={() => navigate('/quality/ncrs')}>All NCRs</Button>}
       />
       {query.isLoading && !query.data && <SkeletonTable columns={6} rows={6} />}

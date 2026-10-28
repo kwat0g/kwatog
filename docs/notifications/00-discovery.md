@@ -1,7 +1,7 @@
 # Notification and badge discovery
 
 **Audit date:** 2026-10-25
-**Scope:** static source and configuration review across `api/`, `spa/`, migrations, tests, schedulers, and the running local Compose database. No notification or badge code changed.
+**Scope:** static source and configuration review across `api/`, `spa/`, migrations, tests, schedulers, and the running local Compose database. No notification or badge code changed during discovery; subsequent changes are tracked in `PROGRESS.md`.
 
 ## Evidence and limits
 
@@ -21,15 +21,15 @@ The API contains 23 business/system modules: Accounting, Admin, Assets, Attendan
 - `api/app/Common/Services/NotificationService.php` is the principal dispatcher. `send()` inserts rows into Laravel's `notifications` table, publishes `UserNotificationCreated` after commit, and queues email only when that user's per-type email preference is enabled. `sendInApp()` suppresses email. `sendPortalInApp()` writes rows for active customer/supplier portal users only; it does not broadcast or use internal preferences.
 - The internal envelope is a JSON `data` blob with caller-provided `title`, `message`, `link_to`, and optional `entity_type` / `entity_id`. There is no event/subject schema, template rendering, or central link builder. The service clamps title/message lengths and normalizes malformed values, but it does not check record visibility, exclude the actor, supply fallback recipients, or store a recipient-selection reason.
 - Recipients are deduplicated by internal user ID in `send()`; portal recipients are deduplicated by class and ID. `dedupe_key` is optional. A unique index prevents a second row for the same notifiable and non-null key; duplicate delivery is ignored, not merged into the existing row. Most call sites do not pass a key. `sendDssRecommendationInApp()` has a daily cap and stable dedupe key but has no caller in the current tree; DSS notification publishing is not active.
-- `NotificationService::notify()` is a legacy Laravel-notification wrapper. No external call to this wrapper was found. It applies in-app preferences, then calls `$user->notify()`; direct Laravel notification dispatches elsewhere bypass this wrapper.
+- `NotificationService::notify()` is a legacy Laravel-notification wrapper with no external caller. PR #370 adds `sendLaravelNotification()` for existing Laravel notification objects; it normalizes and deduplicates internal users, then calls `NotificationFacade::send()`. This centralizes transport entry but does not alter audience selection or add subject authorization. The legacy wrapper's `$user->notify()` remains internal to `NotificationService`.
 - `notifications` rows use `type`, polymorphic `notifiable_*`, JSON `data`, `read_at`, timestamps, and optional `dedupe_key`. Legacy fully qualified Laravel class names still have a frontend fallback renderer.
 - One custom notification-like table also exists: `ncr_effectiveness_notifications`. It supports quality corrective-action reminder lifecycle; it is distinct from Laravel's `notifications` table.
 
 ### Direct notification and email paths
 
-- Direct `$user->notify()` sites send mail-only welcome, password-reset, and employee account messages: `Admin/UserAdminController.php:87`, `Auth/PasswordResetService.php:40`, and `HR/UserProvisioningService.php:79,170`. The corresponding `via()` methods return `['mail']`.
-- Direct `Notification::send()` sites send mail-only daily/weekly production summaries and critical alert email: `Console/Commands/SendDailyProductionSummary.php:68`, `SendWeeklyProductionSummary.php:66`, and `Common/Services/AlertEngineService.php:832`. Their notification classes return `['mail']`. Laravel notification classes found: `WelcomeNotification`, `PasswordResetNotification`, `PasswordResetLinkNotification`, `EmployeeWelcomeNotification` and `EmployeePasswordResetNotification` (mail channels); `DailyProductionSummary`, `WeeklyProductionSummary`, and `CriticalAlertEmail` (mail only). No notification class with `toDatabase()` was found; in-app rows are inserted by `NotificationService`.
-- `EmailDeliveryFailureNotifier` converts selected external mail failures to in-app `email.delivery_failed` notices. Callers include recruitment, supplier response/dispatch, scheduled exports, production summaries, critical alerts, and accounting/dunning flows. Selection is explicit user IDs or users with a permission; the wrapper does not check subject visibility.
+- At discovery time, direct `$user->notify()` sites sent mail-only welcome, password-reset, and employee account messages: `Admin/UserAdminController.php:87`, `Auth/PasswordResetService.php:40`, and `HR/UserProvisioningService.php:79,170`. PR #370 routes these four sends through `sendLaravelNotification()`; the corresponding `via()` methods still return `['mail']`.
+- At discovery time, direct `Notification::send()` sites sent mail-only daily/weekly production summaries and critical alert email: `Console/Commands/SendDailyProductionSummary.php:68`, `SendWeeklyProductionSummary.php:66`, and `Common/Services/AlertEngineService.php:832`. PR #370 routes those three sends through `sendLaravelNotification()`. Their notification classes return `['mail']`. Laravel notification classes found: `WelcomeNotification`, `PasswordResetNotification`, `PasswordResetLinkNotification`, `EmployeeWelcomeNotification` and `EmployeePasswordResetNotification` (mail channels); `DailyProductionSummary`, `WeeklyProductionSummary`, and `CriticalAlertEmail` (mail only). No notification class with `toDatabase()` was found; in-app rows are inserted by `NotificationService`.
+- `EmailDeliveryFailureNotifier` converts selected external mail failures to in-app `email.delivery_failed` notices. Callers include recruitment, supplier response/dispatch, scheduled exports, production summaries, critical alerts, and accounting/dunning flows. The wrapper checks subject visibility only when the caller supplies a subject; many legacy paths still do not.
 - Payroll also has a direct `Mail::to(...)->send(new PayslipMail(...))` job path, separate from the `chain.payslip_ready` in-app notice.
 - `notifications:send-digest` runs daily at 07:05. Digest is opt-in via `notification_preferences` type `*`, channel `digest`. `notifications:prune --days=90` removes read rows older than 90 days. Unread rows have no expiry policy in the inspected code.
 
@@ -87,9 +87,9 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/CRM/Services/PriceNegotiationService.php:287` |
 | `api/app/Modules/CRM/Services/PriceNegotiationService.php:289` |
 | `api/app/Common/Services/CustomApprovalEscalationService.php:97` |
-| `api/app/Common/Services/EmailDeliveryFailureNotifier.php:37` |
-| `api/app/Common/Services/ApprovalService.php:367` |
-| `api/app/Common/Services/ApprovalService.php:392` |
+| `api/app/Common/Services/EmailDeliveryFailureNotifier.php:28` |
+| `api/app/Common/Services/ApprovalService.php:382` |
+| `api/app/Common/Services/ApprovalService.php:405` |
 | `api/app/Common/Services/ApprovalEscalationService.php:86` |
 | `api/app/Common/Services/ApprovalEscalationService.php:137` |
 | `api/app/Common/Services/ApprovalEscalationService.php:313` |
@@ -125,20 +125,20 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/Purchasing/Services/AutoPurchaseOrderService.php:209` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseRequestApproved.php:33` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php:32` |
-| `api/app/Modules/Accounting/Services/BillService.php:1070` |
+| `api/app/Modules/Accounting/Services/BillService.php:1042` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php:33` |
 | `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:81` |
-| `api/app/Modules/Accounting/Services/InvoiceService.php:171` |
-| `api/app/Modules/Accounting/Services/InvoiceService.php:331` |
+| `api/app/Modules/Accounting/Services/InvoiceService.php:184` |
+| `api/app/Modules/Accounting/Services/InvoiceService.php:344` |
 | `api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php:259` |
-| `api/app/Modules/Accounting/Services/BudgetTransferService.php:87` |
-| `api/app/Modules/Accounting/Services/BudgetTransferService.php:194` |
+| `api/app/Modules/Accounting/Services/BudgetTransferService.php:89` |
+| `api/app/Modules/Accounting/Services/BudgetTransferService.php:196` |
 | `api/app/Modules/Purchasing/Listeners/AlertOnSupplierDeterioration.php:61` |
-| `api/app/Modules/Accounting/Services/BudgetService.php:135` |
-| `api/app/Modules/Accounting/Services/BudgetService.php:203` |
-| `api/app/Modules/Accounting/Services/ArDunningService.php:192` |
-| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:100` |
-| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:230` |
+| `api/app/Modules/Accounting/Services/BudgetService.php:137` |
+| `api/app/Modules/Accounting/Services/BudgetService.php:205` |
+| `api/app/Modules/Accounting/Services/ArDunningService.php:193` |
+| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:103` |
+| `api/app/Modules/Accounting/Services/InvoicePaymentSubmissionService.php:233` |
 | `api/app/Modules/Production/Services/WorkOrderReworkService.php:167` |
 | `api/app/Modules/Production/Services/WorkOrderReworkService.php:171` |
 | `api/app/Modules/Production/Services/WorkOrderAssignmentService.php:478` |
@@ -165,7 +165,7 @@ The source index below is generated from the `NotificationService` call scan. Ea
 | `api/app/Modules/Payroll/Listeners/NotifyEmployeesOnPayrollFinalized.php:71` |
 | `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeSubmitted.php:38` |
 | `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeDecided.php:29` |
-| `api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php:47` |
+| `api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php:48,50` |
 | `api/app/Modules/Accounting/Listeners/EmailCustomerOnInvoiceFinalized.php:28` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveSubmitted.php:40` |
 | `api/app/Modules/HR/Listeners/NotifyOnSeparationInitiated.php:34` |
@@ -202,13 +202,13 @@ The following lists every direct `Mail::to(...)` call found under `api/app`. The
 | `api/app/Common/Services/NotificationService.php:457` | `$address` | `queue` | `UserNotificationMail` |
 | `api/app/Console/Commands/RunDueScheduledExports.php:176` | `$recipient` | `queue` | `ScheduledExportMail` |
 | `api/app/Modules/Accounting/Listeners/EmailCustomerOnInvoiceFinalized.php:54` | `$recipient` | `queue` | `CustomerInvoiceFinalizedMail` |
-| `api/app/Modules/Accounting/Listeners/EmailCustomerOnOfficialReceiptIssued.php:41` | `$snapshot['customer_email']` | `queue` | `CustomerOfficialReceiptMail` |
+| `api/app/Modules/Accounting/Listeners/EmailCustomerOnOfficialReceiptIssued.php:51` | `$snapshot['customer_email']` | `queue` | `CustomerOfficialReceiptMail` |
 | `api/app/Modules/Accounting/Listeners/EmailPartyOnCreditNoteFinalized.php:43` | `$snapshot['party_email']` | `queue` | `PartyCreditNoteMail` |
 | `api/app/Modules/Accounting/Services/ArDunningService.php:102` | `$email` | `queue` | `InvoiceDunningMail` |
-| `api/app/Modules/B2B/Listeners/EmailSupplierOnInvoiceSubmitted.php:42` | `$snapshot['recipient_email']` | `queue` | `SupplierInvoiceStatusMail` |
+| `api/app/Modules/B2B/Listeners/EmailSupplierOnInvoiceSubmitted.php:44` | `$snapshot['recipient_email']` | `queue` | `SupplierInvoiceStatusMail` |
 | `api/app/Modules/B2B/Listeners/EmailSupplierOnPurchaseOrderCancelled.php:53` | `$snapshot['recipient_email']` | `queue` | `SupplierPurchaseOrderCancelledMail` |
-| `api/app/Modules/B2B/Services/PortalInvitationService.php:158` | `$email` | `queue` | `PortalAccessInvitationMail` |
-| `api/app/Modules/B2B/Services/PortalPasswordResetService.php:92` | `$recipient->email` | `queue` | `PortalPasswordResetMail` |
+| `api/app/Modules/B2B/Services/PortalInvitationService.php:159` | `$email` | `queue` | `PortalAccessInvitationMail` |
+| `api/app/Modules/B2B/Services/PortalPasswordResetService.php:103` | `$recipient->email` | `queue` | `PortalPasswordResetMail` |
 | `api/app/Modules/B2B/Services/SupplierPortalDispatchGateway.php:51` | `$vendorEmail` | `queue` | `SupplierPurchaseOrderMail` |
 | `api/app/Modules/CRM/Listeners/EmailCustomerOnComplaintUpdated.php:42` | `$snapshot['recipient_email']` | `queue` | `CustomerComplaintUpdateMail` |
 | `api/app/Modules/CRM/Listeners/EmailCustomerOnSalesOrderConfirmed.php:51` | `$snapshot['customer_email']` | `queue` | `CustomerSalesOrderConfirmedMail` |
@@ -247,7 +247,7 @@ Cadences below come from `api/routes/console.php`; indirect rows may publish a d
 | `approvals:run-escalations` | Every 6 hours | Sends approval reminders/escalations and custom approval escalations. | `ApprovalEscalationService.php`, `CustomApprovalEscalationService.php`; `console.php:193`. |
 | `ncr:escalate` | Every 15 minutes | Sends NCR escalation notices. | `NcrEscalationService.php:180`; `console.php:199`. |
 | `complaints:check-8d-slas` | Every 15 minutes | Sends 8D SLA notices. | `Complaint8dEscalationService.php:271`; `console.php:205`; current audience list needs scenario proof. |
-| `ar:run-dunning` | Daily 07:00 | Sends invoice dunning email and internal escalation notice. | `ArDunningService.php:102,192`; `console.php:408`; finance/customer boundaries need review. |
+| `ar:run-dunning` | Daily 07:00 | Sends invoice dunning email and internal escalation notice. | `ArDunningService.php:102,193`; `console.php:408`; finance/customer boundaries need review. |
 | `production:send-daily-summary` | Daily 18:00 | Sends production summary email to selected internal users. | `SendDailyProductionSummary.php:68`; `console.php:217`. |
 | `production:send-weekly-summary` | Fridays 18:00 | Sends production summary email to selected internal users. | `SendWeeklyProductionSummary.php:66`; `console.php:221`. |
 | `hr:onboarding-reminders` | Daily 09:00 | Sends HR reminders for stale onboarding. | `OnboardingService.php:231`; `console.php:229`. |
@@ -272,15 +272,15 @@ The `ShouldBroadcast` inventory includes: `UserNotificationCreated`, `Permission
 
 ## Sidebar and navigation discovery
 
-The Phase 0 capture of the internal ERP sidebar is `spa/src/components/layout/Sidebar.tsx`, permission/feature gated by frontend metadata. It recorded 73 internal destinations; 22 carried a badge key. Supplier/customer portals define 19 destinations total. Employee self-service has a six-item conditional mobile bottom navigation; factory floor has two tabs; maintenance mobile has one tab. The three compact shells do not render badge counters. Later implementation deltas are listed below the baseline inventory.
+The Phase 0 capture of the internal ERP sidebar is `spa/src/components/layout/Sidebar.tsx`, permission/feature gated by frontend metadata. It recorded 73 internal destinations; 22 carried a badge key. Current code has 74 destinations and 25 badge-bearing items: PR #342 attaches `inquiries`, PR #367 adds Budget Transfers, and PR #517 adds the Attendance missing-time-out badge. Supplier/customer portals define 19 destinations total. Employee self-service has a six-item conditional mobile bottom navigation; factory floor has two tabs; maintenance mobile has one tab. The three compact shells do not render badge counters. Later implementation deltas are listed below the baseline inventory.
 
-`BadgeService` is the backend badge source, registered at `GET /dashboards/badges`. It defined 29 count keys at capture; 22 were wired to internal sidebar items. The current implementation branch wires 23. Counts are cached per user (default 30 seconds; setting-bounded), use one closure/query per active key, and trigger global version invalidation plus an empty `BadgesChanged` private-channel ping for observed model writes. SPA polling is 60 seconds and pauses in background. StockLevel changes are intentionally not observed; low-stock relies on TTL/poll.
+`BadgeService` is the backend badge source, registered at `GET /dashboards/badges`. It defined 29 count keys at capture; 22 were wired to internal sidebar items. Current code wires 25. Counts are cached per user (default 30 seconds; setting-bounded), use one closure/query per active key, and trigger global version invalidation plus an empty `BadgesChanged` private-channel ping for observed model writes. SPA polling is 60 seconds and pauses in background. StockLevel changes are intentionally not observed; low-stock relies on TTL/poll.
 
 Current visual behavior: one numeric badge per nav item; counts over 99 render as `99+`; no signal chips/popovers. Collapsed item badges remain visible. Collapsed module groups sum child counts and show the highest current severity; the summary is in a title/ARIA label. Mobile uses the same one-badge rendering. There is no signal legend or global system-notice strip in the main shell; alerts, Action Center, and DSS have separate screens.
 
 The Phase 0 internal destination/badge-key inventory is below, followed by its implementation delta. `—` means no badge key.
 
-**Phase 0 internal item count:** 73; **current count:** 74; **baseline items with badge keys:** 22; **current items with badge keys:** 23.
+**Phase 0 internal item count:** 73; **current count:** 74; **baseline items with badge keys:** 22; **current items with badge keys:** 25.
 
 | Path | Label | Permission gate | Feature gate | Badge key |
 | --- | --- | --- | --- | --- |
@@ -298,7 +298,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/crm/complaints` | `Customer Complaints` | `crm.complaints.view` | `crm` | `open_complaints` |
 | `/return-management` | `Returns (RMA)` | `return_management.view` | `return_management` | `pending_returns` |
 | `/return-management/cases` | `Problem Reports` | `return_management.view` | `return_management` | — |
-| `/production/work-orders` | `Production Work Orders` | `production.work_orders.view` | `production` | `work_orders` |
+| `/production/work-orders` | `Production Work Orders` | `production.view` (API route group) + `production.work_orders.view` | `production` | `work_orders_awaiting_confirmation`, `work_orders`, `work_orders_due_soon`, `work_orders_paused` |
 | `/production/schedule` | `Production Schedule (Gantt)` | `production.schedule.view` | `production` | — |
 | `/production/routings` | `Production Routings` | `production.routings.view` | `production` | — |
 | `/mrp/plans` | `MRP Plans` | `mrp.plans.view` | `mrp` | `mrp_plans` |
@@ -310,7 +310,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/purchasing/purchase-requests` | `Purchase Requests` | `purchasing.view` | `purchasing` | `purchase_requests` |
 | `/purchasing/rfqs` | `Supplier RFQs` | `purchasing.rfq.view` | `purchasing` | — |
 | `/purchasing/approved-suppliers` | `Approved Suppliers` | `purchasing.po.create` | `purchasing` | — |
-| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.review` | `purchasing` | — |
+| `/purchasing/supplier-listings` | `Supplier Listings` | `purchasing.supplier_listings.view` | `purchasing` | `supplier_listings_pending` |
 | `/inventory/items` | `Inventory Items` | `inventory.view` | `inventory` | `low_stock` |
 | `/inventory/uoms` | `Units of Measure` | `inventory.items.manage` | `inventory` | — |
 | `/inventory/grn` | `Goods Receipts (GRN)` | `inventory.view` | `inventory` | `pending_grn` |
@@ -321,7 +321,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/inventory/transfer-orders` | `Inventory Transfers` | `inventory.adjust` | `inventory` | — |
 | `/inventory/picking` | `Material Handover` | `inventory.picking.view` | `inventory` | — |
 | `/supply-chain/deliveries` | `Outbound Deliveries` | any: supply_chain.view, supply_chain.deliveries.view | `supply_chain` | `deliveries` |
-| `/supply-chain/fleet` | `Delivery Fleet` | `supply_chain.view` | `supply_chain` | — |
+| `/supply-chain/fleet` | `Delivery Fleet` | `supply_chain.view` | `supply_chain` | `vehicles_maintenance` |
 | `/quality/inspection-specs` | `Inspection Specifications` | `quality.specs.view` | `quality` | — |
 | `/quality/inspections` | `Quality Inspections` | `quality.inspections.view` | `quality` | `pending_inspections` |
 | `/quality/ncrs` | `Nonconformance Reports (NCRs)` | `quality.ncr.view` | `quality` | `ncrs` |
@@ -340,7 +340,7 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 | `/hr/profile-update-requests` | `Bank Account Changes` | any: hr.employees.view, hr.profile_updates.finance_review | `hr` | — |
 | `/hr/employees` | `Employees` | any: hr.employees.view, hr.salary_adjustments.view | `hr` | `profile_requests` |
 | `/hr/departments` | `Departments` | `hr.departments.view` | `hr` | — |
-| `/hr/attendance` | `Attendance & DTR` | any: attendance.edit, attendance.import, attendance.ot.approve | `attendance` | — |
+| `/hr/attendance` | `Attendance & DTR` | `attendance.view` AND any: `attendance.edit`, `attendance.import`, `attendance.ot.approve` | `attendance` | `missing_time_out` |
 | `/hr/attendance/overtime` | `Overtime` | `attendance.ot.approve` | `attendance` | `overtime` |
 | `/hr/leaves` | `Leave Management` | any: leave.approve_dept, leave.approve_hr, leave.types.manage | `leave` | `leaves` |
 | `/payroll/periods` | `Payroll Processing` | `payroll.periods.view` | `payroll` | `payroll` |
@@ -361,7 +361,13 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 
 ### Post-discovery implementation delta
 
-Draft PR [#367](https://github.com/kwat0g/kwatog/pull/367) adds `/budgeting/transfers` (`Budget Transfers`), shown to users with `budgeting.view` or `budgeting.approve`, under the `budgeting` feature. Its `pending_transfers` badge opens `?status=pending&actionable=1`; the badge and filter share the same pending-approval scope. The original 73-destination, 22-badge-key counts above remain the Phase 0 baseline.
+PR #342 attaches `inquiries` to `/crm/inquiries?status=new`. PR #367 adds `/budgeting/transfers` (`Budget Transfers`), shown to users with `budgeting.view` or `budgeting.approve`, under the `budgeting` feature; it merged as `5364a1b0`. Its `pending_transfers` badge opens `?status=pending&actionable=1`; the badge and filter share the same pending-approval scope. PR #369 aligns `overdue_bills` with the Bills page's existing `?overdue=1` filter. The original 73-destination, 22-badge-key counts above remain the Phase 0 baseline.
+
+PR [#374](https://github.com/kwat0g/kwatog/pull/374) adds the `pending_budgets` click-through to `/budgeting?signal=awaiting_my_approval`. The original badge counted every submitted budget; the new badge and filter share `Budget::scopeAwaitingApprovalFor()`, which follows `BudgetService`'s active direct/delegated approver and maker-checker role rules. The transfer queue remains a separate signal and destination.
+
+Draft PR [#375](https://github.com/kwat0g/kwatog/pull/375) corrects both budget and transfer action-notice audiences. They now apply the same per-record actionable scopes as their lists and badges, excluding a delegate when their delegator's role matches the submitter's role.
+
+The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirmation()` with `/crm/sales-orders?signal=awaiting_confirmation`. Workflow source shows that customer-sent drafts remain `draft` but set `customer_confirmation_requested_at`; unsent drafts are not actionable confirmation work. The scope includes those sent drafts, `awaiting_confirmation`, and `delivery_negotiation` records, and excludes soft-deleted rows through the model's default scope.
 
 | Shell | Path | Label |
 | --- | --- | --- |
@@ -387,11 +393,11 @@ Draft PR [#367](https://github.com/kwat0g/kwatog/pull/367) adds `/budgeting/tran
 
 **Other navigation shells:** employee self-service bottom bar: `/self-service` (always), `/self-service/work-orders` (production feature), `/self-service/dtr` (attendance feature), `/self-service/leave` (leave feature), `/self-service/payslips` (payroll feature plus `payroll.view`), `/self-service/me` (always). Factory floor: `/factory`, `/factory/qc`. Maintenance mobile: `/maintenance/mobile`. These use no numeric badges.
 
-### Existing badge definitions
+### Badge definitions at the discovery baseline
 
-The 29 backend keys and their current meanings are defined in `api/app/Modules/Dashboard/Services/BadgeService.php`:
+The discovery snapshot contained 32 backend keys. Current `BadgeService` defines 49 keys; the 17 later keys are listed after this baseline table.
 
-| Key | Current count definition |
+| Key | Count definition captured at discovery |
 | --- | --- |
 | `approvals` | `ApprovalRecord` current/pending rows for the user's role or active delegated roles; no source-record scope filter here. |
 | `action_center` | `ActionCenterService::for($user)['summary']['total']`. |
@@ -406,10 +412,13 @@ The 29 backend keys and their current meanings are defined in `api/app/Modules/D
 | `training_expiry` | Employee training status `expired`. |
 | `training_upcoming` | Non-cancelled/non-expired training scheduled within 14 days or completed certification expiring within 30 days. |
 | `open_postings` | Job postings with status `open`. |
-| `work_orders` | Work orders `confirmed`/`in_progress` with `planned_end < now()`. |
+| `work_orders` | Work orders in `confirmed`/`in_progress` with non-null `planned_end < now()` in app timezone (`Asia/Manila` by default); exclude soft-deleted rows. PR #388 shares `WorkOrder::scopeOverdue()` with `signal=overdue`; badge requires `production.view` and `production.work_orders.view`. |
+| `work_orders_awaiting_confirmation` | `planned` work orders only; no per-work-order confirmer assignment exists. PR #388 shares `WorkOrder::scopeAwaitingConfirmation()` with `signal=release`; badge requires `production.view`, `production.work_orders.view`, and `production.wo.confirm`. |
+| `work_orders_due_soon` | `planned`, `confirmed`, `in_progress`, or `paused` with non-null `planned_end` between now and the end of the date `production.work_orders.due_soon_days` calendar days ahead (default 3; admin configurable 0–365); exclude soft-deleted rows. PR #388 shares `WorkOrder::scopeDueSoon()` with `signal=due_soon`; badge requires `production.view` and `production.work_orders.view` after PR #389. |
+| `work_orders_paused` | `paused` work orders only; exclude soft-deleted rows. PR #388 shares `WorkOrder::scopePaused()` with `signal=paused`; badge requires `production.view`, `production.work_orders.view`, and `production.work_orders.lifecycle`. |
 | `deliveries` | Deliveries in `loading` or `in_transit`. |
 | `unread` | Current user's unread Laravel notifications. |
-| `pending_so` | Sales orders in `draft`, `awaiting_confirmation`, or `delivery_negotiation`. |
+| `pending_so` | Sales orders in `awaiting_confirmation` or `delivery_negotiation`, plus drafts with `customer_confirmation_requested_at`; excludes unsent drafts and soft-deleted rows. Badge and `signal=awaiting_confirmation` list share `SalesOrder::scopeAwaitingConfirmation()`. |
 | `inquiries` | Contact inquiries in `new` or `in_progress`. |
 | `open_complaints` | Complaints outside `resolved`, `closed`, and `cancelled`. |
 | `pending_inspections` | Inspections in `draft` or `in_progress`. |
@@ -419,15 +428,37 @@ The 29 backend keys and their current meanings are defined in `api/app/Modules/D
 | `mrp_plans` | Active MRP plans with `shortages_found > 0`. |
 | `pending_returns` | Return requests outside `completed`, `rejected`, and `cancelled`; customer-service scope can restrict to customer returns. |
 | `draft_invoices` | Invoices in `draft`. |
-| `overdue_bills` | Unpaid/partial bills with `due_date < today()` in app timezone. |
+| `overdue_bills` | Unpaid/partial bills with `due_date < today()` in app timezone (default `Asia/Manila`); due today is not overdue. |
 | `pending_budgets` | Budgets with status `submitted`. |
-| `pending_transfers` | Phase 0 baseline counted all transfers with status `pending`; the current branch scopes this to pending transfers the user can approve under the direct/delegated maker-checker rule. |
+| `pending_transfers` | Phase 0 baseline counted all transfers with status `pending`; current scope counts pending transfers the user can approve under the direct/delegated maker-checker rule. |
+
+### Current definitions added after the discovery snapshot
+
+| Key | Current count definition |
+| --- | --- |
+| `overdue_purchase_orders` | Visible receivable purchase orders with expected delivery date before Manila today and at least one line with quantity remaining. `PurchaseOrderAccessPolicy` applies route visibility. |
+| `purchase_order_actions` | Purchase orders visible to the user and currently actionable by them: current approval step, an approved order they can send, or a pending supplier response they can resolve. |
+| `supplier_listings_pending` | `SupplierItemListing::pending()` shared reviewer queue; requires list-view access and direct or active delegated review permission. No per-reviewer assignment exists. |
+| `maintenance_wo_unassigned` | Open/assigned/in-progress Maintenance work orders with no assignee; requires Maintenance view and assignment permission. |
+| `out_of_stock` | Active Items with usable quantity at or below zero, from `InventoryDashboardService`; positive counts use critical severity. |
+| `overdue_ncrs` | Open/in-progress NCRs at or beyond the shared severity SLA from `NcrSlaService::overdueQuery()`. |
+| `calibration_overdue` | Calibration records with stored status `overdue`; positive counts use critical severity. |
+| `calibration_due` | Calibration records with stored status `due`, recomputed by the daily due-status command. |
+| `effectiveness_due` | Current user's corrective/preventive actions on closed NCRs, pending verification or ineffective, with a next check due by today plus the configured warning window. |
+| `inspection_reviews` | Inspections returned by `Inspection::awaitingReviewBy(current user)`; requires list and review permissions and excludes the inspector/result authors. |
+| `unpaid_invoices` | Open invoices with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
+| `overdue_invoices` | Unpaid invoices with due date before today in `Asia/Manila`; date-only boundary. |
+| `payment_review_invoices` | Open positive-balance invoices with a pending customer payment submission; requires invoice view and collection permission, and excludes `system_admin`. |
+| `unpaid_bills` | Open bills with positive stored balance; excludes draft, paid, cancelled, and zero-balance rows. |
+| `due_soon_bills` | Unpaid/partial bills with positive balance due today through three calendar days ahead, inclusive. |
+| `vehicles_maintenance` | Non-archived fleet vehicles with `VehicleStatus::Maintenance`; status is filtered by the same `status=maintenance` query on the Fleet page. |
+| `missing_time_out` | Attendance rows with time in, no time out, and date before Manila today; the list query applies the same HR/company or department row scope and excludes archived rows. Employee self-service is excluded pending F-84 policy review. |
 
 ## Candidate signal data discovery
 
-Status enums and due/state columns exist across the modules below. The candidate definitions are not approved policy; they are the proposed data-backed review set. Exact excluded/terminal status classification must be locked against each enum and destination list during Phase 2/implementation.
+Status enums and due/state columns exist across the modules below. Phase 2 approved the proposed defaults; implementation records candidates that remain deferred where status, audience, or destination filters are unverified.
 
-| Module | Relevant data found | Candidate signals to evaluate | Current sidebar badge |
+| Module | Relevant data found | Candidate signals to evaluate | Sidebar badge at discovery snapshot |
 | --- | --- | --- | --- |
 | Accounting | Invoice, bill, payment, journal, credit-note, and accounting-period status enums; due dates and payment submission rows | AR unpaid/partial/overdue/due soon; AP unpaid/partial/overdue; submitted payment review; draft/unposted invoice; unreconciled or failed posting; period close/reopen | Draft invoice, overdue bills |
 | Admin | Active/locked users, permission overrides, audit, backup operations, queue/failed-job health | Locked accounts; pending/expired invites; failed jobs, queue wait, backup failure; expiring system credential/certificate if stored | None |
@@ -440,16 +471,16 @@ Status enums and due/state columns exist across the modules below. The candidate
 | DSS | Recommendation status/severity, snooze and outcome fields | Open critical/high-confidence recommendation assigned to the user's eligible audience; no publisher currently wired | Decision Center has no count |
 | Forecasting | Forecasting module exists; no sidebar badge or status enum was found in the status-enum scan | Stale forecast run or decision awaiting owner, only if a reliable freshness/status field and destination filter exist | None |
 | HR | Employee, training, job, profile update, salary adjustment, clearance, training matrix and review statuses | Training/cert expiry; recruitment queue/bottleneck; profile/salary change approval; separation clearance tasks; contract/regularization if a reliable end date exists | Payroll-side profile requests only (currently attached to Employees item); no training/recruitment badge |
-| Inventory | Stock level, item reorder, GRN, MRB, reservations, stock adjustment/count, transfer, material issue, cost review statuses | Low/out of stock; material shortage/reservation block; GRN incoming QC/putaway; MRB disposition; stock-count/adjustment approval; receipt awaiting inspection | Low stock, pending GRN |
+| Inventory | Stock level, item reorder, GRN, MRB, reservations, stock adjustment/count, transfer, material issue, cost review statuses | Low/out of stock; material shortage/reservation block; GRN incoming QC; MRB disposition; stock-count/adjustment approval; receipt awaiting inspection. Putaway is deferred: no putaway status, stage, or remaining quantity exists. The pending-GRN badge is limited to `inventory.view` + `inventory.grn.create`; QC action is represented by the separate Quality inspection queue. | Low stock, pending GRN |
 | Landing | Contact inquiry and newsletter statuses | New/untriaged contact inquiry; newsletter failures only if actionable internal owner exists | None |
 | Leave | `LeaveRequestStatus`: `pending_dept`, `pending_hr`, `approved`, `rejected`, `cancelled`; no `returned` state found | Pending current department or HR approval; rejected outcome only for requester if policy wants a history signal; no deadline field confirmed | Leaves |
 | Loans | Loan and write-off statuses; employee-linked request ownership | Pending current loan/write-off approval; requester outcome; repayment exception only with actionable data | None |
-| Maintenance | Maintenance work-order statuses, preventive maintenance generation and machine breakdown events | Unassigned work orders; open breakdown; PM due/overdue; part request handoff; maintenance SLA | Open maintenance WOs |
+| Maintenance | Maintenance work-order statuses, preventive maintenance generation and machine breakdown events; PM schedules use calendar days, machine running hours, or mold shots | Unassigned work orders; open breakdown; PM due/overdue; part request handoff; maintenance SLA. Generation checks day, runtime, and shot intervals separately. The `overdue_preventive` queue and DSS detector use only linked schedule `next_due_at`, while the dashboard due-schedules widget counts active dates through its horizon without excluding generated work orders. The work-order schema has no general due date or waiting-parts state. | Open maintenance WOs |
 | MRP | Run/plan, machine and mold statuses; shortage count and shot limits | Active shortage; failed/stale run; machine down/shot limit; plan needs review | Active shortage plans |
 | Payroll | Period, adjustment, bank file, GL handoff statuses and restricted payroll scopes; payslip email status also persists `failed` | Pending my approval/review; `manual_required` bank/GL handoff; failed payslip email for the affected employee; no `failed` value exists in bank/GL enums; never a broad HR/finance payroll count | Draft/processing periods |
-| Production | Work-order, schedule, operation, late-report and receipt handoff statuses; planned start/end | Pending release; overdue/starting soon; paused/blocked; missing output confirmation; material block; staffing assignment change | Overdue work orders |
+| Production | Work-order, schedule, operation, late-report and receipt handoff statuses; planned start/end | Planned confirmation; overdue/starting soon; paused; missing output confirmation; material block; staffing assignment change | Four Work Order signals: awaiting confirmation, overdue, due soon, and paused. No site/line/assignee filter exists. PR #389 aligns SPA/sidebar gates and overdue/due-soon badge gates with the API parent permission. Seeded-role and override cases have focused tests. |
 | Purchasing | PR/PO, RFQ, supplier response/listing/dispatch statuses; approval records | Pending current approval; supplier response/quote due; unfulfilled/late PO; auto-PO review; supplier listing review; inbound receipt and failed conversion | PR approvals only |
-| Quality | Inspection, NCR, effectiveness, calibration, PPAP statuses and due dates | Inspection awaiting completion/review; rejected lot; open/overdue NCR/CAPA/effectiveness; calibration due/expired; customer complaint response SLA | Pending inspections, open NCRs |
+| Quality | Inspection, NCR, effectiveness, calibration, PPAP statuses and due dates | Inspection awaiting completion/review; held MRB material; open/overdue NCR/CAPA/effectiveness; calibration due/expired; customer complaint response SLA. No aggregate rejected-lot state or list filter exists; traceability is a point search. | Pending inspections, open NCRs |
 | ReturnManagement | Return request/case, inspection handoff, restock and supplier-return state | Open customer/supplier return needing current owner; overdue inspection/credit; rejected/returned outcome for requester; only fields supported by current return implementation | Pending returns |
 | SupplyChain | Delivery, shipment, vehicle and delivery handoff statuses; delivery date/attempts | Delivery planned/late/in transit/awaiting customer acknowledgement; failed delivery/depot count; shipment clearance/receipt; vehicle issue | Loading/in-transit deliveries |
 

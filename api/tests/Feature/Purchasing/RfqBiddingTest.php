@@ -510,7 +510,8 @@ final class RfqBiddingTest extends TestCase
         RequestForQuote::query()->sole()->forceFill(['closes_at' => now()->subMinute()])->save();
         $other = $this->roleUser('department_head');
 
-        $this->actingAsFresh($other)->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
+        $this->actingAsFresh($other);
+        $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
 
         $this->assertSame('open', RequestForQuote::query()->sole()->status->value);
     }
@@ -573,7 +574,8 @@ final class RfqBiddingTest extends TestCase
         Mail::fake();
 
         $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->once()->withArgs(fn ($audience, string $type): bool => $type === 'purchasing.rfq_closed'
+        $notifications->shouldReceive('sendForSubject')->once()->withArgs(fn (RequestForQuote $subject, $audience, string $type): bool => $subject->is($model)
+            && $type === 'purchasing.rfq_closed'
             && $audience->pluck('id')->all() === [$this->buyer->id]);
         $listener = new DeliverRfqLifecycleNotification($notifications);
 

@@ -142,7 +142,7 @@ export function PageHeader(props: PageHeaderProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {backTo && (
-          <a href={backTo} onClick={handleBackClick} className="inline-flex items-center gap-1 text-caption text-muted hover:text-primary mb-1">
+            <a href={backTo} onClick={handleBackClick} className="inline-flex min-h-11 items-center gap-1 text-caption text-muted hover:text-primary mb-1 xl:min-h-0">
               <LuArrowLeft size={11} />
               {backLabel ?? 'Back'}
             </a>

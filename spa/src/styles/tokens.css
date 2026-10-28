@@ -19,6 +19,10 @@
   --space-12: 48px;
   --space-16: 64px;
   --page-gutter: 16px;
+  --page-content-narrow: 72ch;
+  --touch-target-min: 44px;
+  --form-grid-gap: var(--space-4);
+  --detail-layout-gap: var(--space-4);
   --topbar-height: 48px;
 
   /* ─── Type scale ─── */
@@ -32,6 +36,16 @@
   --font-size-table-header: 14px;
   --font-size-table-cell: 14px;
   --font-size-code: 14px;
+  --line-height-page-title: 36px;
+  --line-height-section-title: 28px;
+  --line-height-subsection: 24px;
+  --line-height-body: 1.5;
+  --line-height-body-small: 19px;
+  --line-height-caption: 18px;
+  --line-height-label: 18px;
+  --line-height-table-header: 18px;
+  --line-height-table-cell: 20px;
+  --line-height-code: 18px;
   --font-weight-body: 400;
 
   /* ─── Canvas ─── */
@@ -159,8 +173,9 @@
   --radius-full: 9999px;
 
   /* ─── Density — office. [data-theme='floor'] overrides all three. ─── */
-  --row-height: 48px;
+  --row-height: 36px;
   --row-height-compact: 36px;
+  --row-height-comfortable: 48px;
   --row-height-spacious: 56px;
   --hit-min: 28px;
   --font-size-body: 14px;
@@ -404,6 +419,9 @@
 
   /* Density — the only palette that raises these. */
   --row-height: 48px;
+  --row-height-compact: 44px;
+  --row-height-comfortable: 48px;
+  --row-height-spacious: 56px;
   --hit-min: 44px;
   --font-size-body: 15px;
 }

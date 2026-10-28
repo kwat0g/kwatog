@@ -582,6 +582,8 @@ export interface InventoryDashboard {
   total_stock_value: string;
   items_below_reorder: number;
   items_critical: number;
+  items_low_stock: number;
+  items_out_of_stock: number;
   pending_grns: number;
   low_stock_alerts: Array<{
     item_id: string;

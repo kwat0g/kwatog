@@ -109,6 +109,17 @@ class PurchaseOrderService
                 [now()->toDateString()],
             )->whereIn('status', PurchaseOrderStatus::open());
         }
+        if (($filters['signal'] ?? null) === 'receipt_overdue') {
+            $q->receiptOverdue();
+        }
+        if (($filters['signal'] ?? null) === 'action') {
+            if ($user) {
+                $actionType = ($filters['action_type'] ?? '') !== '' ? $filters['action_type'] : null;
+                $q = $this->visibility->awaitingMyAction($q, $user, $actionType);
+            } else {
+                $q->whereRaw('1 = 0');
+            }
+        }
         if (! empty($filters['from'])) {
             $q->whereDate('date', '>=', $filters['from']);
         }

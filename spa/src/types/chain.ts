@@ -73,11 +73,6 @@ export interface ApprovalStep {
   overdue_hours?: number | null;
 }
 
-/* ──────────────────────────────────────────────────────────────────
- * Series C — Task C4. Real-time chain progress broadcast.
- * Mirrors ChainStepAdvanced::broadcastWith() on the API.
- * ────────────────────────────────────────────────────────────────── */
-
 export type ChainEntityType =
   | 'sales_order'
   | 'work_order'
@@ -86,16 +81,6 @@ export type ChainEntityType =
   | 'grn'
   | 'bill'
   | 'invoice';
-
-export interface ChainStepEvent {
-  entity_type: ChainEntityType;
-  entity_id: string;
-  doc_number: string;
-  new_status: string;
-  active_step: string;
-  completed_steps: string[];
-  actor_name: string | null;
-}
 
 /* ──────────────────────────────────────────────────────────────────
  * Series C — Task C5. Chain bottleneck dashboard widget payload.

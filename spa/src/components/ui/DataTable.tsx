@@ -5,18 +5,20 @@ import {
   useRef,
   useMemo,
   useState,
+  useId,
   type ReactNode,
   type KeyboardEvent,
 } from 'react';
 import { LuArrowDown, LuArrowUp, LuChevronDown } from '@/lib/icons';
 import { cn } from '@/lib/cn';
+import { horizontalScrollEdges } from '@/lib/horizontalScrollEdges';
 import { focusRingInset } from '@/lib/focus';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import { RowContextMenu, type RowContextMenuItem } from './RowContextMenu';
 import { useTablePrefsStore, type TableDensity } from '@/stores/tablePrefsStore';
 import { DataTableToolbar } from './DataTableToolbar';
-import { DataTablePagination } from './DataTablePagination';
+import { TablePagination } from './DataTablePagination';
 import { EmptyState } from './EmptyState';
 import { SkeletonBlock } from './Skeleton';
 import type { PaginationMeta } from '@/types';
@@ -37,6 +39,12 @@ export interface Column<T> {
   primary?: boolean;
   /** Tailwind width class (e.g. `w-32`, `min-w-[160px]`). */
   className?: string;
+  /** Optional width and resize bounds in CSS pixels. */
+  width?: number;
+  minWidth?: number;
+  maxWidth?: number;
+  /** Set false for utility columns without a meaningful resize boundary. */
+  resizable?: boolean;
   /** Hide by default; user can show via "Customize columns". */
   defaultHidden?: boolean;
   /** Series X / Task X4 — pin column to the left edge so it stays visible on horizontal scroll. */
@@ -84,7 +92,7 @@ export interface DataTableProps<T> {
 
   /**
    * Stable key for persisting per-user preferences (density, hidden columns).
-   * When omitted, prefs are session-only via local component state.
+   * When omitted, density uses an automatic route-scoped key; column visibility stays opt-in.
    */
   tableKey?: string;
   /** Renders an inline expandable detail row when set. The chevron column appears at the start. */
@@ -121,7 +129,7 @@ export interface DataTableProps<T> {
 
 const rowHeight: Record<TableDensity, string> = {
   compact: 'h-row-compact',
-  default: 'h-row',
+  default: 'h-row-comfortable',
   spacious: 'h-row-spacious',
 };
 
@@ -136,6 +144,20 @@ const alignClass: Record<ColumnAlign, string> = {
   right: 'text-right',
   center: 'text-center',
 };
+
+const EMPTY_COLUMN_WIDTHS: Record<string, number> = {};
+const MIN_COLUMN_WIDTH = 64;
+const MAX_COLUMN_WIDTH = 1200;
+
+function resizeBounds<T>(column: Column<T>) {
+  const min = column.minWidth ?? MIN_COLUMN_WIDTH;
+  return { min, max: Math.max(min, column.maxWidth ?? MAX_COLUMN_WIDTH) };
+}
+
+function clampColumnWidth<T>(column: Column<T>, width: number) {
+  const { min, max } = resizeBounds(column);
+  return Math.min(max, Math.max(min, width));
+}
 
 // ─── Component ────────────────────────────────────────────────
 
@@ -182,13 +204,14 @@ export function DataTable<T>({
   } | null>(null);
   const tableScrollerRef = useRef<HTMLDivElement>(null);
   const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
+  const headerRefs = useRef(new Map<string, HTMLTableCellElement>());
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const scroller = tableScrollerRef.current;
     if (!scroller) return;
     const update = () => {
-      const maxScroll = scroller.scrollWidth - scroller.clientWidth;
-      const next = { left: scroller.scrollLeft > 1, right: maxScroll - scroller.scrollLeft > 1 };
+      const next = horizontalScrollEdges(scroller);
       setScrollEdges((current) => current.left === next.left && current.right === next.right ? current : next);
     };
     update();
@@ -204,10 +227,21 @@ export function DataTable<T>({
   }, []);
 
   // ─── Persistent prefs ─────────────────────────────────────
-  const prefs = useTablePrefsStore((s) => (tableKey ? s.byTable[tableKey] : undefined));
+  const tableInstanceId = useId();
+  const preferenceKey = tableKey ?? `auto:${typeof window === 'undefined' ? '/' : window.location.pathname}:${tableInstanceId}`;
+  const prefs = useTablePrefsStore((s) => s.byTable[preferenceKey]);
   const setStoreDensity = useTablePrefsStore((s) => s.setDensity);
   const setStoreHidden = useTablePrefsStore((s) => s.setHiddenColumns);
-  const density: TableDensity = densityProp ?? prefs?.density ?? 'default';
+  const setStoreWidths = useTablePrefsStore((s) => s.setColumnWidths);
+  const density: TableDensity = densityProp ?? prefs?.density ?? 'compact';
+  const savedWidths = prefs?.columnWidths ?? EMPTY_COLUMN_WIDTHS;
+  const [columnWidths, setColumnWidths] = useState(savedWidths);
+  const columnWidthsRef = useRef(columnWidths);
+  useEffect(() => {
+    setColumnWidths(savedWidths);
+    columnWidthsRef.current = savedWidths;
+  }, [savedWidths]);
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
   const hiddenColumnKeys = useMemo(
     () => new Set(prefs?.hiddenColumns ?? columns.filter((c) => c.defaultHidden).map((c) => c.key)),
     [prefs?.hiddenColumns, columns],
@@ -217,7 +251,70 @@ export function DataTable<T>({
 
   const handleDensityChange = (d: TableDensity) => {
     onDensityChange?.(d);
-    if (tableKey) setStoreDensity(tableKey, d);
+    setStoreDensity(preferenceKey, d);
+  };
+
+  const widthFor = (column: Column<T>) => clampColumnWidth(
+    column,
+    columnWidths[column.key] ?? column.width ?? (headerRefs.current.get(column.key)?.getBoundingClientRect().width || 160),
+  );
+
+  const columnWidthStyle = (column: Column<T>) => {
+    const width = columnWidths[column.key] === undefined ? undefined : widthFor(column);
+    const { min, max } = resizeBounds(column);
+    return width !== undefined
+      ? { width, minWidth: column.minWidth ?? min, maxWidth: column.maxWidth ?? max }
+      : {
+          ...(column.width ? { width: column.width } : {}),
+          ...(column.minWidth ? { minWidth: column.minWidth } : {}),
+          ...(column.maxWidth ? { maxWidth: column.maxWidth } : {}),
+        };
+  };
+
+  const saveWidths = (next: Record<string, number>) => {
+    columnWidthsRef.current = next;
+    setColumnWidths(next);
+    setStoreWidths(preferenceKey, next);
+  };
+
+  const resetColumnWidths = () => saveWidths(EMPTY_COLUMN_WIDTHS);
+
+  const startResize = (column: Column<T>, startX: number) => {
+    resizeCleanupRef.current?.();
+    const startWidth = widthFor(column);
+    const { min, max } = resizeBounds(column);
+    let nextWidth = startWidth;
+    const onMove = (event: PointerEvent) => {
+      nextWidth = Math.min(max, Math.max(min, Math.round(startWidth + event.clientX - startX)));
+      const next = { ...columnWidthsRef.current, [column.key]: nextWidth };
+      columnWidthsRef.current = next;
+      setColumnWidths(next);
+    };
+    const finish = () => {
+      cleanup();
+      if (nextWidth !== startWidth) setStoreWidths(preferenceKey, columnWidthsRef.current);
+    };
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      resizeCleanupRef.current = null;
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', finish, { once: true });
+    window.addEventListener('pointercancel', finish, { once: true });
+    resizeCleanupRef.current = cleanup;
+  };
+
+  const handleResizeKey = (event: KeyboardEvent<HTMLSpanElement>, column: Column<T>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const { min, max } = resizeBounds(column);
+    const delta = event.key === 'ArrowRight' ? 16 : -16;
+    saveWidths({
+      ...columnWidthsRef.current,
+      [column.key]: Math.min(max, Math.max(min, Math.round(widthFor(column) + delta))),
+    });
   };
 
   const toggleColumnVisibility = (colKey: string) => {
@@ -249,10 +346,7 @@ export function DataTable<T>({
   // build here. Sticky positioning takes care of the "stay-on-screen" effect.
   const orderedColumns = [...pinnedColumns, ...flowingColumns];
 
-  // Approximate widths (px) for sticky offsets. Real widths depend on content;
-  // we use a conservative estimate so adjacent pinned columns offset cleanly
-  // without overlapping. Pages can override per column with `className` (e.g.
-  // `min-w-[160px]`) to make this exact.
+  // Default widths keep adjacent pinned columns clear until the browser measures them.
   const PINNED_COL_DEFAULT_WIDTH = 160;
   const pinnedOffsets = useMemo(() => {
     const offsets: Record<string, number> = {};
@@ -260,10 +354,10 @@ export function DataTable<T>({
     if (renderExpanded) cumulative += 28; // expand chevron
     for (const col of pinnedColumns) {
       offsets[col.key] = cumulative;
-      cumulative += PINNED_COL_DEFAULT_WIDTH;
+      cumulative += clampColumnWidth(col, columnWidths[col.key] ?? col.width ?? PINNED_COL_DEFAULT_WIDTH);
     }
     return offsets;
-  }, [pinnedColumns, selectable, renderExpanded]);
+  }, [pinnedColumns, selectable, renderExpanded, columnWidths]);
 
   const allOnPageSelected = data.length > 0 && data.every((r) => selected.has(idOf(r)));
   const selectedRows = data.filter((r) => selected.has(idOf(r)));
@@ -348,7 +442,7 @@ export function DataTable<T>({
   // Pinned-column sticky styles. We embed inline styles for `left:` because
   // Tailwind can't dynamically compute the cumulative offset.
   const pinnedTHClass = 'sticky bg-canvas z-20';
-  const pinnedTDClass = 'sticky bg-canvas';
+  const pinnedTDClass = 'sticky';
 
   const totalCols = visibleColumns.length + (selectable ? 1 : 0) + (renderExpanded ? 1 : 0) + (rowActions ? 1 : 0);
   const rowExpands = Boolean(renderExpanded && expandOnRowClick && !onRowClick);
@@ -471,10 +565,12 @@ export function DataTable<T>({
         enableColumnVisibilityToggle={enableColumnVisibilityToggle}
         hiddenColumnKeys={hiddenColumnKeys}
         toggleColumnVisibility={toggleColumnVisibility}
+        hasCustomWidths={Object.keys(columnWidths).length > 0}
+        resetColumnWidths={resetColumnWidths}
       />
 
       <div
-        className={cn('table-scroll-frame min-w-0', fillHeight && 'min-h-0 flex-1')}
+        className={cn('scroll-edge-frame min-w-0', fillHeight && 'min-h-0 flex-1')}
         data-more-left={scrollEdges.left}
         data-more-right={scrollEdges.right}
       >
@@ -492,7 +588,7 @@ export function DataTable<T>({
         <table
           data-layout="table"
           aria-busy={loading}
-          className={cn('w-full border-collapse text-table-cell', fixedColumnLayout && 'table-fixed')}
+          className={cn('w-full border-collapse text-table-cell', (fixedColumnLayout || Object.keys(columnWidths).length > 0) && 'table-fixed')}
         >
           <thead className={cn(stickyHeader && 'sticky top-0 z-10 bg-[var(--bg-thead)]')}>
             <tr className="border-b border-default bg-[var(--bg-thead)]">
@@ -502,7 +598,7 @@ export function DataTable<T>({
                   className={cn(
                     cellPadding[density],
                     'w-8 text-left text-table-header text-muted font-semibold',
-                    rowHeight.default,
+                    rowHeight[density],
                     stickyHeader && 'sticky top-0 z-20',
                   )}
                 >
@@ -519,7 +615,7 @@ export function DataTable<T>({
                   className={cn(
                     cellPadding[density],
                     'w-7 text-left text-table-header text-muted font-semibold',
-                    rowHeight.default,
+                    rowHeight[density],
                     stickyHeader && 'sticky top-0 z-20',
                   )}
                   aria-label="Expand row"
@@ -531,18 +627,26 @@ export function DataTable<T>({
                 return (
                   <th
                     key={col.key}
+                    ref={(element) => {
+                      if (element) headerRefs.current.set(col.key, element);
+                      else headerRefs.current.delete(col.key);
+                    }}
                     scope="col"
                     aria-sort={ariaSortFor(col)}
-                    style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
                     className={cn(
+                      'relative',
                       cellPadding[density],
                       'text-table-header text-muted font-semibold select-none',
-                      rowHeight.default,
+                      rowHeight[density],
                       alignClass[col.align ?? 'left'],
                       isPinned && pinnedTHClass,
                       isPinned && 'border-r border-default',
                       col.className,
                     )}
+                    style={{
+                      ...(isPinned ? { left: pinnedOffsets[col.key] } : {}),
+                      ...columnWidthStyle(col),
+                    }}
                   >
                     {/* Sorting used to live on the <th>'s onClick, so it was
                         mouse-only — DESIGN-SYSTEM.md requires every
@@ -563,6 +667,24 @@ export function DataTable<T>({
                       </button>
                     ) : (
                       <span className="inline-flex items-center gap-1">{col.header}</span>
+                    )}
+                    {col.resizable !== false && (
+                      <span
+                        role="separator"
+                        aria-orientation="vertical"
+                        aria-label={`${typeof col.header === 'string' ? col.header : col.key} column width`}
+                        aria-valuenow={Math.round(widthFor(col))}
+                        aria-valuemin={resizeBounds(col).min}
+                        aria-valuemax={resizeBounds(col).max}
+                        title="Drag to resize; use arrow keys to adjust"
+                        tabIndex={0}
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          startResize(col, event.clientX);
+                        }}
+                        onKeyDown={(event) => handleResizeKey(event, col)}
+                        className="data-table-column-resizer absolute right-0 top-1/2 z-10 flex h-8 w-3 -translate-y-1/2 cursor-col-resize items-center justify-center border-r border-transparent hover:border-accent focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset focus-visible:outline-none max-xl:h-11 max-xl:w-11 pointer-coarse:h-11 pointer-coarse:w-11"
+                      />
                     )}
                   </th>
                 );
@@ -617,7 +739,7 @@ export function DataTable<T>({
                           ? 'bg-accent/10 hover:bg-accent/15 outline outline-2 outline-accent -outline-offset-2 z-10'
                           : highlightedRowId && rid === highlightedRowId
                             ? 'bg-subtle outline outline-2 outline-accent/50 -outline-offset-2 z-10'
-                            : 'hover:bg-surface hover:z-10',
+                            : cn(i % 2 === 1 && 'bg-[var(--bg-zebra-even)]', 'hover:bg-surface hover:z-10'),
                         rowHeight[density],
                       )}
                       onClick={(e) => {
@@ -675,11 +797,19 @@ export function DataTable<T>({
                         return (
                           <td
                             key={col.key}
-                            style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
+                            style={{
+                              ...(isPinned ? { left: pinnedOffsets[col.key] } : {}),
+                              ...columnWidthStyle(col),
+                            }}
                             className={cn(
                               cellPadding[density],
                               alignClass[col.align ?? 'left'],
                               isPinned && pinnedTDClass,
+                              isPinned && (isSelected
+                                ? 'bg-accent/10'
+                                : highlightedRowId && rid === highlightedRowId
+                                  ? 'bg-subtle'
+                                  : i % 2 === 1 ? 'bg-[var(--bg-zebra-even)]' : 'bg-canvas'),
                               isPinned && 'border-r border-default',
                               col.primary && 'font-medium text-primary',
                               col.className,
@@ -714,7 +844,7 @@ export function DataTable<T>({
       </div>
 
       {meta && onPageChange && (
-        <DataTablePagination
+        <TablePagination
           meta={meta}
           onPageChange={onPageChange}
           onPageSizeChange={onPageSizeChange}

@@ -58,6 +58,7 @@ export interface LeaveRequest {
  reason: string | null;
  has_document: boolean;
  status: LeaveStatus;
+ can_approve: boolean;
  status_label?: string;
  dept_approver: { id: string; name: string } | null;
  dept_approved_at: string | null;

@@ -54,6 +54,56 @@ function slug(value) {
   return value.replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-') || 'root';
 }
 
+function groupSamples(items, fields) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = JSON.stringify(fields.map((field) => item[field]));
+    const group = groups.get(key) ?? { ...item, count: 0, examples: [] };
+    group.count += 1;
+    const example = item.text ?? item.label;
+    if (example && group.examples.length < 3 && !group.examples.includes(example)) group.examples.push(example);
+    for (const field of ['scrollWidth', 'clientWidth', 'scrollHeight', 'clientHeight']) {
+      if (typeof item[field] !== 'number') continue;
+      const aggregate = `max${field[0].toUpperCase()}${field.slice(1)}`;
+      group[aggregate] = Math.max(group[aggregate] ?? item[field], item[field]);
+    }
+    for (const field of ['width', 'height']) {
+      if (typeof item[field] !== 'number') continue;
+      const title = field[0].toUpperCase() + field.slice(1);
+      group[`min${title}`] = Math.min(group[`min${title}`] ?? item[field], item[field]);
+      group[`max${title}`] = Math.max(group[`max${title}`] ?? item[field], item[field]);
+    }
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
+function compactMetricSamples(metrics) {
+  metrics.horizontalOverflow = groupSamples(metrics.horizontalOverflow, [
+    'tag', 'className', 'horizontal', 'vertical', 'intentionalHorizontal', 'insideMain', 'insideSidebar', 'overflowX', 'overflowY',
+  ]);
+  metrics.verticalScrollContainers = groupSamples(metrics.verticalScrollContainers, [
+    'tag', 'className', 'insideMain', 'insideSidebar', 'overflowX', 'overflowY',
+  ]);
+  metrics.typography.samples = groupSamples(metrics.typography.samples, [
+    'tag', 'className', 'font', 'size', 'weight', 'lineHeight', 'letterSpacing', 'textTransform', 'color', 'background', 'contrast',
+  ]);
+  for (const field of ['below13px', 'below12px', 'contrastBelowAA']) {
+    metrics.typography[field] = groupSamples(metrics.typography[field], ['tag', 'size', 'contrast', 'color', 'background']);
+  }
+  metrics.table?.textBelowMinimum && (metrics.table.textBelowMinimum = groupSamples(metrics.table.textBelowMinimum, ['tag', 'size']));
+  const groupTargets = (items, colors = false) => groupSamples(
+    items.map((item) => ({ ...item, widthBelow44: item.width < 44, heightBelow44: item.height < 44 })),
+    ['widthBelow44', 'heightBelow44', ...(colors ? ['background', 'color'] : [])],
+  ).map(({ widthBelow44, heightBelow44, ...item }) => item);
+  metrics.buttons = groupTargets(metrics.buttons, true);
+  metrics.buttonTargetsBelow44 = groupTargets(metrics.buttonTargetsBelow44, true);
+  metrics.controls = groupTargets(metrics.controls);
+  metrics.controlsBelow44 = groupTargets(metrics.controlsBelow44);
+  metrics.recordLinks = groupSamples(metrics.recordLinks, ['color', 'contrast', 'distinctFromBodyText']);
+  return metrics;
+}
+
 function luminance(rgb) {
   const channel = (value) => {
     const v = value / 255;
@@ -93,7 +143,7 @@ function localUser(role, themeMode) {
     name: `Layout Audit ${role}`,
     email: ROLE_EMAILS[role],
     role: { id: `layout-audit-${role}`, slug: slugs[role], name: slugs[role] },
-    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.items.manage', 'production.work_orders.view', 'production.wo.create'],
+    permissions: ['inventory.adjust', 'inventory.adjust.approve', 'inventory.view', 'inventory.picking.view', 'inventory.items.manage', 'inventory.warehouse.manage', 'inventory.issue.create', 'inventory.grn.create', 'inventory.mrb.view', 'inventory.mrb.manage', 'quality.inspections.view', 'quality.inspections.manage', 'quality.ncr.view', 'accounting.journal.view', 'accounting.journal.post', 'accounting.bills.create', 'return_management.manage', 'production.view', 'production.schedule.view', 'mrp.schedule', 'production.work_orders.view', 'production.wo.create', 'production.wo.record', 'production.routings.view', 'production.routings.manage'],
     delegated_approvals: [],
     features: ['inventory', 'production', 'notifications', 'search', 'b2b_portals'],
     employee: { id: 'layout-audit-employee', employee_no: 'LAYOUT-AUDIT' },
@@ -131,6 +181,106 @@ function sampleAdjustments(count) {
   }));
 }
 
+function sampleHandoverTasks(count, status = 'pending') {
+  return Array.from({ length: count }, (_, index) => {
+    const rowStatus = status || (index % 3 === 1 ? 'handed_over' : index % 3 === 2 ? 'needs_review' : 'pending');
+    return {
+      id: `layout-handover-${index + 1}`,
+      work_order_id: `layout-handover-wo-${index + 1}`,
+      material_issue_id: `layout-handover-slip-${index + 1}`,
+      maintenance_work_order_id: null,
+      label: index === 1
+        ? 'WO-REFERENCE-202610-000000000002 · MATERIAL-ISSUE-REFERENCE-000000000002'
+        : `WO-LAYOUT-${String(index + 1).padStart(6, '0')} · MAT-${String(index + 1).padStart(6, '0')}`,
+      status: rowStatus,
+      total_lines: index === 2 ? 123456 : 4 + (index % 13),
+      handed_over_lines: rowStatus === 'handed_over' ? 4 : 0,
+      pending_lines: rowStatus === 'pending' ? 4 + (index % 13) : 0,
+      latest_issue_at: `2026-10-${String((index % 28) + 1).padStart(2, '0')}T09:14:00+08:00`,
+    };
+  });
+}
+
+function sampleHandoverDetail(count, index = 0) {
+  const task = sampleHandoverTasks(index + 1, '')[index];
+  return {
+    ...task,
+    sources: Array.from({ length: count }, (_, sourceIndex) => {
+      const returned = sourceIndex % 5 === 1;
+      const handedOver = sourceIndex % 5 === 2;
+      return {
+        request_id: `layout-request-${sourceIndex + 1}`,
+        requested_quantity: sourceIndex === 0 ? '123456789.125' : '25000.000',
+        movement_id: `layout-movement-${index + 1}-${sourceIndex + 1}`,
+        item: {
+          id: `layout-item-${sourceIndex + 1}`,
+          code: sourceIndex === 0 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(sourceIndex + 1).padStart(6, '0')}`,
+          name: sourceIndex === 0
+            ? 'Long material description used to check wrapping, readable secondary text and quantity alignment across narrow and ultra-wide screens'
+            : `Material component ${sourceIndex + 1}`,
+          unit_of_measure: 'kg',
+        },
+        location: { id: 'layout-location-1', code: 'WH-RAW-MATERIAL-REFERENCE-000000000001' },
+        lot_number: sourceIndex === 0 ? 'LOT-REFERENCE-202610-000000000000001' : `LOT-${String(sourceIndex + 1).padStart(6, '0')}`,
+        issued_quantity: sourceIndex === 0 ? '123456789.125' : '25000.000',
+        returned_quantity: returned ? '25000.000' : '0.000',
+        remaining_quantity: returned ? '0.000' : '25000.000',
+        eligible: !handedOver && !returned && task.status === 'pending',
+        handover: handedOver ? {
+          recipient_name: 'A very long production recipient name for dropdown and secondary text width checks',
+          quantity: '25000.000',
+          handed_over_at: '2026-10-27T09:14:00+08:00',
+          recorded_by: 'Layout Audit Warehouse Staff',
+        } : null,
+      };
+    }),
+    recipients: [
+      { value: 'layout-employee-1', label: 'A very long production employee name used for dropdown layout checks' },
+      { value: 'layout-employee-2', label: 'Employee 2' },
+    ],
+    default_recipient_id: 'layout-employee-1',
+  };
+}
+
+assert.equal(sampleHandoverTasks(3).length, 3);
+assert.equal(sampleHandoverDetail(10).sources.length, 10);
+
+function sampleScannerRecords(count) {
+  return Array.from({ length: Math.min(count, 25) }, (_, index) => ({
+    value: `layout-record-${index + 1}`,
+    label: index === 0
+      ? 'WO-REFERENCE-202610-000000000001 · Long product and production batch label for width checks'
+      : `WO-202610-${String(index + 1).padStart(6, '0')}`,
+  }));
+}
+
+function sampleScanResult(barcode) {
+  if (barcode.toLocaleUpperCase().includes('UNKNOWN')) {
+    return { type: 'unknown', entity: null, suggested_actions: [] };
+  }
+  return {
+    type: 'item',
+    type_label: 'Inventory item',
+    entity: {
+      id: 'layout-item-001',
+      code: 'RAW-MATERIAL-REFERENCE-000000000000001',
+      name: 'Long material description used to check scanner result wrapping on tablets and wide displays',
+      item_type: 'raw_material',
+      unit_of_measure: 'kg',
+      available_quantity: '123456789.125',
+      location: 'WH-RAW-MATERIAL-REFERENCE-000000000001',
+      remarks: 'Synthetic scan result with long text and ₱ glyph coverage for layout audit.',
+    },
+    suggested_actions: [
+      { action: 'open_item', label: 'Open inventory item', params: {}, href: '/inventory/items/layout-item-001' },
+      { action: 'review_stock', label: 'Review stock levels', params: {}, href: '/inventory/stock-levels' },
+    ],
+  };
+}
+
+assert.equal(sampleScannerRecords(500).length, 25);
+assert.equal(sampleScanResult('LAYOUT-UNKNOWN-001').type, 'unknown');
+
 const sampleItem = {
   id: 'layout-item-001',
   code: 'RAW-MATERIAL-REFERENCE-000001',
@@ -148,6 +298,23 @@ const sampleItem = {
   classification_needs_review: false, created_at: '2026-10-01T09:14:00+08:00',
   updated_at: '2026-10-25T16:20:00+08:00',
 };
+
+function sampleItems(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...sampleItem,
+    id: index === 0 ? sampleItem.id : `layout-item-${String(index + 1).padStart(6, '0')}`,
+    code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+    name: index === 1
+      ? 'A long inventory item description used to check truncation, wrapping, and column sizing across the entire table'
+      : index === 0 ? sampleItem.name : `Inventory item ${index + 1}`,
+    standard_cost: index === 2 ? '123456789.1234' : sampleItem.standard_cost,
+    on_hand_quantity: index === 2 ? '987654321.125' : sampleItem.on_hand_quantity,
+    available_quantity: index === 2 ? '987654320.875' : sampleItem.available_quantity,
+    stock_status: index % 5 === 0 ? 'critical' : index % 3 === 0 ? 'ok' : 'low',
+    is_active: index % 7 !== 0,
+    quality_plan_ready: index % 4 !== 0,
+  }));
+}
 
 const sampleWorkOrder = {
   id: 'layout-wo-001', wo_number: 'WO-LAYOUT-202610-001', batch_number: 'BATCH-202610-001',
@@ -169,35 +336,637 @@ const sampleWorkOrder = {
   created_at: '2026-10-25T08:00:00+08:00', updated_at: '2026-10-25T09:00:00+08:00',
 };
 
-const sampleWarehouse = [{
-  id: 'layout-warehouse-1', name: 'Main Warehouse', code: 'MW', address: null, is_active: true,
-  zones: [{
-    id: 'layout-zone-1', name: 'Raw materials', code: 'RM', zone_type: 'raw_materials',
-    locations: [{
-      id: 'layout-location-1', zone_id: 'layout-zone-1', code: 'A-01-01', rack: 'A-01', bin: '01',
-      is_active: true, is_blocked: false, full_code: 'MW-RM-A-01-01',
-    }],
+const operationStatuses = ['pending', 'setup', 'in_progress', 'paused', 'completed', 'skipped'];
+function sampleWorkOrderOperations(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const status = operationStatuses[index % operationStatuses.length];
+    return {
+      id: `layout-operation-${String(index + 1).padStart(6, '0')}`,
+      sequence: (index + 1) * 10,
+      operation_name: index === 1
+        ? 'Long injection molding and detailed first-article inspection operation name'
+        : `Production operation ${index + 1}`,
+      status,
+      status_label: status.replaceAll('_', ' '),
+      machine: {
+        id: 'layout-machine-1',
+        machine_code: index === 2 ? 'MACHINE-REFERENCE-000000000000000000000001' : 'MC-01',
+        name: 'Layout press',
+      },
+      mold: { id: 'layout-mold-1', mold_code: 'MOLD-01', name: 'Layout mold' },
+      operator: status === 'pending' ? null : {
+        id: `layout-operator-${index + 1}`,
+        first_name: index === 3 ? 'Alexandria-Maria' : 'Ana',
+        last_name: index === 3 ? 'Santos-Dela-Cruz' : 'Santos',
+      },
+      planned_start: '2026-10-25T08:00:00+08:00',
+      planned_end: '2026-10-25T16:00:00+08:00',
+      actual_start: status === 'pending' ? null : '2026-10-25T08:15:00+08:00',
+      actual_end: status === 'completed' ? '2026-10-25T16:00:00+08:00' : null,
+      setup_start: null,
+      setup_end: null,
+      qty_planned: index === 2 ? '123456789.8754' : '200',
+      qty_completed: index === 2 ? '98765432.1256' : String(index * 25),
+      qty_scrapped: '0',
+      scrap_reason: null,
+      downtime_minutes: '0',
+      notes: null,
+      logs: [],
+    };
+  });
+}
+
+for (const count of [0, 1, 10, 50, 500]) {
+  assert.equal(sampleWorkOrderOperations(count).length, count);
+}
+
+function sampleWorkOrders(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...sampleWorkOrder,
+    id: index === 0 ? sampleWorkOrder.id : `layout-wo-${String(index + 1).padStart(6, '0')}`,
+    wo_number: index === 0 ? sampleWorkOrder.wo_number : `WO-LAYOUT-${String(index + 1).padStart(6, '0')}`,
+    product: {
+      ...sampleWorkOrder.product,
+      part_number: index === 1 ? 'PART-REFERENCE-000000000000000000000000000001' : `PART-${String(index + 1).padStart(5, '0')}`,
+      name: index === 1
+        ? 'Long product name for layout stress that should wrap or truncate without forcing unrelated columns to grow'
+        : `Layout test product ${index + 1}`,
+    },
+    sales_order: index === 3
+      ? { ...sampleWorkOrder.sales_order, so_number: 'SO-REFERENCE-000000000000000000000000000001' }
+      : sampleWorkOrder.sales_order,
+    machine: index === 2
+      ? { ...sampleWorkOrder.machine, machine_code: 'MACHINE-REFERENCE-000000000000000000000001' }
+      : sampleWorkOrder.machine,
+    quantity_target: index === 2 ? 123456789 : 200 + index,
+    quantity_produced: index === 2 ? 98765432 : index % 2 ? 50 + index : 0,
+    progress_percentage: index === 2 ? 79.99 : index % 2 ? 25 : 0,
+    planned_end: index === 0 ? sampleWorkOrder.planned_end : '2026-11-25T16:00:00+08:00',
+    created_at: `2026-10-${String((index % 28) + 1).padStart(2, '0')}T08:00:00+08:00`,
+  }));
+}
+
+const sampleRouting = {
+  id: 'layout-routing-001',
+  product: { id: 'layout-product-1', part_number: 'PART-001', name: 'Layout test product' },
+  version: 12, is_active: false, total_cycle_time: '123456.75',
+  notes: 'Long routing notes for measuring readable form line lengths across desktop and mobile layouts.',
+  operations: [{
+    id: 'layout-operation-001', sequence: 10, operation_name: 'Injection molding', work_center: 'Molding cell A',
+    machine: { id: 'layout-machine-1', machine_code: 'MC-01', name: 'Layout press' },
+    mold: { id: 'layout-mold-1', mold_code: 'MOLD-01', name: 'Layout mold' },
+    setup_time_minutes: '15.00', cycle_time_minutes: '123456.75', labor_rate_per_hour: '125.5000',
+    machine_rate_per_hour: '123456.7890', overhead_rate_per_hour: '9876.5432',
+    description: 'Verify resin temperature and inspect first article before running the complete production batch.',
+    qc_required: true,
   }],
-}];
+  created_at: '2026-10-01T09:14:00+08:00', updated_at: '2026-10-25T16:20:00+08:00',
+};
+
+function sampleRoutings(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...sampleRouting,
+    id: index === 0 ? sampleRouting.id : `layout-routing-${String(index + 1).padStart(6, '0')}`,
+    version: index === 2 ? 123456 : index + 1,
+    is_active: index % 3 !== 2,
+    total_cycle_time: index === 2 ? '123456789.75' : `${15.25 + index}`,
+    product: {
+      ...sampleRouting.product,
+      part_number: index === 1 ? 'PART-REFERENCE-000000000000000000000000000001' : `PART-${String(index + 1).padStart(5, '0')}`,
+      name: index === 1
+        ? 'Long product name for routing layout checks that should not widen every table column'
+        : `Layout test product ${index + 1}`,
+    },
+  }));
+}
+
+for (const count of [0, 1, 10, 50, 500]) assert.equal(sampleRoutings(count).length, count);
+
+assert.equal(sampleWorkOrders(0).length, 0);
+assert.equal(sampleWorkOrders(1)[0].id, sampleWorkOrder.id);
+assert.equal(sampleWorkOrders(500).length, 500);
+
+function sampleWarehouseTree(count) {
+  return [{
+    id: 'layout-warehouse-1', name: 'Main Warehouse', code: 'MW', address: null, is_active: true,
+    zones: [{
+      id: 'layout-zone-1', name: 'Raw materials', code: 'RM', zone_type: 'raw_materials',
+      zone_type_label: 'Raw materials',
+      locations: Array.from({ length: count }, (_, index) => ({
+        id: `layout-location-${index + 1}`, zone_id: 'layout-zone-1',
+        code: index === 1 ? 'LOC-REFERENCE-00001' : `A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+        rack: `A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}`,
+        bin: String((index % 100) + 1).padStart(2, '0'),
+        is_active: true, is_blocked: index % 17 === 0,
+        full_code: `MW-RM-A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+      })),
+    }],
+  }];
+}
 
 const sampleStockLevel = {
   item: { id: sampleItem.id, code: sampleItem.code, name: sampleItem.name, unit_of_measure: sampleItem.unit_of_measure },
   location: { id: 'layout-location-1', code: 'A-01-01', full_code: 'MW-RM-A-01-01' },
   quantity: '123456789.125', reserved_quantity: '234567.250', available: '123222221.875',
+  usable_quantity: '123222221.875', expired_quantity: '0.000', unusable_zone_quantity: '25.000',
   quality_held_quantity: '1200.000', weighted_avg_cost: '1234567.8900', total_value: '152415787517145.00',
   lock_version: 0, last_counted_at: '2026-10-01T09:14:00+08:00',
 };
+
+function sampleStockLevels(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...sampleStockLevel,
+    item: {
+      ...sampleStockLevel.item,
+      id: index === 0 ? sampleItem.id : `layout-item-${String(index + 1).padStart(6, '0')}`,
+      code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+      name: index === 1
+        ? 'Long inventory material description for stock level column sizing and truncation checks'
+        : index === 0 ? sampleItem.name : `Inventory item ${index + 1}`,
+    },
+    location: {
+      id: `layout-location-${index + 1}`,
+      code: `A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+      full_code: `MW-RM-A-${String(Math.floor(index / 100) + 1).padStart(2, '0')}-${String((index % 100) + 1).padStart(2, '0')}`,
+    },
+    quantity: index === 2 ? '987654321.125' : sampleStockLevel.quantity,
+    reserved_quantity: index === 2 ? '12345678.250' : sampleStockLevel.reserved_quantity,
+    available: index === 2 ? '975308642.875' : sampleStockLevel.available,
+    usable_quantity: index === 2 ? '975308642.875' : sampleStockLevel.usable_quantity,
+    weighted_avg_cost: index === 2 ? '123456789.1234' : sampleStockLevel.weighted_avg_cost,
+    total_value: index === 2 ? '999999999999999.99' : sampleStockLevel.total_value,
+  }));
+}
+
+function sampleUoms(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: index === 0 ? 'layout-uom-kg' : `layout-uom-${String(index + 1).padStart(6, '0')}`,
+    code: index === 0 ? 'kg' : `UOM-${String(index + 1).padStart(4, '0')}`,
+    name: index === 1
+      ? 'Long unit name for layout checks, readability, and narrow table behavior'
+      : index === 0 ? 'Kilogram' : `Unit ${index + 1}`,
+    deleted_at: null,
+  }));
+}
+
+const movementTypes = ['grn_receipt', 'material_issue', 'material_return', 'transfer', 'adjustment_in', 'delivery'];
+function sampleStockMovements(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const movementType = movementTypes[index % movementTypes.length];
+    return {
+      id: `layout-movement-${String(index + 1).padStart(6, '0')}`,
+      created_at: `2026-10-${String((index % 28) + 1).padStart(2, '0')}T09:14:00+08:00`,
+      movement_type: movementType,
+      movement_type_label: movementType.replaceAll('_', ' '),
+      item: {
+        id: `layout-item-${String(index + 1).padStart(6, '0')}`,
+        code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+        name: index === 1
+          ? 'Long material description for checking stock movement table wrapping and truncation behavior'
+          : `Inventory item ${index + 1}`,
+        unit_of_measure: 'kg',
+      },
+      from_location: movementType === 'material_issue' || movementType === 'transfer'
+        ? { id: 'layout-location-from', code: 'MW-RM-A-01-01' } : null,
+      to_location: movementType === 'grn_receipt' || movementType === 'transfer'
+        ? { id: 'layout-location-to', code: 'MW-RM-A-02-01' } : null,
+      quantity: index === 2 ? '987654321.125' : `${(index + 1) * 1.125}`,
+      unit_cost: index === 2 ? '123456789.1234' : '1234.5000',
+      total_cost: index === 2 ? '999999999999999.99' : '1388.81',
+      lot_number: index % 2 ? `LOT-${String(index + 1).padStart(6, '0')}` : null,
+      expiry_date: null,
+      gl_handoff: {
+        status: index % 3 === 0 ? 'generated' : index % 3 === 1 ? 'manual_required' : 'not_required',
+        status_label: index % 3 === 0 ? 'Posted' : index % 3 === 1 ? 'Manual required' : 'Not required',
+        message: null,
+        at: '2026-10-25T09:14:00+08:00',
+      },
+      reference_type: 'material_issue',
+      reference_id: `REF-${String(index + 1).padStart(6, '0')}`,
+      reference_label: index === 1 ? 'Long material reference with a description that should not widen the table' : `Movement reference ${index + 1}`,
+      reference_work_order_id: null,
+      reference_url: null,
+      remarks: index === 2 ? 'Long movement note used to check tooltip and text overflow behavior.' : null,
+      creator: { id: 'layout-user-1', name: index === 1 ? 'Alexandria-Maria Santos-Dela-Cruz' : 'Ana Santos' },
+    };
+  });
+}
+
+function sampleReservations(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `layout-reservation-group-${index + 1}`,
+    work_order: {
+      id: `layout-work-order-${index + 1}`,
+      wo_number: index === 1 ? 'WO-202610-0000000000001' : `WO-202610-${String(index + 1).padStart(6, '0')}`,
+    },
+    materials: [
+      {
+        id: `layout-reservation-${index + 1}-1`,
+        work_order: { id: `layout-work-order-${index + 1}`, wo_number: `WO-202610-${String(index + 1).padStart(6, '0')}` },
+        item: {
+          id: `layout-item-${index + 1}`,
+          code: index === 0 ? sampleItem.code : `SKU-${String(index + 1).padStart(6, '0')}`,
+          name: index === 1 ? 'Long material description for expanded reservation details' : `Inventory item ${index + 1}`,
+          unit_of_measure: 'kg',
+        },
+        location: { id: `layout-location-${index + 1}`, full_code: `MW-RM-A-${String(index + 1).padStart(2, '0')}-01` },
+        quantity: index === 2 ? '987654321.125' : `${(index + 1) * 10}.000`,
+        status: index % 3 === 0 ? 'reserved' : index % 3 === 1 ? 'issued' : 'released',
+        reserved_at: '2026-10-25T09:14:00+08:00',
+        ended_at: null,
+      },
+    ],
+  }));
+}
+
+const grnStatuses = ['draft', 'pending_qc', 'accepted', 'partial_accepted', 'rejected'];
+const mrbStatuses = ['held', 'released', 'scrapped', 'returned'];
+
+function sampleGrnLine(index, status) {
+  const quantity = index === 2 ? '123456789.125' : `${(index + 1) * 25}.000`;
+  return {
+    id: `layout-grn-line-${index + 1}`,
+    purchase_order_item_id: `layout-po-line-${index + 1}`,
+    item: {
+      id: `layout-grn-item-${index + 1}`,
+      code: index === 1 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`,
+      name: index === 1 ? 'Long resin description for receipt table sizing and line wrapping checks' : `Receipt material ${index + 1}`,
+      unit_of_measure: 'kg', quality_plan_ready: index % 5 !== 0,
+      stored_bins: [{ id: 'layout-location-good', full_code: 'MW-RM-A-01-01', quantity: '12500.000' }],
+    },
+    location: { id: 'layout-location-good', code: 'A-01-01', full_code: 'MW-RM-A-01-01' },
+    quantity_received: quantity,
+    quantity_received_in_uom: '12500.000',
+    received_uom_conversion_factor: '0.500000',
+    quantity_accepted: status === 'accepted' ? quantity : status === 'partial_accepted' ? '12.500' : '0.000',
+    quantity_outstanding: '987654321.125',
+    unit_cost: index === 2 ? '123456789.1234' : '1234.5000',
+    received_uom_code: 'BAG',
+    lot_number: `LOT-${String(index + 1).padStart(6, '0')}`,
+    supplier_lot_reference: `SUPPLIER-LOT-${String(index + 1).padStart(6, '0')}`,
+    expiry_date: '2027-10-27',
+    moisture_percentage: '0.125',
+    coa_document_path: `certificates/cofa-${String(index + 1).padStart(4, '0')}.pdf`,
+    coa_verified: index % 2 === 0,
+    remarks: index === 1 ? 'Long inspection note used to verify receipt cell wrapping at narrow widths.' : null,
+    inspection: { id: `layout-incoming-qc-${index + 1}`, inspection_number: `IQC-202610-${String(index + 1).padStart(4, '0')}`, status: 'passed', status_label: 'Passed' },
+    active_quality_holds: index === 1 ? [{ id: 'layout-ncr-1', ncr_number: 'NCR-202610-0001', quantity: '12.500' }] : [],
+  };
+}
+
+function sampleGrns(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const status = grnStatuses[index % grnStatuses.length];
+    return {
+      id: `layout-grn-${String(index + 1).padStart(5, '0')}`,
+      grn_number: `GRN-202610-${String(index + 1).padStart(5, '0')}`,
+      received_date: `2026-10-${String((index % 27) + 1).padStart(2, '0')}`,
+      status,
+      status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      rejected_reason: null,
+      remarks: null,
+      accepted_at: status === 'accepted' ? '2026-10-27T09:14:00+08:00' : null,
+      incoming_qc_handoff: {
+        status: status === 'pending_qc' ? 'manual_required' : 'generated',
+        status_label: status === 'pending_qc' ? 'Needs retry' : 'Created',
+        message: status === 'pending_qc' ? 'Incoming inspection handoff needs review.' : null,
+        at: '2026-10-27T09:14:00+08:00',
+      },
+      vendor: { id: 'layout-vendor-1', name: index === 1 ? 'International Industrial Materials and Packaging Corporation' : `Supplier ${index + 1}` },
+      purchase_order: { id: `layout-po-${index + 1}`, po_number: `PO-202610-${String(index + 1).padStart(5, '0')}` },
+      receiver: { id: 'layout-user-receiver', name: index === 2 ? 'Alexandria-Maria Santos-Dela-Cruz' : 'Ana Santos' },
+    };
+  });
+}
+
+function sampleGrnDetail(count, status = 'pending_qc') {
+  const draft = status === 'draft';
+  const accepted = status === 'accepted' || status === 'partial_accepted';
+  const lines = Array.from({ length: Math.max(1, count) }, (_, index) => sampleGrnLine(index, status));
+  return {
+    ...sampleGrns(1)[0],
+    id: 'layout-grn-detail-001',
+    status,
+    status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    grn_number: 'GRN-202610-00001',
+    received_date: draft ? null : '2026-10-27',
+    rejected_reason: status === 'rejected' ? 'Packaging was damaged on arrival; see attached supplier evidence.' : null,
+    remarks: 'Synthetic receipt used for layout review; values cover long text, large quantities, and four-decimal unit costs.',
+    accepted_at: accepted ? '2026-10-27T10:30:00+08:00' : null,
+    remainder_rejected_at: null,
+    remainder_rejected_reason: null,
+    remainder_rejected_by: null,
+    can_reject_remainder: status === 'pending_qc' || status === 'partial_accepted',
+    incoming_qc_handoff: {
+      status: status === 'pending_qc' ? 'generated' : draft ? 'not_started' : 'not_required',
+      status_label: status === 'pending_qc' ? 'Created' : draft ? 'Not started' : 'Not required',
+      message: null,
+      at: status === 'pending_qc' ? '2026-10-27T09:14:00+08:00' : null,
+    },
+    qc_inspection: status === 'pending_qc' ? { id: 'layout-incoming-qc-1', inspection_number: 'IQC-202610-0001', stage: 'incoming', stage_label: 'Incoming', status: 'passed', status_label: 'Passed' } : null,
+    journal_entry: accepted ? { id: 'layout-journal-1', entry_number: 'JE-202610-0001', status: 'draft', status_label: 'Draft' } : null,
+    vendor: { id: 'layout-vendor-1', name: 'International Industrial Materials and Packaging Corporation' },
+    purchase_order: { id: 'layout-po-1', po_number: 'PO-202610-00001', purchase_request: { id: 'layout-pr-1', pr_number: 'PR-202610-00001' } },
+    receiver: draft ? null : { id: 'layout-user-receiver', name: 'Alexandria-Maria Santos-Dela-Cruz' },
+    acceptor: accepted ? { id: 'layout-user-approver', name: 'Warehouse Quality Approver' } : null,
+    supplier_shipment: {
+      id: 'layout-supplier-shipment-1', tracking_number: 'TRACKING-REFERENCE-000000000001',
+      items: lines.slice(0, 10).map((line) => ({ purchase_order_item_id: line.purchase_order_item_id, quantity_shipped: line.quantity_received, quantity_received: line.quantity_received, difference: '0.000', unit: 'kg' })),
+    },
+    bill: accepted ? { id: 'layout-bill-1', bill_number: 'BILL-202610-00001', status: 'draft', status_label: 'Draft', total_amount: '999999999999.99' } : null,
+    items: lines,
+  };
+}
+
+function sampleReceivablePurchaseOrder(count) {
+  return {
+    id: 'layout-po-1', po_number: 'PO-202610-00001', status: 'partially_received',
+    vendor: { id: 'layout-vendor-1', name: 'International Industrial Materials and Packaging Corporation' },
+    items: Array.from({ length: count }, (_, index) => ({
+      id: `layout-po-line-${index + 1}`, purchase_request_item_id: null,
+      item: { id: `layout-grn-item-${index + 1}`, code: `SKU-${String(index + 1).padStart(5, '0')}`, name: index === 1 ? 'Long resin description for receiving form layout and wrap behavior' : `Receipt material ${index + 1}`, unit_of_measure: 'kg' },
+      description: `Receipt material ${index + 1}`, quantity: '25000.000', unit: 'kg', unit_price: '1234.5000', total: '30862500.00',
+      quantity_received: '0.000', quantity_accepted: '0.000', quantity_remaining: '25000.000', base_quantity_ordered: '25000.000', base_quantity_remaining: '25000.000', delivered_unit_cost: '1234.5000',
+    })),
+  };
+}
+
+const materialIssueStatuses = ['issued', 'draft', 'cancelled'];
+
+function sampleMaterialIssueLine(index) {
+  const quantity = index === 2 ? '123456789.125' : `${(index + 1) * 12.5}`;
+  return {
+    id: index + 1,
+    stock_movement_id: `layout-movement-${String(index + 1).padStart(6, '0')}`,
+    item: {
+      id: `layout-item-${index + 1}`,
+      code: index === 1 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`,
+      name: index === 1 ? 'Long injection-grade resin description for material issue detail width review' : `Issued material ${index + 1}`,
+      unit_of_measure: 'kg',
+    },
+    location: { id: 'layout-location-good', code: 'MW-RM-A-01-01' },
+    quantity_issued: quantity,
+    quantity_issued_in_uom: '12500.000',
+    issued_uom_conversion_factor: '0.500000',
+    unit_cost: index === 2 ? '123456789.1234' : '1234.5000',
+    total_cost: index === 2 ? '999999999999.99' : (Number(quantity) * 1234.5).toFixed(2),
+    issued_uom_code: index === 1 ? 'BAG' : null,
+    lot_number: `LOT-${String(index + 1).padStart(6, '0')}`,
+    remarks: index === 1 ? 'Long material issue note used to review wrapping and table width.' : null,
+  };
+}
+
+function sampleMaterialIssues(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const status = materialIssueStatuses[index % materialIssueStatuses.length];
+    return {
+      id: `layout-mis-${String(index + 1).padStart(5, '0')}`,
+      slip_number: `MIS-202610-${String(index + 1).padStart(5, '0')}`,
+      work_order_id: index % 4 === 1 ? null : sampleWorkOrder.id,
+      work_order: index % 4 === 1 ? null : { id: sampleWorkOrder.id, wo_number: sampleWorkOrder.wo_number },
+      issued_date: `2026-10-${String((index % 27) + 1).padStart(2, '0')}`,
+      status,
+      status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      total_value: index === 2 ? '999999999999.99' : (1234.5 * (index + 1)).toFixed(2),
+      reference_text: index % 4 === 1 ? 'A very long external reference for unplanned maintenance material issue' : null,
+      remarks: null,
+      issuer: { id: 'layout-user-issuer', name: index === 2 ? 'Alexandria-Maria Santos-Dela-Cruz' : 'Warehouse Operator' },
+      created_at: '2026-10-27T09:14:00+08:00',
+    };
+  });
+}
+
+function sampleMaterialIssueDetail(count) {
+  return {
+    ...sampleMaterialIssues(1)[0],
+    items: Array.from({ length: count }, (_, index) => sampleMaterialIssueLine(index)),
+    remarks: 'Synthetic material issue used for layout review; includes large quantities, long identifiers, and extended notes.',
+  };
+}
+
+const transferStatuses = ['pending', 'transferred', 'cancelled'];
+
+function sampleTransferOrder(index) {
+  const status = transferStatuses[index % transferStatuses.length];
+  const longValue = index === 0;
+  return {
+    id: `layout-transfer-${String(index + 1).padStart(5, '0')}`,
+    transfer_number: `TO-202610-${String(index + 1).padStart(5, '0')}`,
+    from_location: {
+      id: 'layout-location-1',
+      code: 'A-01-01',
+      full_code: longValue ? 'MW-RAW-MATERIALS-A-01-01-REFERENCE' : 'MW-RM-A-01-01',
+    },
+    to_location: {
+      id: 'layout-location-2',
+      code: 'B-02-03',
+      full_code: longValue ? 'MW-QUALITY-HOLD-B-02-03-REFERENCE' : 'MW-QC-B-02-03',
+    },
+    item: {
+      id: longValue ? 'layout-item-long' : sampleItem.id,
+      code: longValue ? 'RAW-MATERIAL-REFERENCE-000000000000001' : sampleItem.code,
+      name: longValue ? 'Long injection-grade resin material description for transfer layout' : sampleItem.name,
+      unit_of_measure: sampleItem.unit_of_measure,
+    },
+    quantity: longValue ? '123456789.125' : `${(index + 1) * 12.5}`,
+    reason: longValue ? 'Long transfer reason used to inspect wrapping, width, and detail readability.' : `Replenish location ${index + 1}`,
+    status,
+    status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    created_by: { id: 'layout-other-warehouse-user', name: 'Warehouse Lead' },
+    transferred_by: status === 'transferred' ? { id: 'layout-audit-admin', name: 'Layout Audit admin' } : null,
+    transferred_at: status === 'transferred' ? '2026-10-27T09:14:00+08:00' : null,
+    created_at: `2026-10-${String((index % 27) + 1).padStart(2, '0')}T09:14:00+08:00`,
+  };
+}
+
+function sampleTransferOrders(count) {
+  return Array.from({ length: count }, (_, index) => sampleTransferOrder(index));
+}
+
+const sampleMrbLocation = (id, code, zone, zoneType) => ({
+  id, code, full_code: `MW-${zone}-${code}`, warehouse_id: 'layout-warehouse-1',
+  warehouse_code: 'MW', warehouse_name: 'Main Warehouse', is_active: true, zone, zone_type: zoneType,
+});
+
+function sampleMrbRecord(index = 0) {
+  const status = mrbStatuses[index % mrbStatuses.length];
+  return {
+    id: `layout-mrb-${String(index + 1).padStart(5, '0')}`,
+    mrb_number: `MRB-202610-${String(index + 1).padStart(5, '0')}`,
+    status,
+    status_label: status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    disposition: status === 'held' ? null : status === 'scrapped' ? 'scrap' : 'rework',
+    disposition_label: status === 'scrapped' ? 'Scrap' : status === 'held' ? undefined : 'Rework',
+    quantity: index === 2 ? '123456789.125' : `${(index + 1) * 25}.500`,
+    concession_approval_reference: null,
+    requires_concession_approval: false,
+    item: { id: `layout-item-${index + 1}`, code: index === 1 ? 'RAW-MATERIAL-REFERENCE-000000000000001' : `SKU-${String(index + 1).padStart(5, '0')}`, name: index === 1 ? 'Long material description for MRB table width and truncation review' : `Quarantined material ${index + 1}`, unit_of_measure: 'kg' },
+    ncr: { id: `layout-ncr-${index + 1}`, ncr_number: `NCR-202610-${String(index + 1).padStart(5, '0')}`, status: 'open', status_label: 'Open', affected_quantity: 25, disposition: 'rework', disposition_label: 'Rework', inspection: { id: `layout-inspection-${index + 1}`, inspection_number: `INSP-202610-${String(index + 1).padStart(5, '0')}`, stage: 'incoming', status: 'failed' } },
+    inspection: { id: `layout-inspection-${index + 1}`, inspection_number: `INSP-202610-${String(index + 1).padStart(5, '0')}`, stage: 'incoming', stage_label: 'Incoming', status: 'failed', status_label: 'Failed', batch_quantity: 25 },
+    return_request: null,
+    actions: { can_release: status === 'held', can_release_good_stock: true },
+    source_location: sampleMrbLocation('layout-location-good', 'A-01-01', 'RM', 'raw_materials'),
+    quarantine_location: sampleMrbLocation('layout-location-quarantine', 'Q-01-01', 'QUAR', 'quarantine'),
+    release_location: status === 'held' ? null : sampleMrbLocation('layout-location-good', 'A-01-01', 'RM', 'raw_materials'),
+    hold_movement_id: `layout-hold-movement-${index + 1}`,
+    release_movement_id: status === 'held' ? null : `layout-release-movement-${index + 1}`,
+    held_by_id: 'layout-audit-originator', held_by: 'Alexandria-Maria Santos-Dela-Cruz',
+    held_at: '2026-10-27T09:14:00+08:00', released_by: status === 'held' ? null : 'Warehouse Quality Approver',
+    released_at: status === 'held' ? null : '2026-10-27T11:30:00+08:00',
+    notes: 'Long quarantine note describing the supplier lot discrepancy and the inspection evidence that triggered the hold.',
+    created_at: '2026-10-27T09:14:00+08:00',
+  };
+}
+
+function sampleMrbs(count) {
+  return Array.from({ length: count }, (_, index) => sampleMrbRecord(index));
+}
+
+function sampleQuarantineWarehouseTree() {
+  const location = (id, code, blocked = false) => ({
+    id, zone_id: 'layout-zone-placeholder', code, rack: code.slice(0, 4), bin: code.slice(-2),
+    is_active: true, is_blocked: blocked, full_code: `MW-${code}`,
+  });
+  return [{
+    id: 'layout-warehouse-1', name: 'Main Warehouse', code: 'MW', address: null, is_active: true,
+    zones: [
+      { id: 'layout-zone-raw', name: 'Raw materials', code: 'RM', zone_type: 'raw_materials', zone_type_label: 'Raw materials', locations: [location('layout-location-good', 'A-01-01')] },
+      { id: 'layout-zone-quarantine', name: 'Quarantine', code: 'QUAR', zone_type: 'quarantine', zone_type_label: 'Quarantine', locations: [location('layout-location-quarantine', 'Q-01-01')] },
+      { id: 'layout-zone-scrap', name: 'Scrap', code: 'SCRAP', zone_type: 'scrap', zone_type_label: 'Scrap', locations: [location('layout-location-scrap', 'S-01-01')] },
+    ],
+  }];
+}
+
+for (const count of [0, 1, 10, 50, 500]) {
+  assert.equal(sampleItems(count).length, count);
+  assert.equal(sampleUoms(count).length, count);
+  assert.equal(sampleWarehouseTree(count)[0].zones[0].locations.length, count);
+  assert.equal(sampleStockLevels(count).length, count);
+  assert.equal(sampleStockMovements(count).length, count);
+  assert.equal(sampleReservations(count).length, count);
+  assert.equal(sampleGrns(count).length, count);
+  assert.equal(sampleGrnDetail(count).items.length, Math.max(1, count));
+  assert.equal(sampleReceivablePurchaseOrder(count).items.length, count);
+  assert.equal(sampleMaterialIssues(count).length, count);
+  assert.equal(sampleMaterialIssueDetail(count).items.length, count);
+  assert.equal(sampleTransferOrders(count).length, count);
+  assert.equal(sampleMrbs(count).length, count);
+}
+
+function addDays(date, days) {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function sampleScheduleSnapshot(count, from, to) {
+  const days = Math.max(1, Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000));
+  const machineCount = Math.max(1, Math.min(10, count));
+  const rows = Array.from({ length: machineCount }, (_, index) => ({
+    machine_id: `layout-schedule-machine-${index + 1}`,
+    machine_code: `IMM-${String(index + 1).padStart(2, '0')}`,
+    name: index === 1 ? 'Large-capacity injection molding machine for long label checks' : `Injection machine ${index + 1}`,
+    tonnage: 120 + index * 10,
+    status: index % 2 ? 'running' : 'idle',
+    current_owner: index === 0 ? { id: 'layout-schedule-owner', wo_number: 'WO-202610-0001' } : null,
+    bars: [],
+  }));
+  for (let index = 0; index < count; index += 1) {
+    const machine = rows[index % machineCount];
+    const date = addDays(from, index % days);
+    const hour = 7 + (index % 9);
+    const start = `${date}T${String(hour).padStart(2, '0')}:00:00+08:00`;
+    const end = `${date}T${String(hour + 1).padStart(2, '0')}:00:00+08:00`;
+    const status = index % 5 === 0 ? 'executed' : index % 3 === 0 ? 'confirmed' : 'pending';
+    machine.bars.push({
+      id: `layout-schedule-${index + 1}`,
+      updated_at: '2026-10-27T02:00:00.000Z',
+      wo_id: `layout-schedule-wo-${index + 1}`,
+      wo_number: index === 0 ? 'WO-202610-000001' : `WO-202610-${String(index + 1).padStart(6, '0')}`,
+      product_name: index === 1
+        ? 'Very long injection-molded product name for table width and wrapping checks'
+        : `Product ${index + 1}`,
+      product_part_number: index === 1 ? 'PART-REFERENCE-000000000000000000000001' : `PART-${String(index + 1).padStart(5, '0')}`,
+      quantity_target: index === 2 ? 123456789.125 : 250 + index * 10,
+      sales_order: index % 3 === 0 ? { id: `layout-schedule-so-${index + 1}`, so_number: `SO-202610-${String(index + 1).padStart(6, '0')}` } : null,
+      mold_code: index % 4 === 0 ? null : `MOLD-${String((index % 10) + 1).padStart(3, '0')}`,
+      start,
+      end,
+      status,
+      wo_status: status === 'executed' ? 'completed' : status === 'confirmed' ? 'confirmed' : 'planned',
+      reserves_capacity: status !== 'executed',
+      staffing: {
+        worker_names: index === 1 ? ['A very long employee name for schedule width checks', 'Production Worker'] : ['Ana Santos', 'Juan Dela Cruz'],
+        worker_count: index === 1 ? 2 : 2,
+        minimum_workers: index === 1 ? 3 : 2,
+        recorder_name: 'Layout Auditor',
+        blockers: index === 1 ? ['Minimum worker count not met'] : [],
+        execution_blockers: [],
+        expected_crew_id: `layout-schedule-crew-${index + 1}`,
+        approval_blockers: [],
+      },
+    });
+  }
+  return {
+    from: `${from}T00:00:00+08:00`,
+    to: `${to}T00:00:00+08:00`,
+    timezone: 'Asia/Manila',
+    rows,
+    conflicts: count ? [{
+      work_order_id: 'layout-schedule-conflict',
+      wo_number: 'WO-202610-CONFLICT',
+      reasons: ['No covered shift', 'No covered shift', 'Machine readiness needs review'],
+      checked_at: '2026-10-27T02:00:00.000Z',
+    }] : [],
+  };
+}
+
+assert.equal(addDays('2026-12-31', 1), '2027-01-01');
+assert.equal(sampleScheduleSnapshot(0, '2026-10-27', '2026-11-10').rows.flatMap((row) => row.bars).length, 0);
+assert.equal(sampleScheduleSnapshot(10, '2026-10-27', '2026-11-10').rows.flatMap((row) => row.bars).length, 10);
 
 async function installLocalMocks(page, role, rowCount, themeMode) {
   const user = localUser(role, themeMode);
   await page.route('**/api/v1/**', async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     let json = { data: [], meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 } };
+    let status = 200;
     if (pathname.endsWith('/auth/user')) json = { data: user };
     else if (pathname.endsWith('/dashboard/dispatch')) json = { data: { target: { path: '/dashboard/default' }, candidates: [] } };
     else if (pathname.endsWith('/business-policies')) json = { data: { functional_currency_code: 'PHP', reporting_currency_code: 'PHP' } };
     else if (pathname.endsWith('/landing/contact')) json = { legal_name: 'OGAMI ERP' };
     else if (pathname.endsWith('/dashboards/badges')) json = { data: {} };
+    else if (pathname.endsWith('/inventory/scan/options')) json = {
+      data: { contexts: [
+        { value: 'lookup', label: 'General lookup' },
+        { value: 'wo_id', label: 'Work order' },
+        { value: 'po_id', label: 'Purchase order' },
+        { value: 'grn_id', label: 'Goods receipt' },
+        { value: 'bin_id', label: 'Warehouse bin' },
+        { value: 'item_id', label: 'Inventory item' },
+      ] },
+    };
+    else if (pathname.endsWith('/inventory/scan/records')) {
+      const query = new URL(route.request().url()).searchParams;
+      const search = (query.get('search') ?? '').toLocaleLowerCase();
+      json = { data: sampleScannerRecords(rowCount).filter((record) => !search || record.label.toLocaleLowerCase().includes(search)) };
+    }
+    else if (pathname.endsWith('/inventory/scan/resolve')) {
+      const { barcode } = route.request().postDataJSON();
+      if (String(barcode).toLocaleUpperCase().includes('ERROR')) {
+        status = 422;
+        json = { message: 'Synthetic scanner service error for layout audit.' };
+      } else {
+        json = { data: sampleScanResult(String(barcode)) };
+      }
+    }
+    else if (pathname.endsWith('/mrp/scheduler/options')) json = { data: { default_horizon_days: 14 } };
+    else if (pathname.endsWith('/mrp/scheduler/snapshot')) {
+      const query = new URL(route.request().url()).searchParams;
+      const from = query.get('from') ?? '2026-10-27';
+      const to = query.get('to') ?? addDays(from, 14);
+      json = { data: sampleScheduleSnapshot(rowCount, from, to) };
+    }
     else if (pathname.endsWith('/inventory/items/options')) json = {
       data: {
         replenishment_basis: { demand_history_days: 90, coverage_buffer_ratio: 1.2, default_lead_time_days: 14 },
@@ -207,8 +976,136 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
         stock_statuses: [{ value: 'ok', label: 'OK' }, { value: 'low', label: 'Low' }, { value: 'critical', label: 'Critical' }],
       },
     };
+    else if (pathname.endsWith('/inventory/grn/options')) json = {
+      data: {
+        statuses: grnStatuses.map((value) => ({ value, label: value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) })),
+        default_qc_result: 'pending',
+      },
+    };
+    else if (pathname.endsWith('/inventory/grn/receivable-purchase-orders')) json = {
+      data: [{ id: 'layout-po-1', po_number: 'PO-202610-00001', status: 'partially_received', vendor: { id: 'layout-vendor-1', name: 'International Industrial Materials and Packaging Corporation' } }],
+      meta: { current_page: 1, last_page: 1, per_page: 50, total: 1, from: 1, to: 1 },
+    };
+    else if (/\/inventory\/grn\/receivable-purchase-orders\/[^/]+$/.test(pathname)) json = {
+      data: sampleReceivablePurchaseOrder(rowCount),
+    };
+    else if (/\/inventory\/grn\/[^/]+$/.test(pathname) || /\/inventory\/grns\/[^/]+$/.test(pathname)) {
+      json = { data: sampleGrnDetail(rowCount, arg('grn-state', 'pending_qc')) };
+    }
+    else if (pathname.endsWith('/inventory/grn')) json = {
+      data: sampleGrns(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
+    else if (/\/b2b\/goods-receipt-notes\/[^/]+\/supplier-documents$/.test(pathname)) json = {
+      data: {
+        shipment: null,
+        shipments: [
+          { id: 'layout-shipment-1', can_edit: true, shipped_date: '2026-10-26', carrier: 'OGAMI Freight', tracking_number: 'TRACKING-REFERENCE-000000000001', estimated_arrival: '2026-10-27', notes: 'Synthetic shipment for layout audit.', updated_at: '2026-10-26T12:00:00+08:00', items: [{ purchase_order_item_id: 'layout-po-line-1', quantity_shipped: '25000.000' }] },
+          { id: 'layout-shipment-2', can_edit: true, shipped_date: '2026-10-26', carrier: null, tracking_number: 'TRACKING-REFERENCE-000000000002', estimated_arrival: '2026-10-28', notes: null, updated_at: '2026-10-26T13:00:00+08:00', items: [{ purchase_order_item_id: 'layout-po-line-1', quantity_shipped: '12500.000' }] },
+        ],
+        documents: [],
+      },
+    };
+    else if (pathname.endsWith('/inventory/mrb/options')) json = {
+      data: {
+        statuses: mrbStatuses.map((value) => ({ value, label: value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) })),
+        dispositions: [
+          { value: 'scrap', label: 'Scrap' },
+          { value: 'rework', label: 'Rework' },
+          { value: 'use_as_is', label: 'Use as is' },
+          { value: 'return_to_supplier', label: 'Return to supplier' },
+        ],
+      },
+    };
+    else if (pathname.endsWith('/inventory/mrb/quality-options')) json = {
+      data: {
+        inspections: [{ id: 'layout-inspection-1', inspection_number: 'INSP-202610-00001', stage: 'incoming', stage_label: 'Incoming', status: 'failed', status_label: 'Failed', batch_quantity: 25 }],
+        ncrs: [{ id: 'layout-ncr-1', ncr_number: 'NCR-202610-00001', status: 'open', status_label: 'Open', affected_quantity: 25, inspection: { id: 'layout-inspection-1', inspection_number: 'INSP-202610-00001', stage: 'incoming', status: 'failed' } }],
+      },
+    };
+    else if (pathname.endsWith('/inventory/mrb/source-lots')) json = {
+      data: [{ lot_number: 'LOT-202610-00001', net: '12500.000', expiry_date: '2027-10-27' }, { lot_number: 'LOT-REFERENCE-000000000000002', net: '500.000', expiry_date: null }],
+    };
+    else if (/\/inventory\/mrb\/[^/]+$/.test(pathname)) json = { data: sampleMrbRecord() };
+    else if (pathname.endsWith('/inventory/mrb')) json = {
+      data: sampleMrbs(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
+    else if (pathname.endsWith('/inventory/material-issues/options')) json = {
+      data: {
+        work_orders: [{ id: sampleWorkOrder.id, wo_number: sampleWorkOrder.wo_number, status: 'in_progress', product_part_number: 'PART-LAYOUT-001' }],
+        sources: [{ location_id: 'layout-location-good', label: 'MW-RM-A-01-01', available: '123222221.875', reserved_for_work_order: '25000.000', is_blocked: false }],
+        reservations: [{ id: 'layout-reservation-1', location_id: 'layout-location-good', quantity: '25000.000', reserved_at: '2026-10-26T09:14:00+08:00' }],
+      },
+    };
+    else if (/\/inventory\/material-issues\/[^/]+$/.test(pathname)) json = { data: sampleMaterialIssueDetail(rowCount) };
+    else if (pathname.endsWith('/inventory/material-issues')) json = {
+      data: sampleMaterialIssues(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
+    else if (pathname.endsWith('/inventory/material-handovers/sources')) {
+      const query = new URL(route.request().url()).searchParams;
+      const selector = query.get('work_order_id') ?? query.get('material_issue_id') ?? query.get('maintenance_work_order_id') ?? '';
+      const index = Math.max(0, Number(selector.match(/-(\d+)$/)?.[1] ?? 1) - 1);
+      const data = sampleHandoverDetail(rowCount, index);
+      if (query.has('maintenance_work_order_id')) {
+        data.maintenance_work_order_id = selector;
+        data.work_order_id = null;
+        data.material_issue_id = null;
+        data.label = `Maintenance work order ${selector}`;
+      }
+      json = { data };
+    }
+    else if (pathname.endsWith('/inventory/material-handovers')) {
+      const query = new URL(route.request().url()).searchParams;
+      const status = query.get('status') ?? '';
+      let data = sampleHandoverTasks(rowCount, status);
+      const workOrderId = query.get('work_order_id');
+      const maintenanceWorkOrderId = query.get('maintenance_work_order_id');
+      if (workOrderId) data = data.filter((task) => task.work_order_id === workOrderId);
+      if (maintenanceWorkOrderId) data = data.slice(0, 1).map((task) => ({
+        ...task,
+        work_order_id: null,
+        material_issue_id: null,
+        maintenance_work_order_id: maintenanceWorkOrderId,
+        label: `Maintenance work order ${maintenanceWorkOrderId}`,
+      }));
+      json = { data, meta: { current_page: 1, last_page: 1, per_page: Math.max(1, data.length), total: data.length, from: data.length ? 1 : 0, to: data.length } };
+    }
+    else if (/\/inventory\/transfer-orders\/[^/]+$/.test(pathname)) json = { data: sampleTransferOrder(0) };
+    else if (pathname.endsWith('/inventory/transfer-orders')) json = {
+      data: sampleTransferOrders(rowCount),
+      meta: { current_page: 1, last_page: 1, per_page: Math.max(50, rowCount), total: rowCount, from: rowCount ? 1 : 0, to: rowCount },
+    };
     else if (pathname.endsWith(`/inventory/items/${sampleItem.id}`)) json = { data: sampleItem };
+    else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}/operations`)) json = { data: sampleWorkOrderOperations(rowCount) };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}`)) json = { data: sampleWorkOrder };
+    else if (pathname.endsWith(`/production/routings/${sampleRouting.id}`)) json = { data: sampleRouting };
+    else if (pathname.endsWith('/production/routings')) json = {
+      data: sampleRoutings(rowCount),
+      meta: { current_page: 1, last_page: 1, per_page: Math.max(rowCount, 25), total: rowCount,
+        from: rowCount ? 1 : 0, to: rowCount },
+    };
+    else if (pathname.endsWith('/crm/products')) json = {
+      data: [{ ...sampleWorkOrder.product, unit_of_measure: 'piece', include_forecast_in_mrp: false, image_url: null }],
+      meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+    };
+    else if (pathname.endsWith('/mrp/machines')) json = {
+      data: [{ id: 'layout-machine-1', machine_code: 'MC-01', name: 'Layout press' }],
+      meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+    };
+    else if (pathname.endsWith('/mrp/molds')) json = {
+      data: [{ id: 'layout-mold-1', mold_code: 'MOLD-01', name: 'Layout mold' }],
+      meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+    };
+    else if (pathname.endsWith('/production/work-orders/form-options')) json = {
+      data: {
+        products: [{ ...sampleWorkOrder.product, stock_production: { eligible: true, blockers: [] } }],
+        machines: [{ id: 'layout-machine-1', machine_code: 'MC-01', name: 'Layout press', tonnage: 120, status: 'active' }],
+        molds: [{ id: 'layout-mold-1', mold_code: 'MOLD-01', name: 'Layout mold', product: sampleWorkOrder.product, cavity_count: 2, status: 'active' }],
+        shifts: [{ id: 'layout-shift-1', name: 'Day shift' }],
+      },
+    };
     else if (pathname.endsWith('/production/work-orders/options')) json = {
       data: { statuses: [
         { value: 'planned', label: 'Planned', next_statuses: [] },
@@ -216,24 +1113,52 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
       ], operation_statuses: [] },
     };
     else if (pathname.endsWith('/production/work-orders')) json = {
-      data: [sampleWorkOrder],
-      meta: { current_page: 1, last_page: 1, per_page: 25, total: 1, from: 1, to: 1 },
+      data: sampleWorkOrders(rowCount),
+      meta: { current_page: 1, last_page: 1, per_page: Math.max(rowCount, 25), total: rowCount,
+        from: rowCount ? 1 : 0, to: rowCount },
     };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}/crew`)) json = {
       data: { current: null, history: [], minimum_workers: 1, maximum_workers: null, can_assign: false },
     };
     else if (pathname.endsWith(`/production/work-orders/${sampleWorkOrder.id}/chain`)) json = { data: [] };
     else if (pathname.endsWith('/inventory/items')) json = {
-      data: [sampleItem], meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+      data: sampleItems(rowCount), meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 100)), per_page: 100, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 100) },
       links: { first: '', last: '', prev: null, next: null },
     };
-    else if (pathname.endsWith('/inventory/warehouse')) json = { data: sampleWarehouse };
+    else if (pathname.endsWith('/inventory/warehouse')) {
+      const pagePath = new URL(page.url()).pathname;
+      json = {
+        data: pagePath.startsWith('/inventory/grn') || pagePath.startsWith('/inventory/mrb')
+          ? sampleQuarantineWarehouseTree()
+          : sampleWarehouseTree(rowCount),
+      };
+    }
     else if (pathname.endsWith('/inventory/stock-levels')) json = {
-      data: [sampleStockLevel], meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+      data: sampleStockLevels(rowCount), meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 100)), per_page: 100, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 100) },
       links: { first: '', last: '', prev: null, next: null },
+    };
+    else if (pathname.endsWith('/inventory/stock-movements/options')) json = {
+      data: { movement_types: movementTypes.map((value) => ({ value, label: value.replaceAll('_', ' ') })) },
+    };
+    else if (/\/inventory\/stock-movements\/[^/]+\/return-options$/.test(pathname)) json = {
+      data: {
+        eligible: true, source_movement_id: 'layout-movement-000002', issued_quantity: '20.000',
+        returned_quantity: '0.000', returned_cost: '0.00', returnable_quantity: '20.000',
+        unit_cost: '1234.5000', unit_of_measure: 'kg', total_returned_at_original_cost: '0.00',
+        location: 'MW-RM-A-01-01', lot_number: 'LOT-000002', gross_production_units: '0',
+        consumption_floor: '0', consumption_basis: 'unlinked_issue', message: null,
+      },
+    };
+    else if (pathname.endsWith('/inventory/stock-movements')) json = {
+      data: sampleStockMovements(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
+    };
+    else if (pathname.endsWith('/inventory/material-reservations')) json = {
+      data: sampleReservations(rowCount),
+      meta: { current_page: 1, last_page: Math.max(1, Math.ceil(rowCount / 50)), per_page: 50, total: rowCount, from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
     };
     else if (pathname.endsWith('/inventory/uoms')) json = {
-      data: [{ id: 'layout-uom-kg', code: 'kg', name: 'Kilogram', deleted_at: null }],
+      data: sampleUoms(rowCount),
     };
     else if (pathname.includes('/inventory/stock-adjustments/options')) json = {
       data: {
@@ -251,12 +1176,13 @@ async function installLocalMocks(page, role, rowCount, themeMode) {
           from: rowCount ? 1 : 0, to: Math.min(rowCount, 50) },
       };
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(json) });
+    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) });
   });
 }
 
 async function startLocalServer() {
-  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5174', '--strictPort'], {
+  const port = new URL(BASE).port || '5174';
+  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', port, '--strictPort'], {
     cwd: SPA_ROOT,
     env: {
       ...process.env,
@@ -265,6 +1191,8 @@ async function startLocalServer() {
       VITE_REVERB_HOST: '127.0.0.1',
       VITE_REVERB_PORT: '8080',
       VITE_REVERB_SCHEME: 'http',
+      VITE_HMR_HOST: '127.0.0.1',
+      VITE_HMR_PORT: port,
     },
     stdio: 'ignore',
   });
@@ -324,6 +1252,7 @@ async function measure(page) {
       return Number(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toFixed(2));
     };
     const main = document.querySelector('main#main-content, main');
+    const dialog = document.querySelector('[role="dialog"]');
     const pageHeader = main?.querySelector('[data-layout="page-header"]')
       ?? main?.querySelector('h1')?.closest('div.px-5.py-4')
       ?? main?.querySelector('h1')?.parentElement?.parentElement;
@@ -350,30 +1279,94 @@ async function measure(page) {
         verticalOverflow: element.scrollHeight > element.clientHeight + 1,
       };
     });
+    const pageSectionAlignment = pageRoot?.getAttribute('data-layout') === 'page-shell'
+      && pageHeader?.parentElement === pageRoot
+      ? Object.fromEntries(flowElements.map((element, index) => {
+        const box = element.getBoundingClientRect();
+        const reference = pageHeader.getBoundingClientRect();
+        return [`section-${index}`, box && reference ? {
+          leftDelta: Math.round((box.left - reference.left) * 100) / 100,
+          rightDelta: Math.round((box.right - reference.right) * 100) / 100,
+          aligned: Math.abs(box.left - reference.left) <= 1 && Math.abs(box.right - reference.right) <= 1,
+        } : null];
+      })) : null;
+    const sections = [...(main?.querySelectorAll('[data-layout="section"]') ?? [])].map((section) => {
+      const style = getComputedStyle(section);
+      const parent = section.parentElement;
+      const parentStyle = parent ? getComputedStyle(parent) : null;
+      const body = section.lastElementChild;
+      const bodyStyle = body ? getComputedStyle(body) : null;
+      return {
+        title: (section.querySelector('h2,h3,h4')?.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 100),
+        className: typeof section.className === 'string' ? section.className : '',
+        bounds: rect(section),
+        display: style.display,
+        overflowY: style.overflowY,
+        gridParent: parent ? {
+          className: typeof parent.className === 'string' ? parent.className : '',
+          bounds: rect(parent),
+          display: parentStyle.display,
+          gridTemplateRows: parentStyle.gridTemplateRows,
+        } : null,
+        body: body ? {
+          className: typeof body.className === 'string' ? body.className : '',
+          bounds: rect(body),
+          display: bodyStyle.display,
+          overflowY: bodyStyle.overflowY,
+          scrollHeight: body.scrollHeight,
+          clientHeight: body.clientHeight,
+        } : null,
+      };
+    });
     const filterBar = main?.querySelector('[data-layout="filter-bar"]')
       ?? main?.querySelector('[role="search"]')?.parentElement;
     const table = main?.querySelector('[data-layout="table"]') ?? main?.querySelector('table');
+    const scheduleScroller = main?.querySelector('[data-layout="schedule-scroll-region"]');
+    const scheduleFrame = scheduleScroller?.closest('.scroll-edge-frame');
     const tableCard = table?.closest('[data-layout="table-scroller"]') ?? table?.parentElement;
+    const tableSection = table?.closest('[data-layout="section"]');
+    const tableAlignmentReference = tableSection?.lastElementChild ?? pageHeader;
     const tableRoot = table?.closest('[data-layout="data-table"]') ?? tableCard?.parentElement;
     const toolbar = tableRoot?.querySelector('[data-layout="table-toolbar"]')
       ?? (tableRoot && [...tableRoot.children].find((element) => element.classList.contains('justify-end')));
     const pagination = tableRoot?.querySelector('[data-layout="pagination"]')
-      ?? (tableRoot && [...tableRoot.children].find((element) => element.classList.contains('mt-3')));
+      ?? (tableRoot && [...tableRoot.children].find((element) => element.classList.contains('mt-3')))
+      ?? (location.pathname === '/inventory/transfer-orders'
+        ? pageRoot?.querySelector('[data-layout="pagination"]') : null);
+    const transferFlowAlignment = location.pathname === '/inventory/transfer-orders' && pageRoot
+      ? Object.fromEntries([
+        ['header', pageHeader],
+        ['content', flowElements[1]],
+        ['pagination', pageRoot.querySelector('[data-layout="pagination"]')],
+      ].map(([name, element]) => {
+        const box = rect(element);
+        const shellBox = rect(pageRoot);
+        return [name, box && shellBox ? {
+          leftDelta: Math.round((box.left - shellBox.left) * 100) / 100,
+          rightDelta: Math.round((box.right - shellBox.right) * 100) / 100,
+          aligned: Math.abs(box.left - shellBox.left) <= 1 && Math.abs(box.right - shellBox.right) <= 1,
+        } : null];
+      })) : null;
     const pageBlocks = {
       header: rect(pageHeader),
       filters: rect(filterBar),
       toolbar: rect(toolbar),
-      table: rect(tableCard),
+      table: rect(tableCard ?? scheduleScroller),
       pagination: rect(pagination),
     };
     const reference = pageBlocks.header;
-    const alignment = Object.fromEntries(Object.entries(pageBlocks).map(([key, box]) => [key,
-      box && reference
-        ? { leftDelta: Math.round((box.left - reference.left) * 100) / 100,
-            rightDelta: Math.round((box.right - reference.right) * 100) / 100,
-            aligned: Math.abs(box.left - reference.left) <= 1 && Math.abs(box.right - reference.right) <= 1 }
+    const alignment = Object.fromEntries(Object.entries(pageBlocks).map(([key, box]) => {
+      const edgeReference = ['toolbar', 'table', 'pagination'].includes(key) && tableSection
+        ? rect(tableAlignmentReference) : reference;
+      return [key,
+      box && edgeReference
+        ? { reference: ['toolbar', 'table', 'pagination'].includes(key) && tableSection ? 'section-content' : 'page-content',
+            leftDelta: Math.round((box.left - edgeReference.left) * 100) / 100,
+            rightDelta: Math.round((box.right - edgeReference.right) * 100) / 100,
+            aligned: Math.abs(box.left - edgeReference.left) <= 1 && Math.abs(box.right - edgeReference.right) <= 1 }
         : null,
-    ]));
+    ];
+    }));
     const sidebar = document.querySelector('aside[aria-label="Sidebar"]');
     const sidebarBox = sidebar ? sidebar.getBoundingClientRect() : null;
     const firstContentLeft = reference?.left ?? pageBlocks.toolbar?.left ?? main?.getBoundingClientRect().left ?? 0;
@@ -383,11 +1376,13 @@ async function measure(page) {
       countSidebarRail && box
         ? Math.round((box.left - sidebarBox.right) * 100) / 100 : null,
     ]));
-    const rows = table ? [...table.querySelectorAll('tbody tr')].filter((row) => row.offsetHeight > 0) : [];
+    const rows = table ? [...table.querySelectorAll('tbody > tr')]
+      .filter((row) => row.closest('table') === table && row.offsetHeight > 0) : [];
     const heights = rows.map((row) => Math.round(row.getBoundingClientRect().height * 100) / 100);
     const unique = (values) => [...new Set(values)];
     const typeNodes = [
       ...Array.from(main?.querySelectorAll('h1,h2,h3,p,label,button,th,tbody td,.text-muted') ?? []),
+      ...Array.from(dialog?.querySelectorAll('h1,h2,h3,p,label,button,th,tbody td,.text-muted') ?? []),
     ];
     const typography = typeNodes.map((element) => {
       const css = getComputedStyle(element);
@@ -418,6 +1413,7 @@ async function measure(page) {
       const classText = typeof element.className === 'string' ? element.className : '';
       const intentionalHorizontal = horizontal && (
         element.matches('[data-layout="table-scroller"]')
+        || element.matches('[data-layout="schedule-scroll-region"]')
         ||
         /overflow-x-(auto|scroll)/.test(classText)
         || /truncate|sr-only/.test(classText)
@@ -441,7 +1437,7 @@ async function measure(page) {
         clientHeight: element.clientHeight,
       }];
     });
-    const buttons = [...(main?.querySelectorAll('button') ?? [])].map((button) => {
+    const buttons = [...(main?.querySelectorAll('button') ?? []), ...(dialog?.querySelectorAll('button') ?? [])].map((button) => {
       const css = getComputedStyle(button);
       const box = button.getBoundingClientRect();
       return {
@@ -467,16 +1463,23 @@ async function measure(page) {
           optionBackground: option ? getComputedStyle(option).backgroundColor : null,
         };
       });
-    const controls = [...(main?.querySelectorAll('button:not(.sr-only),input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"]') ?? [])]
+    const controls = [
+      ...(main?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"],[role="separator"]') ?? []),
+      ...(dialog?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"],[role="separator"]') ?? []),
+    ]
       .filter((control) => control.getAttribute('aria-hidden') !== 'true' && control.tabIndex !== -1)
       .map((control) => {
-        const box = control.getBoundingClientRect();
+        const target = control instanceof HTMLInputElement && control.type === 'checkbox'
+          ? control.closest('label') ?? control
+          : control;
+        const box = target.getBoundingClientRect();
         return {
           label: control.getAttribute('aria-label') || control.getAttribute('name') || control.textContent?.trim() || control.tagName.toLowerCase(),
           width: Math.round(box.width),
           height: Math.round(box.height),
         };
-      });
+      })
+      .filter((control) => control.width > 0 && control.height > 0);
     const bodyTextColor = getComputedStyle(document.body).color;
     const recordLinks = [...(main?.querySelectorAll('a[href].font-mono,button.font-mono') ?? [])]
       .map((element) => {
@@ -506,14 +1509,56 @@ async function measure(page) {
     });
     const yGap = (a, b) => a && b ? Math.round((b.top - a.bottom) * 100) / 100 : null;
     const tableRows = rows.filter((row) => !row.querySelector('td[colspan]'));
-    const tableDensity = table?.closest('[data-layout="data-table"]')?.getAttribute('data-density') ?? 'default';
-    const tableTextMinimum = tableDensity === 'compact' ? 13 : 14;
+    const tableOwner = table?.closest('[data-layout="data-table"]');
+    const tableDensity = tableOwner?.getAttribute('data-density') ?? (table ? 'manual' : 'default');
+    const tableTextMinimum = tableDensity === 'compact' || tableDensity === 'manual' ? 13 : 14;
     const firstRow = tableRows[0];
     const lastRow = tableRows.at(-1);
     const doc = document.documentElement;
-    const pageVerticalScroll = doc.scrollHeight > innerHeight + 1;
-    const internalVerticalScroll = overflow.filter((item) => item.vertical && item.insideMain);
+    const originalHorizontalScroll = doc.scrollLeft;
+    doc.scrollLeft = doc.scrollWidth;
+    const horizontalPageMaxScroll = doc.scrollLeft;
+    doc.scrollLeft = originalHorizontalScroll;
+    const pageVerticalScroll = doc.scrollHeight > innerHeight + 1
+      || Boolean(pageRoot && pageRoot.scrollHeight > pageRoot.clientHeight + 1
+        && /auto|scroll/.test(getComputedStyle(pageRoot).overflowY));
+    const internalVerticalScroll = overflow.filter((item) => item.vertical && item.insideMain
+      && !item.className.includes('page-shell--viewport'));
     const sidebarVerticalScroll = overflow.some((item) => item.vertical && item.insideSidebar);
+    const layoutContext = [...document.querySelectorAll('html, body, #root, .app-shell, .app-content, .app-main, .route-transition, main, [data-layout="page-shell"], aside[aria-label="Sidebar"]')]
+      .map((element) => {
+        const box = element.getBoundingClientRect();
+        const css = getComputedStyle(element);
+        return {
+          tag: element.tagName.toLowerCase(),
+          className: typeof element.className === 'string' ? element.className : '',
+          left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width),
+          scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, scrollLeft: element.scrollLeft,
+          overflowX: css.overflowX,
+        };
+      });
+    const elementsPastViewport = [...document.body.querySelectorAll('*')]
+      .map((element) => ({ element, box: element.getBoundingClientRect(), css: getComputedStyle(element) }))
+      .filter(({ element, box, css }) => {
+        if (box.right <= innerWidth + 1 || element.closest('.sr-only') || css.position === 'fixed') return false;
+        return true;
+      })
+      .sort((a, b) => b.box.right - a.box.right)
+      .slice(0, 12)
+      .map(({ element, box, css }) => ({
+        tag: element.tagName.toLowerCase(),
+        className: typeof element.className === 'string' ? element.className : '',
+        left: Math.round(box.left), right: Math.round(box.right), width: Math.round(box.width),
+        overflowX: css.overflowX,
+        insideHorizontalScroll: Boolean(element.closest('[data-layout="table-scroller"], [data-layout="schedule-scroll-region"]')
+          ?? element.closest('.overflow-x-auto, .overflow-x-scroll')),
+      }));
+    const rootPseudoElements = ['::before', '::after'].map((pseudo) => {
+      const css = getComputedStyle(document.documentElement, pseudo);
+      return { pseudo, content: css.content, position: css.position, left: css.left, right: css.right, width: css.width };
+    });
+    const uncontainedElementsPastViewport = elementsPastViewport
+      .filter(({ insideHorizontalScroll }) => !insideHorizontalScroll);
     const actualTableBottom = tableCard?.getBoundingClientRect().bottom;
     const stickyHeaderCss = Boolean(thead && getComputedStyle(thead).position === 'sticky')
       || ths.some((th) => getComputedStyle(th).position === 'sticky');
@@ -532,6 +1577,39 @@ async function measure(page) {
       stickyProbe.scrollerTopAfterScroll = Math.round(scrollerBox.top * 100) / 100;
       stickyProbe.sticksToScroller = Math.abs(headerBox.top - scrollerBox.top - 1) <= 2;
       tableCard.scrollTop = originalScrollTop;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    const scheduleHeader = scheduleScroller?.querySelector('[data-layout="gantt-header"]');
+    const scheduleColumns = scheduleHeader ? [...scheduleHeader.children].map((column) => {
+      const box = column.getBoundingClientRect();
+      return {
+        label: (column.textContent ?? '').trim().replace(/\s+/g, ' '),
+        width: Math.round(box.width * 100) / 100,
+        share: scheduleScroller?.scrollWidth
+          ? Number((box.width / scheduleScroller.scrollWidth).toFixed(3)) : null,
+      };
+    }) : [];
+    const ganttRowHeights = [...(scheduleScroller?.querySelectorAll('[data-layout="gantt-bar-row"]') ?? [])]
+      .map((row) => Math.round(row.getBoundingClientRect().height * 100) / 100);
+    const scheduleStickyProbe = {
+      cssSticky: Boolean(scheduleHeader && getComputedStyle(scheduleHeader).position === 'sticky'),
+      tested: false,
+      sticksToScroller: null,
+      topAfterScroll: null,
+      scrollerTopAfterScroll: null,
+    };
+    if (scheduleScroller && scheduleHeader
+      && scheduleScroller.scrollHeight > scheduleScroller.clientHeight + 1) {
+      const originalScrollTop = scheduleScroller.scrollTop;
+      scheduleScroller.scrollTop = Math.min(scheduleScroller.scrollHeight, originalScrollTop + 120);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const headerBox = scheduleHeader.getBoundingClientRect();
+      const scrollerBox = scheduleScroller.getBoundingClientRect();
+      scheduleStickyProbe.tested = true;
+      scheduleStickyProbe.topAfterScroll = Math.round(headerBox.top * 100) / 100;
+      scheduleStickyProbe.scrollerTopAfterScroll = Math.round(scrollerBox.top * 100) / 100;
+      scheduleStickyProbe.sticksToScroller = Math.abs(headerBox.top - scrollerBox.top) <= 2;
+      scheduleScroller.scrollTop = originalScrollTop;
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
     return {
@@ -559,12 +1637,21 @@ async function measure(page) {
         tabs: main?.querySelectorAll('[role="tab"]').length ?? 0,
       },
       main: rect(main),
+      mainContent: main ? {
+        textLength: main.innerText.trim().length,
+        textSample: main.innerText.trim().replace(/\s+/g, ' ').slice(0, 160),
+        documentTables: document.querySelectorAll('table').length,
+        mainTables: main.querySelectorAll('table').length,
+      } : null,
       sidebar: sidebarBox ? { left: sidebarBox.left, right: sidebarBox.right, width: sidebarBox.width } : null,
       sidebarClearance: countSidebarRail ? Math.round(firstContentLeft - sidebarBox.right) : null,
       sidebarClearanceByBlock,
       blocks: pageBlocks,
       flowBlocks,
+      sections,
       edgeAlignment: alignment,
+      pageSectionAlignment,
+      transferFlowAlignment,
       verticalGaps: {
         headerToFilters: yGap(pageBlocks.header, pageBlocks.filters),
         filtersToToolbar: yGap(pageBlocks.filters, pageBlocks.toolbar),
@@ -573,13 +1660,42 @@ async function measure(page) {
           ? Math.round((pageBlocks.pagination.top - actualTableBottom) * 100) / 100 : null,
       },
       horizontalPageOverflow: doc.scrollWidth > doc.clientWidth,
+      horizontalPageMaxScroll,
+      layoutContext,
+      elementsPastViewport,
+      uncontainedElementsPastViewport,
+      rootPseudoElements,
       horizontalOverflow: overflow.filter((item) => item.horizontal),
       verticalScrollContainers: overflow.filter((item) => item.vertical),
       sidebarVerticalScroll,
       pageVerticalScroll,
       doubleVerticalScroll: pageVerticalScroll && internalVerticalScroll.length > 0,
+      scheduleScrollRegion: scheduleScroller ? {
+        horizontal: scheduleScroller.scrollWidth > scheduleScroller.clientWidth + 1,
+        vertical: scheduleScroller.scrollHeight > scheduleScroller.clientHeight + 1,
+        left: scheduleFrame?.getAttribute('data-more-left') === 'true',
+        right: scheduleFrame?.getAttribute('data-more-right') === 'true',
+        keyboardFocusable: scheduleScroller.tabIndex >= 0,
+        labelled: Boolean(scheduleScroller.getAttribute('aria-label')),
+        columns: scheduleColumns,
+        barRowHeight: {
+          min: ganttRowHeights.length ? Math.min(...ganttRowHeights) : null,
+          max: ganttRowHeights.length ? Math.max(...ganttRowHeights) : null,
+          distinct: [...new Set(ganttRowHeights)],
+        },
+        stickyHeader: scheduleStickyProbe,
+      } : null,
       table: table ? {
         density: tableDensity,
+        scrollAffordance: tableCard ? {
+          needed: tableCard.scrollWidth - tableCard.offsetWidth
+            + (Number.parseFloat(getComputedStyle(tableCard).borderLeftWidth) || 0)
+            + (Number.parseFloat(getComputedStyle(tableCard).borderRightWidth) || 0) > 1,
+          left: tableCard.closest('.scroll-edge-frame')?.getAttribute('data-more-left') === 'true',
+          right: tableCard.closest('.scroll-edge-frame')?.getAttribute('data-more-right') === 'true',
+          keyboardFocusable: tableCard.tabIndex >= 0,
+          labelled: Boolean(tableCard.getAttribute('aria-label')),
+        } : null,
         textBelowMinimum: typography.filter((item) =>
           (item.tag === 'th' && item.size < 13) || (item.tag === 'td' && item.size < tableTextMinimum))
           .map((item) => ({ tag: item.tag, size: item.size, text: item.text })),
@@ -632,7 +1748,7 @@ async function captureTableSamples(page, out, route, width, rowCount) {
     maxX: element.scrollWidth - element.clientWidth,
     maxY: element.scrollHeight - element.clientHeight,
   }));
-  const vertical = rowCount >= 500 ? [0, 0.5, 1] : [0];
+  const vertical = rowCount >= 50 ? [0, 0.5, 1] : [0];
   const horizontal = dimensions.maxX > 1 ? [0, 1] : [0];
   const screenshots = [];
   for (const y of vertical) {
@@ -644,12 +1760,106 @@ async function captureTableSamples(page, out, route, width, rowCount) {
         element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * position.y);
       }, { x, y });
       await page.waitForTimeout(80);
+      if (dimensions.maxX > 1) {
+        await page.waitForTimeout(300);
+        const edges = await scroller.evaluate((element) => {
+          const frame = element.closest('.scroll-edge-frame');
+          return {
+            left: frame?.getAttribute('data-more-left') === 'true',
+            right: frame?.getAttribute('data-more-right') === 'true',
+            scrollLeft: element.scrollLeft,
+            maxScroll: element.scrollWidth - element.clientWidth,
+          };
+        });
+        assert.equal(edges.left, x === 1, `horizontal table scroll must update the left edge cue: ${JSON.stringify(edges)}`);
+        assert.equal(edges.right, x === 0, `horizontal table scroll must update the right edge cue: ${JSON.stringify(edges)}`);
+      }
       const file = path.join(out, `${slug(route)}-${width}-table-${yName}-${xName}.png`);
       await scroller.screenshot({ path: file });
       screenshots.push(path.relative(ROOT, file));
     }
   }
   return screenshots;
+}
+
+async function captureLongTableSamples(page, out, route, width) {
+  const scroller = page.locator('[data-layout="table-scroller"]');
+  const hasScroller = await scroller.count() > 0;
+  const tableMetrics = hasScroller
+    ? await scroller.evaluate((element) => ({
+      maxY: element.scrollHeight - element.clientHeight,
+      maxX: element.scrollWidth - element.clientWidth,
+    }))
+    : null;
+  const useTableScroll = Boolean(tableMetrics && tableMetrics.maxY > 1);
+  const screenshots = [];
+  for (const [position, name] of [[0, 'top'], [0.5, 'middle'], [1, 'bottom']]) {
+    if (useTableScroll) {
+      await scroller.evaluate((element, y) => {
+        element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * y);
+      }, position);
+    } else {
+      await page.evaluate((y) => window.scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * y)), position);
+    }
+    await page.waitForTimeout(80);
+    const file = path.join(out, `${slug(route)}-${width}-long-${name}.png`);
+    if (useTableScroll) await scroller.screenshot({ path: file });
+    else await page.screenshot({ path: file });
+    screenshots.push(path.relative(ROOT, file));
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  if (useTableScroll) await scroller.evaluate((element) => { element.scrollTop = 0; });
+  if ((tableMetrics?.maxX ?? 0) > 1) console.log(`${route} @ ${width}: horizontal table scroll ${tableMetrics.maxX}px`);
+  return screenshots;
+}
+
+async function probeColumnResize(page, screenshotPath) {
+  const handle = page.getByRole('separator').first();
+  if (!(await handle.count())) return null;
+  const before = Number(await handle.getAttribute('aria-valuenow'));
+  const box = await handle.boundingBox();
+  assert.ok(box, 'column resize handle must be visible');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 48, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const after = Number(await handle.getAttribute('aria-valuenow'));
+  assert.ok(after > before, 'drag resize must increase width');
+  const reset = page.getByRole('button', { name: 'Reset widths' });
+  assert.ok(await reset.isVisible(), 'custom width must expose Reset widths');
+  const resetBox = await reset.boundingBox();
+  assert.ok(resetBox && ((page.viewportSize()?.width ?? 0) > 1024 || resetBox.height >= 44), 'reset target must be at least 44px high on narrow screens');
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await reset.click();
+  assert.equal(await page.getByRole('button', { name: 'Reset widths' }).count(), 0);
+  return { before, after, reset: true, screenshot: path.relative(ROOT, screenshotPath) };
+}
+
+async function captureInventoryDialog(page, out, route, width, themeMode, label, buttonName) {
+  if (buttonName) {
+    const button = page.getByRole('button', { name: buttonName, exact: true }).first();
+    if (!(await button.count())) return null;
+    await button.click();
+  }
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor({ state: 'visible', timeout: 5_000 });
+  await page.waitForTimeout(350);
+  const screenshot = path.join(out, `${slug(route)}-${width}-${slug(`/${label}`)}-dialog.png`);
+  await page.screenshot({ path: screenshot });
+  const metrics = await measure(page);
+  const sample = {
+    label,
+    screenshot: path.relative(ROOT, screenshot),
+    visible: metrics.counts.dialogs === 1,
+    theme: metrics.appliedTheme,
+    contrastFailures: metrics.typography.contrastBelowAA.reduce((sum, item) => sum + item.count, 0),
+  };
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached', timeout: 5_000 });
+  assert.equal(sample.visible, true, `${label} dialog must render before screenshot`);
+  assert.equal(sample.theme, themeMode, `${label} dialog must retain the active theme`);
+  assert.equal(sample.contrastFailures, 0, `${label} dialog text must meet AA contrast`);
+  return sample;
 }
 
 async function main() {
@@ -681,6 +1891,11 @@ async function main() {
   });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage({ viewport: { width: viewports[0], height: 900 } });
+  page.on('pageerror', (error) => console.error(`Browser error: ${error.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.error(`Browser console: ${message.text()}`);
+  });
+  page.on('requestfailed', (request) => console.error(`Request failed: ${request.url()} — ${request.failure()?.errorText}`));
   const rows = [];
   try {
     if (local) await installLocalMocks(page, role, rowCount, themeMode);
@@ -689,16 +1904,117 @@ async function main() {
       for (const width of viewports) {
         await page.setViewportSize({ width, height: width < 480 ? 812 : width <= 768 ? 1024 : 900 });
         const response = await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle', timeout: 45_000 });
-        await page.locator('main#main-content, main').first().waitFor({ state: 'visible', timeout: 15_000 });
+        try {
+          await page.locator('main#main-content, main').first().waitFor({ state: 'visible', timeout: 15_000 });
+        } catch (error) {
+          console.error(`Main content missing at ${route} @ ${width}: ${page.url()} — ${await page.title()}`);
+          console.error((await page.locator('body').innerText()).slice(0, 1000));
+          console.error((await page.content()).slice(0, 3000));
+          throw error;
+        }
         await page.waitForFunction((theme) => document.documentElement.getAttribute('data-theme') === theme, themeMode, { timeout: 10_000 });
+        await page.waitForFunction(() => !document.querySelector('main .animate-shimmer'), null, { timeout: 15_000 });
+        await page.waitForFunction(() => {
+          const content = document.querySelector('main#main-content, main');
+          return Boolean(content?.querySelector('h1,[role="alert"],[data-layout="page-shell"]'));
+        }, null, { timeout: 15_000 });
+        if (local && route === '/production/routings/create') {
+          await page.waitForFunction(
+            () => document.querySelector('select[name="product_id"] option[value="layout-product-1"]'),
+            null,
+            { timeout: 5_000 },
+          );
+        }
+        if (route === '/production/schedule' && process.argv.includes('--schedule-list')) {
+          await page.getByRole('tab', { name: /Schedule list/ }).click();
+          await page.waitForTimeout(100);
+        }
+        if (route === `/production/work-orders/${sampleWorkOrder.id}` && process.argv.includes('--work-order-operations')) {
+          await page.getByRole('tab', { name: 'Operations' }).click();
+          await page.waitForTimeout(150);
+        }
+        if (route === '/inventory/transfer-orders' && process.argv.includes('--transfer-selected') && rowCount > 0) {
+          const transfer = page.getByRole('button', { name: /TO-202610-00001/ }).first();
+          if (await transfer.isVisible().catch(() => false)) {
+            const detail = page.waitForResponse((response) => response.url().includes('/inventory/transfer-orders/layout-transfer-00001') && response.ok());
+            await transfer.click();
+            await detail;
+          } else {
+            const picker = page.getByRole('combobox', { name: 'Transfer order' });
+            if (await picker.isVisible().catch(() => false)) {
+              await picker.click();
+              const detail = page.waitForResponse((response) => response.url().includes('/inventory/transfer-orders/layout-transfer-00001') && response.ok());
+              await page.getByRole('option', { name: /TO-202610-00001/ }).click();
+              await detail;
+            }
+          }
+        }
+        if (route === '/inventory/scanner' && arg('scanner-workflow')) {
+          await page.getByLabel('Workflow', { exact: true }).selectOption(arg('scanner-workflow'));
+          await page.getByRole('combobox', { name: 'Context record' }).waitFor({ state: 'visible', timeout: 10_000 });
+          await page.waitForTimeout(250);
+        }
+        if (route === '/inventory/scanner' && arg('scanner-result')) {
+          const resultState = arg('scanner-result');
+          if (!['item', 'unknown', 'error'].includes(resultState)) throw new Error('--scanner-result must be item, unknown, or error');
+          await page.getByLabel('Barcode', { exact: true }).fill(`LAYOUT-${resultState.toLocaleUpperCase()}-001`);
+          await page.getByRole('button', { name: 'Resolve', exact: true }).click();
+          const resultText = resultState === 'item'
+            ? 'Scan result'
+            : resultState === 'unknown'
+              ? 'Unrecognized barcode'
+              : 'Synthetic scanner service error for layout audit.';
+          await page.getByText(resultText, { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+        }
+        if (process.argv.includes('--expand-first-row') && new URL(route, BASE).searchParams.get('view') === 'reservations') {
+          const expand = page.getByRole('button', { name: 'Expand row' }).first();
+          if (await expand.count()) {
+            await expand.click();
+            await page.waitForTimeout(100);
+          }
+        }
+        if (route.startsWith('/inventory/picking') && process.argv.includes('--picking-all-statuses')) {
+          await page.getByLabel('Status', { exact: true }).selectOption('');
+          await page.waitForTimeout(350);
+        }
+        if (route.startsWith('/inventory/picking') && process.argv.includes('--picking-expand-first-row')) {
+          const expand = page.getByRole('button', { name: 'Expand row' }).first();
+          if (await expand.count()) {
+            await expand.click();
+            await page.locator('[aria-label^="Handover details for"]').first().waitFor({ state: 'visible', timeout: 10_000 });
+            await page.waitForTimeout(250);
+          }
+        }
         await page.waitForTimeout(350);
-        const metrics = await measure(page);
         const screenshot = path.join(out, `${slug(route)}-${width}.png`);
-        await page.screenshot({ path: screenshot, fullPage: true });
+        const resizeSample = process.argv.includes('--resize-sample')
+          ? await probeColumnResize(page, path.join(out, `${slug(route)}-${width}-resized.png`))
+          : null;
+        const metrics = compactMetricSamples(await measure(page));
+        await page.screenshot({ path: screenshot, fullPage: rowCount < 300 });
+        let scheduleBottomSample = null;
+        if (route === '/production/schedule' && width <= 480) {
+          const shell = page.locator('[data-layout="page-shell"]');
+          const scroll = await shell.evaluate((element) => ({
+            max: element.scrollHeight - element.clientHeight,
+            top: element.scrollTop,
+          }));
+          if (scroll.max > 1) {
+            await shell.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+            await page.waitForTimeout(80);
+            const bottomScreenshot = path.join(out, `${slug(route)}-${width}-bottom.png`);
+            await page.screenshot({ path: bottomScreenshot });
+            scheduleBottomSample = { screenshot: path.relative(ROOT, bottomScreenshot), maxScrollTop: scroll.max };
+            await shell.evaluate((element) => { element.scrollTop = 0; });
+          }
+        }
         if (process.argv.includes('--dropdown-sample')) {
           const combo = page.locator('input[role="combobox"]').first();
-          if (await combo.count()) {
+          if (await combo.isVisible().catch(() => false)) {
             await combo.click();
+            if (route === '/inventory/scanner' && arg('scanner-workflow')) {
+              await page.locator('[role="listbox"] [role="option"]').first().waitFor({ state: 'visible', timeout: 5_000 });
+            }
             await page.waitForTimeout(100);
             const dropdownScreenshot = path.join(out, `${slug(route)}-${width}-dropdown.png`);
             await page.screenshot({ path: dropdownScreenshot });
@@ -708,7 +2024,143 @@ async function main() {
         const tableSampleScreenshots = tableSamples && width === 1440
           ? await captureTableSamples(page, out, route, width, rowCount)
           : [];
-        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, ...metrics });
+        const longTableScreenshots = rowCount >= 300 && !tableSamples && metrics.counts.tables > 0 && width === 1440
+          ? await captureLongTableSamples(page, out, route, width)
+          : [];
+        let longTransferListScreenshots = [];
+        if (rowCount >= 300 && route === '/inventory/transfer-orders' && width === 1440) {
+          const scroller = page.getByRole('region', { name: 'Transfer orders' });
+          if (await scroller.count()) {
+            const maxScroll = await scroller.evaluate((element) => element.scrollHeight - element.clientHeight);
+            for (const [position, name] of [[0, 'top'], [0.5, 'middle'], [1, 'bottom']]) {
+              await scroller.evaluate((element, ratio) => {
+                element.scrollTop = Math.round((element.scrollHeight - element.clientHeight) * ratio);
+              }, position);
+              await page.waitForTimeout(80);
+              const file = path.join(out, `${slug(route)}-${width}-long-list-${name}.png`);
+              await scroller.screenshot({ path: file });
+              longTransferListScreenshots.push(path.relative(ROOT, file));
+            }
+            assert.ok(maxScroll > 0, '500 transfer cards must scroll inside their list region');
+            await scroller.evaluate((element) => { element.scrollTop = 0; });
+          }
+        }
+        let dialogSample = null;
+        if (process.argv.includes('--dialog-sample') && width === 1440
+          && route === '/production/routings/layout-routing-001') {
+          await page.getByRole('button', { name: 'Make active', exact: true }).first().click();
+          const dialog = page.getByRole('dialog');
+          await dialog.waitFor({ state: 'visible' });
+          const dialogScreenshot = path.join(out, `${slug(route)}-${width}-confirm-dialog.png`);
+          await page.screenshot({ path: dialogScreenshot });
+          const dialogMetrics = compactMetricSamples(await measure(page));
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({ state: 'detached' });
+          dialogSample = {
+            screenshot: path.relative(ROOT, dialogScreenshot),
+            visible: dialogMetrics.counts.dialogs === 1,
+            dismissedWithEscape: true,
+            buttons: dialogMetrics.buttons,
+          };
+          assert.equal(dialogSample.visible, true, 'confirm dialog must render before screenshot');
+        }
+        let scheduleDialogSample = null;
+        if (process.argv.includes('--schedule-dialog-sample') && [375, 1440].includes(width) && route === '/production/schedule') {
+          await page.getByRole('button', { name: 'Run scheduler', exact: true }).first().click();
+          const dialog = page.getByRole('dialog');
+          await dialog.waitFor({ state: 'visible' });
+          await page.waitForTimeout(350);
+          const dialogScreenshot = path.join(out, `${slug(route)}-${width}-confirm-dialog.png`);
+          await page.screenshot({ path: dialogScreenshot });
+          const dialogMetrics = compactMetricSamples(await measure(page));
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({ state: 'detached' });
+          scheduleDialogSample = {
+            screenshot: path.relative(ROOT, dialogScreenshot),
+            visible: dialogMetrics.counts.dialogs === 1,
+            dismissedWithEscape: true,
+            contrastFailures: dialogMetrics.typography.contrastBelowAA.reduce((sum, sample) => sum + sample.count, 0),
+            buttons: dialogMetrics.buttons,
+          };
+          assert.equal(scheduleDialogSample.visible, true, 'schedule confirmation must render before screenshot');
+          assert.equal(scheduleDialogSample.contrastFailures, 0, 'schedule confirmation text must meet AA contrast');
+        }
+        const inventoryDialogSamples = [];
+        if (process.argv.includes('--inventory-dialog-samples') && [375, 1440].includes(width)) {
+          const capture = async (label, buttonName) => {
+            const sample = await captureInventoryDialog(page, out, route, width, themeMode, label, buttonName);
+            if (sample) inventoryDialogSamples.push(sample);
+          };
+          if (route === '/inventory/items') await capture('categories', 'Categories');
+          if (route === '/inventory/uoms') await capture('new-unit', 'New unit');
+          if (route === '/inventory/warehouse') {
+            await capture('new-warehouse', 'New warehouse');
+            await capture('new-zone', 'Zone');
+            await capture('new-location', 'Location');
+          }
+          if (route === '/inventory/transfer-orders' && rowCount > 0) {
+            await capture('transfer-create', 'New transfer');
+            await capture('transfer-execute-confirmation', 'Execute');
+            await capture('transfer-cancel-confirmation', 'Cancel');
+          }
+          if (new URL(route, BASE).searchParams.get('view') === 'movements') {
+            const expand = page.getByRole('button', { name: 'Expand row' });
+            if (await expand.count() > 1) {
+              await expand.nth(1).click();
+              await page.getByRole('button', { name: 'Receive unused return', exact: true }).click();
+              const sample = await captureInventoryDialog(page, out, route, width, themeMode, 'return-unused-material', null);
+              if (sample) inventoryDialogSamples.push(sample);
+            }
+          }
+        }
+        if (process.argv.includes('--receiving-dialog-samples') && [375, 1440].includes(width)) {
+          const capture = async (label, buttonName) => {
+            const sample = await captureInventoryDialog(page, out, route, width, themeMode, label, buttonName);
+            if (sample) inventoryDialogSamples.push(sample);
+          };
+          const grnState = arg('grn-state', 'pending_qc');
+          if (route === '/inventory/mrb') await capture('mrb-hold', 'Raise hold');
+          if (route === '/inventory/mrb/layout-mrb-00001') await capture('mrb-release', 'Release');
+          if (route === '/inventory/grn/create?po_id=layout-po-1') {
+            const locations = page.getByRole('combobox', { name: 'Location' });
+            for (let index = 0; index < await locations.count(); index += 1) {
+              await locations.nth(index).click();
+              await page.getByRole('option', { name: 'MW-RM-A-01-01', exact: true }).click();
+            }
+            await page.getByRole('button', { name: 'Create GRN', exact: true }).click();
+            await capture('grn-create-confirmation', null);
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'pending_qc') {
+            await capture('grn-accept', 'Accept');
+            await capture('grn-reject', 'Reject');
+            await capture('grn-reject-remainder', 'Reject remainder');
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'partial_accepted') {
+            const input = page.locator('input[type="number"]').first();
+            if (await input.count()) await input.fill('13.500');
+            await capture('grn-accept-additional', 'Accept additional');
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'accepted') {
+            await capture('grn-post-bill', 'Post bill');
+          }
+          if (route === '/inventory/grn/layout-grn-detail' && grnState === 'draft') {
+            const shipment = page.getByLabel('Supplier shipment');
+            assert.equal(await shipment.count(), 1, 'draft GRN fixture must expose the shipment selector');
+            await shipment.selectOption('layout-shipment-1');
+            const quantity = page.getByLabel('Entered quantity SKU-00001');
+            assert.equal(await quantity.count(), 1, 'draft GRN fixture must expose a labeled receipt quantity');
+            await quantity.fill('25000.000');
+            const finalize = page.getByRole('button', { name: 'Finalize receiving', exact: true });
+            await page.waitForFunction(() => {
+              const button = [...document.querySelectorAll('button')].find((element) => element.textContent?.trim() === 'Finalize receiving');
+              return button && !button.disabled;
+            }, null, { timeout: 5_000 }).catch(async () => {
+              throw new Error(`draft GRN fixture did not satisfy finalize prerequisites: ${await page.getByRole('status').allTextContents()}`);
+            });
+            await capture('grn-finalize', 'Finalize receiving');
+          }
+        }
+        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, longTransferListScreenshots, resizeSample, dialogSample, scheduleDialogSample, inventoryDialogSamples, scheduleBottomSample, ...metrics });
         console.log(`${route} @ ${width}: ${metrics.counts.tables} table(s), ${metrics.counts.rows} row(s), overflow=${metrics.horizontalPageOverflow}`);
       }
     }
@@ -720,11 +2172,17 @@ async function main() {
   const rankedIssues = rows.map((row) => {
     const issues = [];
     if (Object.values(row.edgeAlignment).some((item) => item && !item.aligned)) issues.push('block edges differ by >1px');
+    if (Object.values(row.pageSectionAlignment ?? {}).some((item) => item && !item.aligned)) issues.push('page section edges differ by >1px');
+    if (Object.values(row.transferFlowAlignment ?? {}).some((item) => item && !item.aligned)) issues.push('transfer page blocks differ from the shared gutter by >1px');
     if (Object.values(row.sidebarClearanceByBlock).some((value) => value !== null && value < 16)) issues.push('block clearance under provisional 16px minimum');
     if (row.horizontalPageOverflow) issues.push('horizontal page overflow');
     if (row.doubleVerticalScroll) issues.push('nested vertical scroll');
     if (row.table?.stickyProbe.tested && !row.table.stickyProbe.sticksToScroller) issues.push('sticky header scrolls out of table scroller');
-    if (row.typography.contrastBelowAA.length) issues.push(`${row.typography.contrastBelowAA.length} sampled text items below 4.5:1`);
+    if (row.table?.scrollAffordance?.needed && (!row.table.scrollAffordance.right || !row.table.scrollAffordance.keyboardFocusable || !row.table.scrollAffordance.labelled)) issues.push('horizontally scrolling table lacks a visible keyboard-accessible affordance');
+    if (row.scheduleScrollRegion?.horizontal && (!row.scheduleScrollRegion.right || !row.scheduleScrollRegion.keyboardFocusable || !row.scheduleScrollRegion.labelled)) issues.push('horizontally scrolling timeline lacks a visible keyboard-accessible affordance');
+    if (row.scheduleScrollRegion?.stickyHeader.tested && !row.scheduleScrollRegion.stickyHeader.sticksToScroller) issues.push('timeline date header scrolls out of its region');
+    const contrastFailures = row.typography.contrastBelowAA.reduce((sum, sample) => sum + sample.count, 0);
+    if (contrastFailures) issues.push(`${contrastFailures} sampled text items below 4.5:1`);
     if (row.recordLinks.some((link) => !link.distinctFromBodyText || (link.contrast !== null && link.contrast < 4.5))) issues.push('clickable record identifier lacks distinct AA text color');
     if (row.typography.below12px.length) issues.push(`${row.typography.below12px.length} sampled text items below 12px`);
     const score = issues.reduce((sum, issue) => {
@@ -745,6 +2203,7 @@ async function main() {
     routes: routeList,
     serial: true,
     rankingMethod: 'edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport',
+    sampleGrouping: 'Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.',
     rankedIssues,
     rows,
   };
@@ -759,7 +2218,7 @@ async function main() {
     ...rankedIssues.slice(0, 50).map((item, index) =>
       `| ${index + 1} | ${item.route} | ${item.width}px | ${item.score} | ${item.issues.join('; ') || 'none'} |`),
     '',
-    'Full block geometry, typography, table and button measurements: `report.json`.',
+    'Full block geometry and grouped typography, table, overflow, and button samples: `report.json`; repeated samples retain counts and up to three text examples.',
     '16px sidebar clearance is a provisional audit threshold taken from the brief’s example, not an approved final token.',
   ].join('\n');
   await writeFile(path.join(out, 'summary.md'), `${summary}\n`);
@@ -768,13 +2227,21 @@ async function main() {
     const failures = rows.flatMap((row) => {
       const checks = [
         [Object.values(row.edgeAlignment).some((item) => item && !item.aligned), 'page block edges differ by >1px'],
+        [Object.values(row.pageSectionAlignment ?? {}).some((item) => item && !item.aligned), 'page section edges differ by >1px'],
+        [Object.values(row.transferFlowAlignment ?? {}).some((item) => item && !item.aligned), 'transfer page blocks differ from the shared gutter by >1px'],
+        [!row.mainContent?.textLength, 'page content did not render inside the main landmark'],
         [Object.values(row.sidebarClearanceByBlock).some((value) => value !== null && value < 16), 'sidebar clearance below 16px'],
         [row.horizontalPageOverflow, 'horizontal page overflow'],
         [row.doubleVerticalScroll, 'double vertical scroll'],
         [row.table?.stickyProbe.tested && !row.table.stickyProbe.sticksToScroller, 'sticky header misses table scroller'],
-        [row.table && row.table.rowHeight.min !== null && row.table.rowHeight.min < ({ default: 48, compact: 36, spacious: 56 }[row.table.density] ?? 48), 'table row below selected density minimum'],
+        [row.table?.scrollAffordance?.needed && (!row.table.scrollAffordance.right || !row.table.scrollAffordance.keyboardFocusable || !row.table.scrollAffordance.labelled), 'horizontally scrolling table lacks a visible keyboard-accessible affordance'],
+        [row.scheduleScrollRegion?.horizontal && (!row.scheduleScrollRegion.right || !row.scheduleScrollRegion.keyboardFocusable || !row.scheduleScrollRegion.labelled), 'horizontally scrolling timeline lacks a visible keyboard-accessible affordance'],
+        [row.scheduleScrollRegion?.stickyHeader.tested && !row.scheduleScrollRegion.stickyHeader.sticksToScroller, 'timeline header misses its scroll region'],
+        [row.table && row.table.rowHeight.min !== null && row.table.rowHeight.min < ({ default: 48, compact: 36, manual: 36, spacious: 56 }[row.table.density] ?? 48), 'table row below selected density minimum'],
         [row.table?.textBelowMinimum.length > 0, 'table text below selected density minimum'],
-        [row.table?.columns.some((column) => column.cellAlign && column.headerAlign !== column.cellAlign), 'table header/cell alignment differs'],
+        [row.table?.columns.some((column) => column.header && column.cellAlign
+          && ({ start: 'left', end: 'right' }[column.cellAlign] ?? column.cellAlign)
+            !== ({ start: 'left', end: 'right' }[column.headerAlign] ?? column.headerAlign)), 'table header/cell alignment differs'],
         [row.typography.below12px.length > 0, 'sampled text below 12px'],
         [row.typography.contrastBelowAA.length > 0, 'sampled contrast below 4.5:1'],
         [row.recordLinks.some((link) => !link.distinctFromBodyText || (link.contrast !== null && link.contrast < 4.5)), 'clickable record identifier lacks distinct AA text color'],

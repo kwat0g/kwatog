@@ -42,6 +42,7 @@ class NcrEscalationService
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
+        private readonly NcrSlaService $ncrSla,
     ) {}
 
     /** Returns the count of NCRs whose tier was durably delivered this run. */
@@ -101,14 +102,15 @@ class NcrEscalationService
                     return self::OUTCOME_SKIPPED;
                 }
 
-                $severity = $ncr->severity instanceof NcrSeverity
-                    ? $ncr->severity->value
-                    : (string) $ncr->severity;
-                $hoursDue = $this->settings->requiredInt("quality.ncr.sla_{$severity}_hours", 1);
-                $clockStart = $ncr->last_escalated_at ?: $ncr->created_at;
-                if (! $clockStart instanceof Carbon) {
-                    $clockStart = Carbon::parse((string) $clockStart);
+                $severityCase = $ncr->severity instanceof NcrSeverity
+                    ? $ncr->severity
+                    : NcrSeverity::tryFrom((string) $ncr->severity);
+                if ($severityCase === null) {
+                    throw new BusinessRuleException('NCR severity is invalid.');
                 }
+                $severity = $severityCase->value;
+                $hoursDue = $this->ncrSla->hoursFor($severityCase);
+                $clockStart = $this->ncrSla->clockStart($ncr) ?? Carbon::parse((string) $ncr->created_at);
                 if ($clockStart->diffInHours(now(), true) < $hoursDue) {
                     return self::OUTCOME_SKIPPED;
                 }
@@ -177,7 +179,7 @@ class NcrEscalationService
                     return self::OUTCOME_UNSTAFFED;
                 }
 
-                $this->notifications->send($recipients, 'ncr.escalation', [
+                $this->notifications->sendForSubject($ncr, $recipients, 'ncr.escalation', [
                     'title'       => $subject,
                     'message'     => "NCR {$ncr->ncr_number} (severity {$severity}) has been open without a Corrective action for over {$hoursDue}h. Tier {$nextTier} escalation.",
                     'link_to'     => "/quality/ncrs/{$ncr->hash_id}",

@@ -206,7 +206,7 @@ class AutoPurchaseOrderService
                     && $user->hasPermission('purchasing.view')
                     && $access->canView($user, $po))
                 ->values();
-            $notifications->send($vps, 'auto_po_pending', [
+            $notifications->sendForSubject($po, $vps, 'auto_po_pending', [
                 'title'       => 'Auto-PO awaiting approval',
                 'message'     => "Critical stock alert. Auto-PO {$po->po_number} for {$item->code} is awaiting approval.",
                 'link_to'     => "/purchasing/purchase-orders/{$po->hash_id}",

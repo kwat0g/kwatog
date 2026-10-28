@@ -2,8 +2,8 @@
 /**
  * Table cell primitives — the one source of truth for table typography.
  *
- * DESIGN-SYSTEM.md → "Data table": 32px rows, 0 10px cell padding, header
- * 10px uppercase tracking-wider muted 500, numbers always mono + tabular.
+ * Compact shared table typography: 14px body text, 13px headers, and tabular
+ * figures for explicitly marked numeric, date, and identifier cells.
  *
  * Import these instead of retyping the class strings. Hand-typed headers had
  * drifted into six variants (missing height, `px-4 py-2`, no uppercase,
@@ -24,22 +24,21 @@ const alignCls: Record<Align, string> = {
 /** Header cell classes. Use when you can't use `<Th>` (e.g. inside a map). */
 export const thCls = (align: Align = 'left'): string =>
   cn(
-    'h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none',
+    'h-row-compact px-3 text-table-header text-secondary font-semibold select-none',
     alignCls[align],
   );
 
 /** Body cell classes. `mono` for any numeric / ID / date content. */
 export const tdCls = (align: Align = 'left', mono = false): string =>
-  cn('px-2.5 py-1 align-middle', alignCls[align], mono && 'font-mono tabular-nums');
+  cn('px-3 py-1 align-middle text-sm', alignCls[align], mono && 'font-mono tabular-nums');
 
 /**
  * Row classes — hairline separator, hover highlight, selected outline.
  *
- * Height is `h-row` (`--row-height`), not a fixed `h-8`: office palettes
- * declare 32px, the shop-floor palette 48px for gloved hands.
+ * Compact rows use 36px in the office and 44px on the shop floor.
  */
 export const trCls =
-  'h-row border-b border-subtle hover:bg-subtle transition-colors duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-accent aria-selected:-outline-offset-2 aria-selected:z-10';
+  'h-row-compact border-b border-subtle hover:bg-subtle transition-colors duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-accent aria-selected:-outline-offset-2 aria-selected:z-10';
 
 /** Header row classes. */
 export const theadTrCls = 'border-b border-default';
@@ -52,10 +51,10 @@ export const theadTrCls = 'border-b border-default';
  * all-sides colour appended after it loses on stylesheet order, silently
  * leaving the rule hairline-grey. A side-specific utility cannot collide.
  */
-export const totalsTrCls = 'h-row border-t-2 border-t-strong font-medium';
+export const totalsTrCls = 'h-row-compact border-t-2 border-t-strong font-medium';
 
 /** Table element classes. */
-export const tableCls = 'w-full border-collapse text-xs';
+export const tableCls = 'w-full border-collapse text-sm';
 
 interface ThProps extends Omit<ThHTMLAttributes<HTMLTableCellElement>, 'align'> {
   align?: Align;

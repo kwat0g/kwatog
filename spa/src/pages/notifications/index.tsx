@@ -12,7 +12,7 @@ import { reportMutationError } from '@/lib/formErrors';
  * - Per-row dismiss, "Clear read" in the header, and Load more paging.
  */
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { LuCheck, LuEye, LuTrash2, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -24,6 +24,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { focusRingInset } from '@/lib/focus';
+import { notificationLinkTo } from '@/lib/notificationLink';
 import {
  bucketLabel,
  dateBucket,
@@ -56,7 +57,6 @@ interface NotificationsListProps {
 
 export default function NotificationsListPage({ api = notificationsApi, queryKey = DEFAULT_QUERY_KEY, linkPrefix }: NotificationsListProps = {}) {
  const qc = useQueryClient();
- const navigate = useNavigate();
  const [filter, setFilter] = useState<FilterKey>('all');
  const unreadOnly = filter === 'unread';
 
@@ -137,8 +137,6 @@ export default function NotificationsListPage({ api = notificationsApi, queryKey
 
  const handleClickRow = (n: NotificationRow) => {
  if (!n.read_at) markRead.mutate(n.id);
- const link = (n.data?.link_to as string | undefined) ?? null;
- if (link && (!linkPrefix || link.startsWith(linkPrefix + '/'))) navigate(link);
  };
 
  const loadedCount = rows.length;
@@ -249,48 +247,76 @@ export default function NotificationsListPage({ api = notificationsApi, queryKey
  const message = (n.data?.message as string | undefined) ?? '';
  const isUnread = !n.read_at;
  const scheduleLink = n.type === 'maintenance.repeat_breakdown' && !linkPrefix
-   && typeof n.data?.schedule_link === 'string' && n.data.schedule_link.startsWith('/maintenance/schedules')
-   ? n.data.schedule_link : null;
+   ? notificationLinkTo(n.data?.schedule_link, '/maintenance/schedules') : null;
+ const link = notificationLinkTo(n.data?.link_to, linkPrefix) ?? scheduleLink;
+ const rowClassName = cn(
+ 'min-w-0 flex-1 text-left px-3 py-2.5 flex items-start gap-3 no-underline text-primary hover:bg-elevated hover:no-underline transition-colors duration-fast cursor-pointer',
+ focusRingInset,
+ );
+ const rowContent = (
+  <>
+   <span
+    className={cn(
+     'shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md',
+     isUnread ? 'bg-accent text-accent-fg' : 'bg-elevated text-muted',
+    )}
+   >
+    <Icon size={13} />
+   </span>
+   <span className="min-w-0 flex-1">
+    <span className="block text-sm">
+     <span className={cn(isUnread && 'font-medium text-primary')}>{title}</span>
+     <span className="ml-2 text-2xs uppercase tracking-wider text-muted">
+      {meta.label}
+     </span>
+    </span>
+    {message && (
+     <span className="block text-xs text-muted mt-0.5">{message}</span>
+    )}
+    <span className="block text-2xs text-muted font-mono tabular-nums mt-0.5">
+     {timeAgo(n.created_at)}
+    </span>
+   </span>
+  </>
+ );
  return (
  <li key={n.id}>
  <div className={cn('w-full flex items-stretch', isUnread && 'border-l-2 border-accent')}>
- <button
- type="button"
- onClick={() => handleClickRow(n)}
- aria-label={message ? `${title}: ${message}` : title}
- className={cn(
- 'min-w-0 flex-1 text-left px-3 py-2.5 flex items-start gap-3 hover:bg-elevated transition-colors duration-fast cursor-pointer',
- focusRingInset,
+ {link ? (
+  <Link
+   to={link}
+   onClick={() => handleClickRow(n)}
+   onAuxClick={(event) => {
+    if (event.button === 1) handleClickRow(n);
+   }}
+   aria-label={message ? `${title}: ${message}` : title}
+   className={rowClassName}
+  >
+   {rowContent}
+  </Link>
+ ) : (
+  <button
+   type="button"
+   onClick={() => handleClickRow(n)}
+   aria-label={message ? `${title}: ${message}` : title}
+   className={rowClassName}
+  >
+   {rowContent}
+  </button>
  )}
- >
- <span
- className={cn(
- 'shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md',
- isUnread ? 'bg-accent text-accent-fg' : 'bg-elevated text-muted',
- )}
- >
- <Icon size={13} />
- </span>
- <span className="min-w-0 flex-1">
- <span className="block text-sm">
- <span className={cn(isUnread && 'font-medium text-primary')}>{title}</span>
- <span className="ml-2 text-2xs uppercase tracking-wider text-muted">
- {meta.label}
- </span>
- </span>
- {message && (
- <span className="block text-xs text-muted mt-0.5">{message}</span>
- )}
- <span className="block text-2xs text-muted font-mono tabular-nums mt-0.5">
- {timeAgo(n.created_at)}
- </span>
- </span>
- </button>
  <span className="ml-auto shrink-0 flex items-center gap-0.5 px-2">
- {scheduleLink && <Button type="button" variant="ghost" size="sm" onClick={() => {
-   if (isUnread) markRead.mutate(n.id);
-   navigate(scheduleLink);
- }}>Review schedule</Button>}
+ {scheduleLink && (
+  <Link
+   to={scheduleLink}
+   onClick={() => handleClickRow(n)}
+   onAuxClick={(event) => {
+    if (event.button === 1) handleClickRow(n);
+   }}
+   className="min-h-10 inline-flex items-center px-3 text-xs no-underline text-link hover:text-link-hover hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+  >
+   Review schedule
+  </Link>
+ )}
  {isUnread && (
  <Button
  type="button"

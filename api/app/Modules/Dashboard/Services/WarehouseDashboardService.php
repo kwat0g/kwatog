@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\TransferOrderStatus;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Services\InventoryDashboardService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -69,15 +72,7 @@ class WarehouseDashboardService
 
     private function lowStockItemCount(): int
     {
-        if (! Schema::hasTable('items') || ! Schema::hasTable('stock_levels')) {
-            return 0;
-        }
-
-        return (int) DB::table('items')
-            ->where('is_active', true)
-            ->where('reorder_point', '>', 0)
-            ->whereRaw('items.reorder_point > COALESCE((SELECT SUM(quantity - reserved_quantity) FROM stock_levels WHERE stock_levels.item_id = items.id), 0)')
-            ->count();
+        return (int) app(InventoryDashboardService::class)->summary()['items_low_stock'];
     }
 
     /**
@@ -145,63 +140,36 @@ class WarehouseDashboardService
      */
     private function warehouseLowStockAlerts(): array
     {
-        if (! Schema::hasTable('items') || ! Schema::hasTable('stock_levels')) {
-            return [];
+        $items = collect(app(InventoryDashboardService::class)->summary()['low_stock_alerts']);
+        $itemIds = $items->map(fn (array $item) => HashIdFilter::decode($item['item_id'], Item::class))
+            ->filter()->values();
+        $suppliers = collect();
+        if ($itemIds->isNotEmpty() && Schema::hasTable('approved_suppliers') && Schema::hasTable('vendors')) {
+            $suppliers = DB::table('approved_suppliers as ap')
+                ->join('vendors as v', 'v.id', '=', 'ap.vendor_id')
+                ->whereIn('ap.item_id', $itemIds)
+                ->orderByDesc('ap.is_preferred')
+                ->orderBy('ap.id')
+                ->get(['ap.item_id', 'ap.vendor_id', 'v.name'])
+                ->unique('item_id')
+                ->keyBy('item_id');
         }
 
-        $availableSub = '(SELECT COALESCE(SUM(quantity - reserved_quantity), 0) FROM stock_levels WHERE stock_levels.item_id = items.id)';
+        return $items->map(function (array $item) use ($suppliers): array {
+            $id = HashIdFilter::decode($item['item_id'], Item::class);
+            $supplier = $id ? $suppliers->get($id) : null;
 
-        $query = DB::table('items')
-            ->where('items.is_active', true)
-            ->where('items.reorder_point', '>', 0)
-            ->whereRaw("items.reorder_point > {$availableSub}")
-            ->select(
-                'items.id',
-                'items.code',
-                'items.name',
-                'items.reorder_point',
-                DB::raw("{$availableSub} as available"),
-            );
-
-        if (Schema::hasTable('approved_suppliers') && Schema::hasTable('vendors')) {
-            // Keep one dashboard row per item. A direct supplier join duplicates
-            // low-stock alerts whenever an item has multiple approved vendors.
-            $query->addSelect([
-                'vendor_id' => DB::table('approved_suppliers as ap')
-                    ->select('ap.vendor_id')
-                    ->whereColumn('ap.item_id', 'items.id')
-                    ->orderByDesc('ap.is_preferred')
-                    ->orderBy('ap.id')
-                    ->limit(1),
-                'vendor_name' => DB::table('approved_suppliers as ap')
-                    ->join('vendors as v', 'v.id', '=', 'ap.vendor_id')
-                    ->select('v.name')
-                    ->whereColumn('ap.item_id', 'items.id')
-                    ->orderByDesc('ap.is_preferred')
-                    ->orderBy('ap.id')
-                    ->limit(1),
-            ]);
-        }
-
-        return $query
-            ->orderBy('items.name')
-            ->limit(10)
-            ->get()
-            ->map(function ($r) {
-                $available = (float) $r->available;
-                $reorder = (float) $r->reorder_point;
-
-                return [
-                    'item_id' => app('hashids')->encode((int) $r->id),
-                    'item_code' => $r->code,
-                    'item_name' => $r->name,
-                    'current_stock' => number_format($available, 2, '.', ''),
-                    'reorder_point' => number_format($reorder, 2, '.', ''),
-                    'shortage' => number_format(max(0.0, $reorder - $available), 2, '.', ''),
-                    'supplier_id' => isset($r->vendor_id) && $r->vendor_id ? app('hashids')->encode((int) $r->vendor_id) : null,
-                    'supplier_name' => $r->vendor_name ?? null,
-                ];
-            })
+            return [
+                'item_id' => $item['item_id'],
+                'item_code' => $item['code'],
+                'item_name' => $item['name'],
+                'current_stock' => number_format((float) $item['available'], 2, '.', ''),
+                'reorder_point' => number_format((float) $item['reorder_point'], 2, '.', ''),
+                'shortage' => number_format(max(0.0, (float) $item['reorder_point'] - (float) $item['available']), 2, '.', ''),
+                'supplier_id' => $supplier?->vendor_id ? app('hashids')->encode((int) $supplier->vendor_id) : null,
+                'supplier_name' => $supplier?->name,
+            ];
+        })
             ->all();
     }
 

@@ -156,7 +156,7 @@ class TriggerOutgoingQC implements ShouldQueue
                 $finalWorkOrderUrl = $wo->usesFinishFirstQc()
                     ? "/quality/work-orders/{$wo->hash_id}/final-inspection"
                     : null;
-                app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [
+                app(NotificationService::class)->sendForSubject($created[0], $recipients, 'chain.outgoing_qc_required', [
                     'title' => 'Outgoing QC required',
                     'message' => "Outgoing QC required for WO {$wo->wo_number}.",
                     // One batch opens directly; several open the filtered inspection queue.

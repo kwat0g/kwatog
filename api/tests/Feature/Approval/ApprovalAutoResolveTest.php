@@ -7,8 +7,11 @@ namespace Tests\Feature\Approval;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalEscalationService;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -244,6 +247,8 @@ class ApprovalAutoResolveTest extends TestCase
 
     public function test_vp_stall_escalates_to_system_admin_without_changing_decision_authority(): void
     {
+        $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.return_management', true, 'modules');
         Mail::fake();
         Cache::forget('settings:approvals.escalation.superior_role_map');
         $this->assertSame(
@@ -252,13 +257,21 @@ class ApprovalAutoResolveTest extends TestCase
         );
 
         $vpRole = Role::firstOrCreate(['slug' => 'vice_president'], ['name' => 'Vice President']);
+        $vpRole->permissions()->syncWithoutDetaching([
+            Permission::query()->where('slug', 'return_management.view')->value('id'),
+        ]);
         $vp = User::factory()->create(['role_id' => $vpRole->id, 'is_active' => true]);
         $admin = User::query()->whereHas('role', fn ($query) => $query->where('slug', 'system_admin'))->firstOrFail();
         app(SettingsService::class)->set('approvals.escalation_hours', 1, 'approval');
 
+        $rma = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-ESC-'.substr(uniqid(), -8),
+            'type' => 'customer_return',
+            'status' => 'pending_approval',
+        ]);
         $rec = ApprovalRecord::create([
-            'approvable_type' => 'TestApprovable',
-            'approvable_id' => 100,
+            'approvable_type' => ReturnRequest::class,
+            'approvable_id' => $rma->id,
             'step_order' => 1,
             'role_slug' => 'vice_president',
             'action' => 'pending',
@@ -274,6 +287,17 @@ class ApprovalAutoResolveTest extends TestCase
             'notifiable_id' => $admin->id,
             'type' => 'approval_escalation',
         ]);
+        $notification = DB::table('notifications')
+            ->where('notifiable_id', $vp->id)
+            ->where('type', 'approval_escalation')
+            ->firstOrFail();
+        $data = json_decode($notification->data, true);
+        $this->assertSame(ReturnRequest::class, $data['subject_type']);
+        $this->assertSame((string) $rma->id, $data['subject_id']);
+        $this->assertSame("/return-management/{$rma->hash_id}", $data['link_to']);
+        $this->actingAs($vp)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk();
         $this->assertSame('pending', $rec->fresh()->action);
         $this->assertSame('vice_president', $rec->fresh()->role_slug);
         $this->assertNull($rec->fresh()->approver_id);

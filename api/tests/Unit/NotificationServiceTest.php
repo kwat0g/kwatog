@@ -7,11 +7,14 @@ namespace Tests\Unit;
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class NotificationServiceTest extends TestCase
@@ -107,6 +110,82 @@ class NotificationServiceTest extends TestCase
         Event::assertDispatched(UserNotificationCreated::class, 3);
     }
 
+    public function test_laravel_notifications_use_the_central_dispatcher_for_explicit_recipients(): void
+    {
+        $recipient = User::factory()->create();
+        $other = User::factory()->create();
+        Notification::fake();
+
+        $this->service->sendLaravelNotification(
+            [$recipient, $recipient],
+            new PasswordResetLinkNotification('https://ogami.test/reset?token=opaque', 30),
+        );
+
+        $this->assertCount(1, Notification::sent($recipient, PasswordResetLinkNotification::class));
+        Notification::assertNotSentTo($other, PasswordResetLinkNotification::class);
+    }
+
+    public function test_inactive_internal_users_are_excluded_from_notification_delivery(): void
+    {
+        $active = User::factory()->create();
+        $inactive = User::factory()->create(['is_active' => false]);
+        $deleted = User::factory()->create();
+        $deleted->delete();
+        Event::fake([UserNotificationCreated::class]);
+        Notification::fake();
+
+        $this->service->send([$active, $inactive, $deleted], 'active.user.test', [
+            'title' => 'Active recipient',
+            'message' => 'Only active users should receive this.',
+        ]);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $active->id,
+            'type' => 'active.user.test',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $inactive->id,
+            'type' => 'active.user.test',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $deleted->id,
+            'type' => 'active.user.test',
+        ]);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $active->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $inactive->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $deleted->id);
+
+        $notice = new PasswordResetLinkNotification('https://ogami.test/reset?token=opaque', 30);
+        $this->service->sendLaravelNotification([$inactive, $deleted], $notice);
+
+        Notification::assertNotSentTo($inactive, PasswordResetLinkNotification::class);
+        Notification::assertNotSentTo($deleted, PasswordResetLinkNotification::class);
+    }
+
+    public function test_empty_recipient_audiences_are_logged_without_fallback_delivery(): void
+    {
+        Event::fake([UserNotificationCreated::class]);
+        Notification::fake();
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('Notification delivery skipped: no eligible recipients.', ['type' => 'empty.audience.test']);
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('Laravel notification delivery skipped: no eligible recipients.', [
+                'notification_class' => PasswordResetLinkNotification::class,
+            ]);
+
+        $this->service->send([], 'empty.audience.test', ['title' => 'No recipients']);
+        $this->service->sendLaravelNotification(
+            [],
+            new PasswordResetLinkNotification('https://ogami.test/reset?token=opaque', 30),
+        );
+
+        $this->assertDatabaseMissing('notifications', ['type' => 'empty.audience.test']);
+        Event::assertNotDispatched(UserNotificationCreated::class);
+        Notification::assertNothingSent();
+    }
+
     public function test_dedupe_key_makes_replayed_send_idempotent(): void
     {
         $user = User::factory()->create();
@@ -183,5 +262,24 @@ class NotificationServiceTest extends TestCase
         config(['dss.notification_daily_cap' => 0]);
         $this->assertFalse($this->service->sendDssRecommendationInApp($user, ['title' => 'No notice', 'message' => 'Publishing disabled.'], 'disabled-cap'));
         $this->assertSame(0, DB::table('notifications')->where('notifiable_id', $user->id)->where('type', 'dss.recommendation')->count());
+    }
+
+    public function test_dss_recommendation_skips_and_logs_an_inactive_recipient(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+        config(['dss.notification_daily_cap' => 1]);
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('DSS recommendation delivery skipped: no active recipient.', ['type' => 'dss.recommendation']);
+
+        $this->assertFalse($this->service->sendDssRecommendationInApp(
+            $user,
+            ['title' => 'No notice', 'message' => 'Recipient inactive.'],
+            'inactive-recipient',
+        ));
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $user->id,
+            'type' => 'dss.recommendation',
+        ]);
     }
 }

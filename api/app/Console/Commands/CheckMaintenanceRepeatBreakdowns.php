@@ -33,7 +33,7 @@ class CheckMaintenanceRepeatBreakdowns extends Command
             $machine = $repeat['machine'];
             $history = '/maintenance/downtime?search='.rawurlencode($machine->machine_code);
             $schedules = '/maintenance/schedules?maintainable_type=machine&maintainable_id='.$machine->hash_id;
-            $notifications->send($supervisors, 'maintenance.repeat_breakdown', [
+            $notifications->sendForSubject($machine, $supervisors, 'maintenance.repeat_breakdown', [
                 'title' => 'Repeated breakdowns: '.$machine->machine_code,
                 'message' => $repeat['count'].' distinct breakdown incidents in 30 days. Review machine history and its preventive schedule.',
                 'link_to' => $history, 'history_link' => $history, 'schedule_link' => $schedules,

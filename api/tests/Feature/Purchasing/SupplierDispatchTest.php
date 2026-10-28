@@ -7,9 +7,10 @@ namespace Tests\Feature\Purchasing;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
 use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -27,6 +28,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use RuntimeException;
@@ -153,6 +155,43 @@ class SupplierDispatchTest extends TestCase
             'type' => 'email.delivery_failed',
             'notifiable_type' => User::class,
             'notifiable_id' => $outsider->id,
+        ]);
+    }
+
+    public function test_queued_supplier_email_failure_rechecks_po_row_visibility(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $role = Role::create([
+            'name' => 'PO email failure viewer '.substr(uniqid(), -5),
+            'slug' => 'po_email_failure_viewer_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync([
+            Permission::query()->where('slug', 'purchasing.view')->value('id'),
+        ]);
+        $owner = User::factory()->create(['role_id' => $role->id]);
+        $outsider = User::factory()->create(['role_id' => $role->id]);
+        $purchaseOrder = PurchaseOrder::factory()->create(['created_by' => $owner->id]);
+        $mail = new SupplierPurchaseOrderMail($purchaseOrder, [$owner->id, $outsider->id]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'email.delivery_failed',
+                'subject_type' => PurchaseOrder::class,
+                'subject_id' => $purchaseOrder->id,
+                'user_ids' => [$outsider->id],
+            ],
+        );
+
+        $mail->failed(new RuntimeException('Mail delivery failed.'));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $owner->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $outsider->id,
+            'type' => 'email.delivery_failed',
         ]);
     }
 

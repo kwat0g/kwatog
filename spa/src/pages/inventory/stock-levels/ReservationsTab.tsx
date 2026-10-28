@@ -10,6 +10,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
+import { formatQuantity } from '@/lib/formatNumber';
 import type { MaterialReservation, WorkOrderReservations } from '@/types/inventory';
 import type { ListParams } from '@/types';
 
@@ -43,7 +44,7 @@ export function ReservationsTab() {
         row.work_order ? (
           can('production.view') && can('production.work_orders.view') ? (
             <Link
-              className="text-link font-mono"
+              className="inline-flex min-h-11 items-center text-link font-mono"
               to={`/production/work-orders/${row.work_order.id}`}
             >
               {row.work_order.wo_number}
@@ -94,13 +95,14 @@ export function ReservationsTab() {
     },
   ];
   return (
-    <>
-      <p className="px-5 pt-3 text-xs text-muted">
+    <div className="min-h-0 flex flex-1 flex-col gap-3">
+      <p className="text-xs text-muted">
         One row per work order. Expand to see matching materials and locations. Reserved quantities
         remain allocated; issued and released lines show history. Physical handover is recorded in
         Movements.
       </p>
       <FilterBar
+        inset={false}
         values={filters}
         onSearch={(search) => setFilters((previous) => ({ ...previous, search, page: 1 }))}
         onFilter={(key, value) =>
@@ -121,31 +123,37 @@ export function ReservationsTab() {
           },
         ]}
       />
-      {query.isLoading && <SkeletonTable columns={4} rows={6} />}
+      {query.isLoading && <div className="min-h-0 flex-1 overflow-auto"><SkeletonTable columns={4} rows={6} /></div>}
       {query.isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Reservations could not be loaded"
-          action={<Button onClick={() => query.refetch()}>Retry</Button>}
-        />
+        <div className="min-h-0 flex-1 flex items-center justify-center">
+          <EmptyState
+            icon="alert-circle"
+            title="Reservations could not be loaded"
+            action={<Button onClick={() => query.refetch()}>Retry</Button>}
+          />
+        </div>
       )}
       {!query.isError && query.data?.data.length === 0 && (
-        <EmptyState
-          icon="inbox"
-          title="No matching reservations"
-          description="Try another WO or material, or change the status filter."
-        />
+        <div className="min-h-0 flex-1 flex items-center justify-center">
+          <EmptyState
+            icon="inbox"
+            title="No matching reservations"
+            description="Try another WO or material, or change the status filter."
+          />
+        </div>
       )}
       {!query.isError && query.data && query.data.data.length > 0 && (
-        <div className="p-5">
+        <div className="min-h-0 flex-1 flex flex-col">
           <DataTable
+            tableKey="stock-level-reservations"
+            fillHeight
             key={`${filters.search ?? ''}:${filters.status ?? ''}:${filters.page}:${filters.per_page}`}
             columns={columns}
             data={query.data.data}
             meta={query.data.meta}
             expandOnRowClick
             renderExpanded={(row) => (
-              <table className="w-full min-w-[680px] text-xs">
+              <table className="w-full min-w-160 text-sm">
                 <caption className="pb-2 text-left font-medium text-primary">
                   Materials for {row.work_order?.wo_number ?? 'unlinked reservations'}
                 </caption>
@@ -172,7 +180,7 @@ export function ReservationsTab() {
                       <td className="px-2 py-2">{line.location?.full_code ?? 'No location'}</td>
                       <td className="px-2 py-2 text-right whitespace-nowrap">
                         <NumCell>
-                          {line.quantity} {line.item?.unit_of_measure}
+                          {formatQuantity(line.quantity)} {line.item?.unit_of_measure}
                         </NumCell>
                       </td>
                       <td className="px-2 py-2">{statusChip(line.status)}</td>
@@ -189,6 +197,6 @@ export function ReservationsTab() {
           />
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -47,8 +47,8 @@ class SupplierItemListingTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
 
-        $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->zeroOrMoreTimes();
+        $notifications = Mockery::mock(NotificationService::class)->makePartial();
+        $notifications->shouldReceive('sendForSubject')->zeroOrMoreTimes();
         $this->app->instance(NotificationService::class, $notifications);
 
         $this->vendor = Vendor::factory()->create();
@@ -88,6 +88,20 @@ class SupplierItemListingTest extends TestCase
         $listing->save();
 
         return $listing;
+    }
+
+    /** @param array<int, string> $permissions */
+    private function userWithPermissions(string $slug, array $permissions): User
+    {
+        $role = Role::query()->create([
+            'name' => $slug,
+            'slug' => $slug,
+            'description' => 'Test role',
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync(DB::table('permissions')->whereIn('slug', $permissions)->pluck('id'));
+
+        return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }
 
     /* ─── Portal: catalog ──────────────────────────────────── */
@@ -150,21 +164,29 @@ class SupplierItemListingTest extends TestCase
         ]);
         $revoked->flushPermissionsCache();
 
-        $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->once()->withArgs(function ($audience) use ($revoked): bool {
-            $ids = collect($audience)->pluck('id');
-
-            return $ids->contains($this->purchasingOfficer->id) && ! $ids->contains($revoked->id);
+        $sent = null;
+        $notifications = Mockery::mock(NotificationService::class)->makePartial();
+        $notifications->shouldReceive('sendForSubject')->once()->andReturnUsing(function (...$arguments) use (&$sent): void {
+            $sent = $arguments;
         });
         $this->app->instance(NotificationService::class, $notifications);
 
         $item = Item::factory()->create(['is_active' => true]);
-        app(SupplierListingService::class)->submit($this->vendor->id, [
+        $listing = app(SupplierListingService::class)->submit($this->vendor->id, [
             'item_id' => $item->id,
             'supplier_item_code' => 'SAFE-01',
             'price' => '100.00',
             'lead_time_days' => 5,
         ]);
+
+        [$subject, $audience, $type, $data] = $sent;
+        $ids = collect($audience)->pluck('id');
+        $this->assertInstanceOf(SupplierItemListing::class, $subject);
+        $this->assertSame($listing->id, $subject->id);
+        $this->assertSame('supplier_listing_submitted', $type);
+        $this->assertSame('/purchasing/supplier-listings', $data['link_to']);
+        $this->assertContains($this->purchasingOfficer->id, $ids);
+        $this->assertNotContains($revoked->id, $ids);
     }
 
     public function test_duplicate_pending_listing_for_same_item_is_rejected(): void
@@ -238,6 +260,68 @@ class SupplierItemListingTest extends TestCase
         $this->actingAs($this->purchasingOfficer)
             ->getJson('/api/v1/purchasing/supplier-listings')
             ->assertOk();
+    }
+
+    public function test_pending_review_badge_matches_queue_and_requires_view_and_review_access(): void
+    {
+        $this->makeListing(['item_id' => Item::factory()->create()->id]);
+        $this->makeListing(['item_id' => Item::factory()->create()->id]);
+        $this->makeListing([
+            'item_id' => Item::factory()->create()->id,
+            'status' => SupplierListingStatus::Approved->value,
+        ]);
+
+        $badges = $this->actingAs($this->purchasingOfficer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $queue = $this->actingAs($this->purchasingOfficer, 'sanctum')
+            ->getJson('/api/v1/purchasing/supplier-listings?status=pending')
+            ->assertOk();
+
+        $this->assertSame(2, $badges['supplier_listings_pending']['count']);
+        $this->assertSame($badges['supplier_listings_pending']['count'], $queue->json('meta.total'));
+
+        $viewOnly = $this->userWithPermissions('test_supplier_listing_view_only', [
+            'purchasing.supplier_listings.view',
+        ]);
+        $viewOnlyBadges = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('supplier_listings_pending', $viewOnlyBadges);
+        $this->getJson('/api/v1/purchasing/supplier-listings?status=pending')->assertOk();
+
+        $reviewOnly = $this->userWithPermissions('test_supplier_listing_review_only', [
+            'purchasing.supplier_listings.review',
+        ]);
+        $reviewOnlyBadges = $this->actingAs($reviewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('supplier_listings_pending', $reviewOnlyBadges);
+        $this->getJson('/api/v1/purchasing/supplier-listings?status=pending')->assertForbidden();
+    }
+
+    public function test_review_queue_id_filter_returns_only_the_target_and_fails_closed_for_unknown_hash(): void
+    {
+        $item = Item::factory()->create();
+        $target = $this->makeListing(['item_id' => $item->id, 'supplier_item_code' => 'SUP-ONE']);
+        $this->makeListing(['item_id' => $item->id, 'supplier_item_code' => 'SUP-TWO']);
+
+        $this->actingAs($this->purchasingOfficer)
+            ->getJson('/api/v1/purchasing/supplier-listings?status=pending&id='.$target->hash_id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $target->hash_id);
+
+        $this->getJson('/api/v1/purchasing/supplier-listings?status=pending&id=invalid-hash')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson('/api/v1/purchasing/supplier-listings?status=pending&id=0')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 
     /* ─── Internal: approve ────────────────────────────────── */

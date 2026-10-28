@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\DSS\Detectors;
 
-use App\Common\Services\SettingsService;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
-use App\Modules\Quality\Enums\NcrStatus;
-use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\DSS\Contracts\DetectorScanResult;
+use App\Modules\Quality\Enums\NcrSeverity;
+use App\Modules\Quality\Services\NcrSlaService;
 
 /**
  * D13 — NCR SLA breach follow-up. The escalation sweep already reminds and
@@ -27,9 +27,7 @@ class NcrSlaBreachDetector implements DetectorInterface
 {
     public const ID = 'dss.ncr_sla_breach';
 
-    public function __construct(
-        private readonly SettingsService $settings,
-    ) {}
+    public function __construct(private readonly NcrSlaService $ncrSla) {}
 
     public function id(): string
     {
@@ -57,28 +55,26 @@ class NcrSlaBreachDetector implements DetectorInterface
     }
 
     /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
         $maxEvidence = max(1, (int) ($context['max_evidence'] ?? $this->defaultParams()['max_evidence_per_severity']));
 
         $emissions = [];
+        $rowsScanned = 0;
 
-        foreach (['critical', 'high', 'medium', 'low'] as $severity) {
-            $slaHours = $this->settings->requiredInt("quality.ncr.sla_{$severity}_hours", 1);
-            $cutoff = now()->subHours($slaHours);
+        foreach ([NcrSeverity::Critical, NcrSeverity::High, NcrSeverity::Medium, NcrSeverity::Low] as $severity) {
+            $slaHours = $this->ncrSla->hoursFor($severity);
 
             $count = 0;
             $oldestOverdueHours = 0;
             $evidence = [];
 
-            NonConformanceReport::query()
-                ->where('severity', $severity)
-                ->whereIn('status', [NcrStatus::Open->value, NcrStatus::InProgress->value])
-                ->whereRaw('COALESCE(last_escalated_at, created_at) < ?', [$cutoff])
+            $ncrSla = $this->ncrSla;
+            $this->ncrSla->overdueQuery($severity)
                 ->orderBy('id')
-                ->chunkById(200, function ($ncrs) use (&$count, &$oldestOverdueHours, &$evidence, $maxEvidence): void {
+                ->chunkById(200, function ($ncrs) use (&$count, &$oldestOverdueHours, &$evidence, $maxEvidence, $ncrSla): void {
                     foreach ($ncrs as $ncr) {
-                        $clock = $ncr->last_escalated_at ?: $ncr->created_at;
+                        $clock = $ncrSla->clockStart($ncr) ?? now();
                         $count++;
                         $oldestOverdueHours = max(
                             $oldestOverdueHours,
@@ -90,6 +86,7 @@ class NcrSlaBreachDetector implements DetectorInterface
                         }
                     }
                 });
+            $rowsScanned += $count;
 
             if ($count === 0) {
                 continue;
@@ -97,11 +94,11 @@ class NcrSlaBreachDetector implements DetectorInterface
 
             $emissions[] = new DetectorEmission(
                 type: 'ncr_sla_breach',
-                severity: $severity === 'critical' ? 'critical' : 'warning',
-                dedupeKey: "ncr-sla:{$severity}",
+                severity: $severity === NcrSeverity::Critical ? 'critical' : 'warning',
+                dedupeKey: "ncr-sla:{$severity->value}",
                 rationale: [
                     'rule' => 'ncr sla breach scan',
-                    'severity' => $severity,
+                    'severity' => $severity->value,
                     'affected_count' => $count,
                     'oldest_overdue_hours' => $oldestOverdueHours,
                     'sla_hours' => $slaHours,
@@ -113,6 +110,6 @@ class NcrSlaBreachDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $rowsScanned);
     }
 }

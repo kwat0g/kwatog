@@ -97,6 +97,7 @@ class CustomerSalesOrderConfirmedMail extends QueuedMailable
                 'entity_id' => $snapshot['sales_order_hash_id'],
                 'reason' => 'The customer email was unreachable or the email provider rejected the message.',
             ],
+            $this->salesOrder,
         );
     }
 

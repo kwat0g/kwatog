@@ -17,7 +17,11 @@ class NotifyMaintenanceWorkOrder
     public function handle(MaintenanceWorkOrderCreated $event): void
     {
         $order = $event->workOrder;
-        $supervisors = User::query()->where('is_active', true)
+        $supervisorQuery = User::query()->where('is_active', true);
+        if ($order->created_by !== null) {
+            $supervisorQuery->whereKeyNot($order->created_by);
+        }
+        $supervisors = $supervisorQuery
             ->whereHas('role', fn ($query) => $query->where('slug', 'maintenance_supervisor'))
             ->get()
             ->filter(fn (User $user): bool => $user->hasPermission('maintenance.view'))
@@ -27,7 +31,7 @@ class NotifyMaintenanceWorkOrder
 
             return;
         }
-        $this->notifications->send($supervisors, 'maintenance.assignment_needed', self::payload(
+        $this->notifications->sendForSubject($order, $supervisors, 'maintenance.assignment_needed', self::payload(
             $order, 'Maintenance assignment needed: '.$order->mwo_number,
             'Review this maintenance order and assign a technician.',
         ), 'maintenance:new:'.$order->id);

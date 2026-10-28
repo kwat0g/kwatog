@@ -1,6 +1,6 @@
 # OGAMI layout and table spec — Phase 2 pilot
 
-Status: **Pilot implementation complete; awaiting user review.** “Proceed” authorized the Phase 2 spec and three-route pilot. The dark-mode, link-color, button-color, and modest type-size additions are included. Phase 3+ remains gated. This spec extends the existing Atelier tokens and shared components.
+Status: **Approved for Phase 3.** “Proceed” authorized the Phase 2 spec and three-route pilot; the user approved the pilot and Phase 3 on 2026-10-25. The dark-mode, link-color, button-color, decimal, and modest type-size additions are included. This spec extends the existing Atelier tokens and shared components.
 
 Pilot routes:
 
@@ -84,9 +84,9 @@ PageHeader title, subtitle, and action align in one row when space permits. On n
 ### Container, states, and density
 
 - Outer table surface uses the existing canvas/surface, default border, and `radius-md`; its outer edge matches page content edges. First/last cell text inset matches page gutter/header text.
-- Quiet 1px `--border-subtle` dividers on every row. Hover, selected, and keyboard-focus remain distinct and use current semantic tokens. Zebra default is **off**; no zebra toggle is included in the pilot.
-- Comfortable: 48px minimum row; Compact: 36px; Spacious: 56px. Comfortable is the approved default. Cell vertical padding: 8px Compact, 12px Comfortable, 16px Spacious; horizontal padding 12px standard, 16px for wide text columns.
-- Persist density per authenticated user and table key. Current browser-wide `localStorage` key is not account-scoped; adjust ownership before rollout. Provide a global default in Settings only after the pilot proves the component behavior.
+- Quiet 1px `--border-subtle` dividers on every row. Hover, selected, and keyboard-focus remain distinct and use current semantic tokens. Zebra is on by default using `--bg-zebra-even`; existing Light, Dark, and Floor token values control the stripe. No zebra toggle is included.
+- Compact minimum: 36px office / 44px Floor default; Comfortable minimum: 48px; Spacious minimum: 56px. Rows may grow for permitted multi-line content. The user requested Compact as the default for all tables while keeping Floor rows above the 44px touch minimum. Cell vertical padding: 8px Compact, 12px Comfortable, 16px Spacious; horizontal padding 12px standard, 16px for wide text columns.
+- Persist density and visible-column choices per authenticated user and table key through the existing preferences API. Explicit table keys remain stable; unkeyed tables receive an automatic route-scoped key so density always works and persists. A global default in Settings remains out of scope.
 - Skeleton rows match selected density. Empty state has a next action where the user can create data; error state has retry; loading overlay reserves the same dimensions.
 - Selection, filter, sorting, pagination, and row-action business behavior remain unchanged.
 
@@ -147,7 +147,7 @@ Case: sentence case for buttons, labels, and table headers. Dates are not IDs an
 ### Number and decimal policy
 
 - Money: configured functional currency, grouping separators, exactly 2 decimal places. Formatting only; calculations stay in integer centavos or backend decimal strings.
-- Quantity: use unit/domain precision, up to the supported 3 decimals in inventory; do not add or drop significant quantity precision. Group large values.
+- Quantity: use unit/domain precision, up to the supported 3 decimals in inventory and up to 4 decimals for Production Work Order operation values; do not add or drop significant quantity precision. Group large values.
 - Whole counts: 0 decimals. Display percentages: 1 decimal by default; use domain-specific precision only when the field requires it. Do not call `.toFixed()` ad hoc in cell renderers.
 - Compact currency: keep K/M suffix but still group the scaled number and use exactly 2 decimals. The shared helper now groups the scaled value.
 - Business date/time: format explicitly in `Asia/Manila`; test timestamp-with-offset, date-only, and midnight-boundary cases.
@@ -179,8 +179,8 @@ Clickable record identifiers use the existing `--text-link`/`--text-link-hover` 
 - Print the Inventory item stock-card route: correct page width, table columns, repeated header, and page breaks. Backend PDF output is separate.
 - Compare before/after screenshots and the JSON geometry report. Require 1px edge alignment, minimum gutter, no page overflow, no double main scroll, row/column/type/contrast checks, and no functional behavior changes.
 
-## 9. Pilot defaults and remaining review gate
+## 9. Approved pilot defaults and rollout boundary
 
-Defaults applied in the pilot: zebra off; Comfortable 48px default with Compact 36px and Spacious 56px; gutters 16/24/32px at <640/640–1439/≥1440px; sentence-case sans headers; mono reserved for codes/IDs; existing clay primary and red danger button colors retained; dark regular text weight 450; common utility text sizes raised modestly (2xs to 12px); clickable IDs use link tokens. Secondary and ghost buttons intentionally keep transparent fills with theme-aware text and borders; primary and danger buttons use theme-aware fills and foregrounds. Pilot CTA colors were measured in both themes. Page-authored native buttons and submit actions outside the pilot still need route-level review.
+Defaults applied in the pilot and follow-up: zebra on by user request; Compact 36px default with Comfortable 48px and Spacious 56px available; gutters 16/24/32px at <640/640–1439/≥1440px; sentence-case sans headers; mono reserved for codes/IDs; existing clay primary and red danger button colors retained; dark regular text weight 450; common utility text sizes raised modestly (2xs to 12px); clickable IDs use link tokens. Density, visible-column choices, sidebar width, and sidebar Expand all preference persist per authenticated user. Secondary and ghost buttons intentionally keep transparent fills with theme-aware text and borders; primary and danger buttons use theme-aware fills and foregrounds. Pilot CTA colors were measured in both themes. Page-authored native buttons and submit actions outside the pilot still need route-level review.
 
-Review light/dark captures and measurement reports before any Phase 3 foundation rollout or Phase 4 route migration. The source scan found form-submit `<Button>` calls without an explicit variant; they still render the shared outlined secondary default. Review their action hierarchy per module before changing those call sites.
+The user approved these defaults on 2026-10-25. A source scan across SPA TSX found zero `<Button type="submit">` calls without an explicit variant. Non-submit action hierarchy, native buttons, and route-level appearance still need review during module rollout. Phase 3 foundation work is authorized; Phase 4 page migration remains separate and evidence-led.

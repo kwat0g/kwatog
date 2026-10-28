@@ -45,7 +45,7 @@ class NotifyOnLoanSubmitted implements ShouldQueue
                 ->values();
 
             $currency = $this->currency ?? app(CurrencyDisplayService::class);
-            $this->notifications->send($audience, 'loans.submitted', [
+            $this->notifications->sendForSubject($loan, $audience, 'loans.submitted', [
                 'title' => "{$typeLabel} Request from {$emp->full_name}",
                 'message' => $currency->format($loan->principal).' — awaiting approval.',
                 'link_to' => "/hr/loans/{$loan->hash_id}",

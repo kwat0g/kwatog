@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Dashboard;
 
-use App\Common\Models\ApprovalRecord;
-use App\Common\Models\ApprovalDelegation;
 use App\Common\Enums\PermissionOverrideType;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Models\ApprovalRecord;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
@@ -15,23 +16,33 @@ use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Auth\Models\Role;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
+use App\Modules\HR\Enums\ProfileUpdateStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\ProfileUpdateRequest;
 use App\Modules\HR\Models\Training;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Landing\Enums\ContactInquiryStatus;
+use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Leave\Models\LeaveRequest;
-use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use Carbon\Carbon;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -131,6 +142,326 @@ class BadgeControllerTest extends TestCase
         $this->assertArrayHasKey('payroll', $hrBadges);
     }
 
+    public function test_production_overdue_badge_matches_filtered_list_for_every_work_order_status(): void
+    {
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+        ]);
+        $this->assertTrue($user->hasPermission('production.work_orders.view'));
+
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create([
+                'status' => $status->value,
+                'planned_end' => now()->subMinute(),
+            ]);
+        }
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::Confirmed->value,
+            'planned_end' => now()->addMinutes(5),
+        ]);
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::InProgress->value,
+            'planned_end' => now()->subMinute(),
+        ])->delete();
+
+        $listResponse = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=overdue')
+            ->assertOk();
+        $list = $listResponse->json('meta.total');
+        $badges = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(2, $list);
+        $this->assertSame($list, $badges['work_orders']['count']);
+        $this->assertSame(['confirmed', 'in_progress'], collect($listResponse->json('data'))
+            ->pluck('status')->sort()->values()->all());
+
+        $employee = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=overdue')
+            ->assertForbidden();
+        $employeeBadges = $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders', $employeeBadges);
+    }
+
+    public function test_production_overdue_and_due_soon_badges_require_the_parent_route_permission(): void
+    {
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::Confirmed->value,
+            'planned_end' => now()->subMinute(),
+        ]);
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::InProgress->value,
+            'planned_end' => now()->addDay(),
+        ]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $grantor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
+            'type' => PermissionOverrideType::Grant->value,
+            'granted_by' => $grantor->id,
+            'reason' => 'Work-order badge parent route permission regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user = $user->fresh();
+        $this->assertTrue($user->hasPermission('production.work_orders.view'));
+        $this->assertFalse($user->hasPermission('production.view'));
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=overdue')
+            ->assertForbidden();
+        $badges = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders', $badges);
+        $this->assertArrayNotHasKey('work_orders_due_soon', $badges);
+    }
+
+    public function test_production_due_soon_badge_matches_filtered_list_for_active_statuses_and_window_edges(): void
+    {
+        $this->seed(SettingsSeeder::class);
+        $timezone = config('app.timezone');
+        config(['app.timezone' => 'Asia/Manila']);
+        Carbon::setTestNow(Carbon::parse('2026-10-26 09:00:00', 'Asia/Manila'));
+
+        try {
+            $user = User::factory()->create([
+                'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            ]);
+
+            foreach (WorkOrderStatus::cases() as $status) {
+                WorkOrder::factory()->create([
+                    'status' => $status->value,
+                    'planned_end' => now()->copy()->startOfDay()->addDays(3)->endOfDay(),
+                ]);
+            }
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::InProgress->value,
+                'planned_end' => now(),
+            ]);
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::InProgress->value,
+                'planned_end' => now()->copy()->startOfDay()->addDays(4),
+            ]);
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::Confirmed->value,
+                'planned_end' => now()->subSecond(),
+            ]);
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::Planned->value,
+                'planned_end' => now()->addDay(),
+            ])->delete();
+
+            $listResponse = $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/production/work-orders?signal=due_soon')
+                ->assertOk();
+            $badges = $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data');
+
+            $this->assertSame(5, $listResponse->json('meta.total'));
+            $this->assertSame(5, $badges['work_orders_due_soon']['count']);
+            $this->assertSame(['confirmed', 'in_progress', 'in_progress', 'paused', 'planned'], collect($listResponse->json('data'))
+                ->pluck('status')->sort()->values()->all());
+
+            $employee = User::factory()->create([
+                'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+            ]);
+            $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/production/work-orders?signal=due_soon')
+                ->assertForbidden();
+            $employeeBadges = $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data');
+            $this->assertArrayNotHasKey('work_orders_due_soon', $employeeBadges);
+        } finally {
+            Carbon::setTestNow();
+            config(['app.timezone' => $timezone]);
+        }
+    }
+
+    public function test_production_paused_badge_matches_filtered_list_and_requires_lifecycle_permission(): void
+    {
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+        ]);
+        $this->assertTrue($user->hasPermission('production.work_orders.lifecycle'));
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create(['status' => $status->value]);
+        }
+        WorkOrder::factory()->create(['status' => WorkOrderStatus::Paused->value])->delete();
+
+        $listResponse = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=paused')
+            ->assertOk();
+        $badges = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $listResponse->json('meta.total'));
+        $this->assertSame($listResponse->json('meta.total'), $badges['work_orders_paused']['count']);
+
+        $planner = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'ppc_head')->value('id'),
+        ]);
+        $this->assertTrue($planner->hasPermission('production.work_orders.view'));
+        $this->assertFalse($planner->hasPermission('production.work_orders.lifecycle'));
+        $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=paused')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $plannerBadges = $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_paused', $plannerBadges);
+
+        $viewless = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $grantor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $viewless->id,
+            'permission_id' => Permission::query()->where('slug', 'production.work_orders.lifecycle')->value('id'),
+            'type' => PermissionOverrideType::Grant->value,
+            'granted_by' => $grantor->id,
+            'reason' => 'Work-order lifecycle badge gate regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $viewless = $viewless->fresh();
+        $this->assertTrue($viewless->hasPermission('production.work_orders.lifecycle'));
+        $this->assertFalse($viewless->hasPermission('production.work_orders.view'));
+        $this->actingAs($viewless, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=paused')
+            ->assertForbidden();
+        $viewlessBadges = $this->actingAs($viewless, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_paused', $viewlessBadges);
+    }
+
+    public function test_production_release_badge_matches_planned_list_and_requires_view_and_confirm_permissions(): void
+    {
+        $planner = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'ppc_head')->value('id'),
+        ]);
+        $this->assertTrue($planner->hasPermission('production.work_orders.view'));
+        $this->assertTrue($planner->hasPermission('production.wo.confirm'));
+
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create(['status' => $status->value]);
+        }
+        WorkOrder::factory()->create(['status' => WorkOrderStatus::Planned->value])->delete();
+
+        $listResponse = $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertOk();
+        $badges = $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $listResponse->json('meta.total'));
+        $this->assertSame('planned', $listResponse->json('data.0.status'));
+        $this->assertSame($listResponse->json('meta.total'), $badges['work_orders_awaiting_confirmation']['count']);
+
+        $viewOnly = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $grantor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            ['user_id' => $viewOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view-only regression test', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $viewOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view-only regression test', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $viewOnly = $viewOnly->fresh();
+        $this->assertTrue($viewOnly->hasPermission('production.view'));
+        $this->assertTrue($viewOnly->hasPermission('production.work_orders.view'));
+        $this->assertFalse($viewOnly->hasPermission('production.wo.confirm'));
+        $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $viewOnlyBadges = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_awaiting_confirmation', $viewOnlyBadges);
+
+        $confirmOnly = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            ['user_id' => $confirmOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view gate regression test', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $confirmOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.wo.confirm')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view gate regression test', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $confirmOnly = $confirmOnly->fresh();
+        $this->assertTrue($confirmOnly->hasPermission('production.view'));
+        $this->assertTrue($confirmOnly->hasPermission('production.wo.confirm'));
+        $this->assertFalse($confirmOnly->hasPermission('production.work_orders.view'));
+        $this->actingAs($confirmOnly, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertForbidden();
+        $confirmOnlyBadges = $this->actingAs($confirmOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_awaiting_confirmation', $confirmOnlyBadges);
+
+        $moduleless = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            ['user_id' => $moduleless->id, 'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge parent route gate regression test', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $moduleless->id, 'permission_id' => Permission::query()->where('slug', 'production.wo.confirm')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge parent route gate regression test', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $moduleless = $moduleless->fresh();
+        $this->assertFalse($moduleless->hasPermission('production.view'));
+        $this->assertTrue($moduleless->hasPermission('production.work_orders.view'));
+        $this->assertTrue($moduleless->hasPermission('production.wo.confirm'));
+        $this->actingAs($moduleless, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertForbidden();
+        $modulelessBadges = $this->actingAs($moduleless, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_awaiting_confirmation', $modulelessBadges);
+    }
+
     public function test_widened_scope_badges_are_permission_gated(): void
     {
         $employee = Role::where('slug', 'employee')->firstOrFail();
@@ -160,6 +491,165 @@ class BadgeControllerTest extends TestCase
             $this->assertIsString($sysResp[$key]['label']);
             $this->assertIsString($sysResp[$key]['description']);
         }
+    }
+
+    public function test_badge_permissions_match_destination_list_permissions(): void
+    {
+        $employeeRole = Role::where('slug', 'employee')->firstOrFail();
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+
+        $employee = User::factory()->create(['role_id' => $employeeRole->id]);
+        $this->assertTrue($employee->hasPermission('payroll.view'));
+        $this->assertFalse($employee->hasPermission('payroll.periods.view'));
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/payroll-periods')
+            ->assertForbidden();
+        $employeeBadges = $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('payroll', $employeeBadges);
+
+        $periodReader = User::factory()->create(['role_id' => $employeeRole->id]);
+        $this->grantPermission($periodReader, 'payroll.periods.view', $admin);
+        $this->actingAs($periodReader, 'sanctum')
+            ->getJson('/api/v1/payroll-periods')
+            ->assertOk();
+        $periodBadges = $this->actingAs($periodReader, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('payroll', $periodBadges);
+
+        $complaintReader = User::factory()->create([
+            'role_id' => Role::where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->assertTrue($complaintReader->hasPermission('crm.complaints.view'));
+        $this->assertFalse($complaintReader->hasPermission('crm.complaints.manage'));
+        $this->actingAs($complaintReader, 'sanctum')
+            ->getJson('/api/v1/crm/complaints')
+            ->assertOk();
+        $complaintBadges = $this->actingAs($complaintReader, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('open_complaints', $complaintBadges);
+
+        $warehouse = User::factory()->create([
+            'role_id' => Role::where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $this->assertTrue($warehouse->hasPermission('supply_chain.deliveries.view'));
+        $this->assertFalse($warehouse->hasPermission('supply_chain.view'));
+        $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/supply-chain/deliveries')
+            ->assertOk();
+        $deliveryBadges = $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('deliveries', $deliveryBadges);
+    }
+
+    public function test_profile_request_badge_matches_the_hr_and_finance_review_queues(): void
+    {
+        $reviewerEmployee = Employee::factory()->create();
+        $hrReviewer = User::factory()->create([
+            'role_id' => Role::where('slug', 'department_head')->value('id'),
+            'employee_id' => $reviewerEmployee->id,
+        ]);
+        $requester = User::factory()->create();
+        $sameDepartment = Employee::factory()->create(['department_id' => $reviewerEmployee->department_id]);
+        $otherDepartment = Employee::factory()->create();
+
+        $createRequest = static fn (Employee $employee, ProfileUpdateStatus $status, bool $requiresFinance) => ProfileUpdateRequest::query()->create([
+            'employee_id' => $employee->id,
+            'requested_by' => $requester->id,
+            'status' => $status->value,
+            'requires_finance' => $requiresFinance,
+            'changes' => $requiresFinance
+                ? ['bank_name' => 'Test Bank']
+                : ['mobile_number' => '09170000000'],
+        ]);
+
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, false);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Approved, true);
+        $createRequest($otherDepartment, ProfileUpdateStatus::Pending, false);
+
+        $hrList = $this->actingAs($hrReviewer, 'sanctum')
+            ->getJson('/api/v1/hr/profile-update-requests')
+            ->assertOk();
+        $hrBadge = $this->actingAs($hrReviewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.profile_requests.count');
+        $this->assertSame(2, $hrList->json('meta.total'));
+        $this->assertSame($hrList->json('meta.total'), $hrBadge);
+
+        $finance = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($otherDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, false);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Approved, true);
+
+        $financeList = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/hr/profile-update-requests')
+            ->assertOk();
+        $financeBadge = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.profile_requests.count');
+        $this->assertSame(3, $financeList->json('meta.total'));
+        $this->assertSame($financeList->json('meta.total'), $financeBadge);
+    }
+
+    public function test_inquiry_badge_matches_new_inquiry_list_and_requires_manage_permission(): void
+    {
+        $customerService = User::factory()->create([
+            'role_id' => Role::where('slug', 'customer_service_officer')->value('id'),
+        ]);
+        $this->assertTrue($customerService->hasPermission('crm.inquiries.view'));
+        $this->assertTrue($customerService->hasPermission('crm.inquiries.manage'));
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::New]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::InProgress]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::Closed]);
+
+        $list = $this->actingAs($customerService, 'sanctum')
+            ->getJson('/api/v1/crm/inquiries?status=new')
+            ->assertOk();
+        $badge = $this->actingAs($customerService, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.inquiries.count');
+
+        $this->assertSame(1, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
+
+        $viewer = User::factory()->create([
+            'role_id' => Role::where('slug', 'employee')->value('id'),
+        ]);
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+        $this->grantPermission($viewer, 'crm.inquiries.view', $admin);
+        $this->assertTrue($viewer->fresh()->hasPermission('crm.inquiries.view'));
+        $this->assertFalse($viewer->fresh()->hasPermission('crm.inquiries.manage'));
+
+        $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/v1/crm/inquiries?status=new')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $viewerBadges = $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('inquiries', $viewerBadges);
     }
 
     public function test_widened_scope_badge_counts_track_recent_rows(): void
@@ -451,6 +941,244 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(2, $list->json('meta.total'));
         $this->assertSame($list->json('meta.total'), $badge);
         $this->assertSame(['pending_qc', 'pending_qc'], $list->json('data.*.status'));
+
+        $qcUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->assertTrue($qcUser->hasPermission('inventory.view'));
+        $this->assertTrue($qcUser->hasPermission('quality.inspections.manage'));
+        $this->assertFalse($qcUser->hasPermission('inventory.grn.create'));
+        $qcBadges = $this->actingAs($qcUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('pending_grn', $qcBadges);
+    }
+
+    public function test_inspection_review_badge_matches_the_current_users_review_list(): void
+    {
+        $maker = User::factory()->create(['role_id' => Role::query()->where('slug', 'qc_inspector')->value('id')]);
+        $checker = User::factory()->create(['role_id' => Role::query()->where('slug', 'qc_inspector')->value('id')]);
+        $contributor = User::factory()->create(['role_id' => Role::query()->where('slug', 'production_manager')->value('id')]);
+        $viewOnly = User::factory()->create(['role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id')]);
+        $viewOnly->role->permissions()->syncWithoutDetaching([
+            Permission::query()->where('slug', 'quality.inspections.view')->value('id'),
+        ]);
+        $viewOnly->flushPermissionsCache();
+        $product = Product::factory()->create();
+
+        DB::table('inspections')->insert([
+            'inspection_number' => 'INS-REVIEW-DRAFT', 'stage' => 'incoming', 'status' => 'draft',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => $maker->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('inspections')->insert([
+            'inspection_number' => 'INS-REVIEW-0001', 'stage' => 'incoming', 'status' => 'awaiting_review',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => $maker->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $contributed = DB::table('inspections')->insertGetId([
+            'inspection_number' => 'INS-REVIEW-0002', 'stage' => 'outgoing', 'status' => 'awaiting_review',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => $maker->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('inspection_result_authors')->insert([
+            'inspection_id' => $contributed, 'user_id' => $contributor->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('inspections')->insert([
+            'inspection_number' => 'INS-REVIEW-0003', 'stage' => 'incoming', 'status' => 'awaiting_review',
+            'product_id' => $product->id, 'batch_quantity' => 20, 'sample_size' => 5,
+            'inspector_id' => null, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        foreach ([
+            [$checker, 2, ['INS-REVIEW-0001', 'INS-REVIEW-0002']],
+            [$contributor, 1, ['INS-REVIEW-0001']],
+            [$maker, 0, []],
+        ] as [$user, $expected, $inspectionNumbers]) {
+            $list = $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/quality/inspections?status=awaiting_review&signal=awaiting_my_review')
+                ->assertOk();
+            $badges = $this->actingAs($user, 'sanctum')->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+
+            $this->assertSame($expected, $list->json('meta.total'));
+            $this->assertSame($expected, $badges['inspection_reviews']['count']);
+            $this->assertEqualsCanonicalizing($inspectionNumbers, $list->json('data.*.inspection_number'));
+            if ($user->is($checker)) {
+                $this->assertSame(1, $badges['pending_inspections']['count']);
+            }
+        }
+
+        $viewOnlyList = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/quality/inspections?status=awaiting_review&signal=awaiting_my_review')
+            ->assertOk();
+        $viewOnlyBadges = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+        $this->assertSame(0, $viewOnlyList->json('meta.total'));
+        $this->assertArrayNotHasKey('inspection_reviews', $viewOnlyBadges);
+        $this->assertArrayNotHasKey('pending_inspections', $viewOnlyBadges);
+    }
+
+    public function test_mrb_hold_badge_matches_the_filtered_list_and_requires_view_permission(): void
+    {
+        $warehouseUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $item = Item::factory()->create();
+        $source = WarehouseLocation::factory()->create();
+        $quarantine = WarehouseLocation::factory()->create();
+
+        foreach ([MrbStatus::Held, MrbStatus::Held, MrbStatus::Released] as $index => $status) {
+            DB::table('material_review_records')->insert([
+                'mrb_number' => 'MRB-BADGE-'.$index,
+                'item_id' => $item->id,
+                'quantity' => 1,
+                'source_location_id' => $source->id,
+                'quarantine_location_id' => $quarantine->id,
+                'status' => $status->value,
+                'held_by' => $warehouseUser->id,
+                'held_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $list = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/inventory/mrb?status=held')
+            ->assertOk();
+        $badge = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.mrb_holds.count');
+
+        $this->assertSame(2, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
+        $this->assertSame(['held', 'held'], $list->json('data.*.status'));
+
+        $employee = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/inventory/mrb?status=held')
+            ->assertForbidden();
+        $employeeBadges = $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('mrb_holds', $employeeBadges);
+    }
+
+    public function test_shipment_badge_matches_the_mid_pipe_list_for_both_read_permissions(): void
+    {
+        $purchasingOfficer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'purchasing_officer')->value('id'),
+        ]);
+        $impexOfficer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'impex_officer')->value('id'),
+        ]);
+        $warehouseUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+        ]);
+
+        $this->assertTrue($purchasingOfficer->hasPermission('supply_chain.shipments.view'));
+        $this->assertFalse($purchasingOfficer->hasPermission('supply_chain.view'));
+        $this->assertTrue($impexOfficer->hasPermission('supply_chain.view'));
+        $this->assertTrue($warehouseUser->hasPermission('supply_chain.deliveries.view'));
+        $this->assertFalse($warehouseUser->hasPermission('supply_chain.shipments.view'));
+        $this->assertFalse($warehouseUser->hasPermission('supply_chain.view'));
+
+        foreach (ShipmentStatus::cases() as $index => $status) {
+            $purchaseOrder = PurchaseOrder::factory()->create();
+            DB::table('shipments')->insert([
+                'shipment_number' => 'SHP-MIDPIPE-'.$index,
+                'purchase_order_id' => $purchaseOrder->id,
+                'status' => $status->value,
+                'created_by' => $impexOfficer->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $deletedPurchaseOrder = PurchaseOrder::factory()->create();
+        DB::table('shipments')->insert([
+            'shipment_number' => 'SHP-MIDPIPE-DELETED',
+            'purchase_order_id' => $deletedPurchaseOrder->id,
+            'status' => ShipmentStatus::InTransit->value,
+            'created_by' => $impexOfficer->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+            'deleted_at' => now(),
+        ]);
+
+        foreach ([$purchasingOfficer, $impexOfficer] as $viewer) {
+            $list = $this->actingAs($viewer, 'sanctum')
+                ->getJson('/api/v1/supply-chain/shipments?status=mid_pipe')
+                ->assertOk();
+            $badge = $this->actingAs($viewer, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.shipments.count');
+
+            $this->assertSame(3, $list->json('meta.total'));
+            $this->assertSame($list->json('meta.total'), $badge);
+            $this->assertEqualsCanonicalizing(
+                [ShipmentStatus::InTransit->value, ShipmentStatus::Customs->value, ShipmentStatus::Cleared->value],
+                $list->json('data.*.status'),
+            );
+        }
+
+        $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/supply-chain/shipments?status=mid_pipe')
+            ->assertForbidden();
+        $warehouseBadges = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('shipments', $warehouseBadges);
+    }
+
+    public function test_sales_order_confirmation_badge_matches_its_filtered_list(): void
+    {
+        $salesOfficer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+        ]);
+
+        foreach (SalesOrderStatus::cases() as $status) {
+            SalesOrder::factory()->create(['status' => $status->value]);
+        }
+        SalesOrder::factory()->create([
+            'status' => SalesOrderStatus::Draft->value,
+            'customer_confirmation_requested_at' => now(),
+        ]);
+        SalesOrder::factory()->create([
+            'status' => SalesOrderStatus::AwaitingConfirmation->value,
+        ])->delete();
+
+        $list = $this->actingAs($salesOfficer, 'sanctum')
+            ->getJson('/api/v1/crm/sales-orders?signal=awaiting_confirmation')
+            ->assertOk();
+        $badge = $this->actingAs($salesOfficer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.pending_so.count');
+
+        $this->assertSame(3, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
+        $this->assertEqualsCanonicalizing([
+            SalesOrderStatus::Draft->value,
+            SalesOrderStatus::AwaitingConfirmation->value,
+            SalesOrderStatus::DeliveryNegotiation->value,
+        ], $list->json('data.*.status'));
+
+        $employee = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/crm/sales-orders?signal=awaiting_confirmation')
+            ->assertForbidden();
+        $this->assertArrayNotHasKey(
+            'pending_so',
+            $this->actingAs($employee, 'sanctum')->getJson('/api/v1/dashboards/badges')->assertOk()->json('data'),
+        );
     }
 
     public function test_per_badge_severity_override_beats_global_threshold(): void
@@ -538,6 +1266,34 @@ class BadgeControllerTest extends TestCase
 
         $this->assertSame(1, $resp['approvals']['count']);
         $this->assertSame('warning', $resp['approvals']['severity']);
+    }
+
+    public function test_approval_board_and_badge_count_items_beyond_the_visible_page_limit(): void
+    {
+        $department = Department::factory()->create();
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+
+        for ($i = 0; $i < 101; $i++) {
+            $this->addPendingLeaveApproval($employee, 'department_head');
+        }
+
+        $board = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/approvals/board')
+            ->assertOk()
+            ->json('data');
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertCount(100, $board['my_action']);
+        $this->assertSame(101, $board['summary']['my_action']);
+        $this->assertTrue($board['meta']['pending_truncated']);
+        $this->assertSame(101, $badges['approvals']['count']);
     }
 
     public function test_purchase_request_badge_matches_filtered_list_and_scope(): void
@@ -629,6 +1385,50 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(1, $badge);
     }
 
+    public function test_purchase_request_badge_is_zero_without_list_access(): void
+    {
+        $department = Department::factory()->create();
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.view')->value('id'),
+            'type' => PermissionOverrideType::Deny,
+            'granted_by' => $admin->id,
+            'reason' => 'Verify approval counts do not expose a queue without list access.',
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.pr.approve')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $admin->id,
+            'reason' => 'Keep approval authority while testing revoked list access.',
+        ]);
+        $approver->flushPermissionsCache();
+        $this->assertTrue($approver->hasPermission('purchasing.pr.approve'));
+        $this->assertFalse($approver->hasPermission('purchasing.view'));
+
+        $this->addPendingPurchaseRequest(User::factory()->create(), $department->id, 'department_head');
+
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests?signal=awaiting_my_approval')
+            ->assertForbidden();
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertOk()
+            ->assertJsonPath('data.count', 0);
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('purchase_requests', $badges);
+    }
+
     private function addPendingPurchaseRequest(User $requester, ?int $departmentId, string $roleSlug): PurchaseRequest
     {
         $request = PurchaseRequest::factory()->create([
@@ -662,6 +1462,18 @@ class BadgeControllerTest extends TestCase
             'is_current' => true,
             'created_at' => now(),
         ]);
+    }
+
+    private function grantPermission(User $user, string $permissionSlug, User $admin): void
+    {
+        UserPermissionOverride::create([
+            'user_id' => $user->id,
+            'permission_id' => Permission::where('slug', $permissionSlug)->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $admin->id,
+            'reason' => 'Verify badge access follows the destination list permission.',
+        ]);
+        $user->flushPermissionsCache();
     }
 
     public function test_zero_count_yields_neutral_severity(): void
@@ -699,11 +1511,11 @@ class BadgeControllerTest extends TestCase
         return [
             'inquiries', 'open_complaints', 'pending_inspections', 'pending_grn',
             'mrb_holds', 'shipments', 'mrp_plans', 'pending_returns',
-            'draft_invoices', 'overdue_bills', 'training_upcoming', 'open_postings',
+            'draft_invoices', 'overdue_bills', 'unpaid_bills', 'due_soon_bills', 'training_upcoming', 'open_postings',
         ];
     }
 
-    public function test_budgeting_badges_track_submitted_budgets_and_pending_transfers(): void
+    public function test_budget_approval_badge_matches_the_current_approver_list(): void
     {
         $employee = Role::where('slug', 'employee')->firstOrFail();
         $emp = User::factory()->create(['role_id' => $employee->id]);
@@ -746,11 +1558,18 @@ class BadgeControllerTest extends TestCase
             return [$budget, $budget->lineItems()->firstOrFail()->fresh()];
         };
 
-        // Two budgets stay submitted: the pending_budgets badge counts them.
+        // Two finance-submitted budgets are actionable by a vice president.
         [$stuckA] = $draftOneLineBudget('Badge submitted A');
         [$stuckB] = $draftOneLineBudget('Badge submitted B');
         $budgets->submit($stuckA, $maker->id);
         $budgets->submit($stuckB, $maker->id);
+
+        // A second vice president cannot approve a budget submitted by that role.
+        $vpMaker = User::factory()->create([
+            'role_id' => Role::where('slug', 'vice_president')->value('id'),
+        ]);
+        [$sameRoleSubmission] = $draftOneLineBudget('Badge same-role submission');
+        $budgets->submit($sameRoleSubmission, $vpMaker->id);
 
         // A second pair goes all the way active so a transfer can pend on it.
         [$liveA, $lineA] = $draftOneLineBudget('Badge live A');
@@ -769,10 +1588,117 @@ class BadgeControllerTest extends TestCase
             ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
         $this->assertSame(2, $tracked['pending_budgets']['count']);
         $this->assertSame(1, $tracked['pending_transfers']['count']);
+        $pendingBudgets = $this->actingAs($vp, 'sanctum')
+            ->getJson('/api/v1/budgets?signal=awaiting_my_approval')
+            ->assertOk();
+        $this->assertSame($tracked['pending_budgets']['count'], $pendingBudgets->json('meta.total'));
+        $this->assertSame(['submitted'], array_values(array_unique(array_column($pendingBudgets->json('data'), 'status'))));
+
+        // Finance can review the vice-president's budget, but not budgets raised by its own role.
+        $makerBadges = $this->actingAs($maker, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+        $this->assertSame(1, $makerBadges['pending_budgets']['count']);
+        $makerBudgets = $this->actingAs($maker, 'sanctum')
+            ->getJson('/api/v1/budgets?signal=awaiting_my_approval')
+            ->assertOk();
+        $this->assertSame($makerBadges['pending_budgets']['count'], $makerBudgets->json('meta.total'));
         $pendingTransfers = $this->actingAs($vp, 'sanctum')
             ->getJson('/api/v1/budget-transfers?status=pending&actionable=1')
             ->assertOk();
         $this->assertSame($tracked['pending_transfers']['count'], $pendingTransfers->json('meta.total'));
+    }
+
+    public function test_delegated_budget_badge_matches_the_filtered_list(): void
+    {
+        $maker = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $delegator = User::factory()->create([
+            'role_id' => Role::where('slug', 'vice_president')->value('id'),
+        ]);
+        $delegate = User::factory()->create([
+            'role_id' => Role::where('slug', 'employee')->value('id'),
+        ]);
+        $budget = Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $maker->id,
+            'submitted_at' => now(),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $delegate->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $delegator->id,
+            'reason' => 'Budget approval badge parity test',
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'vice_president',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        $delegate->flushPermissionsCache();
+
+        $list = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/budgets?signal=awaiting_my_approval')
+            ->assertOk();
+        $badges = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertTrue($delegate->fresh()->hasPermission('budgeting.view'));
+        $this->assertFalse($delegate->fresh()->hasPermission('budgeting.approve'));
+        $this->assertSame(1, $badges['pending_budgets']['count']);
+        $this->assertSame($badges['pending_budgets']['count'], $list->json('meta.total'));
+        $this->assertSame([$budget->hash_id], $list->json('data.*.id'));
+    }
+
+    public function test_approval_only_user_gets_restricted_budget_queue_without_broad_badge(): void
+    {
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.approve')->firstOrFail()->id,
+            'type' => PermissionOverrideType::Grant->value,
+            'granted_by' => $approver->id,
+            'reason' => 'Approval-only budget queue parity test.',
+        ]);
+        $approver->flushPermissionsCache();
+        $maker = User::factory()->withRole('finance_officer')->create();
+        $actionable = Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $maker->id,
+            'submitted_at' => now(),
+        ]);
+        Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $approver->id,
+            'submitted_at' => now(),
+        ]);
+
+        $this->assertTrue($approver->fresh()->hasPermission('budgeting.approve'));
+        $this->assertFalse($approver->fresh()->hasPermission('budgeting.view'));
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('pending_budgets', $badges);
+
+        $queue = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/budgets')
+            ->assertOk();
+        $this->assertSame(1, $queue->json('meta.total'));
+        $this->assertSame([$actionable->hash_id], $queue->json('data.*.id'));
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/budgets?status=draft')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
+        $this->actingAs($approver, 'sanctum')->getJson('/api/v1/budgets/options')->assertForbidden();
     }
 
     public function test_overdue_bill_badge_matches_the_filtered_bill_list(): void
@@ -791,7 +1717,7 @@ class BadgeControllerTest extends TestCase
                 'balance' => 900,
                 'due_date' => today()->subDay(),
             ]);
-            Bill::factory()->create(['due_date' => today()]);
+            $dueTodayBill = Bill::factory()->create(['due_date' => today()]);
             Bill::factory()->create(['status' => 'paid', 'due_date' => today()->subDay()]);
             Bill::factory()->create(['status' => 'draft', 'due_date' => today()->subDay()]);
             Bill::factory()->create(['status' => 'cancelled', 'due_date' => today()->subDay()]);
@@ -808,6 +1734,173 @@ class BadgeControllerTest extends TestCase
             $this->assertSame($badgeCount, $overdueList->json('meta.total'));
             $this->assertSame(['partial', 'unpaid'], collect($overdueList->json('data'))->pluck('status')->sort()->values()->all());
             $this->assertSame([true, true], collect($overdueList->json('data'))->pluck('is_overdue')->all());
+
+            $unpaidList = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/bills?status=unpaid')
+                ->assertOk();
+            $dueTodayRow = collect($unpaidList->json('data'))->firstWhere('id', $dueTodayBill->hash_id);
+            $this->assertNotNull($dueTodayRow);
+            $this->assertFalse($dueTodayRow['is_overdue']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_unpaid_bill_badge_matches_the_open_balance_list(): void
+    {
+        $finance = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        Bill::factory()->create(['status' => 'unpaid', 'balance' => 500]);
+        Bill::factory()->create(['status' => 'partial', 'amount_paid' => 500, 'balance' => 500]);
+        Bill::factory()->create(['status' => 'partial', 'amount_paid' => 1000, 'balance' => 0]);
+        Bill::factory()->create(['status' => 'paid', 'amount_paid' => 1000, 'balance' => 0]);
+        Bill::factory()->create(['status' => 'draft', 'balance' => 500]);
+        Bill::factory()->create(['status' => 'cancelled', 'balance' => 500]);
+
+        $badgeCount = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.unpaid_bills.count');
+        $unpaidList = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/bills?signal=unpaid')
+            ->assertOk();
+
+        $this->assertSame(2, $badgeCount);
+        $this->assertSame($badgeCount, $unpaidList->json('meta.total'));
+        $this->assertSame(['partial', 'unpaid'], collect($unpaidList->json('data'))->pluck('status')->sort()->values()->all());
+        $this->assertSame([500.0, 500.0], collect($unpaidList->json('data'))->pluck('balance')->map(fn ($balance) => (float) $balance)->sort()->values()->all());
+    }
+
+    public function test_due_soon_bill_badge_matches_the_filtered_bill_list(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-15 00:01:00', config('app.timezone')));
+
+        try {
+            $finance = User::factory()->create([
+                'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+            ]);
+            $today = today();
+            $inThreeDays = $today->copy()->addDays(3)->toDateString();
+            $inFourDays = $today->copy()->addDays(4)->toDateString();
+            $yesterday = $today->copy()->subDay()->toDateString();
+
+            Bill::factory()->create(['status' => 'unpaid', 'balance' => 500, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'partial', 'amount_paid' => 500, 'balance' => 500, 'due_date' => $inThreeDays]);
+            Bill::factory()->create(['status' => 'unpaid', 'balance' => 500, 'due_date' => $inFourDays]);
+            Bill::factory()->create(['status' => 'unpaid', 'balance' => 500, 'due_date' => $yesterday]);
+            Bill::factory()->create(['status' => 'partial', 'balance' => 0, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'paid', 'balance' => 0, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'draft', 'balance' => 500, 'due_date' => $today]);
+            Bill::factory()->create(['status' => 'cancelled', 'balance' => 500, 'due_date' => $today]);
+
+            $badgeCount = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.due_soon_bills.count');
+            $dueSoonList = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/bills?signal=due_soon')
+                ->assertOk();
+
+            $this->assertSame(2, $badgeCount);
+            $this->assertSame($badgeCount, $dueSoonList->json('meta.total'));
+            $this->assertSame([$today->toDateString(), $inThreeDays], collect($dueSoonList->json('data'))->pluck('due_date')->sort()->values()->all());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_missing_time_out_badge_matches_filtered_attendance_list_and_scope(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-27 10:00:00', config('app.timezone')));
+
+        try {
+            $departmentA = Department::factory()->create();
+            $departmentB = Department::factory()->create();
+            $headEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $coworkerA = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $coworkerB = Employee::factory()->create(['department_id' => $departmentB->id]);
+            $todayEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $noTimeInEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $completedEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $archivedEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
+            $yesterday = today()->subDay()->toDateString();
+            $today = today()->toDateString();
+
+            foreach ([$headEmployee, $coworkerA, $coworkerB] as $employee) {
+                Attendance::create([
+                    'employee_id' => $employee->id,
+                    'date' => $yesterday,
+                    'time_in' => "{$yesterday} 08:00:00",
+                ]);
+            }
+            Attendance::create([
+                'employee_id' => $todayEmployee->id,
+                'date' => $today,
+                'time_in' => "{$today} 08:00:00",
+            ]);
+            Attendance::create([
+                'employee_id' => $noTimeInEmployee->id,
+                'date' => $yesterday,
+            ]);
+            Attendance::create([
+                'employee_id' => $completedEmployee->id,
+                'date' => $yesterday,
+                'time_in' => "{$yesterday} 08:00:00",
+                'time_out' => "{$yesterday} 17:00:00",
+            ]);
+            Attendance::create([
+                'employee_id' => $archivedEmployee->id,
+                'date' => $yesterday,
+                'time_in' => "{$yesterday} 08:00:00",
+            ])->delete();
+
+            $hr = User::factory()->create(['role_id' => Role::where('slug', 'hr_officer')->value('id')]);
+            $head = User::factory()->create([
+                'employee_id' => $headEmployee->id,
+                'role_id' => Role::where('slug', 'department_head')->value('id'),
+            ]);
+            $employee = User::factory()->withRole('employee')->create(['employee_id' => $coworkerA->id]);
+
+            $hrList = $this->actingAs($hr, 'sanctum')
+                ->getJson('/api/v1/attendance/attendances?missing_time_out=1')
+                ->assertOk();
+            $hrBadge = $this->actingAs($hr, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.missing_time_out.count');
+            $this->assertSame(3, $hrList->json('meta.total'));
+            $this->assertSame($hrList->json('meta.total'), $hrBadge);
+
+            Attendance::query()
+                ->where('employee_id', $headEmployee->id)
+                ->whereDate('date', $yesterday)
+                ->firstOrFail()
+                ->update(['time_out' => "{$yesterday} 17:00:00"]);
+            $this->assertSame(2, $this->actingAs($hr, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.missing_time_out.count'));
+
+            $headList = $this->actingAs($head, 'sanctum')
+                ->getJson('/api/v1/attendance/attendances?missing_time_out=1')
+                ->assertOk();
+            $headBadge = $this->actingAs($head, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.missing_time_out.count');
+            $this->assertSame(1, $headList->json('meta.total'));
+            $this->assertSame($headList->json('meta.total'), $headBadge);
+
+            $employeeList = $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/attendance/attendances?missing_time_out=1')
+                ->assertOk();
+            $employeeBadges = $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data');
+            $this->assertSame(1, $employeeList->json('meta.total'));
+            $this->assertArrayNotHasKey('missing_time_out', $employeeBadges);
         } finally {
             Carbon::setTestNow();
         }

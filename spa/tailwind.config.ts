@@ -164,15 +164,16 @@ const config: Config = {
       },
 
       fontSize: {
-        'page-title': ['var(--font-size-page-title)', { lineHeight: '36px' }],
-        'section-title': ['var(--font-size-section-title)', { lineHeight: '28px' }],
-        subsection: ['var(--font-size-subsection)', { lineHeight: '24px' }],
-        'body-small': ['var(--font-size-body-small)', { lineHeight: '19px' }],
-        caption: ['var(--font-size-caption)', { lineHeight: '18px' }],
-        label: ['var(--font-size-label)', { lineHeight: '18px' }],
-        'table-header': ['var(--font-size-table-header)', { lineHeight: '18px' }],
-        'table-cell': ['var(--font-size-table-cell)', { lineHeight: '20px' }],
-        code: ['var(--font-size-code)', { lineHeight: '18px' }],
+        'page-title': ['var(--font-size-page-title)', { lineHeight: 'var(--line-height-page-title)' }],
+        'section-title': ['var(--font-size-section-title)', { lineHeight: 'var(--line-height-section-title)' }],
+        subsection: ['var(--font-size-subsection)', { lineHeight: 'var(--line-height-subsection)' }],
+        body: ['var(--font-size-body)', { lineHeight: 'var(--line-height-body)' }],
+        'body-small': ['var(--font-size-body-small)', { lineHeight: 'var(--line-height-body-small)' }],
+        caption: ['var(--font-size-caption)', { lineHeight: 'var(--line-height-caption)' }],
+        label: ['var(--font-size-label)', { lineHeight: 'var(--line-height-label)' }],
+        'table-header': ['var(--font-size-table-header)', { lineHeight: 'var(--line-height-table-header)' }],
+        'table-cell': ['var(--font-size-table-cell)', { lineHeight: 'var(--line-height-table-cell)' }],
+        code: ['var(--font-size-code)', { lineHeight: 'var(--line-height-code)' }],
         '2xs': ['12px', { lineHeight: '1.4' }],
         xs: ['12px', { lineHeight: '1.4' }],
         sm: ['13px', { lineHeight: '1.4' }],
@@ -192,10 +193,11 @@ const config: Config = {
         full: 'var(--radius-full)',
       },
 
-      // Density tokens differ by palette; components read them without branching.
+      // Shared row and touch-target tokens stay theme-aware.
       height: {
         row: 'var(--row-height)',
         'row-compact': 'var(--row-height-compact)',
+        'row-comfortable': 'var(--row-height-comfortable)',
         'row-spacious': 'var(--row-height-spacious)',
       },
 

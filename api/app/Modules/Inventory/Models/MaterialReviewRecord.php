@@ -13,6 +13,7 @@ use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -47,6 +48,11 @@ class MaterialReviewRecord extends Model
         'held_at' => 'datetime',
         'released_at' => 'datetime',
     ];
+
+    public function scopeHeld(Builder $query): Builder
+    {
+        return $query->where('status', MrbStatus::Held->value);
+    }
 
     public function requiresConcessionApproval(): bool
     {

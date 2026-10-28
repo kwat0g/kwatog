@@ -36,7 +36,9 @@ class ChainBroadcasterTest extends TestCase
             return $e->entityType === 'sales_order'
                 && $e->newStatus === 'confirmed'
                 && $e->activeStep === 'confirmed'
-                && $e->docNumber === 'SO-202604-0042';
+                && $e->docNumber === 'SO-202604-0042'
+                && $e->broadcastAs() === 'chain.refresh'
+                && $e->broadcastWith() === ['refresh' => true];
         });
     }
 

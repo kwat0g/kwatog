@@ -89,6 +89,15 @@ class PendingStockAdjustmentResolutionTest extends TestCase
         $requester = $this->userWith('warehouse_staff', ['inventory.adjust']);
         $finance = $this->userWith('finance_officer', ['inventory.adjust.approve']);
         $adjustment = $this->pendingAdjustment($requester);
+        $approvalNotice = DB::table('notifications')
+            ->where('notifiable_id', $finance->id)
+            ->where('type', 'approval.action_required')
+            ->whereRaw("data->>'entity_id' = ?", [$adjustment->hash_id])
+            ->first();
+        $this->assertNotNull($approvalNotice);
+        $approvalData = json_decode((string) $approvalNotice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(StockAdjustment::class, $approvalData['subject_type']);
+        $this->assertSame((string) $adjustment->id, $approvalData['subject_id']);
         $quantityBefore = $this->stockQuantity();
         $movementCount = StockMovement::query()->count();
 
@@ -115,6 +124,15 @@ class PendingStockAdjustmentResolutionTest extends TestCase
         $this->assertNotEmpty($response->json('data.resolved_at'));
         $this->assertSame('rejected', $adjustment->fresh()->status->value);
         $this->assertNull($adjustment->fresh()->stock_movement_id);
+        $outcomeNotice = DB::table('notifications')
+            ->where('notifiable_id', $requester->id)
+            ->where('type', 'approval.rejected')
+            ->whereRaw("data->>'entity_id' = ?", [$adjustment->hash_id])
+            ->first();
+        $this->assertNotNull($outcomeNotice);
+        $outcomeData = json_decode((string) $outcomeNotice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(StockAdjustment::class, $outcomeData['subject_type']);
+        $this->assertSame((string) $adjustment->id, $outcomeData['subject_id']);
         $this->assertNull($adjustment->fresh()->approved_by);
         $this->assertSame($quantityBefore, $this->stockQuantity());
         $this->assertSame($movementCount, StockMovement::query()->count());

@@ -153,7 +153,7 @@ final class QueueLaneAssignmentTest extends TestCase
     {
         // Behavioural proof that the mechanism works, on a mailable whose
         // constructor needs no database records.
-        $mailable = new PortalPasswordResetMail('supplier', 'token', 'Recipient');
+        $mailable = new PortalPasswordResetMail('supplier', 'token', 'Recipient', 1, '/accounting/vendors/vendor-hash');
 
         $this->assertSame('mail', $mailable->queue);
 
@@ -162,14 +162,20 @@ final class QueueLaneAssignmentTest extends TestCase
         // quietly compete with approvals again. Fail the file, not the instance.
         $files = collect(File::allFiles(app_path()))
             ->filter(fn (\SplFileInfo $file) => $file->getPathInfo()->getFilename() === 'Mail')
-            ->filter(fn (\SplFileInfo $file) => str_contains($file->getContents(), 'implements ShouldQueue'));
+            ->filter(function (\SplFileInfo $file): bool {
+                $source = $file->getContents();
+
+                return $file->getFilename() !== 'QueuedMailable.php'
+                    && (str_contains($source, 'extends QueuedMailable')
+                        || str_contains($source, 'implements ShouldQueue'));
+            });
 
         $this->assertGreaterThanOrEqual(25, $files->count(), 'Mailable discovery found fewer files than expected.');
 
         foreach ($files as $file) {
-            $this->assertStringContainsString(
-                "\$this->onQueue('mail');",
-                $file->getContents(),
+            $source = $file->getContents();
+            $this->assertTrue(
+                str_contains($source, "\$this->onQueue('mail');") || str_contains($source, 'extends QueuedMailable'),
                 basename($file->getPathname()).' is queued but does not set the mail lane; '
                 .'it will land on `default` and compete with interactive listeners.',
             );

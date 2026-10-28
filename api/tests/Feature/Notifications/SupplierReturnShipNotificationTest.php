@@ -91,11 +91,11 @@ class SupplierReturnShipNotificationTest extends TestCase
         ]);
     }
 
-    /** A purchasing role holding PO and return-request view access. */
+    /** A purchasing role holding Purchasing and return-request view access. */
     private function purchasingUser(): User
     {
         $role = Role::query()->create(['name' => 'Purchasing Notify Test', 'slug' => 'purchasing-notify-test']);
-        $permissions = Permission::query()->whereIn('slug', ['purchasing.po.view', 'return_management.view'])->pluck('id');
+        $permissions = Permission::query()->whereIn('slug', ['purchasing.view', 'return_management.view'])->pluck('id');
         $role->permissions()->attach($permissions->all());
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
@@ -229,7 +229,7 @@ class SupplierReturnShipNotificationTest extends TestCase
         return $rma->load('items');
     }
 
-    public function test_ship_dispose_notifies_purchasing_po_view_holders(): void
+    public function test_ship_dispose_notifies_purchasing_view_holders_who_can_open_the_rma(): void
     {
         $admin = $this->admin();
         $purchasing = $this->purchasingUser();
@@ -259,6 +259,9 @@ class SupplierReturnShipNotificationTest extends TestCase
         $this->assertStringContainsString($rma->rma_number, $data['message']);
         $this->assertStringContainsString('18 unit(s)', $data['message'], 'Quantity renders without trailing decimal zeros.');
         $this->assertSame("/return-management/{$rma->hash_id}", $data['link_to']);
+        $this->assertSame(ReturnRequest::class, $data['subject_type']);
+        $this->assertSame((string) $rma->id, $data['subject_id']);
+        $this->actingAs($purchasing)->getJson('/api/v1/return-management/return-requests/'.$rma->hash_id)->assertOk();
     }
 
     public function test_ship_dispose_notifies_wildcard_system_admin(): void
@@ -288,6 +291,13 @@ class SupplierReturnShipNotificationTest extends TestCase
         $admin = $this->admin();
         $outsider = $this->outsider();
         $hiddenRmaViewer = $this->purchasingUser();
+        $customerOnly = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+            'is_active' => true,
+        ]);
+        Role::query()->whereKey($customerOnly->role_id)->firstOrFail()->permissions()->syncWithoutDetaching([
+            Permission::query()->where('slug', 'purchasing.view')->value('id'),
+        ]);
         UserPermissionOverride::create([
             'user_id' => $hiddenRmaViewer->id,
             'permission_id' => Permission::query()->where('slug', 'return_management.view')->value('id'),
@@ -317,6 +327,13 @@ class SupplierReturnShipNotificationTest extends TestCase
             'notifiable_id' => $hiddenRmaViewer->id,
             'type'          => 'return.shipped_to_vendor',
         ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $customerOnly->id,
+            'type'          => 'return.shipped_to_vendor',
+        ]);
+        $this->actingAs($customerOnly)
+            ->getJson('/api/v1/return-management/return-requests/'.$rma->hash_id)
+            ->assertNotFound();
     }
 
     public function test_customer_restock_fires_no_supplier_ship_notification(): void

@@ -35,6 +35,7 @@ class EmailPartyOnCreditNoteFinalized implements ShouldQueue
                 'Credit note email',
                 "Credit note {$snapshot['credit_note_number']} was finalized, but the {$partyLabel} has no usable email address. Send it through an approved channel.",
                 $context,
+                $event->creditNote,
             );
             return;
         }
@@ -50,6 +51,7 @@ class EmailPartyOnCreditNoteFinalized implements ShouldQueue
                 'Credit note email',
                 "Credit note {$snapshot['credit_note_number']} could not be accepted by the email provider. Send it through an approved channel.",
                 $context,
+                $event->creditNote,
             );
             Log::warning('Credit note email enqueue failed', [
                 'credit_note_hash_id' => $snapshot['hash_id'],

@@ -475,15 +475,16 @@ class WorkOrderAssignmentService
                 $crew->members()->create(['employee_id' => $employee->id, 'employee_snapshot' => $this->employeeOption($employee)]);
             }
             $recipients = $employees->map(fn ($e) => $e->user)->filter(fn ($u) => $u?->is_active)->values();
-            app(NotificationService::class)->sendInApp($recipients, 'production.crew.assigned', [
+            app(NotificationService::class)->sendForSubject($wo, $recipients, 'production.crew.assigned', [
                 'title' => 'Work order assigned: '.$wo->wo_number, 'message' => 'Review your crew and production task in My work orders.',
                 'link_to' => '/self-service/work-orders/'.$wo->hash_id.($ncrId ? '?rework_ncr_id='.app('hashids')->encode($ncrId) : ''),
-                'entity_type' => 'work_order', 'entity_id' => $wo->hash_id], 'wo-crew-'.$crew->id);
+                'entity_type' => 'work_order', 'entity_id' => $wo->hash_id], 'wo-crew-'.$crew->id, emailEnabled: false);
             if ($current) {
                 $removed = $current->members->map(fn ($m) => $m->employee?->user)->filter(fn ($u) => $u?->is_active && ! $recipients->contains('id', $u->id))->values();
-                app(NotificationService::class)->sendInApp($removed, 'production.crew.changed', ['title' => 'Crew changed: '.$wo->wo_number,
-                    'message' => 'Your previous assignment ended. Review My work orders for current assignments.',
-                    'link_to' => '/self-service/work-orders', 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id], 'wo-crew-ended-'.$current->id);
+                app(NotificationService::class)->sendForSubject($wo, $removed, 'production.crew.changed', ['title' => 'Crew changed: '.$wo->wo_number,
+                    'message' => 'Your previous crew assignment ended. Review the work order history.',
+                    'link_to' => '/self-service/work-orders/'.$wo->hash_id.'?crew_id='.$current->hash_id,
+                    'entity_type' => 'work_order', 'entity_id' => $wo->hash_id], 'wo-crew-ended-'.$current->id, emailEnabled: false);
             }
 
             return $crew->load('members.employee.user');
@@ -610,6 +611,14 @@ class WorkOrderAssignmentService
         return $issues;
     }
 
+    public function staffingNoticeDedupeKey(int $slotId, ?int $crewId, array $issues, ?string $fallback = null): string
+    {
+        sort($issues);
+        $reason = $issues === [] ? (string) $fallback : implode('|', $issues);
+
+        return 'wo-crew-review-'.$slotId.'-'.($crewId ?? 'none').'-'.sha1($reason);
+    }
+
     public function notifyStaffingChange(int $employeeId, string $changeKey, ?string $context = null): void
     {
         $crews = WorkOrderCrew::whereNull('ended_at')->whereHas('members', fn ($query) => $query->where('employee_id', $employeeId))
@@ -623,12 +632,13 @@ class WorkOrderAssignmentService
             if ($issues === [] && $context === null) {
                 continue;
             }
-            app(NotificationService::class)->sendInApp($owners, 'production.assignment.review', [
+            $slot = $this->schedule($crew->workOrder, $crew->rework_ncr_id);
+            app(NotificationService::class)->sendForSubject($crew->workOrder, $owners, 'production.assignment.review', [
                 'title' => 'Crew needs review: '.$crew->workOrder->wo_number,
                 'message' => $issues === [] ? $context : implode(' ', $issues).' Review workers before starting new operations.',
                 'link_to' => '/production/work-orders/'.$crew->workOrder->hash_id,
                 'entity_type' => 'work_order', 'entity_id' => $crew->workOrder->hash_id,
-            ], 'wo-staffing-'.$crew->id.'-'.$changeKey);
+            ], $this->staffingNoticeDedupeKey($slot?->id ?? 0, $crew->id, $issues, $context ?? $changeKey), emailEnabled: false);
         }
     }
 

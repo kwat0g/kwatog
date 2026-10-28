@@ -240,6 +240,10 @@ class CustomerReturnPortalTest extends TestCase
             'notifiable_id'   => $managerWithoutView->id,
             'type'            => 'customer.rma_created',
         ]);
+        $notice = $manager->notifications()->where('type', 'customer.rma_created')->firstOrFail();
+        $this->assertSame(ReturnRequest::class, $notice->data['subject_type']);
+        $this->assertSame((string) $rma->id, $notice->data['subject_id']);
+        $this->assertSame('/return-management/'.$rma->hash_id, $notice->data['link_to']);
     }
 
     public function test_customer_cannot_return_more_than_the_source_line_holds(): void

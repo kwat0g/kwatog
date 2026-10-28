@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Carbon;
 
 class Invoice extends Model
 {
@@ -108,6 +109,26 @@ class Invoice extends Model
         return $q->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial]);
     }
 
+    public function scopeUnpaid(Builder $q): Builder
+    {
+        return $q->open()->where('balance', '>', 0);
+    }
+
+    public function scopeOverdue(Builder $q): Builder
+    {
+        return $q->unpaid()->whereDate('due_date', '<', today('Asia/Manila'));
+    }
+
+    public function scopeAwaitingPaymentReview(Builder $q): Builder
+    {
+        return $q->unpaid()->whereHas('paymentSubmissions', fn (Builder $submissions) => $submissions->where('status', 'pending'));
+    }
+
+    public function scopeDraftsOwnedBy(Builder $q, User $user): Builder
+    {
+        return $q->where('status', InvoiceStatus::Draft)->where('created_by', $user->id);
+    }
+
     public function isDraft(): bool { return $this->status === InvoiceStatus::Draft; }
 
     public function revisionToken(): string
@@ -130,17 +151,19 @@ class Invoice extends Model
     public function isOverdue(): bool
     {
         if (in_array($this->status, [InvoiceStatus::Paid, InvoiceStatus::Cancelled, InvoiceStatus::Draft], true)) return false;
-        return $this->due_date && $this->due_date->isPast();
+        return $this->due_date !== null
+            && $this->due_date->toDateString() < today('Asia/Manila')->toDateString();
     }
 
     public function agingBucket(?\Carbon\Carbon $asOf = null): string
     {
-        $asOf = $asOf ?? now();
+        $asOfDate = ($asOf ?? now('Asia/Manila'))->copy()->setTimezone('Asia/Manila')->toDateString();
         if (in_array($this->status, [InvoiceStatus::Paid, InvoiceStatus::Cancelled, InvoiceStatus::Draft], true)) {
             return $this->status->value;
         }
-        if (! $this->due_date || $this->due_date->gte($asOf)) return 'current';
-        $days = $this->due_date->diffInDays($asOf, true);
+        $dueDate = $this->due_date?->toDateString();
+        if ($dueDate === null || $dueDate >= $asOfDate) return 'current';
+        $days = Carbon::parse($dueDate, 'Asia/Manila')->diffInDays(Carbon::parse($asOfDate, 'Asia/Manila'), true);
         return match (true) {
             $days <= 30  => 'd1_30',
             $days <= 60  => 'd31_60',

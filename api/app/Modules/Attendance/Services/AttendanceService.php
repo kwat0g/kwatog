@@ -13,6 +13,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class AttendanceService
@@ -33,7 +34,33 @@ class AttendanceService
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
-        $q = Attendance::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department', 'shift']);
+        $q = $this->listQuery($filters, $user)
+            ->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department', 'shift']);
+
+        $sort = $filters['sort'] ?? 'date';
+        // `sort` was whitelisted but `direction` was not, and Laravel's
+        // Query\Builder::orderBy() throws InvalidArgumentException on anything
+        // that is not asc/desc — so `?direction=x` was a 500 on a list endpoint.
+        // Normalise instead of trusting the query string.
+        $dir = strtolower((string) ($filters['direction'] ?? 'desc'));
+        if (! in_array($dir, ['asc', 'desc'], true)) {
+            $dir = 'desc';
+        }
+        if (in_array($sort, ['date', 'status', 'regular_hours', 'overtime_hours'], true)) {
+            $q->orderBy($sort, $dir);
+        }
+
+        return $q->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+    }
+
+    /**
+     * The filtered, row-scoped Attendance query shared by list results and badge counts.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function listQuery(array $filters, ?User $user = null): Builder
+    {
+        $q = Attendance::query();
 
         TrashedFilter::apply($q, $filters);
 
@@ -96,20 +123,7 @@ class AttendanceService
             }
         }
 
-        $sort = $filters['sort'] ?? 'date';
-        // `sort` was whitelisted but `direction` was not, and Laravel's
-        // Query\Builder::orderBy() throws InvalidArgumentException on anything
-        // that is not asc/desc — so `?direction=x` was a 500 on a list endpoint.
-        // Normalise instead of trusting the query string.
-        $dir = strtolower((string) ($filters['direction'] ?? 'desc'));
-        if (! in_array($dir, ['asc', 'desc'], true)) {
-            $dir = 'desc';
-        }
-        if (in_array($sort, ['date', 'status', 'regular_hours', 'overtime_hours'], true)) {
-            $q->orderBy($sort, $dir);
-        }
-
-        return $q->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        return $q;
     }
 
     public function create(array $data): Attendance

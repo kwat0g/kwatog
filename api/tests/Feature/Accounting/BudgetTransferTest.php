@@ -6,6 +6,7 @@ namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
@@ -69,6 +70,42 @@ class BudgetTransferTest extends TestCase
         // annual_total is a stored generated column: it follows the buckets.
         $this->assertSame('700.00', $from->fresh()->annual_total);
         $this->assertSame('1300.00', $to->fresh()->annual_total);
+    }
+
+    public function test_transfer_action_notice_excludes_delegate_of_the_requester_role(): void
+    {
+        [$service, $maker, , $from, $to] = $this->livePair('1000.00', '1000.00');
+        $delegator = User::factory()->withRole('vice_president')->create();
+        $delegate = User::factory()->withRole('employee')->create();
+        UserPermissionOverride::create([
+            'user_id' => $delegate->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $delegator->id,
+            'reason' => 'Budget transfer recipient scope test.',
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'vice_president',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        $delegate->flushPermissionsCache();
+        $payload = [
+            'from_line_item_id' => $from->id,
+            'to_line_item_id' => $to->id,
+            'month' => 'jan',
+            'amount' => '25.00',
+            'reason' => 'Recipient scope probe.',
+        ];
+
+        $service->request($payload, $maker->id);
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->count());
+
+        $service->request($payload, $delegator->id);
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->count());
     }
 
     public function test_transfer_outcome_notice_is_suppressed_without_budget_view_access(): void
@@ -319,6 +356,7 @@ class BudgetTransferTest extends TestCase
         $this->actingAs($approver)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.can_approve', true);
+        $this->assertTrue(NotificationSubjectAccessRegistry::userCanViewRecord($approver->fresh(), $transfer->fresh()));
 
         $sameRoleRequester = User::factory()->withRole('employee')->create();
         $sameRoleTransfer = $service->request([
@@ -341,6 +379,10 @@ class BudgetTransferTest extends TestCase
             ->assertJsonPath('data.can_approve', false);
         $outsider = User::factory()->withRole('employee')->create();
         $this->actingAs($outsider)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")->assertForbidden();
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($outsider->fresh(), $transfer->fresh()));
+
+        $transfer->forceFill(['requested_by' => null])->save();
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($outsider->fresh(), $transfer->fresh()));
     }
 
     public function test_delegated_approver_badge_matches_their_pending_transfer_list(): void

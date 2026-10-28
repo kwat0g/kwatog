@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
@@ -179,6 +180,46 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
             'notifiable_id' => $submitter->id,
             'type' => 'approval.completed',
         ]);
+    }
+
+    public function test_budget_action_notice_excludes_delegate_of_the_submitter_role(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $fiscalYear = $this->currentFiscalYear();
+        $delegator = User::factory()->withRole('vice_president')->create();
+        $delegate = User::factory()->withRole('employee')->create();
+        UserPermissionOverride::create([
+            'user_id' => $delegate->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $delegator->id,
+            'reason' => 'Budget approval recipient scope test.',
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'vice_president',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        $delegate->flushPermissionsCache();
+        $service = app(BudgetService::class);
+        $createBudget = function (string $name) use ($service, $fiscalYear): Budget {
+            return $service->create([
+                'fiscal_year_id' => $fiscalYear->id,
+                'department_id' => null,
+                'budget_type' => 'operating',
+                'name' => $name,
+            ], [['account_id' => $this->expenseAccount()->id, 'jan' => '10.00']]);
+        };
+
+        $financeSubmitter = User::factory()->withRole('finance_officer')->create();
+        $service->submit($createBudget('Budget delegate can act'), $financeSubmitter->id);
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->count());
+
+        $service->submit($createBudget('Budget delegate cannot act'), $delegator->id);
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->count());
     }
 
     public function test_budget_outcome_notice_is_suppressed_after_submitter_loses_view_access(): void

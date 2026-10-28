@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatInt } from '@/lib/formatNumber';
 import { productionDateTime, scheduleDate } from '@/components/production/scheduleDates';
@@ -23,6 +24,7 @@ const DEFAULT_FILTERS: WorkOrderListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  signal: '',
   sort: 'created_at',
   direction: 'desc',
 };
@@ -131,6 +133,8 @@ export default function WorkOrdersListPage() {
     {
       key: 'wo',
       header: 'WO #',
+      className: 'w-32',
+      pinned: 'left',
       cell: (r) => {
         const timing = r.schedule_status ?? r.schedule_warning;
         const informational =
@@ -147,7 +151,7 @@ export default function WorkOrdersListPage() {
                   : 'Schedule passed';
         return (
           <div className="flex flex-col items-start gap-1 py-1">
-            <span className="font-mono">{r.wo_number}</span>
+            <span className="block max-w-full truncate font-mono" title={r.wo_number}>{r.wo_number}</span>
             {r.production_purpose === 'stock' && <Chip variant="info">For stock</Chip>}
             {timing && (
               <span title={timing.message}>
@@ -165,16 +169,18 @@ export default function WorkOrdersListPage() {
       key: 'created_at',
       header: 'Created',
       sortable: true,
+      className: 'w-40',
       cell: (r) => <NumCell>{productionDateTime(r.created_at)}</NumCell>,
     },
     {
       key: 'product',
       header: 'Product',
+      className: 'w-40',
       cell: (r) =>
         r.product ? (
-          <div>
-            <div className="font-mono text-xs">{r.product.part_number}</div>
-            <div className="text-muted text-xs">{r.product.name}</div>
+          <div className="min-w-0">
+            <div className="max-w-full truncate font-mono text-xs" title={r.product.part_number}>{r.product.part_number}</div>
+            <div className="max-w-full truncate text-muted text-xs" title={r.product.name}>{r.product.name}</div>
           </div>
         ) : (
           '—'
@@ -183,9 +189,10 @@ export default function WorkOrdersListPage() {
     {
       key: 'so',
       header: 'SO',
+      className: 'w-32',
       cell: (r) =>
         r.sales_order ? (
-          <span className="font-mono">{r.sales_order.so_number}</span>
+          <span className="block max-w-full truncate font-mono" title={r.sales_order.so_number}>{r.sales_order.so_number}</span>
         ) : (
           <span className="text-muted">—</span>
         ),
@@ -193,9 +200,10 @@ export default function WorkOrdersListPage() {
     {
       key: 'machine',
       header: 'Machine',
+      className: 'w-28',
       cell: (r) =>
         r.machine ? (
-          <span className="font-mono text-xs">{r.machine.machine_code}</span>
+          <span className="block max-w-full truncate font-mono text-xs" title={r.machine.machine_code}>{r.machine.machine_code}</span>
         ) : (
           <span className="text-muted">—</span>
         ),
@@ -204,15 +212,17 @@ export default function WorkOrdersListPage() {
       key: 'qty',
       header: 'Target',
       align: 'right',
+      className: 'w-28',
       cell: (r) => <NumCell>{formatInt(r.quantity_target)}</NumCell>,
     },
     {
       key: 'progress',
       header: 'Progress',
       align: 'right',
+      className: 'w-36',
       cell: (r) => (
-        <div className="flex flex-col items-end gap-0.5 min-w-[120px]">
-          <span className="font-mono tabular-nums text-xs">
+        <div className="flex min-w-0 flex-col items-end gap-0.5">
+          <span className="font-sans tabular-nums text-xs">
             {formatInt(r.quantity_produced)} / {formatInt(r.quantity_target)}
           </span>
           {r.qc_workflow === 'finish_first_v1' && r.status === 'completed' && (
@@ -233,6 +243,7 @@ export default function WorkOrdersListPage() {
       header: 'Production due',
       sortable: true,
       align: 'right',
+      className: 'w-40',
       cell: (r) => (
         <NumCell>{r.planned_end ? scheduleDate(r.planned_end, 'Asia/Manila') : '—'}</NumCell>
       ),
@@ -240,6 +251,7 @@ export default function WorkOrdersListPage() {
     {
       key: 'status',
       header: 'Status',
+      className: 'w-28',
       cell: (r) => (
         <Chip
           variant={
@@ -257,6 +269,9 @@ export default function WorkOrdersListPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
+    { key: 'signal', label: 'Signal', type: 'select', options: [
+      { value: '', label: 'All' }, { value: 'release', label: 'Awaiting confirmation' }, { value: 'overdue', label: 'Overdue' }, { value: 'due_soon', label: 'Due soon' }, { value: 'paused', label: 'Paused' },
+    ] },
     { key: 'production_purpose', label: 'Purpose', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'stock', label: 'For stock' }, { value: 'order', label: 'Sales Order' }, { value: 'internal', label: 'Internal' },
     ] },
@@ -269,13 +284,16 @@ export default function WorkOrdersListPage() {
   ];
 
   return (
-    <div>
+    <PageShell viewport className="flex flex-col gap-4">
       <PageHeader
+        inset={false}
         title="Work orders"
         actions={can('production.wo.create') ? <Button variant="primary" className="min-h-11 xl:min-h-8" onClick={() => navigate('/production/work-orders/create')}>Produce for stock</Button> : undefined}
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'WO' : 'WOs'}` : undefined}
       />
       <FilterBar
+        inset={false}
+        className="mt-2"
         filters={filterConfig}
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
@@ -297,7 +315,7 @@ export default function WorkOrdersListPage() {
       )}
 
       {attention.length > 0 && (
-        <section className="px-5 pt-4" aria-labelledby="wo-attention">
+        <section aria-labelledby="wo-attention">
           <div className="flex items-baseline justify-between mb-2">
             <h2 id="wo-attention" className="text-sm font-medium text-primary">
               Needs attention
@@ -340,22 +358,22 @@ export default function WorkOrdersListPage() {
       )}
 
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
-          <DataTable
-            tableKey="work-orders"
-            onRowClick={(r) => navigate(`/production/work-orders/${r.id}`)}
-            columns={columns}
-            data={data.data}
-            meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
-            onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
-            currentSort={filters.sort}
-            currentDirection={filters.direction}
-          />
-        </div>
+        <DataTable
+          tableKey="work-orders"
+          fillHeight
+          onRowClick={(r) => navigate(`/production/work-orders/${r.id}`)}
+          columns={columns}
+          data={data.data}
+          meta={data.meta}
+          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+          onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
+          currentSort={filters.sort}
+          currentDirection={filters.direction}
+          fixedColumnLayout
+        />
       )}
-    </div>
+    </PageShell>
   );
 }
 

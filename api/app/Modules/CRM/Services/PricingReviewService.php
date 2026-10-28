@@ -20,6 +20,7 @@ use App\Modules\MRP\Events\BomPricingReviewRequested;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Services\BomCostingService;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -55,20 +56,20 @@ class PricingReviewService
                             $key = 'bom:cost:'.$bom->id.':'.(OutboxDispatchContext::payload()['outbox_id'] ?? today()->toDateString());
                             $this->notify('bom.cost_updated', "BOM refreshed: {$product->part_number}",
                                 "Current unit estimate: {$bom->total_cost}. Review cost warnings and selling prices.",
-                                '/mrp/boms/'.$bom->hash_id, $key, ['ppc_head', 'system_admin']);
+                                '/mrp/boms/'.$bom->hash_id, $key, ['ppc_head', 'system_admin'], $bom);
                         }
                     } catch (BusinessRuleException $error) {
                         $bom->forceFill(['costed_at' => null])->save();
                         $this->notify('bom.cost_review_failed', "BOM refresh needs review: {$product->part_number}",
                             $error->getMessage(), '/mrp/boms/'.$bom->hash_id,
-                            'bom:failed:'.$bom->id.':'.hash('sha256', $error->getMessage()).':'.today()->toDateString(), ['ppc_head', 'system_admin']);
+                            'bom:failed:'.$bom->id.':'.hash('sha256', $error->getMessage()).':'.today()->toDateString(), ['ppc_head', 'system_admin'], $bom);
                     }
                 }
                 if ($event->reason === 'product_prices_changed') {
                     $this->notify('pricing.prices_changed', "Selling prices changed: {$product->part_number}",
                         'Current base price: '.($product->base_selling_price ?? 'unset').'; minimum: '.($product->minimum_selling_price ?? 'unset').'. Customer agreement prices and existing orders were not changed. Review affected terms.',
-                        '/crm/price-agreements', 'pricing:changed:'.$id.':'.(OutboxDispatchContext::payload()['outbox_id'] ?? Str::uuid()),
-                        ['ppc_head', 'finance_officer', 'sales_officer', 'customer_service_officer', 'system_admin']);
+                        '/crm/products/'.$product->hash_id, 'pricing:changed:'.$id.':'.(OutboxDispatchContext::payload()['outbox_id'] ?? Str::uuid()),
+                        ['ppc_head', 'finance_officer', 'sales_officer', 'customer_service_officer', 'system_admin'], $product);
                 }
                 $this->reviewProduct($product->fresh()->load('activeBom'));
             }, 3);
@@ -150,12 +151,13 @@ class PricingReviewService
                 || bccomp($receiptCost, (string) $item->standard_cost, 4) === 0) {
                 continue;
             }
+            $review = app(ItemCostReviewService::class)->capture($line, $receiptCost, notify: false);
             $this->notify('inventory.receipt_cost_changed', "Supplier cost needs review: {$item->code}",
                 "{$grn->grn_number}: accepted unit cost {$receiptCost} per {$item->unit_of_measure}; inventory standard cost {$item->standard_cost}. Review the approved standard cost. BOM estimates refresh when that standard changes.",
-                '/crm/price-agreements/cost-reviews',
+                '/crm/price-agreements/cost-reviews?review='.$review->hash_id,
                 'pricing:receipt:'.$line->id.':'.$receiptCost.':'.$item->standard_cost,
-                ['purchasing_officer', 'finance_officer', 'ppc_head', 'warehouse_staff', 'system_admin']);
-            app(ItemCostReviewService::class)->capture($line, $receiptCost);
+                ['purchasing_officer', 'finance_officer', 'ppc_head', 'warehouse_staff', 'system_admin'],
+                $review);
         }
     }
 
@@ -171,8 +173,8 @@ class PricingReviewService
                     $days = (int) today()->diffInDays($agreement->effective_to, false);
                     $this->notify('pricing.agreement_expiring', "Price agreement ending: {$agreement->product->part_number} / {$agreement->customer->name}",
                         "Agreement expires {$agreement->effective_to->toDateString()}. Renew terms with the customer. Afterwards, base pricing applies if configured; otherwise ordering is unavailable.",
-                        '/crm/price-agreements', 'pricing:expiry:'.$agreement->id.':'.$agreement->effective_to->toDateString().':'.($days <= 1 ? 'last_day' : 'week'),
-                        ['sales_officer', 'customer_service_officer', 'system_admin']);
+                        '/crm/price-agreements?agreement='.$agreement->hash_id, 'pricing:expiry:'.$agreement->id.':'.$agreement->effective_to->toDateString().':'.($days <= 1 ? 'last_day' : 'week'),
+                        ['sales_officer', 'customer_service_officer', 'system_admin'], $agreement);
                 }
             });
     }
@@ -183,23 +185,41 @@ class PricingReviewService
         $state = [$product->base_selling_price, $product->minimum_selling_price, $product->standard_cost,
             $bom?->total_cost, $warnings, $agreement?->price, $agreement?->tiers, $agreement?->effective_from?->toDateString(), $agreement?->effective_to?->toDateString()];
         $key = 'pricing:risk:'.$product->id.':'.($agreement?->id ?? 'base').':'.hash('sha256', json_encode($state));
+        $subject = $agreement ?? $product;
+        $link = $agreement
+            ? '/crm/price-agreements?agreement='.$agreement->hash_id
+            : '/crm/products/'.$product->hash_id;
         $this->notify('pricing.review_required', "Pricing review: {$product->part_number}",
             ($agreement ? 'Agreement for '.($agreement->relationLoaded('customer') ? $agreement->customer?->name : $agreement->hash_id).'. ' : 'Product pricing. ').implode(' ', $warnings),
-            '/crm/price-agreements', $key, ['finance_officer', 'sales_officer', 'customer_service_officer', 'system_admin']);
+            $link, $key, ['finance_officer', 'sales_officer', 'customer_service_officer', 'system_admin'], $subject);
     }
 
-    private function notify(string $type, string $title, string $message, string $link, string $key, array $roles): void
-    {
-        $permission = $link === '/crm/price-agreements/cost-reviews' ? 'inventory.costs.review' : (str_starts_with($link, '/mrp') ? 'mrp.boms.manage' : (str_starts_with($link, '/inventory') ? 'inventory.view' : 'crm.price_agreements.view'));
+    private function notify(
+        string $type,
+        string $title,
+        string $message,
+        string $link,
+        string $key,
+        array $roles,
+        Model $subject,
+    ): void {
+        $permission = match (true) {
+            $subject instanceof ItemCostReview => 'inventory.costs.review',
+            $subject instanceof Bom => 'mrp.boms.view',
+            $subject instanceof PriceAgreement => 'crm.price_agreements.view',
+            default => null,
+        };
         $users = $this->activeUsers ??= User::query()->where('is_active', true)->get();
-        $audience = $users->filter(fn (User $user): bool => ($roles === [] || in_array($user->role?->slug, $roles, true))
-            && $user->hasPermission($permission));
-        app(NotificationService::class)->sendInApp($audience, $type, ['title' => $title, 'message' => $message, 'link_to' => $link], $key);
+        $roleSlugs = array_fill_keys($roles, true);
+        $audience = $users->filter(fn (User $user): bool => ($permission === null || $user->hasPermission($permission))
+            && ($roleSlugs === [] || isset($roleSlugs[$user->role?->slug])));
+        $data = ['title' => $title, 'message' => $message, 'link_to' => $link];
+        app(NotificationService::class)->sendForSubject($subject, $audience, $type, $data, $key, emailEnabled: false);
     }
 
     public function notifyCostReview(ItemCostReview $review, string $message): void
     {
         $this->notify('inventory.receipt_cost_changed', 'Supplier cost review: '.$review->item->code, $message,
-            '/crm/price-agreements/cost-reviews', 'pricing:cost-review:'.$review->id.':'.$review->version, []);
+            '/crm/price-agreements/cost-reviews?review='.$review->hash_id, 'pricing:cost-review:'.$review->id.':'.$review->version, [], $review);
     }
 }

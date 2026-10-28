@@ -18,6 +18,7 @@ import type {
 export interface InspectionListParams extends ListParams {
   stage?: InspectionStage;
   work_queue?: 'to_inspect' | '';
+  signal?: 'awaiting_my_review' | '';
   status?: InspectionStatus | '';
   product_id?: string;
   entity_type?: InspectionEntityType;

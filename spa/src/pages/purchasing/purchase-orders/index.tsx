@@ -41,6 +41,8 @@ interface PurchaseOrderListParams extends ListParams {
   vendor_id?: string;
   requires_vp_approval?: boolean | string;
   overdue?: boolean | string;
+  signal?: string;
+  action_type?: string;
   from?: string;
   to?: string;
 }
@@ -49,6 +51,8 @@ const DEFAULT_FILTERS: PurchaseOrderListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  signal: '',
+  action_type: '',
 };
 
 export default function PurchaseOrdersListPage() {
@@ -183,6 +187,31 @@ export default function PurchaseOrdersListPage() {
       ],
     },
     {
+      key: 'signal',
+      label: 'Signal',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: 'action', label: 'Needs my action' },
+        { value: 'receipt_overdue', label: 'Receipt overdue' },
+      ],
+    },
+    ...(filters.signal === 'action'
+      ? [
+          {
+            key: 'action_type',
+            label: 'Action type',
+            type: 'select' as const,
+            options: [
+              { value: '', label: 'All actions' },
+              { value: 'approval', label: 'Awaiting approval' },
+              { value: 'send', label: 'Approved, ready to send' },
+              { value: 'supplier_response', label: 'Supplier response to resolve' },
+            ],
+          },
+        ]
+      : []),
+    {
       key: 'overdue',
       label: 'Delivery',
       type: 'select',
@@ -215,7 +244,14 @@ export default function PurchaseOrdersListPage() {
         filters={filterConfig}
         values={filters}
         onSearch={(s) => setFilters((f) => ({ ...f, search: s, page: 1 }))}
-        onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
+        onFilter={(k, v) =>
+          setFilters((f) => ({
+            ...f,
+            [k]: v,
+            ...(k === 'signal' && v !== 'action' ? { action_type: '' } : {}),
+            page: 1,
+          }))
+        }
         searchPlaceholder="Search PO number…"
         dateRange={{ fromKey: 'from', toKey: 'to', label: 'PO date' }}
       />

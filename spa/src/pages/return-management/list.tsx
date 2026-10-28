@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuMessageSquare, LuPlus } from '@/lib/icons';
@@ -12,6 +11,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { MetricPanel } from '@/components/dashboard/MetricPanel';
 import { usePermission } from '@/hooks/usePermission';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import type { ReturnRequest } from '@/types/returnManagement';
 
@@ -32,7 +32,7 @@ const TYPE_VARIANT: Record<string, ChipVariant> = {
 export default function ReturnManagementListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
- const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
+ const [filters, setFilters] = useUrlFilters<Record<string, unknown>>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['return-requests', filters],
@@ -97,6 +97,11 @@ export default function ReturnManagementListPage() {
  ];
 
  const filterConfig: FilterConfig[] = [
+ {
+ key: 'signal',
+ label: 'Queue',
+ type: 'select',
+ options: [{ value: '', label: 'All returns' }, { value: 'pending', label: 'Awaiting processing' }] },
  {
  key: 'type',
  label: 'Type',

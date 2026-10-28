@@ -6,6 +6,8 @@ namespace Tests\Feature\Notifications;
 
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -15,13 +17,14 @@ use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
 use App\Modules\Leave\Listeners\NotifyOnLeaveApproved;
-use App\Modules\Leave\Listeners\NotifyOnLeaveRejected;
 use App\Modules\Leave\Listeners\NotifyOnLeavePendingHR;
+use App\Modules\Leave\Listeners\NotifyOnLeaveRejected;
 use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Services\LeaveRequestService;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +50,7 @@ class LeaveNotificationTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(WorkflowSeeder::class);
+        $this->seed(SettingsSeeder::class);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -173,6 +177,9 @@ class LeaveNotificationTest extends TestCase
 
         app(NotifyOnLeaveSubmitted::class)->handle(new LeaveRequestSubmitted($req->fresh(['employee', 'leaveType'])));
 
+        $notice = $sameDepartmentHead->notifications()->where('type', 'leave.submitted')->firstOrFail();
+        $this->assertSame(LeaveRequest::class, $notice->data['subject_type']);
+        $this->assertSame((string) $req->id, $notice->data['subject_id']);
         $this->assertDatabaseHas('notifications', [
             'notifiable_type' => User::class,
             'notifiable_id' => $sameDepartmentHead->id,
@@ -185,6 +192,16 @@ class LeaveNotificationTest extends TestCase
                 'type' => 'leave.submitted',
             ]);
         }
+
+        app(NotificationService::class)->sendForSubject($req, [$sameDepartmentHead, $otherDepartmentHead], 'test.leave_subject_access', ['title' => 'Review leave'], emailEnabled: false);
+        $this->assertSame(1, $sameDepartmentHead->notifications()->where('type', 'test.leave_subject_access')->count());
+        $this->assertSame(0, $otherDepartmentHead->notifications()->where('type', 'test.leave_subject_access')->count());
+        $this->actingAs($sameDepartmentHead)->getJson('/api/v1/leaves/requests/'.$req->hash_id)->assertOk();
+        $this->actingAs($otherDepartmentHead)->getJson('/api/v1/leaves/requests/'.$req->hash_id)->assertForbidden();
+
+        app(SettingsService::class)->set('modules.leave', false, 'modules');
+        app(NotificationService::class)->sendForSubject($req, $sameDepartmentHead, 'test.disabled_leave_subject_access', ['title' => 'Review leave'], emailEnabled: false);
+        $this->assertSame(0, $sameDepartmentHead->notifications()->where('type', 'test.disabled_leave_subject_access')->count());
     }
 
     public function test_pending_hr_notification_excludes_users_with_revoked_hr_approval_permission(): void
@@ -214,6 +231,10 @@ class LeaveNotificationTest extends TestCase
             'notifiable_id' => $noViewHr->id,
             'type' => 'leave.pending_hr',
         ]);
+
+        $notice = $eligibleHr->notifications()->where('type', 'leave.pending_hr')->firstOrFail();
+        $this->assertSame(LeaveRequest::class, $notice->data['subject_type']);
+        $this->assertSame((string) $req->id, $notice->data['subject_id']);
     }
 
     private function revokePermission(User $user, string $permissionSlug): void
@@ -298,6 +319,8 @@ class LeaveNotificationTest extends TestCase
             ->where('type', 'leave.approved')->value('data'), true);
         $this->assertStringContainsString('Dec 31, 2026 to Jan 1, 2027', $approvedData['message']);
         $this->assertSame("/self-service/leaves/{$approved->hash_id}", $approvedData['link_to']);
+        $this->assertSame(LeaveRequest::class, $approvedData['subject_type']);
+        $this->assertSame((string) $approved->id, $approvedData['subject_id']);
 
         $rejected = LeaveRequest::factory()->rejected()->create([
             'start_date' => '2026-12-31',
@@ -310,6 +333,8 @@ class LeaveNotificationTest extends TestCase
             ->where('type', 'leave.rejected')->value('data'), true);
         $this->assertStringContainsString('Dec 31, 2026 to Jan 1, 2027', $rejectedData['message']);
         $this->assertSame("/self-service/leaves/{$rejected->hash_id}", $rejectedData['link_to']);
+        $this->assertSame(LeaveRequest::class, $rejectedData['subject_type']);
+        $this->assertSame((string) $rejected->id, $rejectedData['subject_id']);
     }
 
     /**

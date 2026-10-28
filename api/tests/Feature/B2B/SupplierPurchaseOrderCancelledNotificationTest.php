@@ -6,19 +6,22 @@ namespace Tests\Feature\B2B;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Mail\SupplierPurchaseOrderCancelledMail;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
-use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
-use App\Modules\B2B\Mail\SupplierPurchaseOrderCancelledMail;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -233,5 +236,46 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
         Mail::assertNotQueued(
             \App\Modules\B2B\Mail\SupplierPurchaseOrderCancelledMail::class,
         );
+    }
+
+    public function test_queued_cancellation_email_failure_rechecks_po_row_visibility(): void
+    {
+        $role = Role::create([
+            'name' => 'PO notice viewer '.substr(uniqid(), -5),
+            'slug' => 'po_notice_viewer_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync([
+            Permission::query()->where('slug', 'purchasing.view')->value('id'),
+        ]);
+        $owner = User::factory()->create(['role_id' => $role->id]);
+        $outsider = User::factory()->create(['role_id' => $role->id]);
+        $purchaseOrder = PurchaseOrder::factory()->create(['created_by' => $owner->id]);
+        $snapshot = [
+            'po_hash_id' => $purchaseOrder->hash_id,
+            'po_number' => $purchaseOrder->po_number,
+        ];
+        $mail = new SupplierPurchaseOrderCancelledMail($snapshot, [$owner->id, $outsider->id], $purchaseOrder);
+        $mail = unserialize(serialize($mail));
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'email.delivery_failed',
+                'subject_type' => PurchaseOrder::class,
+                'subject_id' => $purchaseOrder->id,
+                'user_ids' => [$outsider->id],
+            ],
+        );
+
+        $mail->failed(new RuntimeException('Mail delivery failed.'));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $owner->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $outsider->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 }

@@ -7,21 +7,30 @@ namespace App\Modules\B2B\Mail;
 use App\Common\Mail\QueuedMailable;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Support\HtmlString;
 use Illuminate\Queue\SerializesModels;
 
 class PortalPasswordResetMail extends QueuedMailable
 {
     use SerializesModels;
 
+    public readonly HtmlString $recipientName;
+
     /** @param list<int> $fallbackUserIds */
     public function __construct(
         public readonly string $portalType,
         public readonly string $token,
-        public readonly string $recipientName,
+        string $recipientName,
+        public readonly int $subjectId,
+        public readonly string $subjectLink,
         public readonly array $fallbackUserIds = [],
     ) {
+        $this->recipientName = $this->safeMarkdownText($recipientName);
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 
@@ -45,7 +54,7 @@ class PortalPasswordResetMail extends QueuedMailable
                 'brand' => $brand,
                 'preheader' => 'Use your one-time link to reset your '.$this->portalType.' portal password.',
                 'portalType' => $this->portalType,
-                'recipientName' => $this->safeMarkdownText($this->recipientName),
+                'safeRecipientName' => $this->recipientName,
                 'resetUrl' => $url,
             ],
         );
@@ -53,29 +62,40 @@ class PortalPasswordResetMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
-        $permission = $this->portalType === 'supplier' ? 'accounting.vendors.view' : 'accounting.customers.view';
+        $subject = match ($this->portalType) {
+            'customer' => Customer::query()->find($this->subjectId),
+            'supplier' => Vendor::query()->find($this->subjectId),
+            default => null,
+        };
+
+        if ($subject === null) {
+            return;
+        }
 
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Portal password reset email',
             'A portal password reset message could not be delivered. Contact the portal user through an approved channel and verify the account before assisting with access.',
             [
-                'link_to' => $this->portalType === 'supplier' ? '/purchasing/vendors' : '/accounting/customers',
+                'link_to' => $this->subjectLink,
                 'entity_type' => $this->portalType.'_portal_user',
                 'reason' => 'The email provider rejected or could not deliver the portal password reset message.',
-                'permission' => $permission,
             ],
+            $subject,
         );
     }
 
-    private function safeMarkdownText(string $value): string
+    private function safeMarkdownText(string $value): HtmlString
     {
         $text = trim(preg_replace('/[\r\n\t]+/u', ' ', strip_tags($value)) ?? '');
         if ($text === '') {
-            return 'there';
+            return new HtmlString('there');
         }
 
-        return preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? 'there';
+        $text = preg_replace('/\[([^\]]*)\]\([^)]+\)/u', '$1', $text) ?? '';
+        $escaped = preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? 'there';
+
+        return new HtmlString(htmlspecialchars($escaped, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
     }
 
     private function safeHeaderText(string $value): string

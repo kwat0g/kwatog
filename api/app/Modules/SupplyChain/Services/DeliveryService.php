@@ -468,10 +468,10 @@ class DeliveryService
                 if (! $this->isUntouchedAutomaticSupply($delivery)) {
                     $blockers[] = "ImpEx and Quality must review invalid source stock on {$delivery->delivery_number}.";
                     $audience = User::where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->whereIn('slug', ['mrp.plans.run', 'quality.inspections.review', 'supply_chain.deliveries.create']))->get();
-                    $this->notifications->sendInApp($audience, 'mrp_run_completed', [
+                    $this->notifications->sendForSubject($delivery, $audience, 'delivery.source_review_required', [
                         'title' => "Shipment source needs review: {$delivery->delivery_number}", 'message' => end($blockers),
                         'link_to' => "/supply-chain/deliveries/{$delivery->hash_id}", 'entity_type' => 'delivery', 'entity_id' => $delivery->hash_id,
-                    ], 'invalid-shipment-source-'.$delivery->id.'-'.$delivery->updated_at->getTimestamp());
+                    ], 'invalid-shipment-source-'.$delivery->id.'-'.$delivery->updated_at->getTimestamp(), emailEnabled: false);
 
                     continue;
                 }
@@ -2192,11 +2192,13 @@ class DeliveryService
             return;
         }
 
-        $this->notifications->send($recipients, 'invoice.auto_failed', [
-            'title' => 'Auto-invoice failed',
-            'message' => 'Auto-invoice could not be created automatically. Open invoice creation to continue manually.',
-            'link_to' => '/accounting/invoices/create',
-        ]);
+        $this->notifications->sendForSubject($d, $recipients, 'invoice.auto_failed', [
+            'title' => "Auto-invoice failed: {$d->delivery_number}",
+            'message' => "No draft invoice was created for {$d->delivery_number}. Open the delivery to continue manually.",
+            'link_to' => "/supply-chain/deliveries/{$d->hash_id}",
+            'entity_type' => 'delivery',
+            'entity_id' => $d->hash_id,
+        ], "invoice-auto-failed:{$d->id}");
     }
 
     public function delete(Delivery $d): void

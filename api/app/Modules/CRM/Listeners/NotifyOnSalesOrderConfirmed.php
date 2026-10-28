@@ -41,7 +41,7 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
                     && (($event->actorUserId !== null && $user->id === (int) $so->created_by)
                         || ($user->hasPermission('production.schedule.view') && in_array($user->role?->slug, $roles, true))));
 
-            $this->notifications->send($audience, 'chain.so_confirmed', [
+            $this->notifications->sendForSubject($so, $audience, 'chain.so_confirmed', [
                 'title' => "Sales order {$so->so_number} confirmed",
                 'message' => 'MRP planning has been queued. Review the order and schedule after it completes.',
                 'link_to' => '/crm/sales-orders/'.$so->hash_id,

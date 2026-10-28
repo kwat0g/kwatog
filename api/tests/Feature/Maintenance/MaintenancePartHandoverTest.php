@@ -13,11 +13,13 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Maintenance\Models\MaintenanceLog;
+use App\Modules\Maintenance\Models\MaintenancePartRequest;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -89,6 +91,10 @@ class MaintenancePartHandoverTest extends TestCase
         $this->assertSame('3.000', $stock->fresh()->quantity);
         $this->assertDatabaseCount('stock_movements', 1);
         $this->assertDatabaseCount('material_handovers', 1);
+        $partsHandedOver = json_decode((string) DB::table('notifications')->where('notifiable_id', $technician->id)
+            ->where('type', 'maintenance.parts_handed_over')->value('data'), true);
+        $this->assertSame(MaintenanceWorkOrder::class, $partsHandedOver['subject_type']);
+        $this->assertSame((string) $order->id, $partsHandedOver['subject_id']);
         $this->actingAs($technician)->getJson($url)->assertOk()->assertJsonPath('data.parts_handover.pending', 0)
             ->assertJsonPath('data.part_requests.0.status', 'handed_over')->assertJsonPath('data.cost', '24.00');
         $this->postJson($url.'/work-records', ['finding' => 'Screw', 'action_taken' => 'Installed', 'result' => 'passed'])->assertCreated();
@@ -154,5 +160,10 @@ class MaintenancePartHandoverTest extends TestCase
             'notifiable_id' => $restricted->id,
             'type' => 'maintenance.parts_requested',
         ]);
+        $notice = json_decode((string) DB::table('notifications')->where('notifiable_id', $warehouse->id)
+            ->where('type', 'maintenance.parts_requested')->value('data'), true);
+        $this->assertSame(MaintenancePartRequest::class, $notice['subject_type']);
+        $this->assertSame((string) MaintenancePartRequest::query()->firstOrFail()->id, $notice['subject_id']);
+        $this->assertSame('/inventory/picking?maintenance_work_order_id='.$order->hash_id, $notice['link_to']);
     }
 }

@@ -24,7 +24,13 @@ class InvoiceController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return InvoiceResource::collection($this->service->list($request->query()));
+        if ($request->query('signal') === 'payment_review'
+            && ($request->user()->role?->slug === 'system_admin'
+                || ! $request->user()->hasPermission('accounting.invoices.collect'))) {
+            abort(403);
+        }
+
+        return InvoiceResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function options(): JsonResponse

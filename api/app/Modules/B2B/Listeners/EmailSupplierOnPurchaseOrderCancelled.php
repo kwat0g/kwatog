@@ -45,6 +45,7 @@ class EmailSupplierOnPurchaseOrderCancelled implements ShouldQueue
                 'Supplier purchase order cancellation',
                 "PO {$po->po_number} was cancelled, but the supplier has no usable email address. Contact the supplier directly.",
                 $context,
+                $po,
             );
             return;
         }
@@ -53,6 +54,7 @@ class EmailSupplierOnPurchaseOrderCancelled implements ShouldQueue
             Mail::to($snapshot['recipient_email'])->queue(new SupplierPurchaseOrderCancelledMail(
                 $snapshot,
                 $fallback->userIdsWithPermission('purchasing.view'),
+                $po,
             ));
         } catch (\Throwable $e) {
             $fallback->notifyPermission(
@@ -60,6 +62,7 @@ class EmailSupplierOnPurchaseOrderCancelled implements ShouldQueue
                 'Supplier purchase order cancellation',
                 "The cancellation email for PO {$po->po_number} could not be queued. Notify the supplier directly.",
                 $context,
+                $po,
             );
             Log::warning('Supplier purchase order cancellation email enqueue failed', [
                 'purchase_order_id' => $po->id,

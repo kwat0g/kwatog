@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
@@ -66,14 +67,26 @@ class RecruitmentBottleneckCommandTest extends TestCase
 
         Artisan::call('recruitment:check-bottlenecks');
 
-        $this->assertDatabaseHas('notifications', [
-            'notifiable_id' => $hr->id,
-            'type' => 'recruitment.bottleneck',
-        ]);
-        $count = (int) \DB::table('notifications')
-            ->where('notifiable_id', $hr->id)
-            ->where('type', 'recruitment.bottleneck')
-            ->count();
+        $notices = $hr->notifications()->where('type', 'recruitment.bottleneck')->get();
+        $applicationNotice = $notices->first(fn ($notice): bool => $notice->data['entity_type'] === 'job_application');
+        $postingNotice = $notices->first(fn ($notice): bool => $notice->data['entity_type'] === 'job_posting');
+        $this->assertNotNull($applicationNotice);
+        $this->assertSame(JobApplication::class, $applicationNotice->data['subject_type']);
+        $this->assertSame((string) $application->id, $applicationNotice->data['subject_id']);
+        $this->assertSame("/hr/recruitment/applications/{$application->hash_id}", $applicationNotice->data['link_to']);
+        $this->assertNotNull($postingNotice);
+        $this->assertSame(JobPosting::class, $postingNotice->data['subject_type']);
+        $this->assertSame((string) $posting->id, $postingNotice->data['subject_id']);
+        $this->assertSame("/hr/recruitment/postings/{$posting->hash_id}", $postingNotice->data['link_to']);
+
+        $noAccess = User::factory()->create();
+        app(NotificationService::class)->sendForSubject($application, $noAccess, 'test.recruitment_bottleneck_access', ['title' => 'Review'], emailEnabled: false);
+        app(NotificationService::class)->sendForSubject($posting, $noAccess, 'test.recruitment_bottleneck_access', ['title' => 'Review'], emailEnabled: false);
+        $this->assertSame(0, $noAccess->notifications()->where('type', 'test.recruitment_bottleneck_access')->count());
+        $this->actingAs($noAccess)->getJson('/api/v1/hr/recruitment/applications/'.$application->hash_id)->assertForbidden();
+        $this->getJson('/api/v1/hr/recruitment/postings/'.$posting->hash_id)->assertForbidden();
+
+        $count = (int) $notices->count();
 
         Artisan::call('recruitment:check-bottlenecks');
 

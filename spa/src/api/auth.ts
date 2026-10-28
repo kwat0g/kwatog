@@ -23,6 +23,8 @@ export interface AuthUser {
  theme_mode: 'light' | 'dark' | 'system';
  sidebar_collapsed: boolean;
  sidebar_peek?: boolean;
+ sidebar_expand_all?: boolean;
+ table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[]; columnWidths?: Record<string, number> }>;
  role: AuthRole;
  /** Linked HR employee, when this user account is wired to one. */
  employee: AuthEmployee | null;
@@ -51,6 +53,8 @@ export interface PreferencesPayload {
  theme_mode?: 'light' | 'dark' | 'system';
  sidebar_collapsed?: boolean;
  sidebar_peek?: boolean;
+ sidebar_expand_all?: boolean;
+ table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[]; columnWidths?: Record<string, number> } | null>;
 }
 
 export const authApi = {

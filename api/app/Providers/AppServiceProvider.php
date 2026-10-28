@@ -29,6 +29,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoicePaymentSubmission;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
 use App\Modules\Admin\Listeners\RecordActivityFromEvent;
@@ -165,6 +166,8 @@ use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Listeners\TriggerInProcessQC;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\CalibrationRecord;
+use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\ReturnManagement\Events\ReturnRequestUpdated;
@@ -318,15 +321,20 @@ class AppServiceProvider extends ServiceProvider
             ContactInquiry::class,
             CustomerComplaint::class,
             Inspection::class,
+            CalibrationRecord::class,
+            NcrAction::class,
             GoodsReceiptNote::class,
             MaterialReviewRecord::class,
             Shipment::class,
             MrpPlan::class,
             ReturnRequest::class,
             Invoice::class,
+            InvoicePaymentSubmission::class,
             Bill::class,
             Budget::class,
             BudgetTransfer::class,
+            Employee::class,
+            Attendance::class,
         ] as $badgeModel) {
             $badgeModel::observe(BadgeInvalidationObserver::class);
         }

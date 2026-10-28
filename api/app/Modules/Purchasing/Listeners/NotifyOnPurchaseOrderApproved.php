@@ -30,7 +30,7 @@ class NotifyOnPurchaseOrderApproved implements ShouldQueue
                     && app(PurchaseOrderAccessPolicy::class)->canView($user, $po))
                 ->values();
 
-            $this->notifications->send($audience, 'chain.po_approved', [
+            $this->notifications->sendForSubject($po, $audience, 'chain.po_approved', [
                 'title'       => "PO {$po->po_number} Approved",
                 'message'     => "Ready to send to {$po->vendor?->name}.",
                 'link_to'     => "/purchasing/purchase-orders/{$po->hash_id}",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { usePermission } from '@/hooks/usePermission';
@@ -20,8 +20,11 @@ import { QueryErrorState } from '@/components/ui/QueryErrorState';
 
 export default function BudgetOverviewPage() {
   const { can } = usePermission();
+  const canView = can('budgeting.view');
   const canManage = can('budgeting.manage');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const awaitingMyApproval = !canView || searchParams.get('signal') === 'awaiting_my_approval';
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedFiscalYearId, setSelectedFiscalYearId] = useState('');
   const [page, setPage] = useState(1);
@@ -30,6 +33,7 @@ export default function BudgetOverviewPage() {
   const fiscalYearsQuery = useQuery({
     queryKey: ['budget-fiscal-years'],
     queryFn: () => budgetingApi.fiscalYears(),
+    enabled: canView,
   });
   const fiscalYears = useMemo(() => fiscalYearsQuery.data ?? [], [fiscalYearsQuery.data]);
   useEffect(() => {
@@ -43,41 +47,51 @@ export default function BudgetOverviewPage() {
   const overviewQuery = useQuery({
     queryKey: ['budget-overview', selectedFiscalYearId],
     queryFn: () => budgetingApi.overview(selectedFiscalYearId),
-    enabled: !!selectedFiscalYearId,
+    enabled: canView && !!selectedFiscalYearId,
   });
   const { data: overview, isLoading: overviewLoading, error } = overviewQuery;
 
   const budgetListQuery = useQuery({
-    queryKey: ['budgets', selectedFiscalYearId, selectedStatus, page, perPage],
+    queryKey: ['budgets', canView, selectedFiscalYearId, selectedStatus, awaitingMyApproval, page, perPage],
     queryFn: () => budgetingApi.list({
-      fiscal_year_id: selectedFiscalYearId,
-      status: selectedStatus || undefined,
+      ...(awaitingMyApproval
+        ? { signal: 'awaiting_my_approval' }
+        : { fiscal_year_id: selectedFiscalYearId, status: selectedStatus || undefined }),
       page,
       per_page: perPage,
     }),
-    enabled: !!selectedFiscalYearId,
+    enabled: !canView || !!selectedFiscalYearId,
   });
 
   const { data: budgetOptions } = useQuery({
     queryKey: ['budgets', 'options'],
     queryFn: () => budgetingApi.options(),
+    enabled: canView,
   });
 
-  useEffect(() => setPage(1), [selectedFiscalYearId, selectedStatus, perPage]);
+  useEffect(() => setPage(1), [selectedFiscalYearId, selectedStatus, awaitingMyApproval, perPage]);
 
-  if (fiscalYearsQuery.isLoading || overviewLoading) {
+  if ((canView && (fiscalYearsQuery.isLoading || overviewLoading)) || (!canView && budgetListQuery.isLoading)) {
     return (
       <div className="p-5 space-y-6">
-        <PageHeader title="Budget Overview" subtitle="Loading..." />
+        <PageHeader title={canView ? 'Budget Overview' : 'Budgets awaiting your approval'} subtitle="Loading..." />
         <SkeletonTable columns={5} rows={6} />
       </div>
     );
   }
-  if (error) {
+  if (canView && error) {
     return (
       <div className="p-5 space-y-6">
         <PageHeader title="Budget Overview" />
         <QueryErrorState subject="the budget overview" onRetry={() => void overviewQuery.refetch()} />
+      </div>
+    );
+  }
+  if (!canView && budgetListQuery.error) {
+    return (
+      <div className="p-5 space-y-6">
+        <PageHeader title="Budgets awaiting your approval" />
+        <QueryErrorState subject="your budget approval queue" onRetry={() => void budgetListQuery.refetch()} />
       </div>
     );
   }
@@ -107,10 +121,10 @@ export default function BudgetOverviewPage() {
   return (
     <div className="p-5 space-y-6">
       <PageHeader
-        title="Budget Overview"
-        subtitle={`FY ${fiscalYear?.year ?? '—'} — Department Budget Summary`}
+        title={canView ? 'Budget Overview' : 'Budgets awaiting your approval'}
+        subtitle={canView ? `FY ${fiscalYear?.year ?? '—'} — Department Budget Summary` : 'Only budgets you can approve are shown.'}
         actions={
-          <div className="flex items-center gap-2">
+          canView ? <div className="flex items-center gap-2">
             <Select
               fieldSize="sm"
               aria-label="Fiscal year"
@@ -127,7 +141,7 @@ export default function BudgetOverviewPage() {
             <Button variant="secondary" size="sm" onClick={() => navigate('/budgeting/transfers')}>
               Transfers
             </Button>
-          </div>
+          </div> : undefined
         }
       />
 
@@ -191,16 +205,22 @@ export default function BudgetOverviewPage() {
         </Panel>
       )}
 
-      <Panel title="Budgets" meta={<SegmentedControl size="sm" label="Budget status" value={selectedStatus} onChange={setSelectedStatus} options={[{ value: '', label: 'All' }, ...(budgetOptions?.statuses ?? [])]} />}>
+      <Panel
+        title={awaitingMyApproval ? 'Budgets awaiting your approval' : 'Budgets'}
+        meta={awaitingMyApproval
+          ? canView ? <Button variant="secondary" size="sm" onClick={() => setSearchParams({})}>Show all budgets</Button> : undefined
+          : <SegmentedControl size="sm" label="Budget status" value={selectedStatus} onChange={setSelectedStatus} options={[{ value: '', label: 'All' }, ...(budgetOptions?.statuses ?? [])]} />}
+      >
         {budgetListQuery.data && budgetListQuery.data.data.length > 0 ? (
           <>
             <div className="overflow-x-auto">
               <table className={tableCls}>
-                <thead><tr className={theadTrCls}><Th>Name</Th><Th>Type</Th><Th align="right">Allocated</Th><Th align="right">Spent</Th><Th align="right">Available</Th><Th align="center">%</Th><Th align="center">Status</Th></tr></thead>
+                <thead><tr className={theadTrCls}><Th>Name</Th>{awaitingMyApproval && <Th>Fiscal year</Th>}<Th>Type</Th><Th align="right">Allocated</Th><Th align="right">Spent</Th><Th align="right">Available</Th><Th align="center">%</Th><Th align="center">Status</Th></tr></thead>
                 <tbody>
                   {budgetListQuery.data.data.map((budget) => (
                     <tr key={budget.id} className={cn(trCls, 'cursor-pointer')} onClick={() => navigate(`/budgeting/${budget.id}`)}>
                       <Td><Link to={`/budgeting/${budget.id}`} onClick={(event) => event.stopPropagation()} className="font-medium hover:text-accent transition-colors">{budget.name}</Link>{budget.department && <span className="ml-2 text-xs text-muted">{budget.department.name}</span>}</Td>
+                      {awaitingMyApproval && <Td>{budget.fiscal_year?.year ?? '—'}</Td>}
                       <Td><Chip variant="neutral">{budget.budget_type}</Chip></Td>
                       <Td align="right" mono>{formatCompactCurrency(budget.total_allocated, 1_000, 'K')}</Td>
                       <Td align="right" mono>{formatCompactCurrency(budget.total_spent, 1_000, 'K')}</Td>

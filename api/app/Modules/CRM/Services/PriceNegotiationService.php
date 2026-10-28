@@ -24,9 +24,12 @@ use Illuminate\Validation\ValidationException;
 
 class PriceNegotiationService
 {
-    public function list(?int $customerId = null): LengthAwarePaginator
+    public function list(?int $customerId = null, ?string $requestHashId = null): LengthAwarePaginator
     {
-        return PriceRequest::with(['product', 'customer'])->when($customerId, fn ($q) => $q->where('customer_id', $customerId))->latest('id')->paginate(25);
+        return PriceRequest::with(['product', 'customer'])
+            ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
+            ->when($requestHashId !== null, fn ($q) => $q->whereHash($requestHashId))
+            ->latest('id')->paginate(25);
     }
 
     public function request(CustomerPortalUser $by, array $data): PriceRequest
@@ -40,7 +43,7 @@ class PriceNegotiationService
             $this->assertNoOpen($by->customer_id, $product->id);
             $row = PriceRequest::create(['customer_id' => $by->customer_id, 'product_id' => $product->id, 'requested_by' => $by->id,
                 'quantity' => $data['quantity'], 'requested_price' => $data['requested_price'] ?? null, 'notes' => $data['notes'], 'status' => Status::Requested]);
-            $this->notice($row, 'Customer requested discount pricing.', ['sales_officer', 'customer_service_officer']);
+            $this->notice($row, 'Customer requested discount pricing.', ['sales_officer', 'customer_service_officer'], portalActor: $by);
 
             return $row->load(['product', 'customer']);
         }));
@@ -79,7 +82,7 @@ class PriceNegotiationService
                 'proposed_by' => $by->id, 'reviewed_by' => null, 'reviewed_at' => null, 'cost_review_signature' => null]);
             $this->history($row, 'offer', $offer, $by->hash_id);
             $row->save();
-            $this->notice($row, 'New price proposal requires Finance review. Customer terms have not changed.', ['finance_officer']);
+            $this->notice($row, 'New price proposal requires Finance review. Customer terms have not changed.', ['finance_officer'], actor: $by);
 
             return $row->load(['product', 'customer']);
         }, 3);
@@ -121,7 +124,7 @@ class PriceNegotiationService
             $row->forceFill(['status' => Status::Offered, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'cost_review_signature' => $cost['signature']]);
             $this->history($row, 'finance_approved', ['notes' => $data['notes']], $by->hash_id);
             $row->save();
-            $this->notice($row, 'Finance approved this offer. Customer acceptance is required before applying it.', ['sales_officer', 'customer_service_officer']);
+            $this->notice($row, 'Finance approved this offer. Customer acceptance is required before applying it.', ['sales_officer', 'customer_service_officer'], actor: $by);
 
             return $row->load(['product', 'customer']);
         }, 3);
@@ -178,7 +181,7 @@ class PriceNegotiationService
             $row->responded_at = now();
             $this->history($row, $decision, ['version' => $version], $by->hash_id);
             $row->save();
-            $this->notice($row, $decision === 'accept' ? 'Customer accepted the reviewed terms. Dated prices now apply to new orders.' : 'Customer declined the offer. Existing pricing remains.', ['sales_officer', 'customer_service_officer', 'finance_officer']);
+            $this->notice($row, $decision === 'accept' ? 'Customer accepted the reviewed terms. Dated prices now apply to new orders.' : 'Customer declined the offer. Existing pricing remains.', ['sales_officer', 'customer_service_officer', 'finance_officer'], portalActor: $by);
 
             return $row->load(['product', 'customer']);
         }, 3));
@@ -196,7 +199,7 @@ class PriceNegotiationService
             $row->status = Status::Withdrawn;
             $this->history($row, 'withdrawn', ['notes' => $notes], $by->hash_id);
             $row->save();
-            $this->notice($row, 'Pricing proposal withdrawn: '.$notes, ['sales_officer', 'customer_service_officer', 'finance_officer']);
+            $this->notice($row, 'Pricing proposal withdrawn: '.$notes, ['sales_officer', 'customer_service_officer', 'finance_officer'], actor: $by);
 
             return $row->load(['product', 'customer']);
         });
@@ -280,15 +283,18 @@ class PriceNegotiationService
         $row->history = [...($row->history ?? []), ['action' => $action, 'actor' => $actor, 'at' => now()->toISOString(), 'data' => $data]];
     }
 
-    private function notice(PriceRequest $row, string $message, array $roles): void
+    private function notice(PriceRequest $row, string $message, array $roles, ?User $actor = null, ?CustomerPortalUser $portalActor = null): void
     {
         $permissions = array_map(fn ($role) => $role === 'finance_officer' ? 'crm.price_agreements.approve' : 'crm.price_agreements.propose', $roles);
-        $users = User::where('is_active', true)->get()->filter(fn ($user) => collect($permissions)->contains(fn ($permission) => $user->hasPermission($permission)));
-        app(NotificationService::class)->sendInApp($users, 'pricing.negotiation', ['title' => 'Pricing request: '.Product::findOrFail($row->product_id)->part_number, 'message' => $message, 'link_to' => '/crm/price-agreements/requests'], 'pricing:negotiation:'.$row->id.':'.$row->version.':'.$row->status->value);
+        $users = User::where('is_active', true)->get()->filter(fn ($user) => $user->id !== $actor?->id && collect($permissions)->contains(fn ($permission) => $user->hasPermission($permission)));
+        app(NotificationService::class)->sendForSubject($row, $users, 'pricing.negotiation', ['title' => 'Pricing request: '.Product::findOrFail($row->product_id)->part_number, 'message' => $message, 'link_to' => '/crm/price-agreements/requests?request='.$row->hash_id], 'pricing:negotiation:'.$row->id.':'.$row->version.':'.$row->status->value, emailEnabled: false);
         if (in_array($row->status, [Status::Offered, Status::Accepted, Status::Rejected, Status::Withdrawn, Status::Expired], true)) {
-            app(NotificationService::class)->sendPortalInApp(CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->get(), 'pricing.negotiation', [
+            $portalRecipients = CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)
+                ->when($portalActor, fn ($query) => $query->whereKeyNot($portalActor->id))
+                ->get();
+            app(NotificationService::class)->sendPortalInApp($portalRecipients, 'pricing.negotiation', [
                 'title' => 'Pricing update: '.Product::findOrFail($row->product_id)->part_number,
-                'message' => $message, 'link_to' => '/portal/customer/pricing', 'entity_type' => 'price_request', 'entity_id' => $row->hash_id,
+                'message' => $message, 'link_to' => '/portal/customer/pricing?request='.$row->hash_id, 'entity_type' => 'price_request', 'entity_id' => $row->hash_id,
             ], 'pricing:'.$row->id.':'.$row->version.':'.$row->status->value);
         }
     }

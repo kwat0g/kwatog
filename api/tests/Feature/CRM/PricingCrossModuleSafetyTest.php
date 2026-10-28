@@ -186,12 +186,21 @@ class PricingCrossModuleSafetyTest extends TestCase
         $p = $this->product();
         $ppc = $this->actor('ppc_head');
         $finance = $this->actor('finance_officer');
+        $costApproval = Permission::query()->where('slug', 'inventory.costs.approve')->firstOrFail();
+        $ppc->role->permissions()->syncWithoutDetaching([$costApproval->id]);
+        $ppc->flushPermissionsCache();
         $proposal = $this->actingAs($ppc)->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-proposal', ['standard_cost' => '12.00', 'notes' => 'Material cost increase'])->assertOk()->json('data.financial_change_request');
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $ppc->id, 'type' => 'pricing.review_required']);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $finance->id, 'type' => 'pricing.review_required']);
+        $notice = json_decode((string) DB::table('notifications')->where('notifiable_id', $finance->id)->where('type', 'pricing.review_required')->value('data'), true);
+        $this->assertSame(Product::class, $notice['subject_type']);
+        $this->assertSame((string) $p->id, $notice['subject_id']);
         $this->assertSame($ppc->hash_id, $proposal['proposed_by']);
         $this->assertSame('10.00', $p->fresh()->standard_cost);
         $this->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-decision', ['proposal_id' => $proposal['id'], 'decision' => 'approve', 'notes' => 'Own change'])->assertForbidden();
         $this->actingAs($finance)->getJson('/api/v1/crm/products/'.$p->hash_id)->assertOk();
         $this->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-decision', ['proposal_id' => $proposal['id'], 'decision' => 'approve', 'notes' => 'Finance checked new cost'])->assertOk()->assertJsonPath('data.standard_cost', '12.00')->assertJsonPath('data.minimum_selling_price', '15.00')->assertJsonPath('data.financial_change_request', null);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $ppc->id, 'type' => 'pricing.review_required']);
         $this->assertTrue(AuditLog::where('model_type', Product::class)->where('model_id', $p->id)->get()->contains(fn ($log) => ($log->new_values['financial_change_request']['decision_notes'] ?? null) === 'Finance checked new cost'));
     }
 

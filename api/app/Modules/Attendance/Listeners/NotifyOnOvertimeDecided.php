@@ -26,7 +26,7 @@ class NotifyOnOvertimeDecided implements ShouldQueue
             $label = $event->approved ? 'Approved' : 'Rejected';
             $type  = $event->approved ? 'attendance.ot_approved' : 'attendance.ot_rejected';
 
-            $this->notifications->send($user, $type, [
+            $this->notifications->sendForSubject($ot, $user, $type, [
                 'title'       => "Overtime Request {$label}",
                 'message'     => "Your OT request ({$ot->hours_requested}h on {$ot->date->format('M j')}) was {$label}.",
                 'link_to'     => "/self-service/overtime/{$ot->hash_id}",

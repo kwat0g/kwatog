@@ -128,11 +128,13 @@ class BudgetService
                 'rejection_reason' => null,
             ])->save();
 
-            $submitterRoleId = User::query()->whereKey($userId)->value('role_id');
             $notifications = app(NotificationService::class);
             $audience = ApprovalDelegation::approvalAudience('budgeting.approve')
-                ->filter(fn (User $user): bool => (int) $user->role_id !== (int) $submitterRoleId);
-            $notifications->send($audience, 'approval.action_required', [
+                ->filter(fn (User $user): bool => Budget::query()
+                    ->whereKey($locked->getKey())
+                    ->awaitingApprovalFor($user)
+                    ->exists());
+            $notifications->sendForSubject($locked, $audience, 'approval.action_required', [
                 'title' => "Budget {$locked->name} needs approval",
                 'message' => 'A submitted budget is waiting for review.',
                 'link_to' => "/budgeting/{$locked->hash_id}",
@@ -200,7 +202,7 @@ class BudgetService
             return;
         }
 
-        app(NotificationService::class)->send($submitter, $type, [
+        app(NotificationService::class)->sendForSubject($budget, $submitter, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your budget was returned for revision.' : 'Your budget was approved.',
             'link_to' => "/budgeting/{$budget->hash_id}",

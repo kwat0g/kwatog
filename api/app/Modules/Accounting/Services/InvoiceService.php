@@ -50,9 +50,23 @@ class InvoiceService
         private readonly OfficialReceiptService $receipts,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $viewer = null): LengthAwarePaginator
     {
         $q = Invoice::query()->with(['customer:id,name']);
+
+        match ($filters['signal'] ?? null) {
+            'unpaid' => $q->unpaid(),
+            'overdue' => $q->overdue(),
+            'payment_review' => $viewer !== null
+                && $viewer->role?->slug !== 'system_admin'
+                && $viewer->hasPermission('accounting.invoices.collect')
+                    ? $q->awaitingPaymentReview()
+                    : $q->whereRaw('1 = 0'),
+            'draft' => $viewer !== null
+                ? $q->draftsOwnedBy($viewer)
+                : $q->whereRaw('1 = 0'),
+            default => null,
+        };
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -64,8 +78,7 @@ class InvoiceService
         if (! empty($filters['from'])) $q->whereDate('date', '>=', $filters['from']);
         if (! empty($filters['to']))   $q->whereDate('date', '<=', $filters['to']);
         if (! empty($filters['overdue'])) {
-            $q->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial])
-              ->whereDate('due_date', '<', now());
+            $q->overdue();
         }
         if (! empty($filters['search'])) {
             $term = $filters['search'];
@@ -168,7 +181,7 @@ class InvoiceService
                 $audience = ApprovalDelegation::approvalAudience('accounting.invoices.prebill_approve')
                     ->filter(fn (User $approver): bool => $approver->hasPermission('accounting.invoices.view'))
                     ->reject(fn (User $approver): bool => (int) $approver->id === (int) $by->id);
-                app(NotificationService::class)->send($audience, 'approval.action_required', [
+                app(NotificationService::class)->sendForSubject($invoice, $audience, 'approval.action_required', [
                     'title' => 'Prebill invoice needs approval',
                     'message' => 'A manual invoice is waiting for prebill approval.',
                     'link_to' => "/accounting/invoices/{$invoice->hash_id}",
@@ -328,7 +341,7 @@ class InvoiceService
 
             $requester = User::query()->whereKey($lockedInvoice->created_by)->where('is_active', true)->first();
             if ($requester && $requester->hasPermission('accounting.invoices.view')) {
-                app(NotificationService::class)->send($requester, 'approval.completed', [
+                app(NotificationService::class)->sendForSubject($lockedInvoice, $requester, 'approval.completed', [
                     'title' => 'Prebill invoice approved',
                     'message' => 'Your manual invoice was approved for prebilling.',
                     'link_to' => "/accounting/invoices/{$lockedInvoice->hash_id}",
@@ -662,7 +675,7 @@ class InvoiceService
         });
     }
 
-    public function aging(?Carbon $asOf = null): array
+    public function aging(?Carbon $asOf = null, ?int &$rowsScanned = null): array
     {
         $asOf = ($asOf ?? now())->copy();
         $cutoff = $asOf->copy()->endOfDay();
@@ -688,6 +701,7 @@ class InvoiceService
             })
             ->orderBy('customer_id')
             ->get();
+        $rowsScanned = $rows->count();
 
         $invoiceIds = $rows->modelKeys();
         $collectionRows = InvoiceCollection::query()

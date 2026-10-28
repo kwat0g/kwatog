@@ -23,7 +23,7 @@ import { reportMutationError } from '@/lib/formErrors';
 import type { OvertimeRequest } from '@/types/attendance';
 
 const DEFAULT_FILTERS: OvertimeListParams = {
- page: 1, per_page: 100, sort: 'date', direction: 'desc', status: '',
+ page: 1, per_page: 100, sort: 'date', direction: 'desc', status: '', signal: '',
 };
 
 export default function OvertimeListPage() {
@@ -171,14 +171,12 @@ export default function OvertimeListPage() {
  }] : []),
  ];
 
- const filterConfig: FilterConfig[] = [
- {
+ const filterConfig: FilterConfig[] = filters.signal === 'awaiting_my_approval' ? [] : [{
  key: 'status',
  label: 'Status',
  type: 'select',
  options: [{ value: '', label: 'All' }, ...(overtimeOptions?.statuses ?? [])],
- },
- ];
+ }];
 
  return (
  <div>

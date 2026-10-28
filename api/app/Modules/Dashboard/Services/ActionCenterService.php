@@ -13,6 +13,7 @@ use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\NcrSlaService;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -36,6 +37,7 @@ class ActionCenterService
 {
     public function __construct(
         private readonly SettingsService $settings,
+        private readonly NcrSlaService $ncrSla,
     ) {}
 
     /** @return array<int, array{value:string,label:string}> */
@@ -58,11 +60,15 @@ class ActionCenterService
         // queue can never surface a row the module list endpoint would refuse:
         // quality splits inspections/NCRs like Quality/routes.php, deliveries
         // accept the narrow deliveries slug like SupplyChain/routes.php.
-        $this->append($items, $failedSources, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.view']);
+        if ($user->hasPermission('quality.inspections.view') && $user->hasPermission('quality.inspections.manage')) {
+            $this->append($items, $failedSources, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.manage']);
+        }
         // A result awaiting its checker gates the outgoing lot's delivery.
-        // Inspections carry no row scope; the review route's own permission is
-        // the gate, and the maker never sees their own result as work.
-        $this->append($items, $failedSources, 'inspection_reviews', fn () => $this->inspectionReviewItems($user), $user, ['quality.inspections.review']);
+        // Inspections carry no row scope; require list and review access, and
+        // exclude every recorded result author from review work.
+        if ($user->hasPermission('quality.inspections.view') && $user->hasPermission('quality.inspections.review')) {
+            $this->append($items, $failedSources, 'inspection_reviews', fn () => $this->inspectionReviewItems($user), $user, ['quality.inspections.review']);
+        }
         $this->append($items, $failedSources, 'ncrs', fn () => $this->ncrItems(), $user, ['quality.ncr.view']);
         $this->append($items, $failedSources, 'maintenance', fn () => $this->maintenanceItems(), $user, ['maintenance.view']);
         $this->append($items, $failedSources, 'production', fn () => $this->productionItems(), $user, ['production.work_orders.view']);
@@ -257,8 +263,7 @@ class ActionCenterService
     private function inspectionReviewItems(User $user): array
     {
         return Inspection::query()->with(['item:id,name', 'product:id,name', 'inspector:id,name'])
-            ->where('status', 'awaiting_review')
-            ->where('inspector_id', '!=', $user->id)
+            ->awaitingReviewBy((int) $user->id)
             ->oldest('updated_at')->limit($this->sourceLimit())->get()
             ->map(function (Inspection $inspection): array {
                 $stage = $this->enumValue($inspection->stage);
@@ -284,35 +289,32 @@ class ActionCenterService
     /** @return array<int, array<string, mixed>> */
     private function ncrItems(): array
     {
-        return NonConformanceReport::query()->with(['product:id,name', 'assignee:id,name'])
-            ->whereNotIn('status', ['closed', 'cancelled'])->oldest()->limit($this->sourceLimit())->get()
-            ->map(function (NonConformanceReport $ncr): array {
-                $priority = $this->enumValue($ncr->severity);
-                $sla = match ($priority) {
-                    'critical' => $this->settings->requiredInt('quality.ncr.sla_critical_hours', 1),
-                    'high' => $this->settings->requiredInt('quality.ncr.sla_high_hours', 1),
-                    'medium' => $this->settings->requiredInt('quality.ncr.sla_medium_hours', 1),
-                    'low' => $this->settings->requiredInt('quality.ncr.sla_low_hours', 1),
-                    default => $this->settings->requiredInt('quality.ncr.sla_medium_hours', 1),
-                };
-                $age = $ncr->created_at?->diffInHours(now(), true) ?? 0;
+        $ncrs = NonConformanceReport::query()->with(['product:id,name', 'assignee:id,name'])
+            ->open()->oldest()->limit($this->sourceLimit())->get();
+        $overdueIds = $this->ncrSla->overdueQuery()
+            ->whereIn('id', $ncrs->modelKeys())
+            ->pluck('id')->flip();
 
-                return $this->item(
-                    id: 'quality:ncr:'.$ncr->hash_id,
-                    category: 'quality', kind: 'ncr',
-                    title: 'Resolve NCR '.$ncr->ncr_number,
-                    description: (string) $ncr->defect_description,
-                    reference: $ncr->ncr_number,
-                    priority: in_array($priority, ['critical', 'high', 'medium', 'low'], true) ? $priority : 'medium',
-                    status: $this->humanize($this->enumValue($ncr->status)),
-                    link: '/quality/ncrs/'.$ncr->hash_id,
-                    createdAt: $ncr->created_at?->toIso8601String(),
-                    updatedAt: $ncr->updated_at?->toIso8601String(),
-                    dueAt: $ncr->created_at?->copy()->addHours($sla)->toIso8601String(),
-                    overdue: $age >= $sla,
-                    owner: $ncr->assignee?->name,
-                );
-            })->all();
+        return $ncrs->map(function (NonConformanceReport $ncr) use ($overdueIds): array {
+            $priority = $this->enumValue($ncr->severity);
+            $dueAt = $this->ncrSla->dueAt($ncr);
+
+            return $this->item(
+                id: 'quality:ncr:'.$ncr->hash_id,
+                category: 'quality', kind: 'ncr',
+                title: 'Resolve NCR '.$ncr->ncr_number,
+                description: (string) $ncr->defect_description,
+                reference: $ncr->ncr_number,
+                priority: in_array($priority, ['critical', 'high', 'medium', 'low'], true) ? $priority : 'medium',
+                status: $this->humanize($this->enumValue($ncr->status)),
+                link: '/quality/ncrs/'.$ncr->hash_id,
+                createdAt: $ncr->created_at?->toIso8601String(),
+                updatedAt: $ncr->updated_at?->toIso8601String(),
+                dueAt: $dueAt?->toIso8601String(),
+                overdue: $overdueIds->has($ncr->id),
+                owner: $ncr->assignee?->name,
+            );
+        })->all();
     }
 
     /** @return array<int, array<string, mixed>> */

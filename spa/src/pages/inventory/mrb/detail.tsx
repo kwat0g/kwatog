@@ -19,9 +19,11 @@ import { Input } from '@/components/ui/Input';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { formatQuantity } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { ChipVariant } from '@/components/ui/Chip';
 import type { MrbRecord, MrbDisposition, MrbStatus } from '@/types/inventory';
@@ -101,13 +103,14 @@ export default function MrbDetailPage() {
   const releaseBlocked = canManage && data.status === 'held' && data.actions?.can_release === false;
 
   return (
-    <div>
+    <PageShell className="flex flex-col gap-4">
       <PageHeader
+        inset={false}
         title={<span className="font-mono">{data.mrb_number}</span>}
         backTo="/inventory/mrb"
         backLabel="MRB / Quarantine"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Chip variant={mrbStatusVariant(data.status)}>{data.status_label}</Chip>
             {canRelease && (
               <Button variant="primary" onClick={() => setReleaseOpen(true)}>
@@ -125,12 +128,12 @@ export default function MrbDetailPage() {
         }
       />
 
-      <div className="px-5 pt-3 pb-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Quantity"
           value={
             <span className="font-mono tabular-nums">
-              {data.quantity} {data.item?.unit_of_measure ?? ''}
+              {formatQuantity(data.quantity)} {data.item?.unit_of_measure ?? ''}
             </span>
           }
         />
@@ -161,12 +164,12 @@ export default function MrbDetailPage() {
         />
         <StatCard
           label="Held"
-          value={formatDate(data.held_at)}
+          value={<span className="tabular-nums">{formatDate(data.held_at)}</span>}
           helper={data.held_by ?? undefined}
         />
       </div>
 
-      <div className="px-5 pb-4 space-y-4">
+      <div className="space-y-4 pb-4">
         <Panel title="Movement">
           <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
             <Field label="Source location" value={data.source_location?.full_code} mono />
@@ -178,7 +181,8 @@ export default function MrbDetailPage() {
                 data.return_request ? (
                   <Link
                     to={`/return-management/${data.return_request.id}`}
-                    className="font-mono text-accent hover:underline"
+                    data-touch-target
+                    className="font-mono text-link hover:text-link-hover hover:underline"
                   >
                     {data.return_request.rma_number}
                   </Link>
@@ -193,7 +197,7 @@ export default function MrbDetailPage() {
               label="Linked NCR"
               value={
                 data.ncr ? (
-                  <Link to={`/quality/ncrs/${data.ncr.id}`} className="font-mono text-accent">
+                  <Link data-touch-target to={`/quality/ncrs/${data.ncr.id}`} className="font-mono text-link hover:text-link-hover hover:underline">
                     {data.ncr.ncr_number}
                   </Link>
                 ) : (
@@ -211,7 +215,8 @@ export default function MrbDetailPage() {
                 data.inspection ? (
                   <Link
                     to={`/quality/inspections/${data.inspection.id}`}
-                    className="font-mono text-accent"
+                    data-touch-target
+                    className="font-mono text-link hover:text-link-hover hover:underline"
                   >
                     {data.inspection.inspection_number ?? data.inspection.id}
                   </Link>
@@ -283,7 +288,7 @@ export default function MrbDetailPage() {
           onClose={() => setReleaseOpen(false)}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -291,7 +296,7 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
   const empty = value === null || value === undefined || value === '';
   return (
     <div>
-      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
+      <dt className="text-label text-muted font-medium">{label}</dt>
       <dd className={mono ? 'font-mono' : ''}>{empty ? '—' : value}</dd>
     </div>
   );
@@ -434,7 +439,7 @@ function ReleaseModal({
         className="py-4 space-y-3"
       >
         <p className="text-sm text-muted">
-          Release <span className="font-mono">{record.quantity}</span>{' '}
+          Release <span className="tabular-nums">{formatQuantity(record.quantity)}</span>{' '}
           {record.item?.unit_of_measure} of <span className="font-mono">{record.item?.code}</span>{' '}
           from quarantine.
         </p>
@@ -489,8 +494,8 @@ function ReleaseModal({
           <div className="space-y-3 border-t border-default pt-3">
             <p className="text-sm text-muted">
               Completed reinspection must cover the full held quantity:{' '}
-              <span className="font-mono">
-                {record.quantity} {record.item?.unit_of_measure}
+              <span className="tabular-nums">
+                {formatQuantity(record.quantity)} {record.item?.unit_of_measure}
               </span>
               .{' '}
               {needsConcession

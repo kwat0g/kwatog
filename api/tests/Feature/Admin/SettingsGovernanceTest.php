@@ -8,6 +8,7 @@ use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -112,6 +113,24 @@ class SettingsGovernanceTest extends TestCase
             ->putJson('/api/v1/admin/settings/security.max_login_attempts', ['value' => 5.5])
             ->assertStatus(422)
             ->assertJsonValidationErrors('value');
+    }
+
+    public function test_work_order_due_soon_window_is_seeded_and_admin_configurable_with_bounds(): void
+    {
+        $this->seed(SettingsSeeder::class);
+        $key = 'production.work_orders.due_soon_days';
+        $this->assertSame(3, json_decode((string) DB::table('settings')->where('key', $key)->value('value'), true));
+
+        $this->actingAs($this->systemAdmin())
+            ->putJson('/api/v1/admin/settings/'.$key, ['value' => 5])
+            ->assertOk();
+
+        $this->actingAs($this->systemAdmin())
+            ->putJson('/api/v1/admin/settings/'.$key, ['value' => 366])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('value');
+
+        $this->assertSame(5, json_decode((string) DB::table('settings')->where('key', $key)->value('value'), true));
     }
 
     public function test_demand_movement_settings_reject_unknown_inventory_movement_types(): void

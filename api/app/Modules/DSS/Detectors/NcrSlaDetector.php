@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\DSS\Detectors;
 
-use App\Common\Services\SettingsService;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
 use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\NcrSlaService;
 
 /** D13 — NCR response SLA, using the same clock and thresholds as escalation policy. */
 class NcrSlaDetector implements DetectorInterface
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(private readonly NcrSlaService $ncrSla) {}
 
     public function id(): string { return 'dss.quality_ncr_sla'; }
     public function domain(): string { return 'quality'; }
@@ -31,13 +31,10 @@ class NcrSlaDetector implements DetectorInterface
         $complete = true;
 
         foreach (NcrSeverity::cases() as $severity) {
-            $hours = $this->settings->requiredInt("quality.ncr.sla_{$severity->value}_hours", 1, 87600);
-            $rows = NonConformanceReport::query()
-                ->whereIn('status', ['open', 'in_progress'])
+            $hours = $this->ncrSla->hoursFor($severity);
+            $rows = $this->ncrSla->overdueQuery($severity)
                 ->where('escalation_level', '<', 3)
-                ->where('severity', $severity->value)
                 ->whereDoesntHave('actions', fn ($query) => $query->where('action_type', NcrActionType::Corrective->value))
-                ->whereRaw('COALESCE(last_escalated_at, created_at) <= ?', [now()->subHours($hours)])
                 ->orderByRaw('COALESCE(last_escalated_at, created_at)')
                 ->limit($limit - count($emissions) + 1)
                 ->get(['id', 'ncr_number', 'severity', 'status', 'escalation_level', 'last_escalated_at', 'created_at']);
@@ -49,7 +46,7 @@ class NcrSlaDetector implements DetectorInterface
             }
 
             foreach ($rows as $row) {
-                $clock = $row->last_escalated_at ?? $row->created_at;
+                $clock = $this->ncrSla->clockStart($row) ?? now();
                 $waitHours = $clock->diffInHours(now(), true);
                 $emissions[] = new DetectorEmission(
                     type: 'ncr_sla_breach',
@@ -88,7 +85,7 @@ class NcrSlaDetector implements DetectorInterface
                         'source_clock_rule' => 'COALESCE(last_escalated_at, created_at)',
                     ],
                     sourceObservedAt: $clock,
-                    businessDueAt: $clock->copy()->addHours($hours),
+                    businessDueAt: $this->ncrSla->dueAt($row),
                 );
             }
         }

@@ -467,6 +467,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
 
     public function test_skipped_pr_notifies_the_purchasing_audience(): void
     {
+        app(SettingsService::class)->set('modules.purchasing', true, 'modules');
         $this->seed(RolePermissionSeeder::class);
         $this->seed(WorkflowSeeder::class);
         $officer = User::factory()->create([
@@ -509,6 +510,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $data = json_decode((string) $row->data, true);
         $this->assertStringContainsString($pr->pr_number, (string) ($data['title'] ?? ''));
         $this->assertStringContainsString('/purchasing/purchase-requests/', (string) ($data['link_to'] ?? ''));
+        $this->assertSame(PurchaseRequest::class, $data['subject_type']);
+        $this->assertSame((string) $pr->id, $data['subject_id']);
         $this->assertDatabaseMissing('notifications', [
             'type' => 'chain.pr_auto_convert_skipped',
             'notifiable_id' => $officerWithoutView->id,

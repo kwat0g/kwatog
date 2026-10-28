@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Mail;
 
-use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Common\Services\EmailBrandingService;
 use App\Common\Mail\QueuedMailable;
+use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\HtmlString;
 
 class SupplierPurchaseOrderCancelledMail extends QueuedMailable
 {
+    use SerializesModels;
+
     /** @param list<int> $fallbackUserIds */
     public function __construct(
         public readonly array $snapshot,
         public readonly array $fallbackUserIds = [],
+        protected readonly ?PurchaseOrder $failureSubject = null,
     ) {
         // Lane: mail — see config/horizon.php. Kept off `default` so an
         // email burst cannot sit in front of an approval or a GRN notice.
@@ -58,6 +64,10 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
+        if ($this->failureSubject === null) {
+            return;
+        }
+
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Supplier purchase order cancellation',
@@ -68,14 +78,20 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
                 'entity_id' => $this->snapshot['po_hash_id'],
                 'reason' => 'The supplier email was unreachable or the email provider rejected the message.',
             ],
+            $this->failureSubject,
         );
     }
 
-    private function safeMarkdownText(string $value): string
+    private function safeMarkdownText(string $value): HtmlString
     {
         $text = trim(preg_replace('/[\r\n\t]+/u', ' ', $value) ?? '');
+        if ($text === '') {
+            return new HtmlString('—');
+        }
 
-        return $text === '' ? '—' : (preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? '—');
+        $escaped = preg_replace('/([\\`*_{}\[\]()#+.!|])/u', '\\\\$1', $text) ?? '—';
+
+        return new HtmlString(htmlspecialchars($escaped, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
     }
 
     private function safeHeaderText(string $value): string

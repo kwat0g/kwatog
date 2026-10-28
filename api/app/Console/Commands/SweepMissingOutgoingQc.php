@@ -175,13 +175,15 @@ class SweepMissingOutgoingQc extends Command
                     (array) $settings->get('quality.outgoing_qc.notification_roles', [])))
                 ->where('is_active', true)
                 ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('production.work_orders.view'))
+                ->filter(fn (User $user): bool => $user->hasPermission('production.view') && $user->hasPermission('production.work_orders.view'))
                 ->values();
             if ($recipients->isEmpty()) {
                 $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
                     ->where('is_active', true)
-                    ->get();
+                    ->get()
+                    ->filter(fn (User $user): bool => $user->hasPermission('production.view') && $user->hasPermission('production.work_orders.view'))
+                    ->values();
                 if ($recipients->isEmpty()) {
                     Log::warning('Outgoing QC escalation has no work-order viewers or system admin.', [
                         'work_order_ids' => collect($escalated)->map(fn (array $row): string => $row[0]->hash_id)->all(),
@@ -198,7 +200,7 @@ class SweepMissingOutgoingQc extends Command
             $dedupeKey = 'qc-missing-outgoing:'.now()->toDateString().':'.hash('sha256', implode("\n", $lines));
 
             try {
-                $notifications->send($recipients, 'chain.outgoing_qc_missing', [
+                $notifications->sendForSubject($escalated[0][0], $recipients, 'chain.outgoing_qc_missing', [
                     'title' => 'Outgoing QC missing on completed work orders',
                     'message' => count($escalated).' completed work order(s) have output batches with no outgoing QC: '
                         .implode(' | ', $lines),

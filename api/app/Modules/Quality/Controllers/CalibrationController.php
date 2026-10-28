@@ -27,7 +27,7 @@ class CalibrationController
         $query = CalibrationRecord::query()->orderBy('next_calibration_date');
 
         if ($status = $validated['status'] ?? null) {
-            $query->where('status', $status);
+            $query->withStatus(CalibrationStatus::from($status));
         }
 
         return CalibrationRecordResource::collection($query->paginate((int) ($validated['per_page'] ?? 25)));

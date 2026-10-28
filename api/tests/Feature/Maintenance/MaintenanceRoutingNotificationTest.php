@@ -34,9 +34,10 @@ class MaintenanceRoutingNotificationTest extends TestCase
         Event::fake();
     }
 
-    public function test_creation_routes_both_types_once_to_active_supervisors(): void
+    public function test_creation_routes_both_types_once_to_other_active_supervisors(): void
     {
         $supervisor = $this->actor('maintenance_supervisor');
+        $otherSupervisor = $this->actor('maintenance_supervisor');
         $inactive = $this->actor('maintenance_supervisor');
         $revoked = $this->actor('maintenance_supervisor');
         $inactive->update(['is_active' => false]);
@@ -48,9 +49,19 @@ class MaintenanceRoutingNotificationTest extends TestCase
             $listener->handle(new MaintenanceWorkOrderCreated($order));
         }
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.assignment_needed')->count());
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $supervisor->id,
+            'type' => 'maintenance.assignment_needed',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $otherSupervisor->id,
+            'type' => 'maintenance.assignment_needed',
+        ]);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $inactive->id]);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revoked->id]);
-        $this->assertStringContainsString('/maintenance/work-orders/', json_decode(DB::table('notifications')->value('data'), true)['link_to']);
+        $data = json_decode((string) DB::table('notifications')->where('type', 'maintenance.assignment_needed')->value('data'), true);
+        $this->assertStringContainsString('/maintenance/work-orders/', $data['link_to']);
+        $this->assertSame(MaintenanceWorkOrder::class, $data['subject_type']);
     }
 
     public function test_missing_supervisor_records_setup_failure(): void
@@ -113,6 +124,9 @@ class MaintenanceRoutingNotificationTest extends TestCase
         $service->assign($order, $technician->employee_id, $supervisor, ['expected_assignee_id' => null]);
         $service->assign($order, $technician->employee_id, $supervisor, ['expected_assignee_id' => $technician->employee_id]);
         $this->assertSame(1, DB::table('notifications')->where('type', 'maintenance.assigned')->count());
+        $assignmentData = json_decode((string) DB::table('notifications')->where('type', 'maintenance.assigned')->value('data'), true);
+        $this->assertSame(MaintenanceWorkOrder::class, $assignmentData['subject_type']);
+        $this->assertSame((string) $order->id, $assignmentData['subject_id']);
         $this->artisan('maintenance:check-assignment')->assertSuccessful();
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.assignment_escalated')->count());
         $this->assertSame('assigned', $order->fresh()->status->value);

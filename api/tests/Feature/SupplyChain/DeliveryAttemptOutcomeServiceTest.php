@@ -6,6 +6,7 @@ namespace Tests\Feature\SupplyChain;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -97,6 +98,39 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $this->assertNull(StockLevel::query()->where('item_id', $finishedGood->id)->where('location_id', $quarantine->id)->value('quantity'));
     }
 
+    public function test_delivery_attempt_notice_reaches_only_users_who_can_open_delivery(): void
+    {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        [$delivery, $actor] = $this->dispatchedDelivery();
+        $receive = Permission::firstOrCreate(
+            ['slug' => 'return_management.receive'],
+            ['name' => 'Receive returns', 'module' => 'return_management'],
+        );
+        $view = Permission::firstOrCreate(
+            ['slug' => 'supply_chain.deliveries.view'],
+            ['name' => 'View deliveries', 'module' => 'supply_chain'],
+        );
+        $authorizedRole = Role::firstOrCreate(['slug' => 'notification_delivery_return_viewer'], ['name' => 'Notification Delivery Return Viewer']);
+        $authorizedRole->permissions()->syncWithoutDetaching([$receive->id, $view->id]);
+        $unauthorizedRole = Role::firstOrCreate(['slug' => 'notification_delivery_return_only'], ['name' => 'Notification Delivery Return Only']);
+        $unauthorizedRole->permissions()->syncWithoutDetaching([$receive->id]);
+        $authorized = User::factory()->withRole($authorizedRole->slug)->create(['is_active' => true]);
+        $unauthorized = User::factory()->withRole($unauthorizedRole->slug)->create(['is_active' => true]);
+        $line = $delivery->items()->firstOrFail();
+
+        app(DeliveryAttemptOutcomeService::class)->report(
+            $delivery,
+            $actor,
+            $this->reportPayload($line, '0', '0', '4'),
+        );
+
+        $notice = $authorized->notifications()->where('type', 'chain.delivery_attempt_reported')->firstOrFail();
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
+        $this->assertSame(0, $unauthorized->notifications()->where('type', 'chain.delivery_attempt_reported')->count());
+    }
+
     public function test_depot_return_is_source_costed_non_gl_and_cannot_be_replayed_beyond_actual_receipt(): void
     {
         [$delivery, $actor, $quarantine, $finishedGood] = $this->dispatchedDelivery();
@@ -161,6 +195,15 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
             ->assertOk();
         $this->assertSame(DeliveryStatus::ReturnPending, $delivery->fresh()->status);
 
+        $inspect = Permission::query()->where('slug', 'return_management.inspect')->firstOrFail();
+        $returnView = Permission::query()->where('slug', 'return_management.view')->firstOrFail();
+        $returnReviewerRole = Role::create(['name' => 'Truck Return Notice Reviewer', 'slug' => 'truck-return-notice-reviewer-'.uniqid()]);
+        $returnReviewerRole->permissions()->attach([$inspect->id, $returnView->id]);
+        $returnReviewer = User::factory()->create(['role_id' => $returnReviewerRole->id, 'is_active' => true]);
+        $reviewOnlyRole = Role::create(['name' => 'Truck Return Notice Restricted', 'slug' => 'truck-return-notice-restricted-'.uniqid()]);
+        $reviewOnlyRole->permissions()->attach([$inspect->id]);
+        $reviewOnly = User::factory()->create(['role_id' => $reviewOnlyRole->id, 'is_active' => true]);
+
         $receiver = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
             'is_active' => true,
@@ -179,6 +222,14 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $outcome = DeliveryAttemptOutcome::query()->where('delivery_id', $delivery->id)->sole();
         $rma = ReturnRequest::query()->with('items')
             ->where('delivery_attempt_outcome_id', $outcome->id)->sole();
+        $notice = $returnReviewer->notifications()->where('type', 'return.truck_return_received')->firstOrFail();
+        $this->assertSame(ReturnRequest::class, $notice->data['subject_type']);
+        $this->assertSame((string) $rma->id, $notice->data['subject_id']);
+        $this->assertSame('/return-management/'.$rma->hash_id, $notice->data['link_to']);
+        $this->assertSame(0, $reviewOnly->notifications()->where('type', 'return.truck_return_received')->count());
+        $this->actingAs($returnReviewer)
+            ->getJson('/api/v1/return-management/return-requests/'.$rma->hash_id)
+            ->assertOk();
         $rmaItem = $rma->items->sole();
         $this->assertSame('0.000', (string) $rmaItem->stock_movement_quantity, 'Depot receipt is not a final stock disposition.');
         $this->assertNotNull($rmaItem->quarantine_movement_id);

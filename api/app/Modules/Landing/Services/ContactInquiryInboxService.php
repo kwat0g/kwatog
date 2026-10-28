@@ -9,6 +9,7 @@ use App\Common\Support\SearchOperator;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -22,9 +23,18 @@ class ContactInquiryInboxService
     /** @param array<string, mixed> $filters */
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = ContactInquiry::query();
+        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
 
-        if (! empty($filters['status'])) {
+        return $this->listQuery($filters)->orderByDesc('id')->paginate($perPage);
+    }
+
+    /** @param array<string, mixed> $filters */
+    public function listQuery(array $filters): Builder
+    {
+        $q = ContactInquiry::query();
+        if (($filters['status'] ?? null) === ContactInquiryStatus::New->value) {
+            $q->awaitingTriage();
+        } elseif (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
 
@@ -38,9 +48,7 @@ class ContactInquiryInboxService
             });
         }
 
-        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
-
-        return $q->orderByDesc('id')->paginate($perPage);
+        return $q;
     }
 
     public function show(ContactInquiry $inquiry): ContactInquiry

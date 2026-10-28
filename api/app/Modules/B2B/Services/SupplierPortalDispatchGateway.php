@@ -115,6 +115,7 @@ class SupplierPortalDispatchGateway implements SupplierDispatchGateway
                 'entity_id' => $purchaseOrder->hash_id,
                 'reason' => 'The supplier email was missing, invalid, unreachable, or rejected by the email provider.',
             ],
+            $purchaseOrder,
         );
     }
 }

@@ -30,7 +30,7 @@ class NotifyOnWorkOrderCompleted implements ShouldQueue
                 ->filter(fn (User $user): bool => $user->hasPermission('production.view') && $user->hasPermission('production.work_orders.view'))
                 ->values();
 
-            $this->notifications->send($audience, 'production.wo_completed', [
+            $this->notifications->sendForSubject($wo, $audience, 'production.wo_completed', [
                 'title' => "Work Order {$wo->wo_number} Completed",
                 'message' => "{$wo->product?->name} — {$wo->quantity_good} units produced. Ready for outgoing QC.",
                 'link_to' => "/production/work-orders/{$wo->hash_id}",
