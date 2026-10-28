@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
-use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
+use App\Common\Services\NotificationService;
+use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
 use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Models\Department;
@@ -142,7 +143,33 @@ class UserProvisioningTest extends TestCase
         $this->assertNotSame($oldHash, $fresh->password);
         $this->assertTrue((bool) $fresh->must_change_password);
         $this->assertTrue(Hash::check($temp, $fresh->password));
-        Notification::assertSentTo($fresh, EmployeePasswordResetNotification::class);
+        Notification::assertSentTo($fresh, AdminPasswordResetNotification::class, function (AdminPasswordResetNotification $notification) use ($fresh, $temp): bool {
+            $html = (string) $notification->toMail($fresh)->render();
+
+            return str_contains($html, $temp)
+                && str_contains($html, 'change this password')
+                && ! str_contains($html, 'reset-password?token=');
+        });
+    }
+
+    public function test_password_reset_succeeds_when_notification_dispatch_throws(): void
+    {
+        $svc = app(UserProvisioningService::class);
+        $employee = $this->makeEmployee();
+        $user = $svc->provisionForEmployee($employee);
+        $user->forceFill(['email' => 'not-an-email'])->save();
+
+        $this->mock(NotificationService::class, function ($mock): void {
+            $mock->shouldReceive('sendLaravelNotification')
+                ->once()
+                ->andThrow(new \RuntimeException('Invalid recipient'));
+        });
+
+        $temp = $svc->resetPasswordForUser($user->fresh());
+
+        $this->assertNotEmpty($temp);
+        $this->assertTrue((bool) $user->fresh()->must_change_password);
+        $this->assertTrue(Hash::check($temp, $user->fresh()->password));
     }
 
     public function test_account_status_when_no_account(): void

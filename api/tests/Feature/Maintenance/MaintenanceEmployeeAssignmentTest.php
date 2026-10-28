@@ -104,7 +104,7 @@ class MaintenanceEmployeeAssignmentTest extends TestCase
         $this->assertSame('10.00', $order->fresh()->cost);
     }
 
-    public function test_self_service_is_assignment_scoped_and_reassignment_removes_writes(): void
+    public function test_self_service_assignment_cannot_change_after_work_starts(): void
     {
         $supervisor = $this->actor('maintenance_supervisor');
         $first = $this->actor(); $second = $this->actor();
@@ -120,10 +120,11 @@ class MaintenanceEmployeeAssignmentTest extends TestCase
         $this->actingAs($first)->getJson('/api/v1/maintenance/spare-part-stock?item_id=unrelated')->assertForbidden();
         $this->actingAs($first)->postJson($url.'/work-records', ['finding' => 'Inspect', 'action_taken' => 'Tightened', 'result' => 'passed'])->assertCreated();
         $this->actingAs($supervisor)->patchJson($url.'/assign', ['employee_id' => $second->employee->hash_id,
-            'expected_assignee_id' => $first->employee->hash_id, 'handover_note' => 'Handover for remaining repair'])->assertOk();
-        $this->actingAs($first)->postJson($url.'/work-records', ['finding' => 'stale', 'action_taken' => 'stale', 'result' => 'passed'])->assertForbidden();
-        $this->actingAs($first)->getJson($url)->assertOk()->assertJsonPath('data.can_record_work', false);
-        $this->actingAs($second)->getJson($url)->assertOk()->assertJsonPath('data.can_record_work', true);
+            'expected_assignee_id' => $first->employee->hash_id, 'handover_note' => 'Handover for remaining repair'])->assertUnprocessable();
+        $this->assertSame($first->employee_id, $order->fresh()->assigned_to);
+        $this->actingAs($first)->postJson($url.'/work-records', ['finding' => 'Still assigned', 'action_taken' => 'Continued inspection', 'result' => 'passed'])->assertCreated();
+        $this->actingAs($second)->getJson($url)->assertNotFound();
+        $this->actingAs($second)->postJson($url.'/work-records', ['finding' => 'stale', 'action_taken' => 'stale', 'result' => 'passed'])->assertForbidden();
         $this->actingAs($first)->postJson('/api/v1/maintenance/work-orders', [])->assertForbidden();
     }
 

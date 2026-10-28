@@ -13,8 +13,8 @@ use Illuminate\Notifications\Notification;
 use Throwable;
 
 /**
- * Self-service "forgot password" link. PasswordResetNotification is the
- * admin-triggered counterpart; both send one-time links, never passwords.
+ * Self-service "forgot password" link. Legacy admin reset jobs keep using
+ * PasswordResetNotification; new admin resets use AdminPasswordResetNotification.
  */
 class PasswordResetLinkNotification extends Notification implements ShouldQueue
 {

@@ -19,6 +19,7 @@ use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\DSS\Services\RecommendationService;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
@@ -132,6 +133,7 @@ class BadgeService
         'due_soon_bills' => 'accounting',
         'pending_budgets' => 'budgeting',
         'pending_transfers' => 'budgeting',
+        'decision_center' => 'dss',
     ];
 
     public function __construct(private readonly SettingsService $settings) {}
@@ -270,6 +272,20 @@ class BadgeService
                 'label'       => 'Action Center',
                 'description' => 'Open items needing attention',
                 'counter' => fn (): int => (int) app(ActionCenterService::class)->for($user)['summary']['total'],
+            ],
+
+            'active_sessions' => [
+                'permissions' => ['admin.settings.manage'],
+                'label' => 'Active Sessions',
+                'description' => 'Current signed-in sessions',
+                'counter' => fn (): int => DB::table('sessions')->whereNotNull('user_id')->count(),
+            ],
+
+            'decision_center' => [
+                'permissions' => ['dss.view'],
+                'label' => 'Decision Center',
+                'description' => 'Open recommendations visible to your role',
+                'counter' => fn (): int => app(RecommendationService::class)->actionableCount($user),
             ],
 
             // Procurement > Purchase requests — pending PRs routed to this role.

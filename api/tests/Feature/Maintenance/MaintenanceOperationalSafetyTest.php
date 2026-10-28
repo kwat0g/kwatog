@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Maintenance;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\EmployeeShiftAssignment;
@@ -26,8 +27,10 @@ use App\Modules\Maintenance\Services\MachineHoursService;
 use App\Modules\Maintenance\Services\MaintenanceScheduleService;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\Maintenance\Services\SparePartUsageService;
+use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Services\MachineService;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrder;
 use Database\Seeders\RolePermissionSeeder;
@@ -202,6 +205,69 @@ class MaintenanceOperationalSafetyTest extends TestCase
         }
         $this->assertSame('open', $mwo->fresh()->status->value);
         $this->assertSame('idle', $machine->fresh()->status->value);
+    }
+
+    public function test_offline_machine_can_start_maintenance(): void
+    {
+        $machine = Machine::factory()->create(['status' => 'offline']);
+        $mwo = $this->mwo($machine);
+
+        app(MaintenanceWorkOrderService::class)->start($mwo, $this->actor);
+
+        $this->assertSame('in_progress', $mwo->fresh()->status->value);
+        $this->assertSame('maintenance', $machine->fresh()->status->value);
+    }
+
+    public function test_in_progress_machine_maintenance_rejects_inconsistent_status_and_repeat_start(): void
+    {
+        foreach (['running', 'offline'] as $status) {
+            $machine = Machine::factory()->create(['status' => $status]);
+            $mwo = $this->mwo($machine, 'in_progress');
+
+            try {
+                app(MaintenanceWorkOrderService::class)->start($mwo, $this->actor);
+                $this->fail('An in-progress maintenance order must expose a machine status mismatch.');
+            } catch (ValidationException $error) {
+                $this->assertArrayHasKey('maintainable_id', $error->errors());
+            }
+
+            $this->assertSame($status, $machine->fresh()->status->value);
+            $this->assertSame('in_progress', $mwo->fresh()->status->value);
+        }
+    }
+
+    public function test_repeated_machine_maintenance_start_rejects_active_production(): void
+    {
+        $machine = Machine::factory()->create(['status' => 'maintenance']);
+        WorkOrder::factory()->create(['machine_id' => $machine->id, 'status' => 'in_progress']);
+        $mwo = $this->mwo($machine, 'in_progress');
+
+        try {
+            app(MaintenanceWorkOrderService::class)->start($mwo, $this->actor);
+            $this->fail('An in-progress maintenance order must not ignore active production ownership.');
+        } catch (ValidationException $error) {
+            $this->assertArrayHasKey('maintainable_id', $error->errors());
+        }
+    }
+
+    public function test_active_machine_maintenance_blocks_offline_status_change(): void
+    {
+        $machine = Machine::factory()->create();
+        $mwo = $this->mwo($machine);
+        app(MaintenanceWorkOrderService::class)->start($mwo, $this->actor);
+
+        $this->expectException(BusinessRuleException::class);
+        app(MachineService::class)->transitionStatus($machine->fresh(), MachineStatus::Offline);
+    }
+
+    public function test_machine_cannot_reenter_maintenance_while_production_is_active(): void
+    {
+        $machine = Machine::factory()->create(['status' => 'running']);
+        $this->mwo($machine, 'in_progress');
+        WorkOrder::factory()->create(['machine_id' => $machine->id, 'status' => 'in_progress']);
+
+        $this->expectException(BusinessRuleException::class);
+        app(MachineService::class)->transitionStatus($machine, MachineStatus::Maintenance);
     }
 
     public function test_cancelling_unstarted_duplicate_preserves_active_machine_maintenance(): void

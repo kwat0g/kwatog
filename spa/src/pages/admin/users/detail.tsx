@@ -485,7 +485,7 @@ export default function AdminUserDetailPage() {
  >
  <div className="space-y-3">
  <p className="text-sm text-secondary">
- Copy this one-time temporary password and share it through an approved channel. The user must change it on first login.
+ The temporary password was emailed to the user. Keep it confidential; share through an approved channel only if delivery fails. The user must change it on first sign-in.
  </p>
  <code className="block rounded-md bg-elevated p-3 font-mono tabular-nums select-all">
  {tempPasswordModal}

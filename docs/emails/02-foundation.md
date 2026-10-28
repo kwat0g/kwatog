@@ -42,9 +42,9 @@ Keep Laravel's existing Markdown Mailable and `MailMessage` stack. The applicati
 
 ## Non-production delivery policy
 
-`config/mail.php` defaults to the `log` transport. An unset `APP_ENV` defaults to `local`; `docker-compose.prod.yml` sets `APP_ENV=production` explicitly. In every environment except exactly `production`, the `MessageSending` hook redirects To to `MAIL_TEST_TO`, removes Cc/Bcc and the original Reply-To, sets Reply-To to the sink, and prefixes the subject with the environment. If `MAIL_TEST_TO` is absent or invalid, it throws before transport. Production keeps configured recipients and SMTP transport. Local `.env` files were also changed to `MAIL_MAILER=log`, SMTP credentials cleared, and the active Horizon process restarted.
+`config/mail.php` defaults to the `log` transport. An unset `APP_ENV` defaults to `local`; `docker-compose.prod.yml` sets `APP_ENV=production` explicitly. Non-production mail keeps its configured To and Reply-To recipients, removes Cc/Bcc, and prefixes the subject with the environment. `MAIL_MAILER=log` records mail without delivery; configure SMTP explicitly when local delivery is needed. Queue workers retry failed mail and mark exhausted deliveries failed.
 
-Set `MAIL_TEST_TO` only to a controlled test inbox or Mailpit capture address when a test inbox is needed. Never set it to a customer, supplier, employee, or applicant address. The guard is a last-mile safeguard; future queue workers must run the updated code and load current config.
+Use Mailpit or the `array` mailer for isolated tests. Local SMTP sends to the address selected by each caller. Future queue workers must run the updated code and load current config.
 
 ## Settings to enter/verify
 

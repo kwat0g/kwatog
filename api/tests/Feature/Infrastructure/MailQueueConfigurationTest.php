@@ -7,6 +7,7 @@ namespace Tests\Feature\Infrastructure;
 use App\Common\Mail\QueuedMailable;
 use App\Common\Models\EmailDelivery;
 use App\Common\Services\EmailDeliveryLogService;
+use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
 use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
 use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
@@ -92,6 +93,7 @@ class MailQueueConfigurationTest extends TestCase
             new PasswordResetLinkNotification('https://ogami.test/reset', 15),
             new EmployeeWelcomeNotification('https://app.ogami.test/reset-password?token=setup-token', 60),
             new EmployeePasswordResetNotification('https://app.ogami.test/reset-password?token=reset-token', 60),
+            new AdminPasswordResetNotification('temporary-password'),
         ];
 
         foreach ($notifications as $notification) {
@@ -109,7 +111,6 @@ class MailQueueConfigurationTest extends TestCase
             'mail.default' => 'array',
             'mail.from.address' => 'erp@example.test',
             'mail.from.name' => 'OGAMI ERP Test',
-            'mail.safety_recipient' => 'mailpit@example.test',
             'app.env' => 'testing',
         ]);
 

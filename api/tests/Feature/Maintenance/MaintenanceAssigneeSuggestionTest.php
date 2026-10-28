@@ -11,11 +11,12 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
-use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\MaintenanceWindow;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Services\MaintenanceAssigneeSuggestionService;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\MRP\Models\Machine;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
@@ -29,6 +30,7 @@ class MaintenanceAssigneeSuggestionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         Event::fake();
         $this->travelTo(Carbon::parse('2026-10-09 10:00', config('app.timezone')));
     }
@@ -40,10 +42,11 @@ class MaintenanceAssigneeSuggestionTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'maintenance_tech'], ['name' => 'Technician']);
         $user = User::factory()->create(['employee_id' => $employee->id, 'role_id' => $role->id, 'is_active' => true]);
         $shift = Shift::create(['name' => 'Suggestion shift '.uniqid(), 'start_time' => '08:00', 'end_time' => '16:00', 'is_active' => true]);
-        EmployeeShiftAssignment::create(['employee_id' => $employee->id, 'shift_id' => $shift->id, 'effective_date' => '2026-01-01', 'working_days' => [1,2,3,4,5]]);
+        EmployeeShiftAssignment::create(['employee_id' => $employee->id, 'shift_id' => $shift->id, 'effective_date' => '2026-01-01', 'working_days' => [1, 2, 3, 4, 5]]);
         if ($present) {
             Attendance::create(['employee_id' => $employee->id, 'shift_id' => $shift->id, 'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->subHour()]);
         }
+
         return $user;
     }
 
@@ -54,13 +57,17 @@ class MaintenanceAssigneeSuggestionTest extends TestCase
             'type' => 'corrective', 'priority' => 'high', 'description' => 'Suggestion test', 'status' => 'open',
             'created_by' => $creator->id, 'verification_required' => true], $overrides));
         $order->save();
+
         return $order;
     }
 
     public function test_ranking_uses_presence_load_and_reports_busy_and_inactive(): void
     {
-        $a = $this->technician(); $b = $this->technician(); $unknown = $this->technician(false);
-        $inactive = $this->technician(); $inactive->employee->forceFill(['status' => 'suspended'])->save();
+        $a = $this->technician();
+        $b = $this->technician();
+        $unknown = $this->technician(false);
+        $inactive = $this->technician();
+        $inactive->employee->forceFill(['status' => 'suspended'])->save();
         $order = $this->order($a);
         $this->order($a, ['assigned_to' => $a->employee_id, 'status' => 'assigned']);
         $result = app(MaintenanceAssigneeSuggestionService::class)->suggest($order, now(), now()->addHour());
@@ -76,7 +83,8 @@ class MaintenanceAssigneeSuggestionTest extends TestCase
 
     public function test_known_absence_rejected_for_legacy_assignment(): void
     {
-        $user = $this->technician(); $order = $this->order($user);
+        $user = $this->technician();
+        $order = $this->order($user);
         Attendance::where('employee_id', $user->employee_id)->update(['status' => 'absent']);
         try {
             app(MaintenanceWorkOrderService::class)->assign($order, $user->employee_id, $user, ['expected_assignee_id' => null]);
@@ -95,15 +103,20 @@ class MaintenanceAssigneeSuggestionTest extends TestCase
 
     public function test_no_eligible_suggestion_and_fresh_start_rejects_absence(): void
     {
-        $user = $this->technician(); $order = $this->order($user, ['verification_required' => false]);
+        $user = $this->technician();
+        $order = $this->order($user, ['verification_required' => false]);
         $service = app(MaintenanceWorkOrderService::class);
         $service->assign($order, $user->employee_id, $user, ['expected_assignee_id' => null]);
         Attendance::where('employee_id', $user->employee_id)->update(['status' => 'absent']);
         $result = app(MaintenanceAssigneeSuggestionService::class)->suggest($order, now(), now()->addHour());
         $this->assertNull($result['suggested_employee_id']);
         $this->assertFalse($result['candidates'][0]['can_attest_presence']);
-        try { $service->start($order, $user); $this->fail('Fresh absence must block start.'); }
-        catch (ValidationException $error) { $this->assertArrayHasKey('employee_id', $error->errors()); }
+        try {
+            $service->start($order, $user);
+            $this->fail('Fresh absence must block start.');
+        } catch (ValidationException $error) {
+            $this->assertArrayHasKey('employee_id', $error->errors());
+        }
         $this->assertSame('assigned', $order->fresh()->status->value);
     }
 
@@ -181,9 +194,11 @@ class MaintenanceAssigneeSuggestionTest extends TestCase
         $this->assertSame($user->employee_id, $assigned->assigned_to);
     }
 
-    public function test_attestation_start_and_stale_handover_checks(): void
+    public function test_attestation_start_and_in_progress_reassignment_is_rejected(): void
     {
-        $user = $this->technician(false); $replacement = $this->technician(); $order = $this->order($user, ['verification_required' => false]);
+        $user = $this->technician(false);
+        $replacement = $this->technician();
+        $order = $this->order($user, ['verification_required' => false]);
         $role = Role::firstOrCreate(['slug' => 'maintenance_supervisor'], ['name' => 'Maintenance Supervisor']);
         $supervisor = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
         $service = app(MaintenanceWorkOrderService::class);
@@ -195,17 +210,62 @@ class MaintenanceAssigneeSuggestionTest extends TestCase
         }
         $service->assign($order, $user->employee_id, $supervisor, ['expected_assignee_id' => null, 'presence_attestation_reason' => 'Physically present in workshop.']);
         $service->start($order, $user);
-        foreach ([['expected_assignee_id' => null, 'handover_note' => 'Repair pending.'], ['expected_assignee_id' => $user->employee_id]] as $choice) {
-            try { $service->assign($order, $replacement->employee_id, $supervisor, $choice); $this->fail('Invalid handover must reject.'); }
-            catch (ValidationException $error) { $this->assertNotEmpty($error->errors()); }
+        try {
+            $service->assign($order, $replacement->employee_id, $supervisor, [
+                'expected_assignee_id' => $user->employee_id,
+                'handover_note' => 'Motor removed; isolate power.',
+            ]);
+            $this->fail('An in-progress work order must not allow worker changes.');
+        } catch (ValidationException $error) {
+            $this->assertArrayHasKey('status', $error->errors());
         }
-        $service->assign($order, $replacement->employee_id, $supervisor, ['expected_assignee_id' => $user->employee_id, 'handover_note' => 'Motor removed; isolate power.']);
-        $this->assertDatabaseHas('maintenance_logs', ['work_order_id' => $order->id, 'logged_by' => $supervisor->id]);
-        $from = Employee::findOrFail($user->employee_id);
-        $to = Employee::findOrFail($replacement->employee_id);
-        $this->assertStringStartsWith(
-            "Assignee changed from {$from->full_name} ({$from->employee_no}) to {$to->full_name} ({$to->employee_no}).",
-            $order->logs()->reorder()->latest('id')->firstOrFail()->description,
-        );
+        $this->assertSame($user->employee_id, $order->fresh()->assigned_to);
+    }
+
+    public function test_supervisor_presence_confirmation_is_visible_and_allows_technician_start(): void
+    {
+        $technician = $this->technician(false);
+        $supervisor = User::factory()->create([
+            'role_id' => Role::where('slug', 'maintenance_supervisor')->value('id'),
+            'is_active' => true,
+        ]);
+        $order = $this->order($supervisor, ['verification_required' => false]);
+        $service = app(MaintenanceWorkOrderService::class);
+
+        $service->assign($order, $technician->employee_id, $supervisor, [
+            'expected_assignee_id' => null,
+            'presence_confirmed' => true,
+        ]);
+
+        $log = $order->logs()->latest('id')->firstOrFail();
+        $this->assertStringContainsString('Physical presence confirmed.', $log->description);
+        $this->assertDatabaseHas('activity_events', [
+            'type' => 'maintenance',
+            'action' => 'presence_confirmed',
+            'subject_id' => $order->id,
+            'actor_user_id' => $supervisor->id,
+        ]);
+        $started = $service->start($order, $technician);
+        $this->assertSame('in_progress', $started->status->value);
+    }
+
+    public function test_start_without_presence_confirmation_directs_worker_to_maintenance_supervisor(): void
+    {
+        $technician = $this->technician(false);
+        $order = $this->order($technician, [
+            'assigned_to' => $technician->employee_id,
+            'status' => 'assigned',
+            'verification_required' => false,
+        ]);
+
+        try {
+            app(MaintenanceWorkOrderService::class)->start($order, $technician);
+            $this->fail('Unverified attendance must require supervisor confirmation.');
+        } catch (ValidationException $error) {
+            $this->assertStringContainsString(
+                'Ask the Maintenance Supervisor to confirm physical presence in Assignment before starting.',
+                $error->errors()['employee_id'][0],
+            );
+        }
     }
 }

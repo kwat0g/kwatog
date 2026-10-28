@@ -875,11 +875,11 @@ it('widens the rail after 150ms and reveals labels on keyboard focus', () => {
   act(() => vi.advanceTimersByTime(149));
   expect(rail).toHaveClass('w-14');
   act(() => vi.advanceTimersByTime(1));
-  expect(rail).toHaveClass('w-60');
+  expect(rail).toHaveClass('w-64');
   fireEvent.mouseLeave(rail);
   expect(rail).toHaveClass('w-14');
   fireEvent.focus(within(rail).getByRole('link', { name: 'Dashboard' }));
-  expect(rail).toHaveClass('w-60');
+  expect(rail).toHaveClass('w-64');
 });
 
 it('traps mobile focus and closes the drawer on Escape', () => {

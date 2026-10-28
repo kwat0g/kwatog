@@ -109,6 +109,15 @@ class RecommendationService
         ];
     }
 
+    public function actionableCount(User $user): int
+    {
+        return $this->queryFor($user, [])
+            ->whereIn('status', ['open', 'in_progress'])
+            ->get()
+            ->filter(fn (DssRecommendation $recommendation): bool => $this->audienceAllows($user, $recommendation))
+            ->count();
+    }
+
     public function options(User $user): array
     {
         $query = $this->visibleQuery($user);

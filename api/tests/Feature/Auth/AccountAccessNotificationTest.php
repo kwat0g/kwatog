@@ -6,8 +6,9 @@ namespace Tests\Feature\Auth;
 
 use App\Modules\Auth\Models\PasswordResetRequest;
 use App\Modules\Auth\Models\User;
-use App\Modules\Auth\Notifications\PasswordResetNotification;
+use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
 use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
+use App\Modules\Auth\Notifications\PasswordResetNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
@@ -52,12 +53,11 @@ class AccountAccessNotificationTest extends TestCase
         $this->assertFreshLinkReplacesPassword($html, $user);
     }
 
-    public function test_account_access_mail_has_html_and_plain_text_parts_and_uses_the_nonproduction_sink(): void
+    public function test_account_access_mail_keeps_the_user_recipient_in_nonproduction(): void
     {
         config([
             'app.env' => 'testing',
             'mail.default' => 'array',
-            'mail.safety_recipient' => 'mailpit@example.test',
             'mail.from.address' => 'erp@example.test',
             'mail.from.name' => 'OGAMI ERP Test',
         ]);
@@ -69,7 +69,7 @@ class AccountAccessNotificationTest extends TestCase
         );
 
         $message = Mail::mailer('array')->getSymfonyTransport()->messages()->last()->getOriginalMessage();
-        $this->assertSame(['mailpit@example.test'], array_map(
+        $this->assertSame(['new.user@ogami.test'], array_map(
             static fn ($address) => $address->getAddress(),
             $message->getTo(),
         ));
@@ -77,14 +77,35 @@ class AccountAccessNotificationTest extends TestCase
             static fn ($address) => $address->getAddress(),
             $message->getFrom(),
         ));
-        $this->assertSame(['mailpit@example.test'], array_map(
-            static fn ($address) => $address->getAddress(),
-            $message->getReplyTo(),
-        ));
+        $this->assertSame([], $message->getReplyTo());
         $this->assertStringStartsWith('[TESTING] ', (string) $message->getSubject());
         $this->assertStringContainsString('Your account is ready', (string) $message->getHtmlBody());
         $this->assertStringContainsString('sample-setup-token', (string) $message->getTextBody());
         $this->assertStringNotContainsString('Legacy-Temp-Secret!', (string) $message->getHtmlBody());
+    }
+
+    public function test_admin_reset_mail_goes_to_the_account_email_in_nonproduction(): void
+    {
+        config([
+            'app.env' => 'local',
+            'mail.default' => 'array',
+            'mail.from.address' => 'erp@example.test',
+            'mail.from.name' => 'OGAMI ERP Test',
+        ]);
+        $user = User::factory()->create(['email' => 'reset.user@ogami.test']);
+
+        app(MailChannel::class)->send(
+            $user,
+            new AdminPasswordResetNotification('known-temporary-password'),
+        );
+
+        $message = Mail::mailer('array')->getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $this->assertSame(['reset.user@ogami.test'], array_map(
+            static fn ($address) => $address->getAddress(),
+            $message->getTo(),
+        ));
+        $this->assertStringContainsString('known-temporary-password', (string) $message->getHtmlBody());
+        $this->assertStringStartsWith('[LOCAL] ', (string) $message->getSubject());
     }
 
     public function test_failed_account_security_notifications_alert_admin_without_logging_the_token(): void
@@ -96,6 +117,7 @@ class AccountAccessNotificationTest extends TestCase
             new WelcomeNotification('https://app.ogamiph.test/reset-password?token='.$token, 60),
             new PasswordResetNotification('https://app.ogamiph.test/reset-password?token='.$token, 60),
             new PasswordResetLinkNotification('https://app.ogamiph.test/reset-password?token='.$token, 60),
+            new AdminPasswordResetNotification($token),
         ];
 
         foreach ($notifications as $notification) {
@@ -107,7 +129,7 @@ class AccountAccessNotificationTest extends TestCase
             ->where('type', 'email.delivery_failed')
             ->get();
 
-        $this->assertCount(3, $rows);
+        $this->assertCount(4, $rows);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $employee->id,
             'type' => 'email.delivery_failed',

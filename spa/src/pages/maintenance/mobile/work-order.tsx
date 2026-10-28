@@ -4,8 +4,9 @@ import { useParams, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import toast from 'react-hot-toast';
-import { LuArrowLeft, LuPlus, LuPlay, LuTriangleAlert } from '@/lib/icons';
+import { LuArrowLeft, LuPlus, LuTriangleAlert } from '@/lib/icons';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -52,6 +53,7 @@ export default function MobileWorkOrderDetail() {
   // ── Form state ─────────────────────────────────────────
   const [remarks, setRemarks] = useState('');
   const [showPartSheet, setShowPartSheet] = useState(false);
+  const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
   const [confirmingStart, setConfirmingStart] = useState(false);
   const [confirmingComplete, setConfirmingComplete] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -143,6 +145,7 @@ export default function MobileWorkOrderDetail() {
   const actions = wo.available_actions ?? [];
   const isTerminal = wo.status === 'completed' || wo.status === 'cancelled';
   const canStart = actions.includes('start') && canAny('maintenance.wo.complete', 'maintenance.wo.assign');
+  const canAssign = wo.status !== 'in_progress' && actions.includes('assign') && can('maintenance.wo.assign');
   const canEditParts = wo.can_record_work ?? ((actions.includes('complete') || actions.includes('submit_repair')) && can('maintenance.wo.complete'));
   const canRecordWork = canEditParts && !wo.repair_submitted_at;
   const canCloseWork = wo.closure_readiness?.can_close_work ?? false;
@@ -166,9 +169,11 @@ export default function MobileWorkOrderDetail() {
       {/* MWO summary and current actions */}
       <div className="rounded-md border border-default bg-canvas p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="font-mono tabular-nums text-lg font-medium md:text-2xl">{wo.mwo_number}</h1>
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h1 className="font-mono tabular-nums text-lg font-medium md:text-2xl">{wo.mwo_number}</h1>
             <Chip variant={maintenanceStatusVariant[wo.status]}>{wo.status_label ?? wo.status.replace('_', ' ')}</Chip>
+          </div>
+          <div className="flex items-center gap-1.5">
             <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
               {wo.priority === 'critical' && <LuTriangleAlert className="w-3 h-3" aria-hidden />}
               {wo.priority_label ?? wo.priority}
@@ -182,19 +187,29 @@ export default function MobileWorkOrderDetail() {
           <span>{wo.type_label ?? wo.type}</span>
         </div>
 
-        {(canStart || canRecordWork || canComplete) && (
+        {(canStart || canAssign || canRecordWork || canComplete) && (
           <div className="mt-4 flex flex-wrap gap-2 border-t border-subtle pt-4">
-            {canStart && !isTerminal && (
+            {canAssign && !isTerminal && (
+              <Button
+                type="button"
+                variant={canStart ? 'secondary' : 'primary'}
+                size="sm"
+                className="min-h-11"
+                onClick={() => setAssignmentDialogOpen(true)}
+              >
+                {wo.assignee ? 'Change worker' : 'Assign worker'}
+              </Button>
+            )}
+            {canStart && !isTerminal && (!canAssign || Boolean(wo.assignee)) && (
               <Button
                 type="button"
                 variant="primary"
                 size="sm"
                 className="min-h-11"
-                icon={<LuPlay className="h-4 w-4" />}
                 onClick={() => setConfirmingStart(true)}
                 loading={startMutation.isPending}
               >
-                Start work
+                Confirm start
               </Button>
             )}
             {canRecordWork && <WorkLogControl order={wo} />}
@@ -206,17 +221,8 @@ export default function MobileWorkOrderDetail() {
           </div>
         )}
 
-        {wo.description && (
-          <p className="mt-3 text-sm text-secondary whitespace-pre-wrap">{wo.description}</p>
-        )}
-        {wo.remarks && (
-          <p className="mt-3 border-t border-subtle pt-3 text-sm text-secondary whitespace-pre-wrap">
-            <span className="block text-xs text-muted">{wo.status === 'cancelled' ? 'Cancellation reason' : 'Work performed'}</span>{wo.remarks}
-          </p>
-        )}
-
         {wo.assignee && (
-          <div className="mt-3 text-xs text-muted">
+          <div className="mt-3 border-t border-subtle pt-3 text-xs text-muted">
             Assigned to: <span className="font-medium text-secondary">{wo.assignee.name}</span>
           </div>
         )}
@@ -224,6 +230,17 @@ export default function MobileWorkOrderDetail() {
           <div><dt className="text-muted">Started</dt><dd>{wo.started_at ? formatDateTime(wo.started_at) : '—'}</dd></div>
           <div><dt className="text-muted">Completed</dt><dd>{wo.completed_at ? formatDateTime(wo.completed_at) : '—'}</dd></div>
         </dl>
+        {wo.description && (
+          <div className="mt-3 border-t border-subtle pt-3">
+            <h2 className="text-xs uppercase tracking-wider text-muted">Description</h2>
+            <p className="mt-1 text-sm text-secondary whitespace-pre-wrap">{wo.description}</p>
+          </div>
+        )}
+        {wo.remarks && (
+          <p className="mt-3 border-t border-subtle pt-3 text-sm text-secondary whitespace-pre-wrap">
+            <span className="block text-xs text-muted">{wo.status === 'cancelled' ? 'Cancellation reason' : 'Work performed'}</span>{wo.remarks}
+          </p>
+        )}
       </div>
 
       <RecoveryPanel order={wo} />
@@ -236,22 +253,47 @@ export default function MobileWorkOrderDetail() {
         touch
       />
 
-      {actions.includes('assign') && can('maintenance.wo.assign') && (
-        <AssignmentPanel order={wo} touch />
-      )}
-
-      <TouchConfirmSheet
+      <Modal
         isOpen={confirmingStart}
         onClose={() => setConfirmingStart(false)}
-        onConfirm={() => startMutation.mutate()}
-        title="Start this work order?"
-        confirmLabel="Start work"
-        variant="primary"
-        pending={startMutation.isPending}
-        className="sm:max-w-xl"
+        closeOnOverlayClick={!startMutation.isPending}
+        size="lg"
+        title="Confirm maintenance start"
       >
-        <p>Work starts on <span className="font-mono">{wo.mwo_number}</span>. Downtime uses the recorded equipment downtime start.</p>
-      </TouchConfirmSheet>
+        <div className="space-y-3 pt-2">
+          <p className="text-sm text-secondary">
+            Confirm {wo.mwo_number}{wo.maintainable?.name ? ` for ${wo.maintainable.name}` : ''}. Downtime starts when this work order begins.
+          </p>
+          <p className="rounded-md border border-subtle bg-surface px-3 py-2 text-sm">
+            {wo.assignee ? `Assigned worker: ${wo.assignee.name}` : 'Assign a worker before starting this maintenance order.'}
+          </p>
+          <ModalFooter>
+            <Button variant="secondary" size="touch" onClick={() => setConfirmingStart(false)} disabled={startMutation.isPending}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="touch" onClick={() => startMutation.mutate()} disabled={!wo.assignee} loading={startMutation.isPending}>
+              Confirm & start
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={assignmentDialogOpen && wo.status !== 'in_progress'}
+        onClose={() => setAssignmentDialogOpen(false)}
+        size="lg"
+        title={wo.assignee ? 'Change worker' : 'Assign worker'}
+      >
+        <div className="space-y-3 pt-2">
+          <p className="text-sm text-secondary">Confirm physical presence for workers without a verified attendance record. Assignment does not start the work order.</p>
+          <AssignmentPanel order={wo} touch onAssigned={() => setAssignmentDialogOpen(false)} />
+          <ModalFooter>
+            <Button variant="secondary" size="touch" onClick={() => setAssignmentDialogOpen(false)}>
+              Cancel
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
 
       {(wo.logs?.length || canEditParts) ? (
         <section className="rounded-md border border-default bg-canvas p-4">

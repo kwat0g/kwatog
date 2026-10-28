@@ -250,8 +250,8 @@ class MaintenanceWorkOrderResource extends JsonResource
             $actions[] = 'verify_repair';
         }
 
-        if (in_array($status, [MaintenanceWorkOrderStatus::Open, MaintenanceWorkOrderStatus::Assigned,
-            MaintenanceWorkOrderStatus::InProgress], true) && ! $this->repair_submitted_at
+        if (in_array($status, [MaintenanceWorkOrderStatus::Open, MaintenanceWorkOrderStatus::Assigned], true)
+            && ! $this->repair_submitted_at
             && $actor?->can('maintenance.wo.assign')) {
             array_unshift($actions, 'assign');
         }

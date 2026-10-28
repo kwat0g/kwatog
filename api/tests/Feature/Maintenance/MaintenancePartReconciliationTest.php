@@ -106,7 +106,7 @@ class MaintenancePartReconciliationTest extends TestCase
         $this->assertSame('3.000', $first->fresh()->quantity);
     }
 
-    public function test_reassignment_requires_the_new_technician_to_reconcile_remaining_parts(): void
+    public function test_reassignment_after_start_is_rejected_without_resetting_parts_reconciliation(): void
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00', config('app.timezone')));
         [$technician, $order, $item, $location, $workLog] = $this->fixture();
@@ -123,15 +123,11 @@ class MaintenancePartReconciliationTest extends TestCase
             'employee_id' => $replacement->employee->hash_id,
             'expected_assignee_id' => $technician->employee->hash_id,
             'handover_note' => 'Replacement technician will inspect the issued part.',
-        ])->assertOk();
+        ])->assertUnprocessable();
 
-        $this->assertNull($order->fresh()->parts_reconciled_at);
-        $this->actingAs($replacement)->getJson($url)->assertOk()
-            ->assertJsonPath('data.parts_readiness.can_close_parts', false);
-        $this->patchJson($url.'/complete')->assertUnprocessable()
-            ->assertJsonValidationErrors('parts_reconciliation');
-        $this->postJson($url.'/reconcile-parts', ['confirm_consumed' => true])->assertOk();
-        $this->patchJson($url.'/complete')->assertOk();
+        $this->assertSame($technician->employee_id, $order->fresh()->assigned_to);
+        $this->assertNotNull($order->fresh()->parts_reconciled_at);
+        $this->actingAs($technician)->patchJson($url.'/complete')->assertOk();
     }
 
     public function test_repair_submission_and_verifier_acceptance_recheck_part_reconciliation(): void

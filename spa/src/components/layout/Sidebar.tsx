@@ -251,6 +251,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuTarget,
         work: true,
         permission: 'dss.view',
+        badgeKey: 'decision_center',
       },
       {
         to: '/chains',
@@ -882,6 +883,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Active Sessions',
         icon: LuMonitor,
         permission: 'admin.settings.manage',
+        badgeKey: 'active_sessions',
       },
       // W1.2 — the shared-component catalogue. Not a business destination, but a
       // reviewer's page nobody would find if it were URL-only.
@@ -1466,7 +1468,7 @@ export const Sidebar = memo(function Sidebar({ permissions, delegatedApprovals, 
         className={cn(
           'shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none',
           'hidden md:flex',
-          rail ? 'w-14' : 'w-60',
+          rail ? 'w-14' : 'w-64',
         )}
       >
         {sidebarContent()}
@@ -1534,7 +1536,6 @@ const NavLink = memo(function NavLink({
   const badgeValue = primarySignal?.count ?? badgeOverride ?? item.badge;
   const badgeTone = primarySignal?.severity ?? badgeVariant ?? 'accent';
   const primaryDescription = primarySignal?.description ?? badgeDescription ?? item.label;
-  const showSignalLabels = (item.badgeKeys?.length ?? 0) > 1;
   const hasMultipleSignals = activeSignals.length > 1;
   const hasBadge = badgeValue != null && badgeValue > 0;
   const signalSummary = activeSignals
@@ -1645,7 +1646,7 @@ const NavLink = memo(function NavLink({
         size={collapsed ? 20 : 16}
         className={cn('shrink-0', active ? 'text-accent' : 'text-muted')}
       />
-      {collapsed && hasBadge && (
+      {collapsed && hasBadge && !hasMultipleSignals && (
         <span aria-hidden className="absolute -top-1 right-0 z-10">
           <Badge variant={badgeTone} className="ring-2 ring-canvas">
             {badgeValue > 99 ? '99+' : badgeValue}
@@ -1657,20 +1658,7 @@ const NavLink = memo(function NavLink({
           <span title={item.label} className="min-w-0 flex-1 truncate">
             {item.label}
           </span>
-          {showSignalLabels ? (
-            <span className="ml-auto flex max-w-[58%] flex-wrap justify-end gap-1">
-              {activeSignals.slice(0, 3).map((signal) => (
-                <Badge
-                  key={signal.key}
-                  variant={signal.severity}
-                  className="max-w-full truncate text-[9px]"
-                  aria-label={`${signal.count} ${signal.description}`}
-                >
-                  {signal.count > 99 ? '99+' : signal.count} {signal.label}
-                </Badge>
-              ))}
-            </span>
-          ) : badgeValue != null && badgeValue > 0 ? (
+          {hasBadge && !hasMultipleSignals ? (
             <span className="ml-auto shrink-0">
               <Tooltip content={`${primaryDescription} · ${badgeValue}`} side="top">
                 <Badge
@@ -1691,7 +1679,7 @@ const NavLink = memo(function NavLink({
     <Tooltip content={collapsedLabel} side="right">{link}</Tooltip>
   ) : link;
 
-  if (!hasMultipleSignals) return linkWithTooltip;
+  if (!hasMultipleSignals || !hasBadge) return linkWithTooltip;
 
   return (
     <div className={cn('relative flex items-center', collapsed ? 'mx-1' : 'mx-2')}>
@@ -1703,7 +1691,10 @@ const NavLink = memo(function NavLink({
         aria-expanded={signalsOpen}
         aria-controls={signalMenuId}
         aria-haspopup="dialog"
-        className="flex h-8 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className={cn(
+          'z-10 flex shrink-0 cursor-pointer items-center justify-center rounded p-1 transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          collapsed ? 'absolute -top-1 right-0' : 'ml-1',
+        )}
         onMouseEnter={() => {
           cancelSignalClose();
           focusFirstSignal.current = false;
@@ -1723,7 +1714,10 @@ const NavLink = memo(function NavLink({
           setSignalsOpen(true);
         }}
       >
-        <span aria-hidden>{collapsed ? '•' : '⋯'}</span>
+        <Badge variant={badgeTone} className={collapsed ? 'ring-2 ring-canvas' : undefined}>
+          {badgeValue > 99 ? '99+' : badgeValue}
+          <span aria-hidden className="ml-0.5 text-[9px] opacity-80">+{activeSignals.length - 1}</span>
+        </Badge>
       </button>
       {signalsOpen && createPortal(
         <div

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Unit\Mail;
 
 use App\Common\Services\NonProductionEmailGuard;
-use RuntimeException;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Event;
 use Symfony\Component\Mime\Address;
@@ -14,12 +13,9 @@ use Tests\TestCase;
 
 class NonProductionEmailGuardTest extends TestCase
 {
-    public function test_non_production_mail_is_redirected_and_marked(): void
+    public function test_non_production_mail_keeps_the_account_recipient_and_marks_message(): void
     {
-        config([
-            'app.env' => 'local',
-            'mail.safety_recipient' => 'mailpit@example.test',
-        ]);
+        config(['app.env' => 'local']);
         $message = (new Email)
             ->to('customer@example.com')
             ->cc('finance@example.com')
@@ -29,41 +25,41 @@ class NonProductionEmailGuardTest extends TestCase
 
         app(NonProductionEmailGuard::class)->protect($message);
 
-        self::assertSame(['mailpit@example.test'], array_map(
+        self::assertSame(['customer@example.com'], array_map(
             static fn (Address $address): string => $address->getAddress(),
             $message->getTo(),
         ));
         self::assertSame([], $message->getCc());
         self::assertSame([], $message->getBcc());
-        self::assertSame(['mailpit@example.test'], array_map(
+        self::assertSame(['sales@example.com'], array_map(
             static fn (Address $address): string => $address->getAddress(),
             $message->getReplyTo(),
         ));
         self::assertSame('[LOCAL] Invoice issued', $message->getSubject());
     }
 
-    public function test_non_production_mail_fails_closed_without_valid_sink(): void
+    public function test_non_production_mail_does_not_require_a_test_sink(): void
     {
-        config([
-            'app.env' => 'local',
-            'mail.safety_recipient' => null,
-        ]);
+        config(['app.env' => 'local']);
 
-        $this->expectException(RuntimeException::class);
-        app(NonProductionEmailGuard::class)->protect((new Email)->to('customer@example.com'));
+        $message = (new Email)->to('customer@example.com');
+
+        app(NonProductionEmailGuard::class)->protect($message);
+
+        self::assertSame(['customer@example.com'], array_map(
+            static fn (Address $address): string => $address->getAddress(),
+            $message->getTo(),
+        ));
     }
 
-    public function test_registered_sending_hook_redirects_before_transport(): void
+    public function test_registered_sending_hook_preserves_recipient_before_transport(): void
     {
-        config([
-            'app.env' => 'staging',
-            'mail.safety_recipient' => 'mailpit@example.test',
-        ]);
+        config(['app.env' => 'staging']);
         $message = (new Email)->to('supplier@example.com')->subject('PO issued');
 
         Event::dispatch(new MessageSending($message));
 
-        self::assertSame(['mailpit@example.test'], array_map(
+        self::assertSame(['supplier@example.com'], array_map(
             static fn (Address $address): string => $address->getAddress(),
             $message->getTo(),
         ));
@@ -74,7 +70,6 @@ class NonProductionEmailGuardTest extends TestCase
     {
         config([
             'app.env' => 'production',
-            'mail.safety_recipient' => 'mailpit@example.test',
         ]);
         $message = (new Email)->to('customer@example.com')->subject('Invoice issued');
 

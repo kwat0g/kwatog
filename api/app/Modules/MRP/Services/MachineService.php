@@ -13,6 +13,8 @@ use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Exceptions\IllegalStatusTransitionException;
 use App\Modules\MRP\Models\Machine;
+use App\Modules\Production\Models\ProductionSchedule;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\ProductionDashboardService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +32,7 @@ class MachineService
         'running' => ['idle', 'breakdown', 'maintenance'],
         'breakdown' => ['maintenance', 'idle'],
         'maintenance' => ['idle', 'breakdown', 'offline'],
-        'offline' => ['idle'],
+        'offline' => ['idle', 'maintenance'],
     ];
 
     /** @return array<string, list<string>> */
@@ -117,8 +119,18 @@ class MachineService
             if ($row->current_work_order_id && in_array($to, [MachineStatus::Idle, MachineStatus::Maintenance], true)) {
                 throw new BusinessRuleException('Pause and explicitly release owned production before changing machine service state.');
             }
-            if ($to === MachineStatus::Idle && MaintenanceWorkOrder::query()->where('maintainable_type', 'machine')->where('maintainable_id', $row->id)->where('status', 'in_progress')->exists()) {
-                throw new BusinessRuleException('Complete active maintenance before restoring the machine.');
+            $hasActiveMaintenance = MaintenanceWorkOrder::query()
+                ->where('maintainable_type', 'machine')->where('maintainable_id', $row->id)
+                ->where('status', 'in_progress')->exists();
+            if ($hasActiveMaintenance && in_array($to, [MachineStatus::Idle, MachineStatus::Offline, MachineStatus::Running], true)) {
+                throw new BusinessRuleException('Complete or cancel active maintenance before changing the machine status.');
+            }
+            if ($hasActiveMaintenance && $to === MachineStatus::Maintenance
+                && (WorkOrder::query()->where('machine_id', $row->id)->where('status', 'in_progress')->exists()
+                    || ProductionSchedule::query()->where('machine_id', $row->id)->where('reserves_capacity', true)
+                        ->whereIn('status', ['pending', 'confirmed', 'executed'])
+                        ->where('scheduled_start', '<=', now())->where('scheduled_end', '>', now())->exists())) {
+                throw new BusinessRuleException('Release active production reservations before restoring the machine to maintenance.');
             }
             $from = $row->status?->value ?? 'idle';
             $allowed = self::allowedTransitions()[$from] ?? [];

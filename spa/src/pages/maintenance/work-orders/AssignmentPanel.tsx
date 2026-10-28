@@ -5,7 +5,6 @@ import { workOrdersApi, type MaintenanceAssigneeCandidate } from '@/api/maintena
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Panel } from '@/components/ui/Panel';
-import { Textarea } from '@/components/ui/Textarea';
 import { LuChevronDown, LuRefreshCw } from '@/lib/icons';
 import { formatTime } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
@@ -58,12 +57,19 @@ function TechnicianOption({
   );
 }
 
-export function AssignmentPanel({ order, touch = false }: { order: MaintenanceWorkOrder; touch?: boolean }) {
+export function AssignmentPanel({
+  order,
+  touch = false,
+  onAssigned,
+}: {
+  order: MaintenanceWorkOrder;
+  touch?: boolean;
+  onAssigned?: () => void;
+}) {
   const queryClient = useQueryClient();
   const currentAssigneeId = order.assignee?.id ?? null;
   const [assigneeId, setAssigneeId] = useState(currentAssigneeId ?? '');
-  const [attestationReason, setAttestationReason] = useState('');
-  const [handoverNote, setHandoverNote] = useState('');
+  const [presenceConfirmed, setPresenceConfirmed] = useState(false);
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [submissionBlock, setSubmissionBlock] = useState('');
   const { data: suggestions, isPending, isError, isFetching, refetch } = useQuery({
@@ -84,25 +90,23 @@ export function AssignmentPanel({ order, touch = false }: { order: MaintenanceWo
   const unavailable = suggestions?.candidates.filter((candidate) => !candidate.can_assign && !candidate.can_attest_presence) ?? [];
   const selected = suggestions?.candidates.find((candidate) => candidate.id === assigneeId);
   const changing = assigneeId !== (currentAssigneeId ?? '');
-  const needsAttestation = selected?.can_attest_presence && !selected.can_assign;
-  const needsHandover = order.status === 'in_progress' && changing;
-  const canSave = Boolean(selected && changing
-    && (selected.can_assign || (needsAttestation && attestationReason.trim()))
-    && (!needsHandover || handoverNote.trim()));
+  const needsPresenceConfirmation = selected?.can_attest_presence && !selected.can_assign;
+  const canConfirm = Boolean(selected
+    && (selected.can_assign || (needsPresenceConfirmation && presenceConfirmed)));
+  const canSave = canConfirm && (changing || (needsPresenceConfirmation && presenceConfirmed));
 
   const assign = useMutation({
     mutationFn: (candidate: MaintenanceAssigneeCandidate) => workOrdersApi.assign(order.id, candidate.id, {
       expected_assignee_id: currentAssigneeId,
-      presence_attestation_reason: candidate.can_attest_presence && !candidate.can_assign ? attestationReason.trim() : undefined,
-      handover_note: needsHandover ? handoverNote.trim() : undefined,
+      presence_confirmed: candidate.can_attest_presence && !candidate.can_assign ? presenceConfirmed : undefined,
     }),
-    onSuccess: () => {
+    onSuccess: (_assigned, candidate) => {
       queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
       queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
       queryClient.invalidateQueries({ queryKey: ['maintenance', 'assignee-suggestions', order.id] });
-      setAttestationReason('');
-      setHandoverNote('');
-      toast.success('Work order assigned.');
+      setPresenceConfirmed(false);
+      toast.success(candidate.id === currentAssigneeId ? 'Physical presence confirmed.' : 'Work order assigned.');
+      onAssigned?.();
     },
     onError: (error) => {
       reportMutationError(error, 'Could not assign the work order.');
@@ -119,11 +123,10 @@ export function AssignmentPanel({ order, touch = false }: { order: MaintenanceWo
       setSubmissionBlock('Could not refresh technician availability. Refresh and try again.');
       return;
     }
-    if (!candidate.can_assign && !(candidate.can_attest_presence && attestationReason.trim())) {
+    if (!candidate.can_assign && !(candidate.can_attest_presence && presenceConfirmed)) {
       setSubmissionBlock(`${candidate.blocked_reason ?? 'Technician availability could not be confirmed.'} Choose another technician or update attendance/shift coverage, then refresh.`);
       return;
     }
-    if (needsHandover && !handoverNote.trim()) return;
     assign.mutate(candidate);
   };
 
@@ -134,7 +137,7 @@ export function AssignmentPanel({ order, touch = false }: { order: MaintenanceWo
       selected={candidate.id === assigneeId}
       suggested={candidate.id === suggestions?.suggested_employee_id}
       disabled={assign.isPending || isFetching || Boolean(!candidate.can_assign && !candidate.can_attest_presence)}
-      onSelect={() => { setAssigneeId(candidate.id); setAttestationReason(''); setSubmissionBlock(''); }}
+      onSelect={() => { setAssigneeId(candidate.id); setPresenceConfirmed(false); setSubmissionBlock(''); }}
     />
   );
 
@@ -157,7 +160,7 @@ export function AssignmentPanel({ order, touch = false }: { order: MaintenanceWo
           {ready.length > 0 ? (
             <div className="divide-y divide-default overflow-hidden rounded-md border border-default">{ready.map(option)}</div>
           ) : (
-            <p className="text-sm text-secondary">No technician currently available. Review the blocking reasons, update attendance or shift coverage, then refresh.</p>
+            <p className="text-sm text-secondary">No technician currently available. Resolve attendance, shift, or assignment blockers, then refresh suggestions.</p>
           )}
           {unavailable.length > 0 && (
             <div className="mt-3">
@@ -171,16 +174,25 @@ export function AssignmentPanel({ order, touch = false }: { order: MaintenanceWo
         </fieldset>
       )}
 
-      {needsAttestation && <div className="mt-3"><Textarea label="Presence attestation reason" helper="Required to confirm this technician is physically present." required value={attestationReason} onChange={(event) => setAttestationReason(event.target.value)} /></div>}
-      {needsHandover && <div className="mt-3"><Textarea label="Handover note" helper="Required when replacing a technician during work." required value={handoverNote} onChange={(event) => setHandoverNote(event.target.value)} /></div>}
+      {needsPresenceConfirmation && (
+        <label className="mt-3 flex items-start gap-2 rounded-md border border-default p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={presenceConfirmed}
+            onChange={(event) => setPresenceConfirmed(event.target.checked)}
+            className="mt-1"
+          />
+          <span>I confirm {selected.name} is physically present despite no verified attendance record.</span>
+        </label>
+      )}
       {selected && !selected.can_assign && !selected.can_attest_presence && changing && !submissionBlock && (
         <p role="status" className="mt-3 text-sm text-warning-fg">{selected.blocked_reason} Choose another technician or update attendance/shift coverage, then refresh.</p>
       )}
       {submissionBlock && <p role="alert" className="mt-3 text-sm text-warning-fg">{submissionBlock}</p>}
       <Button type="button" variant="primary" size={touch ? 'touch' : 'md'} className="mt-4 w-full" onClick={submitAssignment} disabled={!canSave || assign.isPending || isFetching || isError} loading={assign.isPending || isFetching}>
-        {order.assignee ? 'Change assignee' : 'Assign technician'}
+        {order.assignee ? 'Save assignment' : 'Assign technician'}
       </Button>
-      {selected && !changing && <p className="mt-2 text-center text-xs text-muted">Select another technician to change this assignment.</p>}
+      {selected && !changing && !needsPresenceConfirmation && <p className="mt-2 text-center text-xs text-muted">Select another technician to change this assignment.</p>}
     </Panel>
   );
 }

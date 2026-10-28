@@ -66,7 +66,7 @@ class MaintenanceRoleWorkflowTest extends TestCase
         $this->assertSame('in_progress', $order->fresh()->status->value);
     }
 
-    public function test_non_admin_supervisor_can_assign_and_handoff_only_to_active_maintenance_technician(): void
+    public function test_non_admin_supervisor_can_assign_before_start_but_not_change_worker_after_start(): void
     {
         $supervisor = $this->actor('maintenance_supervisor');
         $first = $this->actor('maintenance_tech');
@@ -81,21 +81,25 @@ class MaintenanceRoleWorkflowTest extends TestCase
         $this->actingAs($supervisor)->patchJson($url.'/assign', [
             'employee_id' => $first->employee->hash_id, 'expected_assignee_id' => null,
         ])->assertOk();
-        $this->actingAs($first)->patchJson($url.'/start')->assertOk();
-
-        $this->assertContains('assign', $this->actingAs($supervisor)->getJson($url)->assertOk()->json('data.available_actions'));
-
         $this->actingAs($supervisor)->patchJson($url.'/assign', [
             'employee_id' => $second->employee->hash_id,
             'expected_assignee_id' => $first->employee->hash_id,
-            'handover_note' => 'Inspection assigned to replacement technician.',
         ])->assertOk();
+        $this->actingAs($second)->patchJson($url.'/start')->assertOk();
+
+        $this->assertNotContains('assign', $this->actingAs($supervisor)->getJson($url)->assertOk()->json('data.available_actions'));
+
+        $this->actingAs($supervisor)->patchJson($url.'/assign', [
+            'employee_id' => $first->employee->hash_id,
+            'expected_assignee_id' => $second->employee->hash_id,
+            'handover_note' => 'Inspection assigned to replacement technician.',
+        ])->assertUnprocessable();
         $this->assertSame($second->employee_id, $order->fresh()->assigned_to);
         $this->actingAs($first)->patchJson($url.'/complete')->assertForbidden();
         $this->actingAs($second)->postJson($url.'/work-records', [
             'finding' => 'Machine ready for service', 'action_taken' => 'Completed inspection', 'result' => 'passed',
         ])->assertCreated();
-        $this->actingAs($second)->patchJson($url.'/complete', ['remarks' => 'Completed by replacement'])->assertOk();
+        $this->actingAs($second)->patchJson($url.'/complete', ['remarks' => 'Completed by assigned technician'])->assertOk();
         $this->assertSame('completed', $order->fresh()->status->value);
     }
 

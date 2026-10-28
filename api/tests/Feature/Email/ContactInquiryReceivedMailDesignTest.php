@@ -27,7 +27,6 @@ class ContactInquiryReceivedMailDesignTest extends TestCase
             'mail.default' => 'array',
             'mail.from.address' => 'no-reply@example.test',
             'mail.from.name' => 'Ogami Test',
-            'mail.safety_recipient' => 'mailpit@example.test',
         ]);
 
         Mail::mailer('array')->to('sales@example.test')->send(new ContactInquiryReceivedMail(

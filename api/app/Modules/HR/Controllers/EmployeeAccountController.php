@@ -69,7 +69,7 @@ class EmployeeAccountController
         abort_if(! $user, 404, 'Employee has no system account.');
         $this->userAdministration->resetPassword($user, $request->user());
         return response()->json([
-            'message' => 'Password reset. A notification was queued for the user.',
+            'message' => 'Password reset. The temporary password email was queued for the user.',
             'delivery_status' => 'queued',
             'sent_to' => $user->email,
         ]);

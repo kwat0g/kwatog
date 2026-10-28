@@ -8,7 +8,7 @@ use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Auth\Notifications\PasswordResetNotification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
-/** Queued, post-commit HR password-reset notification. */
+/** Legacy HR reset-link notification retained for already queued jobs. */
 class EmployeePasswordResetNotification extends PasswordResetNotification implements ShouldQueue
 {
     public function __construct(string $resetUrl, int $expiryMinutes)

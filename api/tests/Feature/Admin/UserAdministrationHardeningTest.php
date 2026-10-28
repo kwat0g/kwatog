@@ -11,7 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\WelcomeNotification;
 use App\Modules\HR\Models\Employee;
-use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
+use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -143,13 +143,14 @@ class UserAdministrationHardeningTest extends TestCase
             'model_id' => $target->id,
             'action' => 'password_reset',
         ]);
-        NotificationFacade::assertSentTo($target, EmployeePasswordResetNotification::class, function ($notification) use ($target): bool {
+        $temporaryPassword = (string) $response->json('temp_password');
+        NotificationFacade::assertSentTo($target, AdminPasswordResetNotification::class, function (AdminPasswordResetNotification $notification) use ($target, $temporaryPassword): bool {
             $html = (string) $notification->toMail($target)->render();
 
-            return str_contains($html, 'reset-password?token=')
-                && ! str_contains($html, 'Temporary Password');
+            return str_contains($html, $temporaryPassword)
+                && str_contains($html, 'change this password')
+                && ! str_contains($html, 'reset-password?token=');
         });
-        $this->assertDatabaseHas('password_reset_requests', ['user_id' => $target->id]);
     }
 
     public function test_bulk_role_change_reports_decodable_but_missing_users(): void

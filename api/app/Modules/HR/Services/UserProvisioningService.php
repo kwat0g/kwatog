@@ -7,6 +7,7 @@ namespace App\Modules\HR\Services;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\TemporaryPasswordGenerator;
+use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -15,10 +16,10 @@ use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
 use App\Modules\HR\Exceptions\ProvisioningConfigurationException;
 use App\Modules\HR\Models\Employee;
-use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
 use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 /**
  * U1 — provisions, deactivates, and resets system accounts linked to an
@@ -33,6 +34,7 @@ class UserProvisioningService
         private readonly SettingsService $settings,
         private readonly TemporaryPasswordGenerator $temporaryPasswords,
     ) {}
+
     /**
      * @param  array{send_welcome?: bool}  $options
      *
@@ -134,8 +136,8 @@ class UserProvisioningService
     }
 
     /**
-     * Generate a new temp password, force change on login, send notification.
-     * Returns the temp password to the caller (not echoed in API responses).
+     * Generate a temporary password, require a change at sign-in, and email it.
+     * Return the password to the authorized admin caller.
      */
     public function resetPasswordForEmployee(Employee $employee): string
     {
@@ -169,12 +171,18 @@ class UserProvisioningService
             // the new temporary password can be used. Delivery is queued only
             // after this transaction commits.
             $this->revokeSessionsAndTokens($user);
-            DB::afterCommit(function () use ($user): void {
-                $reset = app(PasswordResetService::class)->createResetLink($user);
-                app(NotificationService::class)->sendLaravelNotification(
-                    $user,
-                    new EmployeePasswordResetNotification($reset['url'], $reset['expiry_minutes']),
-                );
+            DB::afterCommit(function () use ($user, $temp): void {
+                try {
+                    app(NotificationService::class)->sendLaravelNotification(
+                        $user,
+                        new AdminPasswordResetNotification($temp),
+                    );
+                } catch (\Throwable $exception) {
+                    Log::warning('Temporary password email delivery failed after admin reset.', [
+                        'user_id' => $user->id,
+                        'exception' => $exception::class,
+                    ]);
+                }
             });
 
             return $temp;

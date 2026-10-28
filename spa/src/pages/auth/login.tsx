@@ -264,12 +264,6 @@ export default function LoginPage() {
  </Link>
  </div>
 
- <div className="text-right">
-  <Link to="/recovery" className="text-xs text-muted underline-offset-2 transition-colors hover:text-primary hover:underline">
-   Database recovery
-  </Link>
- </div>
-
  <Button
  ref={submitRef}
  type="submit"

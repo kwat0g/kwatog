@@ -38,8 +38,8 @@ export interface MaintenanceAssigneeSuggestions {
 }
 export interface MaintenanceAssignmentChoice {
   expected_assignee_id: string | null;
+  presence_confirmed?: boolean;
   presence_attestation_reason?: string;
-  handover_note?: string;
 }
 
 export interface MaintenanceAssigneeOption {

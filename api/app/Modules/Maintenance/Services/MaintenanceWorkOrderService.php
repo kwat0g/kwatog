@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Services;
 
+use App\Common\Models\ActivityEvent;
+use App\Common\Services\ActivityFeedService;
 use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
@@ -24,10 +26,10 @@ use App\Modules\Maintenance\Events\MaintenanceWorkOrderCreated;
 use App\Modules\Maintenance\Listeners\NotifyMaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\MaintenanceLog;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
-use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
-use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
 use App\Modules\Maintenance\Models\MaintenanceWindow;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\SparePartUsage;
+use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
 use App\Modules\Maintenance\Support\MaintenanceWorkOrderStateMachine;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Enums\MoldEventType;
@@ -39,6 +41,7 @@ use App\Modules\MRP\Services\MachineService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\ProductionSchedule;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\ProductionDashboardService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -295,6 +298,10 @@ class MaintenanceWorkOrderService
         return DB::transaction(function () use ($wo, $employeeId, $by, $choice) {
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
             $this->assertRepairEditable($locked);
+            if ($locked->status === MaintenanceWorkOrderStatus::InProgress) {
+                throw ValidationException::withMessages(['status' => ['Workers cannot be changed after maintenance starts.']]);
+            }
+
             $employee = $this->eligibleAssignees()->with('user.role')->whereKey($employeeId)->first();
             if (! $employee || ! MaintenanceWorkAccess::canOpenWorkOrderAsAssignee($employee->user)) {
                 throw ValidationException::withMessages([
@@ -310,17 +317,17 @@ class MaintenanceWorkOrderService
             $candidate = $this->suggestions->candidate($locked, $employee,
                 $window?->planned_start_at ?? now(), $window?->planned_end_at ?? now()->addMinute());
             $reason = trim((string) ($choice['presence_attestation_reason'] ?? ''));
-            if (! $candidate['can_assign'] && ! ($candidate['can_attest_presence'] && $reason !== '' && $by->role?->slug === 'maintenance_supervisor')) {
+            $presenceConfirmed = filter_var($choice['presence_confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $canConfirmPresence = $by->is_active && $by->hasPermission('maintenance.wo.assign');
+            $checkboxConfirmation = $candidate['can_attest_presence'] && $presenceConfirmed && $canConfirmPresence;
+            $legacySupervisorAttestation = $candidate['can_attest_presence'] && $reason !== ''
+                && $by->role?->slug === 'maintenance_supervisor';
+            if (! $candidate['can_assign'] && ! $checkboxConfirmation && ! $legacySupervisorAttestation) {
                 throw ValidationException::withMessages(['employee_id' => [$candidate['blocked_reason'].' Refresh suggestions and choose again.']]);
             }
-            if ($locked->status === MaintenanceWorkOrderStatus::InProgress && $locked->assigned_to !== $employeeId
-                && trim((string) ($choice['handover_note'] ?? '')) === '') {
-                throw ValidationException::withMessages(['handover_note' => ['Describe the handover before replacing an in-progress assignee.']]);
-            }
-
             if ($locked->status === MaintenanceWorkOrderStatus::Open) {
                 $this->stateMachine->transition($locked, MaintenanceWorkOrderStatus::Assigned);
-            } elseif (! in_array($locked->status, [MaintenanceWorkOrderStatus::Assigned, MaintenanceWorkOrderStatus::InProgress], true)) {
+            } elseif ($locked->status !== MaintenanceWorkOrderStatus::Assigned) {
                 throw ValidationException::withMessages(['status' => ['A closed work order cannot be assigned.']]);
             }
             $previous = $locked->assigned_to;
@@ -334,7 +341,21 @@ class MaintenanceWorkOrderService
             $previousEmployee = $previous ? Employee::withTrashed()->find($previous) : null;
             $from = $previousEmployee ? $previousEmployee->full_name.' ('.$previousEmployee->employee_no.')' : ($previous ? 'employee #'.$previous : 'unassigned');
             $to = $employee->full_name.' ('.$employee->employee_no.')';
-            $assignmentLog = $this->recordLifecycleLog($locked, 'Assignee changed from '.$from.' to '.$to.'.'.(! empty($choice['presence_attestation_reason']) ? ' Presence attestation: '.$choice['presence_attestation_reason'] : '').(! empty($choice['handover_note']) ? ' Handover: '.$choice['handover_note'] : ''), $by);
+            $change = $previous === $employeeId
+                ? 'Technician assignment confirmed for '.$to.'.'
+                : 'Assignee changed from '.$from.' to '.$to.'.';
+            $presenceNote = $checkboxConfirmation ? ' Physical presence confirmed.' : '';
+            $assignmentLog = $this->recordLifecycleLog($locked, $change.$presenceNote.(! empty($choice['presence_attestation_reason']) ? ' Presence attestation: '.$choice['presence_attestation_reason'] : ''), $by);
+            if ($checkboxConfirmation) {
+                app(ActivityFeedService::class)->record(
+                    'maintenance',
+                    'presence_confirmed',
+                    $locked,
+                    'Physical presence confirmed for maintenance.',
+                    ['employee_id' => $employee->id, 'assignment_log_id' => $assignmentLog->id],
+                    actorUserId: $by->id,
+                );
+            }
 
             if ($previous !== $employeeId) {
                 $payload = NotifyMaintenanceWorkOrder::payload(
@@ -367,20 +388,48 @@ class MaintenanceWorkOrderService
         return DB::transaction(function () use ($wo, $by) {
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
             if ($locked->status === MaintenanceWorkOrderStatus::InProgress) {
+                if ($locked->maintainable_type === MaintainableType::Machine) {
+                    $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
+                    if (! $machine || ! in_array($machine->status, [MachineStatus::Maintenance, MachineStatus::Breakdown], true)
+                        || $machine->current_work_order_id !== null) {
+                        throw ValidationException::withMessages([
+                            'maintainable_id' => ['An in-progress maintenance order requires a machine in maintenance or breakdown with no production owner.'],
+                        ]);
+                    }
+                    $this->assertNoActiveProductionReservation($locked);
+                }
+
                 return $this->show($locked);
             }
 
             $employee = Employee::find($locked->assigned_to);
             $candidate = $employee ? $this->suggestions->candidate($locked, $employee, now(), now()->addMinute()) : null;
-            $assignmentLog = $candidate && $candidate['can_attest_presence']
-                ? $locked->logs()->with('logger.role')->where('description', 'like', 'Assignee changed from %')->latest('id')->first()
+            $assignmentLog = $candidate && ! $candidate['can_assign']
+                ? $locked->logs()->with('logger.role')->where(fn ($query) => $query
+                    ->where('description', 'like', 'Assignee changed from %')
+                    ->orWhere('description', 'like', 'Technician assignment confirmed for %'))
+                    ->latest('id')->first()
                 : null;
-            $attestation = $assignmentLog
+            $presenceConfirmed = $candidate && $candidate['can_attest_presence'] && $assignmentLog && ActivityEvent::query()
+                ->where('type', 'maintenance')->where('action', 'presence_confirmed')
+                ->where('subject_type', $locked->getMorphClass())
+                ->where('subject_id', $locked->id)
+                ->where('detail->employee_id', (int) $locked->assigned_to)
+                ->where('detail->assignment_log_id', $assignmentLog->id)
+                ->where('created_at', '>=', $candidate['presence']['shift_start'])
+                ->where('created_at', '<=', now())
+                ->exists();
+            $legacySupervisorAttestation = $candidate && $candidate['can_attest_presence'] && $assignmentLog
                 && str_contains($assignmentLog->description, ' Presence attestation:')
                 && $assignmentLog->created_at->gte($candidate['presence']['shift_start'])
                 && $assignmentLog->logger?->role?->slug === 'maintenance_supervisor';
+            $attestation = $presenceConfirmed || $legacySupervisorAttestation;
             if (! $candidate || (! $candidate['can_assign'] && ! $attestation)) {
-                throw ValidationException::withMessages(['employee_id' => [($candidate['blocked_reason'] ?? 'Assign a technician before starting.').' Refresh attendance and assignment before starting.']]);
+                $message = $candidate['blocked_reason'] ?? 'Assign a technician before starting.';
+                $nextStep = $candidate && $candidate['can_attest_presence']
+                    ? ' Ask the Maintenance Supervisor to confirm physical presence in Assignment before starting.'
+                    : ' Refresh attendance and assignment before starting.';
+                throw ValidationException::withMessages(['employee_id' => [$message.$nextStep]]);
             }
 
             $this->stateMachine->transition($locked, MaintenanceWorkOrderStatus::InProgress);
@@ -936,15 +985,20 @@ class MaintenanceWorkOrderService
 
     private function assertNoCurrentProductionReservation(MaintenanceWorkOrder $wo): void
     {
-        $window = \App\Modules\Maintenance\Models\MaintenanceWindow::confirmed()->where('work_order_id', $wo->id)->first();
+        $window = MaintenanceWindow::confirmed()->where('work_order_id', $wo->id)->first();
         if ($window) {
             if (now()->lt($window->planned_start_at) || now()->gte($window->planned_end_at)) {
                 throw ValidationException::withMessages(['planned_start_at' => ['Start within the confirmed maintenance window or ask the supervisor to reschedule.']]);
             }
             app(MaintenanceWindowService::class)->assertAvailable($wo, now(), $window->planned_end_at);
         }
+        $this->assertNoActiveProductionReservation($wo);
+    }
+
+    private function assertNoActiveProductionReservation(MaintenanceWorkOrder $wo): void
+    {
         $column = $wo->maintainable_type === MaintainableType::Machine ? 'machine_id' : 'mold_id';
-        if (\App\Modules\Production\Models\WorkOrder::query()
+        if (WorkOrder::query()
             ->where($column, $wo->maintainable_id)->where('status', 'in_progress')->exists()) {
             throw ValidationException::withMessages(['maintainable_id' => ['Active production still owns this equipment. Ask Production to pause the work order and release resources before starting maintenance.']]);
         }

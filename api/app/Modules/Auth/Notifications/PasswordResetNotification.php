@@ -11,6 +11,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/** Legacy admin reset-link notification retained for already queued jobs. */
 class PasswordResetNotification extends Notification
 {
     use Queueable;

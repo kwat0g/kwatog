@@ -162,7 +162,7 @@ class UserAdminController
         $temporaryPassword = $this->service->resetPassword($user, request()->user());
 
         return response()->json([
-            'message' => 'Password reset. Copy the one-time temporary password shown here and share it through an approved channel.',
+            'message' => 'Password reset. The temporary password email was queued for the user.',
             'sent_to' => $user->email,
             'temp_password' => $temporaryPassword,
         ]);
