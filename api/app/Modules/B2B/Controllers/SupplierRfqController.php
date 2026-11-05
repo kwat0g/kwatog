@@ -37,15 +37,20 @@ class SupplierRfqController
     public function index(Request $request): AnonymousResourceCollection
     {
         // No scheduler in some environments: close anything past its deadline
-        // so the supplier sees the true state.
-        $this->rfqs->closeAllDue();
+        // so this supplier sees the true state without affecting other RFQs.
+        $vendorId = $this->user($request)->vendor_id;
+        $this->rfqs->closeDueForSupplier($vendorId);
 
-        return SupplierRfqInvitationResource::collection($this->quotes->list($this->user($request)->vendor_id, $request->query()));
+        return SupplierRfqInvitationResource::collection($this->quotes->list($vendorId, $request->query()));
     }
 
     public function show(Request $request, RequestForQuote $rfq): SupplierRfqInvitationResource
     {
-        return new SupplierRfqInvitationResource($this->quotes->invitation($this->user($request)->vendor_id, $this->rfqs->closeDue($rfq)));
+        $vendorId = $this->user($request)->vendor_id;
+        $this->quotes->assertInvited($vendorId, $rfq);
+        $rfq = $this->rfqs->closeDue($rfq);
+
+        return new SupplierRfqInvitationResource($this->quotes->invitation($vendorId, $rfq));
     }
 
     /** Save the supplier's quotation; submit=true saves and submits in one step. */
