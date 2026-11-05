@@ -66,13 +66,15 @@ class SupplierQuoteService
         return $query->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
+    /** Verify supplier scope without marking the invitation viewed. */
+    public function assertInvited(int $vendorId, RequestForQuote $rfq): void
+    {
+        $this->findInvitation($vendorId, $rfq);
+    }
+
     public function invitation(int $vendorId, RequestForQuote $rfq): RequestForQuoteInvitation
     {
-        $invitation = RequestForQuoteInvitation::query()
-            ->where('request_for_quote_id', $rfq->id)
-            ->where('vendor_id', $vendorId)
-            ->whereHas('rfq', fn ($q) => $q->whereNotNull('issued_at'))
-            ->firstOrFail();
+        $invitation = $this->findInvitation($vendorId, $rfq);
         if ($invitation->viewed_at === null && $invitation->status === RfqInvitationStatus::Invited) {
             $invitation->forceFill(['viewed_at' => now(), 'status' => RfqInvitationStatus::Viewed])->save();
         }
@@ -86,6 +88,15 @@ class SupplierQuoteService
             'rfq.awards' => fn ($q) => $q->where('vendor_id', $vendorId)->with('rfqItem'),
             'rfq.quotes' => fn ($q) => $q->where('vendor_id', $vendorId)->with(['items', 'documents']),
         ]);
+    }
+
+    private function findInvitation(int $vendorId, RequestForQuote $rfq): RequestForQuoteInvitation
+    {
+        return RequestForQuoteInvitation::query()
+            ->where('request_for_quote_id', $rfq->id)
+            ->where('vendor_id', $vendorId)
+            ->whereHas('rfq', fn ($q) => $q->whereNotNull('issued_at'))
+            ->firstOrFail();
     }
 
     /**

@@ -516,6 +516,42 @@ final class RfqBiddingTest extends TestCase
         $this->assertSame('open', RequestForQuote::query()->sole()->status->value);
     }
 
+    public function test_supplier_index_does_not_close_overdue_rfqs_outside_its_invitation_scope(): void
+    {
+        [$pr] = $this->approvedPr('10.00');
+        [$invitedVendor] = $this->supplier();
+        [, $portal] = $this->supplier();
+        $rfq = $this->startRfq($pr, [$invitedVendor], publish: true);
+        $record = RequestForQuote::query()->sole();
+        $record->forceFill(['closes_at' => now()->subMinute()])->save();
+
+        $this->asSupplier($portal);
+        $this->getJson('/api/v1/b2b/supplier/rfqs')->assertOk();
+
+        $this->assertSame(RfqStatus::Open, $record->fresh()->status);
+        $this->assertDatabaseHas('request_for_quote_invitations', [
+            'request_for_quote_id' => $record->id,
+            'vendor_id' => $invitedVendor->id,
+        ]);
+        $this->assertNotSame($invitedVendor->id, $portal->vendor_id);
+    }
+
+    public function test_supplier_detail_authorizes_invitation_before_lazily_closing_rfq(): void
+    {
+        [$pr] = $this->approvedPr('10.00');
+        [$invitedVendor] = $this->supplier();
+        [, $portal] = $this->supplier();
+        $rfq = $this->startRfq($pr, [$invitedVendor], publish: true);
+        $record = RequestForQuote::query()->sole();
+        $record->forceFill(['closes_at' => now()->subMinute()])->save();
+
+        $this->asSupplier($portal);
+        $this->getJson("/api/v1/b2b/supplier/rfqs/{$rfq['id']}")->assertNotFound();
+
+        $this->assertSame(RfqStatus::Open, $record->fresh()->status);
+        $this->assertNotSame($invitedVendor->id, $portal->vendor_id);
+    }
+
     public function test_a_passed_deadline_closes_on_read_and_cannot_be_extended(): void
     {
         [$pr] = $this->approvedPr('10.00');

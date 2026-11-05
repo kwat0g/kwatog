@@ -29,6 +29,7 @@ use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Purchasing\Policies\RequestForQuoteAccessPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -352,11 +353,25 @@ class RequestForQuoteService
      */
     public function closeAllDue(): int
     {
-        $closed = 0;
-        RequestForQuote::query()
+        return $this->closeDueMatches(RequestForQuote::query()
+            ->where('status', RfqStatus::Open->value)
+            ->where('closes_at', '<=', now()));
+    }
+
+    /** Close only overdue RFQs that have been issued to this supplier. */
+    public function closeDueForSupplier(int $vendorId): int
+    {
+        return $this->closeDueMatches(RequestForQuote::query()
+            ->whereNotNull('issued_at')
             ->where('status', RfqStatus::Open->value)
             ->where('closes_at', '<=', now())
-            ->pluck('id')
+            ->whereHas('invitations', fn (Builder $query) => $query->where('vendor_id', $vendorId)));
+    }
+
+    private function closeDueMatches(Builder $query): int
+    {
+        $closed = 0;
+        $query->pluck('id')
             ->each(function (int $id) use (&$closed): void {
                 $this->closeDue(RequestForQuote::query()->findOrFail($id));
                 $closed++;
