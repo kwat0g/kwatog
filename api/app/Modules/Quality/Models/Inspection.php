@@ -77,6 +77,7 @@ class Inspection extends Model
 
     protected $casts = [
         'counted_capture' => 'array',
+        'quantity_result' => 'array',
         'coverage_confirmed_at' => 'datetime',
         'startup_trial_required' => 'boolean',
         'source_quantity' => 'decimal:3', 'result_version' => 'integer',

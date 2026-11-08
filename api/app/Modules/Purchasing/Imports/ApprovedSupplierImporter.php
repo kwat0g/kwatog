@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Imports;
 
+use App\Common\Services\Import\BatchRefreshableImporter;
 use App\Common\Services\Import\EntityImporter;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
+use App\Modules\Purchasing\Services\SupplierCatalogRealtimeService;
 use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
@@ -21,8 +23,10 @@ use RuntimeException;
  * Both sides must already exist — this importer links catalogue rows, it does
  * not create items or vendors. qualification_status defaults to `approved`.
  */
-class ApprovedSupplierImporter implements EntityImporter
+class ApprovedSupplierImporter implements BatchRefreshableImporter, EntityImporter
 {
+    public function __construct(private readonly SupplierCatalogRealtimeService $realtime) {}
+
     public function key(): string
     {
         return 'approved_suppliers';
@@ -110,5 +114,10 @@ class ApprovedSupplierImporter implements EntityImporter
             'last_price' => $lastPrice !== '' ? $lastPrice : null,
             'is_preferred' => $isPreferred,
         ]);
+    }
+
+    public function stageBatchRefresh(string $action): void
+    {
+        $this->realtime->changed($action);
     }
 }

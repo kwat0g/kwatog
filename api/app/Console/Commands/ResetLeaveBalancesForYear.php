@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveType;
+use App\Modules\Leave\Services\LeaveBalanceRealtimeService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -148,6 +149,10 @@ class ResetLeaveBalancesForYear extends Command
                         $created++;
                     }
                 }
+            }
+
+            if ($created > 0) {
+                app(LeaveBalanceRealtimeService::class)->stageForAllEmployees();
             }
         });
 

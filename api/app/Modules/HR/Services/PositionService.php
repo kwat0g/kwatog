@@ -72,10 +72,23 @@ class PositionService
 
     public function delete(Position $position): void
     {
-        if ($position->employees()->exists()) {
-            throw new BusinessRuleException('Cannot delete position: employees assigned.');
-        }
-        $position->delete();
+        DB::transaction(function () use ($position): void {
+            $locked = Position::query()->lockForUpdate()->findOrFail($position->id);
+
+            if ($locked->employees()->exists()) {
+                throw new BusinessRuleException('Cannot delete position: employees assigned.');
+            }
+
+            $locked->delete();
+        });
+    }
+
+    public function restore(Position $position): void
+    {
+        DB::transaction(function () use ($position): void {
+            $locked = Position::withTrashed()->lockForUpdate()->findOrFail($position->id);
+            $locked->restore();
+        });
     }
 
     private function assertUniqueActiveTitle(string $title, int $departmentId, ?Position $ignore = null): void

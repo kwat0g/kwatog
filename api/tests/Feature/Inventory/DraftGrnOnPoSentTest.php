@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Events\ChainStepAdvanced;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
-use App\Common\Services\SystemActorService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Events\GoodsReceiptNoteChanged;
+use App\Modules\Inventory\Listeners\CreateDraftGrnOnPoSent;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
@@ -17,13 +20,15 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
-use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Quality\Models\Inspection;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -43,7 +48,7 @@ class DraftGrnOnPoSentTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
-        $this->seed(\Database\Seeders\WorkflowSeeder::class);
+        $this->seed(WorkflowSeeder::class);
 
         // Automation actor for the listener attribution.
         $admin = User::factory()->create([
@@ -66,14 +71,15 @@ class DraftGrnOnPoSentTest extends TestCase
         $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin batch',
-            'quantity'          => '100.000',
-            'unit'              => 'kg',
-            'unit_price'        => '12.50',
-            'total'             => '1250.00',
+            'item_id' => $item->id,
+            'description' => 'Resin batch',
+            'quantity' => '100.000',
+            'unit' => 'kg',
+            'unit_price' => '12.50',
+            'total' => '1250.00',
             'quantity_received' => '0.000',
         ]);
+
         return $po;
     }
 
@@ -87,12 +93,12 @@ class DraftGrnOnPoSentTest extends TestCase
         $item = Item::factory()->create(['is_active' => true]);
         PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin batch',
-            'quantity'          => '100.000',
-            'unit'              => 'kg',
-            'unit_price'        => '12.50',
-            'total'             => '1250.00',
+            'item_id' => $item->id,
+            'description' => 'Resin batch',
+            'quantity' => '100.000',
+            'unit' => 'kg',
+            'unit_price' => '12.50',
+            'total' => '1250.00',
             'quantity_received' => '0.000',
         ]);
 
@@ -146,7 +152,59 @@ class DraftGrnOnPoSentTest extends TestCase
         event(new PurchaseOrderSent($po->fresh()));
         event(new PurchaseOrderSent($po->fresh()));
 
+        $grn = GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->firstOrFail();
         $this->assertSame(1, GoodsReceiptNote::where('purchase_order_id', $po->id)->count());
+        $this->assertCount(1, DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteChanged::class)
+            ->get()
+            ->filter(static function ($row) use ($grn): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['grnHashId'] ?? null) === (string) $grn->hash_id;
+            }));
+        $this->assertCount(1, DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->filter(static function ($row) use ($po): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $po->hash_id;
+            }));
+    }
+
+    public function test_expected_draft_creation_refreshes_grn_and_related_po_viewers(): void
+    {
+        $po = $this->makeSentPo();
+
+        event(new PurchaseOrderSent($po->fresh()));
+
+        $grn = GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->firstOrFail();
+        $grnSignals = DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteChanged::class)
+            ->get()
+            ->filter(static function ($row) use ($grn): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['grnHashId'] ?? null) === (string) $grn->hash_id;
+            });
+        $poSignals = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->filter(static function ($row) use ($po): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $po->hash_id;
+            });
+
+        $this->assertCount(1, $grnSignals);
+        $this->assertCount(1, $poSignals);
+        $this->assertSame(0, DB::table('chain_step_runs')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->where('entity_type', 'purchase_order')
+            ->where('entity_id', $po->id)
+            ->count());
     }
 
     public function test_draft_grn_shows_bins_where_its_item_has_stock(): void
@@ -187,9 +245,9 @@ class DraftGrnOnPoSentTest extends TestCase
         $po = $this->makeSentPo();
         app(SettingsService::class)->set('system.automation.actor_roles', ['missing-role']);
 
-        $listener = app(\App\Modules\Inventory\Listeners\CreateDraftGrnOnPoSent::class);
+        $listener = app(CreateDraftGrnOnPoSent::class);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('no active automation actor');
         $listener->handle(new PurchaseOrderSent($po->fresh()));
 
@@ -207,9 +265,17 @@ class DraftGrnOnPoSentTest extends TestCase
         $by = User::factory()->create();
         $result = app(GrnService::class)->finalizeDraft($grn, [[
             'purchase_order_item_id' => $grnItem->purchase_order_item_id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '80.000',
+            'location_id' => $location->id,
+            'quantity_received' => '80.000',
         ]], $by);
+
+        $grnRefreshes = DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteChanged::class)
+            ->get()
+            ->map(static fn ($message): array => json_decode((string) $message->payload, true, flags: JSON_THROW_ON_ERROR))
+            ->filter(fn (array $payload): bool => ($payload['grnHashId'] ?? null) === $result->hash_id
+                && ($payload['action'] ?? null) === 'updated');
+        $this->assertCount(1, $grnRefreshes, 'Finalizing a draft must stage one coalesced GRN refresh after the write transaction.');
 
         $this->assertSame(GrnStatus::PendingQc, $result->status);
         $this->assertNotNull($result->received_date);
@@ -242,13 +308,39 @@ class DraftGrnOnPoSentTest extends TestCase
         try {
             app(GrnService::class)->finalizeDraft($grn, $lines, $by, $foreignDispatch->hash_id);
             $this->fail('A foreign PO shipment was accepted.');
-        } catch (\App\Common\Exceptions\BusinessRuleException $exception) {
+        } catch (BusinessRuleException $exception) {
             $this->assertSame('Supplier shipment does not belong to this purchase order.', $exception->getMessage());
         }
         $this->assertSame(GrnStatus::Draft, $grn->fresh()->status);
         $result = app(GrnService::class)->finalizeDraft($grn, $lines, $by, $dispatch->hash_id);
         $this->assertSame($dispatch->id, $result->supplier_shipment_id);
         $this->assertSame('80.00', $po->fresh()->items()->firstOrFail()->quantity_received);
+    }
+
+    public function test_supplier_dispatch_link_updates_existing_expected_grn_and_po_refreshes(): void
+    {
+        $po = $this->makeSentPo();
+        event(new PurchaseOrderSent($po->fresh()));
+        $grn = GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->firstOrFail();
+        $dispatch = SupplierShipment::factory()->create(['purchase_order_id' => $po->id]);
+
+        DB::table('event_outbox')->where('event_type', GoodsReceiptNoteChanged::class)->delete();
+        DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->delete();
+
+        $linked = app(GrnService::class)->createDraftForSupplierShipment($dispatch);
+
+        $this->assertSame($grn->id, $linked?->id);
+        $this->assertSame($dispatch->id, $linked?->supplier_shipment_id);
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', GoodsReceiptNoteChanged::class)->count());
+        $this->assertNotNull(DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->first(static function ($row) use ($po): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $po->hash_id;
+            }), 'Linking a supplier dispatch must refresh the embedded PO receipt projection.');
     }
 
     public function test_finalize_respects_the_over_receipt_cap(): void
@@ -263,11 +355,11 @@ class DraftGrnOnPoSentTest extends TestCase
         try {
             app(GrnService::class)->finalizeDraft($grn, [[
                 'purchase_order_item_id' => $grnItem->purchase_order_item_id,
-                'location_id'            => $location->id,
-                'quantity_received'      => '150.000', // > 100 ordered
+                'location_id' => $location->id,
+                'quantity_received' => '150.000', // > 100 ordered
             ]], $by);
             $this->fail('Over-receipt should be rejected.');
-        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+        } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('only 100', $e->getMessage());
         }
         $this->assertSame(GrnStatus::Draft, $grn->fresh()->status);
@@ -286,11 +378,11 @@ class DraftGrnOnPoSentTest extends TestCase
         try {
             app(GrnService::class)->finalizeDraft($grn, [[
                 'purchase_order_item_id' => $grnItem->purchase_order_item_id,
-                'location_id'            => $location->id,
-                'quantity_received'      => '0.000',
+                'location_id' => $location->id,
+                'quantity_received' => '0.000',
             ]], $by);
             $this->fail('A zero receipt must not enter pending_qc.');
-        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+        } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('positive received quantity', $e->getMessage());
         }
 
@@ -298,6 +390,7 @@ class DraftGrnOnPoSentTest extends TestCase
         $this->assertSame(0, Inspection::where('entity_type', 'grn')
             ->where('entity_id', $grn->id)->count());
     }
+
     public function test_direct_receipt_completes_the_open_draft_instead_of_stranding_it(): void
     {
         $po = $this->makeSentPo();
@@ -308,9 +401,9 @@ class DraftGrnOnPoSentTest extends TestCase
 
         $result = app(GrnService::class)->create($po->fresh(), [[
             'purchase_order_item_id' => $poLine->id,
-            'item_id'                => $poLine->item_id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '100.000',
+            'item_id' => $poLine->item_id,
+            'location_id' => $location->id,
+            'quantity_received' => '100.000',
         ]], ['received_date' => now()->toDateString()], User::factory()->create());
 
         // One GRN for the PO, carrying the draft's number — not a second one
@@ -337,9 +430,9 @@ class DraftGrnOnPoSentTest extends TestCase
         $service = app(GrnService::class);
         $row = fn (string $qty) => [[
             'purchase_order_item_id' => $poLine->id,
-            'item_id'                => $poLine->item_id,
-            'location_id'            => $location->id,
-            'quantity_received'      => $qty,
+            'item_id' => $poLine->item_id,
+            'location_id' => $location->id,
+            'quantity_received' => $qty,
         ]];
 
         $first = $service->create($po->fresh(), $row('60.000'), [], User::factory()->create());

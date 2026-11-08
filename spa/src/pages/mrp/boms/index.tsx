@@ -16,15 +16,20 @@ import { formatDateIso } from '@/lib/formatDate';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 export default function BomsListPage() {
   const navigate = useNavigate();
   const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<BomListParams>({ page: 1, per_page: 25 });
+  useRealtimeList('bom', 'visible');
 
+  const queryKey = ['mrp', 'boms', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['mrp', 'boms', filters],
+    queryKey,
     queryFn: () => bomsApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
 
   const columns: Column<Bom>[] = [

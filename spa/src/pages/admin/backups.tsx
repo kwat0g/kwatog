@@ -29,6 +29,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime, formatRelative } from '@/lib/formatDate';
 import { formatInt } from '@/lib/formatNumber';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 
 const EMPTY_BACKUPS: BackupOperation[] = [];
 
@@ -330,15 +331,13 @@ export default function AdminBackupsPage() {
  const queryClient = useQueryClient();
  const [restoreTarget, setRestoreTarget] = useState<BackupOperation | null>(null);
  const [confirmation, setConfirmation] = useState('');
+ useRealtimeSignal('admin_backups_changed', 'admin.backups', '.admin.backups.changed');
 
  const query = useInfiniteQuery({
  queryKey: ['admin', 'backups'],
  queryFn: ({ pageParam }) => backupsApi.index(pageParam),
  initialPageParam: null as string | null,
  getNextPageParam: (lastPage) => lastPage.next_cursor,
- // The first page carries the live posture (active operation, configuration);
- // later pages are older ledger history only.
- refetchInterval: (current) => current.state.data?.pages[0]?.active_operation ? 5_000 : 30_000,
  });
 
  const create = useMutation({

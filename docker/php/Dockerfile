@@ -1,4 +1,5 @@
-FROM php:8.3-fpm-alpine
+# Keep the PHP patch and Alpine minor explicit; update this with Dockerfile.prod.
+FROM php:8.3.36-fpm-alpine3.24
 
 # System deps
 RUN apk add --no-cache \
@@ -41,6 +42,21 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 # Redis (PECL)
 RUN pecl install redis \
     && docker-php-ext-enable redis
+
+# The upstream FPM pool defaults to five workers, which saturated during
+# multi-role realtime flows. The ten-worker dev ceiling also saturated: Nginx
+# recorded 2.3–5.0 s FastCGI response times and PHP-FPM logged max_children=10.
+# The active host had 9.9 GiB available and dev workers used about 60 MiB RSS;
+# allow sixteen concurrent requests while keeping the dynamic idle pool small.
+# Production uses its separate, independently bounded image configuration.
+RUN sed -i \
+        -e 's/^pm.max_children = 5$/pm.max_children = 16/' \
+        -e 's/^pm.min_spare_servers = 1$/pm.min_spare_servers = 2/' \
+        -e 's/^pm.max_spare_servers = 3$/pm.max_spare_servers = 5/' \
+        /usr/local/etc/php-fpm.d/www.conf \
+    && grep -q '^pm.max_children = 16$' /usr/local/etc/php-fpm.d/www.conf \
+    && grep -q '^pm.min_spare_servers = 2$' /usr/local/etc/php-fpm.d/www.conf \
+    && grep -q '^pm.max_spare_servers = 5$' /usr/local/etc/php-fpm.d/www.conf
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

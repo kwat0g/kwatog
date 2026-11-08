@@ -414,6 +414,26 @@ class AttendanceHardeningTest extends TestCase
         $this->assertSame([7], $assignment->fresh()->working_days);
     }
 
+    public function test_assignment_api_persists_updated_at_for_new_assignments(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $admin = User::factory()->withRole('system_admin')->create();
+        $employee = Employee::factory()->create();
+        $shift = $this->shift('Timestamp API shift');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/attendance/shifts/assign-employee/{$employee->hash_id}", [
+                'shift_id' => $shift->hash_id,
+                'effective_date' => '2026-10-01',
+                'working_days' => [1, 2, 3, 4, 5, 6],
+            ])
+            ->assertOk();
+
+        $assignment = EmployeeShiftAssignment::query()->where('employee_id', $employee->id)->sole();
+
+        $this->assertNotNull($assignment->updated_at);
+    }
+
     private function overtime(Employee $employee, string $date = '2026-04-10'): OvertimeRequest
     {
         return OvertimeRequest::create([

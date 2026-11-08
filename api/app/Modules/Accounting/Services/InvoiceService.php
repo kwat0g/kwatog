@@ -7,34 +7,36 @@ namespace App\Modules\Accounting\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalDelegation;
-use App\Common\Services\NotificationService;
-use App\Common\Support\SearchOperator;
-
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
-use App\Modules\Accounting\Events\InvoiceFinalized;
 use App\Modules\Accounting\Enums\VatClassification;
+use App\Modules\Accounting\Events\InvoiceFinalized;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Services\SalesOrderService;
+use App\Modules\ReturnManagement\Services\ReturnCaseService;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
-use App\Modules\Auth\Models\User;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class InvoiceService
 {
@@ -73,10 +75,16 @@ class InvoiceService
         }
         if (! empty($filters['customer_id'])) {
             $cid = HashIdFilter::decode($filters['customer_id'], Customer::class);
-            if ($cid) $q->where('customer_id', $cid);
+            if ($cid) {
+                $q->where('customer_id', $cid);
+            }
         }
-        if (! empty($filters['from'])) $q->whereDate('date', '>=', $filters['from']);
-        if (! empty($filters['to']))   $q->whereDate('date', '<=', $filters['to']);
+        if (! empty($filters['from'])) {
+            $q->whereDate('date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->whereDate('date', '<=', $filters['to']);
+        }
         if (! empty($filters['overdue'])) {
             $q->overdue();
         }
@@ -84,7 +92,7 @@ class InvoiceService
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('invoice_number', SearchOperator::like(), SearchOperator::contains($term))
-                   ->orWhereHas('customer', fn ($cc) => $cc->where('name', SearchOperator::like(), SearchOperator::contains($term)));
+                    ->orWhereHas('customer', fn ($cc) => $cc->where('name', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 
@@ -111,6 +119,22 @@ class InvoiceService
         ]);
 
         return $invoice;
+    }
+
+    /** Return the action projection for the current viewer without weakening write-time checks. */
+    public function canApprovePrebill(Invoice $invoice, User $by): bool
+    {
+        if ($invoice->status !== InvoiceStatus::Draft
+            || $invoice->lifecycle_type !== 'prebill'
+            || ! $this->canActorApprovePrebill($by, (int) $invoice->created_by)
+            || (int) $invoice->created_by === (int) $by->id
+            || trim((string) $invoice->prebill_reason) === ''
+            || $invoice->prebill_approved_by !== null
+            || $invoice->prebill_approved_at !== null) {
+            return false;
+        }
+
+        return ! $this->hasEditedSinceLastApproval($invoice, $by);
     }
 
     /** Create a draft invoice (no JE yet). */
@@ -144,38 +168,40 @@ class InvoiceService
             $invoice = Invoice::create([
                 // Number reserved at finalize-time so drafts that get cancelled don't burn numbers.
                 'invoice_number' => null,
-                'customer_id'    => $customer->id,
+                'customer_id' => $customer->id,
                 // C-2 — Persist optional SO/Delivery linkage when supplied so
                 // finalize() can promote the parent SO to 'invoiced'.
                 'sales_order_id' => $source['sales_order_id'],
-                'delivery_id'    => $source['delivery_id'],
+                'delivery_id' => $source['delivery_id'],
                 'lifecycle_type' => $lifecycle,
                 'prebill_approved_by' => null,
                 'prebill_approved_at' => null,
                 'prebill_reason' => $lifecycle === 'prebill' ? trim((string) $data['prebill_reason']) : null,
-                'date'           => $data['date'],
-                'due_date'       => $data['due_date']
+                'date' => $data['date'],
+                'due_date' => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($source['payment_terms_days'] ?? $customer->payment_terms_days)->toDateString(),
-                'is_vatable'     => $isVatable,
+                'is_vatable' => $isVatable,
                 'vat_classification' => $classification,
-                'subtotal'       => $subtotal,
-                'vat_amount'     => $vat,
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
                 'senior_pwd_discount' => $discount,
-                'buyer_tin'      => $data['buyer_tin'] ?? null,
-                'atp_number'     => $data['atp_number'] ?? null,
-                'serial_range'   => $data['serial_range'] ?? null,
-                'is_original'    => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : true,
-                'total_amount'   => $total,
-                'amount_paid'    => Money::zero(),
-                'balance'        => $total,
-                'status'         => InvoiceStatus::Draft,
-                'created_by'     => $by->id,
-                'remarks'        => $data['remarks'] ?? null,
+                'buyer_tin' => $data['buyer_tin'] ?? null,
+                'atp_number' => $data['atp_number'] ?? null,
+                'serial_range' => $data['serial_range'] ?? null,
+                'is_original' => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : true,
+                'total_amount' => $total,
+                'amount_paid' => Money::zero(),
+                'balance' => $total,
+                'status' => InvoiceStatus::Draft,
+                'created_by' => $by->id,
+                'remarks' => $data['remarks'] ?? null,
             ]);
 
             foreach ($items as $row) {
                 InvoiceItem::create(array_merge($row, ['invoice_id' => $invoice->id]));
             }
+
+            app(ChainBroadcaster::class)->broadcastFor($invoice->fresh(), InvoiceStatus::Draft->value, $by, action: 'created');
 
             if ($lifecycle === 'prebill') {
                 $audience = ApprovalDelegation::approvalAudience('accounting.invoices.prebill_approve')
@@ -196,7 +222,7 @@ class InvoiceService
 
     public function update(Invoice $invoice, array $data, User $by): Invoice
     {
-        return DB::transaction(function () use ($invoice, $data) {
+        return DB::transaction(function () use ($invoice, $data, $by) {
             // Re-read the aggregate under lock. A route-bound draft can be
             // stale after a concurrent finalize or cancel.
             $lockedInvoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->getKey());
@@ -242,20 +268,20 @@ class InvoiceService
             [$vat, $total] = $this->computeTotals($classification, $subtotal, $discount);
 
             $lockedInvoice->update([
-                'date'         => $data['date']     ?? $lockedInvoice->date,
-                'due_date'     => $data['due_date'] ?? $lockedInvoice->due_date,
-                'is_vatable'   => $isVatable,
-                'vat_classification'  => $classification,
-                'subtotal'     => $subtotal,
-                'vat_amount'   => $vat,
+                'date' => $data['date'] ?? $lockedInvoice->date,
+                'due_date' => $data['due_date'] ?? $lockedInvoice->due_date,
+                'is_vatable' => $isVatable,
+                'vat_classification' => $classification,
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
                 'senior_pwd_discount' => $discount,
-                'buyer_tin'    => $data['buyer_tin']    ?? $lockedInvoice->buyer_tin,
-                'atp_number'   => $data['atp_number']   ?? $lockedInvoice->atp_number,
+                'buyer_tin' => $data['buyer_tin'] ?? $lockedInvoice->buyer_tin,
+                'atp_number' => $data['atp_number'] ?? $lockedInvoice->atp_number,
                 'serial_range' => $data['serial_range'] ?? $lockedInvoice->serial_range,
-                'is_original'  => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : $lockedInvoice->is_original,
+                'is_original' => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : $lockedInvoice->is_original,
                 'total_amount' => $total,
-                'balance'      => $total, // no payments yet on a draft
-                'remarks'      => $data['remarks'] ?? $lockedInvoice->remarks,
+                'balance' => $total, // no payments yet on a draft
+                'remarks' => $data['remarks'] ?? $lockedInvoice->remarks,
                 'prebill_reason' => $prebillReason,
                 'prebill_approved_by' => null,
                 'prebill_approved_at' => null,
@@ -265,6 +291,8 @@ class InvoiceService
             foreach ($items as $row) {
                 InvoiceItem::create(array_merge($row, ['invoice_id' => $lockedInvoice->id]));
             }
+            app(ChainBroadcaster::class)->broadcastFor($lockedInvoice->fresh(), InvoiceStatus::Draft->value, $by, action: 'updated');
+
             return $this->show($lockedInvoice->fresh());
         });
     }
@@ -281,7 +309,7 @@ class InvoiceService
             if ($lockedInvoice->lifecycle_type !== 'prebill') {
                 throw new BusinessRuleException('Only prebill invoices require prebill approval.');
             }
-            if (! ApprovalDelegation::canActForPermission($by, 'accounting.invoices.prebill_approve', [(int) $lockedInvoice->created_by])) {
+            if (! $this->canActorApprovePrebill($by, (int) $lockedInvoice->created_by)) {
                 throw new ForbiddenActionException('You do not have permission to approve prebill invoices.');
             }
             if ((int) $lockedInvoice->created_by === (int) $by->id) {
@@ -301,34 +329,7 @@ class InvoiceService
                 throw new BusinessRuleException('This prebill invoice has already been approved by another user.');
             }
 
-            $updates = DB::table('audit_logs')
-                ->where('model_type', $lockedInvoice->getMorphClass())
-                ->where('model_id', $lockedInvoice->id)
-                ->where('action', 'updated')
-                ->orderBy('id')
-                ->get(['id', 'user_id', 'new_values']);
-            $lastApprovalId = 0;
-            foreach ($updates as $update) {
-                $changes = is_array($update->new_values)
-                    ? $update->new_values
-                    : (json_decode((string) $update->new_values, true) ?: []);
-                if (($changes['prebill_approved_by'] ?? null) !== null) {
-                    $lastApprovalId = (int) $update->id;
-                }
-            }
-            $hasEditedSinceApproval = $updates->contains(
-                fn (object $update): bool => (int) $update->id > $lastApprovalId
-                    && (int) $update->user_id === (int) $by->id,
-            );
-            if (! $by->hasPermission('accounting.invoices.prebill_approve')) {
-                $delegatorIds = ApprovalDelegation::delegatorsForPermission($by, 'accounting.invoices.prebill_approve')
-                    ->pluck('id')->map(static fn ($id): int => (int) $id)->all();
-                $hasEditedSinceApproval = $hasEditedSinceApproval || $updates->contains(
-                    fn (object $update): bool => (int) $update->id > $lastApprovalId
-                        && in_array((int) $update->user_id, $delegatorIds, true),
-                );
-            }
-            if ($hasEditedSinceApproval) {
+            if ($this->hasEditedSinceLastApproval($lockedInvoice, $by)) {
                 throw new ForbiddenActionException(
                     'You cannot approve a prebill invoice you edited after its last approval. A different user must review it (segregation of duties).',
                 );
@@ -338,6 +339,7 @@ class InvoiceService
                 'prebill_approved_by' => $by->id,
                 'prebill_approved_at' => now(),
             ])->save();
+            app(ChainBroadcaster::class)->broadcastFor($lockedInvoice->fresh(), InvoiceStatus::Draft->value, $by);
 
             $requester = User::query()->whereKey($lockedInvoice->created_by)->where('is_active', true)->first();
             if ($requester && $requester->hasPermission('accounting.invoices.view')) {
@@ -352,6 +354,62 @@ class InvoiceService
 
             return $this->show($lockedInvoice->fresh());
         });
+    }
+
+    private function hasEditedSinceLastApproval(Invoice $invoice, User $by): bool
+    {
+        $updates = DB::table('audit_logs')
+            ->where('model_type', $invoice->getMorphClass())
+            ->where('model_id', $invoice->id)
+            ->where('action', 'updated')
+            ->orderBy('id')
+            ->get(['id', 'user_id', 'new_values']);
+        $lastApprovalId = 0;
+        foreach ($updates as $update) {
+            $changes = is_array($update->new_values)
+                ? $update->new_values
+                : (json_decode((string) $update->new_values, true) ?: []);
+            if (($changes['prebill_approved_by'] ?? null) !== null) {
+                $lastApprovalId = (int) $update->id;
+            }
+        }
+
+        $hasEdited = $updates->contains(
+            fn (object $update): bool => (int) $update->id > $lastApprovalId
+                && (int) $update->user_id === (int) $by->id,
+        );
+        if (! $by->hasPermission('accounting.invoices.prebill_approve')) {
+            $delegatorIds = $this->prebillApprovalDelegatorIds($by);
+            $hasEdited = $hasEdited || $updates->contains(
+                fn (object $update): bool => (int) $update->id > $lastApprovalId
+                    && in_array((int) $update->user_id, $delegatorIds, true),
+            );
+        }
+
+        return $hasEdited;
+    }
+
+    private function canActorApprovePrebill(User $by, int $makerId): bool
+    {
+        if ($by->hasPermission('accounting.invoices.prebill_approve')) {
+            return true;
+        }
+
+        return array_diff($this->prebillApprovalDelegatorIds($by), [$makerId]) !== [];
+    }
+
+    /** @return list<int> */
+    private function prebillApprovalDelegatorIds(User $by): array
+    {
+        $request = request();
+        $attribute = 'accounting.invoice.prebill_delegators.'.(int) $by->id;
+        if (! $request->attributes->has($attribute)) {
+            $ids = ApprovalDelegation::delegatorsForPermission($by, 'accounting.invoices.prebill_approve')
+                ->pluck('id')->map(static fn ($id): int => (int) $id)->unique()->values()->all();
+            $request->attributes->set($attribute, $ids);
+        }
+
+        return $request->attributes->get($attribute, []);
     }
 
     /** Lock the number, build + post the JE, flip status to finalized. */
@@ -431,23 +489,23 @@ class InvoiceService
                 $lockedInvoice->sales_order_id,
             );
 
-            $arId        = $this->configuredAccountId($this->accounts->ar());
+            $arId = $this->configuredAccountId($this->accounts->ar());
             $vatOutputId = $this->configuredAccountId($this->accounts->vatOutput());
 
             $lines = [];
             $lines[] = [
                 'account_id' => $arId,
-                'debit'      => (string) $lockedInvoice->total_amount,
-                'credit'     => '0.00',
-                'description'=> "AR — {$lockedInvoice->customer->name}",
+                'debit' => (string) $lockedInvoice->total_amount,
+                'credit' => '0.00',
+                'description' => "AR — {$lockedInvoice->customer->name}",
             ];
             foreach ($lockedInvoice->items as $item) {
                 $this->postingAccounts->assertTypes((int) $item->revenue_account_id, AccountType::Revenue);
                 $lines[] = [
                     'account_id' => $item->revenue_account_id,
-                    'debit'      => '0.00',
-                    'credit'     => (string) $item->total,
-                    'description'=> $item->description,
+                    'debit' => '0.00',
+                    'credit' => (string) $item->total,
+                    'description' => $item->description,
                 ];
             }
             // OGAMI-008 — Senior/PWD discount: contra-revenue debit keeps the JE
@@ -455,42 +513,42 @@ class InvoiceService
             if (Money::gt((string) $lockedInvoice->senior_pwd_discount, '0')) {
                 $lines[] = [
                     'account_id' => $this->discountAccountId(),
-                    'debit'      => (string) $lockedInvoice->senior_pwd_discount,
-                    'credit'     => '0.00',
-                    'description'=> 'Senior/PWD discount',
+                    'debit' => (string) $lockedInvoice->senior_pwd_discount,
+                    'credit' => '0.00',
+                    'description' => 'Senior/PWD discount',
                 ];
             }
             if ($lockedInvoice->is_vatable && Money::gt((string) $lockedInvoice->vat_amount, '0')) {
                 $lines[] = [
                     'account_id' => $vatOutputId,
-                    'debit'      => '0.00',
-                    'credit'     => (string) $lockedInvoice->vat_amount,
-                    'description'=> 'VAT Output',
+                    'debit' => '0.00',
+                    'credit' => (string) $lockedInvoice->vat_amount,
+                    'description' => 'VAT Output',
                 ];
             }
 
             $invoiceNumber = $this->sequences->generate('invoice', $lockedInvoice->date);
 
             $je = $this->journals->create([
-                'date'           => $lockedInvoice->date->toDateString(),
-                'description'    => "Invoice {$invoiceNumber} to {$lockedInvoice->customer->name}",
+                'date' => $lockedInvoice->date->toDateString(),
+                'description' => "Invoice {$invoiceNumber} to {$lockedInvoice->customer->name}",
                 'reference_type' => 'invoice',
-                'reference_id'   => $lockedInvoice->id,
-                'lines'          => $lines,
+                'reference_id' => $lockedInvoice->id,
+                'lines' => $lines,
             ], $by);
             $je = $this->journals->postSystem($je, (int) $by->id);
 
             $lockedInvoice->update([
-                'invoice_number'   => $invoiceNumber,
+                'invoice_number' => $invoiceNumber,
                 'journal_entry_id' => $je->id,
-                'status'           => InvoiceStatus::Finalized,
+                'status' => InvoiceStatus::Finalized,
             ]);
 
             // C-2 — Promote the parent SO to 'invoiced' once we have a posted
             // JE and a locked invoice number. No-op if the invoice isn't
             // linked to an SO or the SO is already at/past invoiced.
             if (($lockedInvoice->lifecycle_type ?? 'standard') === 'standard' && $lockedInvoice->sales_order_id) {
-                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                app(SalesOrderService::class)
                     ->markInvoiced((int) $lockedInvoice->sales_order_id);
             }
 
@@ -547,8 +605,8 @@ class InvoiceService
                 }
             }
             $lockedInvoice->update([
-                'status'       => InvoiceStatus::Cancelled,
-                'balance'      => Money::zero(),
+                'status' => InvoiceStatus::Cancelled,
+                'balance' => Money::zero(),
                 'cancelled_at' => now(),
                 'cancelled_by' => $by->id,
             ]);
@@ -560,9 +618,11 @@ class InvoiceService
                     ->update(['invoice_id' => null]);
             }
             if ($lockedInvoice->sales_order_id) {
-                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                app(SalesOrderService::class)
                     ->synchronizeAfterInvoiceCancellation((int) $lockedInvoice->sales_order_id);
             }
+
+            app(ChainBroadcaster::class)->broadcastFor($lockedInvoice->fresh(), InvoiceStatus::Cancelled->value, $by);
 
             return $lockedInvoice->fresh();
         });
@@ -570,7 +630,7 @@ class InvoiceService
 
     public function recordCollection(Invoice $invoice, array $data, User $by): InvoiceCollection
     {
-        \Illuminate\Support\Facades\Validator::make($data, ['amount' => ['required', 'numeric', 'decimal:0,2', 'max:9999999999999.99']])->validate();
+        Validator::make($data, ['amount' => ['required', 'numeric', 'decimal:0,2', 'max:9999999999999.99']])->validate();
         $amount = Money::round2((string) $data['amount']);
 
         return DB::transaction(function () use ($invoice, $data, $amount, $by) {
@@ -586,12 +646,26 @@ class InvoiceService
             }
 
             $cashAccountId = $this->postingAccounts->idForTypes($data['cash_account_id'], AccountType::Asset);
+            if (($data['payment_method'] ?? null) === 'bank_transfer') {
+                app(InvoicePaymentSubmissionService::class)->bankAccountId((string) $data['cash_account_id']);
+            }
+            $cashAccount = \App\Modules\Accounting\Models\Account::query()->findOrFail($cashAccountId);
+            if (! str_starts_with($cashAccount->code, '10')
+                || \App\Modules\Accounting\Models\Account::query()->where('parent_id', $cashAccountId)->exists()) {
+                throw new BusinessRuleException('Select an active, postable cash or bank account.');
+            }
 
             $idempotencyKey = isset($data['idempotency_key'])
                 ? trim((string) $data['idempotency_key'])
                 : null;
             if ($idempotencyKey === '') {
                 $idempotencyKey = null;
+            }
+            $manualReason = isset($data['payment_submission_id'])
+                ? null
+                : trim((string) ($data['manual_reason'] ?? ''));
+            if ($manualReason === '') {
+                $manualReason = null;
             }
             if ($idempotencyKey !== null) {
                 $existing = InvoiceCollection::query()
@@ -607,7 +681,7 @@ class InvoiceService
                         || $existing->collection_date->toDateString() !== (string) $data['collection_date']
                         || $existing->payment_method?->value !== (string) $data['payment_method']
                         || $existing->reference_number !== ($data['reference_number'] ?? null)
-                        || $existing->manual_reason !== (isset($data['payment_submission_id']) ? null : trim($data['manual_reason']))) {
+                        || $existing->manual_reason !== $manualReason) {
                         throw new BusinessRuleException('The idempotency key was already used with a different collection payload.');
                     }
 
@@ -619,28 +693,28 @@ class InvoiceService
                 throw new BusinessRuleException("Cannot record a collection while invoice status is {$lockedInvoice->status->value}.");
             }
             if (Money::gt($amount, (string) $lockedInvoice->balance)) {
-                throw new BusinessRuleException("Amount {$amount} exceeds outstanding balance " . $lockedInvoice->balance . '.');
+                throw new BusinessRuleException("Amount {$amount} exceeds outstanding balance ".$lockedInvoice->balance.'.');
             }
 
             $coll = InvoiceCollection::create([
-                'invoice_id'       => $lockedInvoice->id,
-                'cash_account_id'  => $cashAccountId,
-                'collection_date'  => $data['collection_date'],
-                'amount'           => $amount,
-                'payment_method'   => $data['payment_method'],
+                'invoice_id' => $lockedInvoice->id,
+                'cash_account_id' => $cashAccountId,
+                'collection_date' => $data['collection_date'],
+                'amount' => $amount,
+                'payment_method' => $data['payment_method'],
                 'reference_number' => $data['reference_number'] ?? null,
-                'idempotency_key'  => $idempotencyKey,
-                'created_by'       => $by->id,
-                'manual_reason'    => isset($data['payment_submission_id']) ? null : trim($data['manual_reason']),
+                'idempotency_key' => $idempotencyKey,
+                'created_by' => $by->id,
+                'manual_reason' => $manualReason,
             ]);
 
             $arId = $this->configuredAccountId($this->accounts->ar());
             $je = $this->journals->create([
-                'date'           => $coll->collection_date->toDateString(),
-                'description'    => "Collection for Invoice {$lockedInvoice->invoice_number}",
+                'date' => $coll->collection_date->toDateString(),
+                'description' => "Collection for Invoice {$lockedInvoice->invoice_number}",
                 'reference_type' => 'collection',
-                'reference_id'   => $coll->id,
-                'lines'          => [
+                'reference_id' => $coll->id,
+                'lines' => [
                     ['account_id' => $cashAccountId, 'debit' => $amount, 'credit' => '0.00', 'description' => 'Cash received'],
                     ['account_id' => $arId,          'debit' => '0.00',  'credit' => $amount, 'description' => 'AR settled'],
                 ],
@@ -649,18 +723,18 @@ class InvoiceService
             $coll->update(['journal_entry_id' => $je->id]);
             $this->receipts->issueForCollection($coll->fresh(['invoice']), $by);
 
-            $newPaid    = Money::add((string) $lockedInvoice->amount_paid, $amount);
+            $newPaid = Money::add((string) $lockedInvoice->amount_paid, $amount);
             $newBalance = Money::sub((string) $lockedInvoice->total_amount, $newPaid);
-            $newStatus  = Money::isZero($newBalance) ? InvoiceStatus::Paid : InvoiceStatus::Partial;
+            $newStatus = Money::isZero($newBalance) ? InvoiceStatus::Paid : InvoiceStatus::Partial;
 
             $lockedInvoice->update([
                 'amount_paid' => $newPaid,
-                'balance'     => $newBalance,
-                'status'      => $newStatus,
+                'balance' => $newBalance,
+                'status' => $newStatus,
             ]);
 
             if ($lockedInvoice->sales_order_id && $newStatus === InvoiceStatus::Paid) {
-                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                app(SalesOrderService::class)
                     ->synchronizeCompletionState((int) $lockedInvoice->sales_order_id);
             }
 
@@ -751,14 +825,14 @@ class InvoiceService
             $cid = $inv->customer_id;
             if (! isset($byCustomer[$cid])) {
                 $byCustomer[$cid] = [
-                    'customer_id'   => $inv->customer?->hash_id,
+                    'customer_id' => $inv->customer?->hash_id,
                     'customer_name' => $inv->customer?->name ?? '(deleted customer)',
-                    'current'       => '0.00',
-                    'd1_30'         => '0.00',
-                    'd31_60'        => '0.00',
-                    'd61_90'        => '0.00',
-                    'd91_plus'      => '0.00',
-                    'total'         => '0.00',
+                    'current' => '0.00',
+                    'd1_30' => '0.00',
+                    'd31_60' => '0.00',
+                    'd61_90' => '0.00',
+                    'd91_plus' => '0.00',
+                    'total' => '0.00',
                 ];
             }
             $byCustomer[$cid][$bucket] = Money::add($byCustomer[$cid][$bucket], $balance);
@@ -813,13 +887,14 @@ class InvoiceService
         if (count($rawItems) === 0) {
             throw new BusinessRuleException('An invoice must have at least one line item.');
         }
-        $rows = []; $subtotal = Money::zero();
+        $rows = [];
+        $subtotal = Money::zero();
         foreach ($rawItems as $raw) {
             $accountId = $this->postingAccounts->idForTypes(
                 $raw['revenue_account_id'] ?? null,
                 AccountType::Revenue,
             );
-            $qty   = Money::round2((string) $raw['quantity']);
+            $qty = Money::round2((string) $raw['quantity']);
             $price = Money::round2((string) $raw['unit_price']);
             $total = Money::round2(bcmul($qty, $price, 4));
             if (Money::lte($qty, '0') || Money::lt($price, '0')) {
@@ -830,22 +905,23 @@ class InvoiceService
                 'source_delivery_item_id' => isset($raw['source_delivery_item_id'])
                     ? (is_int($raw['source_delivery_item_id'])
                         ? $raw['source_delivery_item_id']
-                        : HashIdFilter::decode($raw['source_delivery_item_id'], \App\Modules\SupplyChain\Models\DeliveryItem::class))
+                        : HashIdFilter::decode($raw['source_delivery_item_id'], DeliveryItem::class))
                     : null,
-                'description'        => (string) $raw['description'],
-                'quantity'           => $qty,
-                'unit'               => $raw['unit'] ?? null,
-                'unit_price'         => $price,
-                'total'              => $total,
+                'description' => (string) $raw['description'],
+                'quantity' => $qty,
+                'unit' => $raw['unit'] ?? null,
+                'unit_price' => $price,
+                'total' => $total,
             ];
             $subtotal = Money::add($subtotal, $total);
         }
+
         return [$rows, $subtotal];
     }
 
     private function assertInvoiceMatchesConfirmedDelivery(
         Invoice $invoice,
-        \App\Modules\SupplyChain\Models\Delivery $delivery,
+        Delivery $delivery,
     ): void {
         if ((int) $delivery->sales_order_id !== (int) $invoice->sales_order_id) {
             throw new BusinessRuleException('Invoice delivery does not belong to the selected sales order.');
@@ -949,7 +1025,7 @@ class InvoiceService
                 ->exists())) {
                 throw new BusinessRuleException('This delivery already has an invoice and cannot be invoiced again.');
             }
-            app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
+            app(ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
         }
 
         return [
@@ -983,7 +1059,7 @@ class InvoiceService
             if (! $delivery || (int) $delivery->sales_order_id !== (int) $invoice->sales_order_id) {
                 throw new BusinessRuleException('Invoice delivery no longer belongs to its sales order.');
             }
-            app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
+            app(ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
         }
 
         return ['delivery' => $delivery];
@@ -998,6 +1074,7 @@ class InvoiceService
         if (! $id) {
             throw new BusinessRuleException('Invalid source document selected for invoice.');
         }
+
         return $id;
     }
 
@@ -1021,6 +1098,7 @@ class InvoiceService
             return $existing->vat_classification
                 ?? ($existing->is_vatable ? VatClassification::Vatable : VatClassification::VatExempt);
         }
+
         return VatClassification::Vatable;
     }
 
@@ -1048,6 +1126,7 @@ class InvoiceService
                 'senior_pwd_discount' => ['Senior/PWD discount cannot exceed the subtotal.'],
             ]);
         }
+
         return $discount;
     }
 
@@ -1063,6 +1142,7 @@ class InvoiceService
         $netBase = Money::sub($subtotal, $discount);
         $vat = $classification->chargesVat() ? Money::mul($netBase, $this->taxPolicy->requiredVatRate()) : Money::zero();
         $total = Money::add($netBase, $vat);
+
         return [$vat, $total];
     }
 

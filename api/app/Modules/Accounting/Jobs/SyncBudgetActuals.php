@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetConsumptionService;
 use App\Modules\Accounting\Services\BudgetFiscalYearResolver;
+use App\Modules\Accounting\Services\BudgetRealtimeService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -48,6 +49,7 @@ class SyncBudgetActuals implements ShouldQueue
         $fiscalYears ??= app(BudgetFiscalYearResolver::class);
         $fiscalYear = $fiscalYears->resolve($this->fiscalYearId);
         $run = $this->markRunning($fiscalYear);
+        app(BudgetRealtimeService::class)->stageDomainRefresh('status_changed');
 
         try {
             $lineQuery = BudgetLineItem::query()
@@ -88,6 +90,7 @@ class SyncBudgetActuals implements ShouldQueue
                     'last_error' => null,
                 ])->save();
             }
+            app(BudgetRealtimeService::class)->stageDomainRefresh('status_changed');
 
             Log::info('[SyncBudgetActuals] Budget actuals sync completed.', [
                 'fiscal_year_id' => $fiscalYear->id,
@@ -96,6 +99,7 @@ class SyncBudgetActuals implements ShouldQueue
             ]);
         } catch (Throwable $exception) {
             $this->markFailed($exception);
+            app(BudgetRealtimeService::class)->stageDomainRefresh('status_changed');
             throw $exception;
         }
     }
@@ -103,6 +107,7 @@ class SyncBudgetActuals implements ShouldQueue
     public function failed(Throwable $exception): void
     {
         $this->markFailed($exception);
+        app(BudgetRealtimeService::class)->stageDomainRefresh('status_changed');
         Log::error('[SyncBudgetActuals] job failed permanently.', [
             'fiscal_year_id' => $this->fiscalYearId,
             'request_id' => $this->requestId,

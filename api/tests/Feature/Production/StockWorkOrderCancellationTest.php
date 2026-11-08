@@ -47,7 +47,16 @@ class StockWorkOrderCancellationTest extends TestCase
     {
         $wo = $this->stock();
         $this->assertFalse(auth()->user()->hasPermission('production.work_orders.lifecycle'));
-        $this->cancel($wo)->assertOk();
+        $this->getJson('/api/v1/production/work-orders/'.$wo->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.cancel', true)
+            ->assertJsonPath('data.available_actions.start', false);
+        $this->getJson('/api/v1/production/work-orders')
+            ->assertOk()
+            ->assertJsonPath('data.0.available_actions.cancel', true);
+        $this->cancel($wo)->assertOk()
+            ->assertJsonPath('data.available_actions.cancel', false)
+            ->assertJsonPath('data.status', 'cancelled');
         $this->assertSame('cancelled', $wo->fresh()->status->value);
         $this->assertSame('Replenishment no longer needed.', $wo->fresh()->pause_reason);
         $this->cancel($wo)->assertStatus(409);

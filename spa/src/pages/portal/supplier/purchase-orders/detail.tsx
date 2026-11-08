@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useOutletContext, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 import {
@@ -16,6 +16,7 @@ import type {
   PortalShippingDocument,
   RespondToPurchaseOrderPayload,
   PortalShipment,
+  SupplierPortalUser,
 } from '@/types/b2b';
 import type { PurchaseOrderResponseStatus, PurchaseOrderResponseType } from '@/types/purchasing';
 import { Panel } from '@/components/ui/Panel';
@@ -38,6 +39,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { billStatusVariant, grnStatusVariant, purchaseOrderStatusVariant } from '@/lib/statusVariants';
+import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
 
 const DECIMAL_RE = /^\d+(\.\d{1,2})?$/;
 
@@ -84,6 +86,8 @@ async function downloadShippingDoc(doc: PortalShippingDocument) {
 
 export default function SupplierPurchaseOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const portalUser = useOutletContext<SupplierPortalUser | undefined>();
+  const vendorHashId = portalUser?.vendor?.id;
   const queryClient = useQueryClient();
   const [showShipmentForm, setShowShipmentForm] = useState(false);
   const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
@@ -123,7 +127,7 @@ export default function SupplierPurchaseOrderDetailPage() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['portal', 'supplier', 'po', id],
+    queryKey: ['portal', 'supplier', 'po', vendorHashId, id],
     queryFn: () => supplierPortalApi.getPo(id!),
     enabled: !!id,
   });
@@ -138,7 +142,7 @@ export default function SupplierPurchaseOrderDetailPage() {
   const draftGrnCount = po?.goods_receipt_notes.filter((grn) => grn.status === 'draft').length ?? 0;
 
   const { data: shippingDocs, isError: shippingDocsFailed, refetch: refetchDocs } = useQuery({
-    queryKey: ['portal', 'supplier', 'po', id, 'shipping-documents'],
+    queryKey: ['portal', 'supplier', 'po', vendorHashId, id, 'shipping-documents'],
     queryFn: () => supplierPortalApi.listShippingDocuments(id!),
     enabled: !!id,
   });
@@ -146,7 +150,7 @@ export default function SupplierPurchaseOrderDetailPage() {
   const respondMut = useMutation({
     mutationFn: (payload: RespondToPurchaseOrderPayload) =>
       supplierPortalApi.respondToPurchaseOrder(id!, payload),
-    onSuccess: (_po, payload) => {
+    onSuccess: (result, payload) => {
       toast.success(
         payload.type === 'accept'
           ? 'Purchase order accepted.'
@@ -157,7 +161,12 @@ export default function SupplierPurchaseOrderDetailPage() {
       setAcceptOpen(false);
       setProposeOpen(false);
       setDeclineOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
+      queryClient.setQueryData(['portal', 'supplier', 'po', vendorHashId, id], result.purchase_order);
+      void invalidateRealtimeSignal(
+        queryClient,
+        'supplier_purchase_orders_changed',
+        [['portal', 'supplier', 'po']],
+      );
     },
     onError: (err: Error & { response?: { data?: { message?: string } } }) => {
       toast.error(err?.response?.data?.message ?? 'Failed to send your response.');
@@ -203,8 +212,9 @@ export default function SupplierPurchaseOrderDetailPage() {
       toast.success(editingShipmentId ? 'Shipment updated.' : 'Shipment added.');
       setShowShipmentForm(false);
       setEditingShipmentId(null);
-      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
-      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id, 'shipping-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', vendorHashId, id] });
+      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', vendorHashId, id, 'shipping-documents'] });
+      void invalidateRealtimeSignal(queryClient, 'supplier_purchase_orders_changed');
     },
     onError: (error) => reportMutationError(error, 'Could not save shipment details.'),
   });
@@ -221,7 +231,8 @@ export default function SupplierPurchaseOrderDetailPage() {
       toast.success('Dispatch photo attached.');
       setPhotoShipmentId(null);
       setLegacyPhoto(null);
-      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id, 'shipping-documents'] });
+      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', vendorHashId, id, 'shipping-documents'] });
+      void invalidateRealtimeSignal(queryClient, 'supplier_purchase_orders_changed');
     },
     onError: (error) => reportMutationError(error, 'Could not attach the dispatch photo.'),
   });
@@ -249,7 +260,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setSelectedBillIds([]);
       setInvoiceFile(null);
       setBillRemarks('');
-      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
+      void invalidateRealtimeSignal(queryClient, 'supplier_bills_changed');
     },
     onError: (err: Error & { response?: { data?: { message?: string } } }) => {
       toast.error(err?.response?.data?.message ?? 'Failed to submit invoice.');

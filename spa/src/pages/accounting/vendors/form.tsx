@@ -99,7 +99,8 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
     onSuccess: (v) => {
       qc.invalidateQueries({ queryKey: ['accounting', 'vendors'] });
       toast.success(mode === 'create' ? 'Vendor created.' : 'Vendor updated.');
-      navigate(`/accounting/vendors/${v.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/accounting/vendors/${v.id}`);
     },
     onError: (e) => {
       applyServerValidationErrors(e, setError, 'Failed to save the vendor.');

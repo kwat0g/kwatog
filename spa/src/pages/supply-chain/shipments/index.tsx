@@ -16,15 +16,20 @@ import type { Shipment } from '@/types/supplyChain';
 import { shipmentStatusVariant } from '@/lib/statusVariants';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 export default function ShipmentsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
+ useRealtimeList('shipment', can('supply_chain.view') || can('supply_chain.shipments.view') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<ShipmentListParams>({ page: 1, per_page: 25 });
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['supply-chain', 'shipments', filters],
+  const queryKey = ['supply-chain', 'shipments', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => shipmentsApi.list(filters),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
  const { data: shipmentOptions } = useQuery({
  queryKey: ['supply-chain', 'shipments', 'options'],

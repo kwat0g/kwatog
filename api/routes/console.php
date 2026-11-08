@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Modules\Accounting\Services\AccountingPeriodService;
 use App\Common\Models\EmailDelivery;
+use App\Modules\Accounting\Services\AccountingPeriodService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -384,6 +384,27 @@ Schedule::command('backup:reconcile-stale')
 Schedule::command('scheduler:prune-ledger --days=90')
     ->dailyAt('03:30')
     ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Audit the configured payload and generation cache stores. The command stays
+// within each Laravel cache prefix and reads metadata only, even when a Redis
+// service also hosts queue data in another logical database.
+Schedule::command('cache:audit --quiet-keys')
+    ->dailyAt('04:10')
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
+Schedule::command('cache:prune-unbounded --apply --limit=500')
+    ->dailyAt('04:20')
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
+// Retired UUID generations are unreachable after their marker rotates. Remove
+// their bounded payload snapshots in small batches rather than retaining them
+// until their individual TTL expires.
+Schedule::command('cache:prune-retired-generations --apply --limit=500')
+    ->dailyAt('04:30')
+    ->withoutOverlapping(20)
     ->onOneServer();
 
 // T1.4 — Demand-driven safety stock recompute, nightly at 02:15.

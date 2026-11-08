@@ -14,7 +14,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { useFormSafety } from '@/hooks/useFormSafety';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -36,9 +37,11 @@ import { capabilityApi } from '@/api/quality/capability';
 import type { InspectionSpecRevision, UpsertInspectionSpecData } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatDateIso } from '@/lib/formatDate';
 import { inspectionMethods } from '@/lib/inspectionMethods';
 import { uomsApi } from '@/api/inventory/uoms';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const checkOptions = [
   { name: 'Product identity', method: '', criterion: 'Product matches the ordered part and its approved identification.' },
@@ -222,6 +225,7 @@ export default function InspectionSpecEditorPage() {
 
   const loadedSpec = isSpecDetailMode ? specDetail.data : existing.data;
   const specId = loadedSpec?.id ?? specIdParam ?? '';
+  useRealtimeRecord('inspection_spec', specId || undefined);
   const isArchived = Boolean(loadedSpec && (!loadedSpec.is_active || loadedSpec.deleted_at));
   const readOnly = !can('quality.specs.manage') || isArchived;
   const revisions = useQuery({
@@ -257,17 +261,7 @@ export default function InspectionSpecEditorPage() {
   });
   const cpkThresholds = spcOptions?.capability_thresholds;
 
-  const {
-    register,
-    control,
-    handleSubmit,
-    getValues,
-    watch,
-    reset,
-    setValue,
-    setError,
-    formState: { errors, isSubmitting, isDirty },
-  } = useForm<z.input<typeof schema>, unknown, FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       product_id: productId,
@@ -283,7 +277,17 @@ export default function InspectionSpecEditorPage() {
       ],
     },
   });
-  useUnsavedChangesGuard(isDirty && !readOnly);
+  const {
+    register,
+    control,
+    handleSubmit,
+    getValues,
+    watch,
+    reset,
+    setValue,
+    setError,
+    formState: { errors, isSubmitting },
+  } = form;
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const selectedNames = new Set(watch('items').map(row => row.parameter_name.trim().replace(/\s+/g, ' ').toLocaleLowerCase()));
@@ -380,11 +384,21 @@ export default function InspectionSpecEditorPage() {
     },
     onSuccess: (spec) => {
       reset(getValues());
-      qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
-      qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs', 'for-product', productId] });
-      qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs', 'spc'] });
+      qc.setQueryData(['quality', 'inspection-specs', 'show', spec.id], spec);
+      qc.setQueryData(['quality', 'inspection-specs', 'for-product', productId], spec);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'inspection_spec', entityId: spec.id },
+        [['quality', 'inspection-specs', 'spc']],
+        [
+          ['quality', 'inspection-specs', 'show', spec.id],
+          ['quality', 'inspection-specs', 'for-product', productId],
+        ],
+      );
       toast.success(`Spec v${spec.version} saved.`);
-      navigate(
+      formSafety.draftState.discard();
+            formSafety.allowNavigationAfterSave();
+navigate(
         isSpecDetailMode
           ? `/quality/inspection-specs/spec/${spec.id}`
           : `/quality/inspection-specs/${productId}`,
@@ -402,11 +416,27 @@ export default function InspectionSpecEditorPage() {
     },
   });
 
+  const formSafety = useFormSafety({
+    form,
+    saved: upsert.isSuccess,
+    formKey: `quality.inspection-spec:${specId || productId || 'new'}`,
+    draft: !readOnly && Boolean(productId) && (isSpecDetailMode ? specDetail.isSuccess : existing.isSuccess),
+  });
+
   const restore = useMutation({
     mutationFn: () => inspectionSpecsApi.restore(specId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
-      qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs', 'show', specId] });
+    onSuccess: (spec) => {
+      qc.setQueryData(['quality', 'inspection-specs', 'show', specId], spec);
+      qc.setQueryData(['quality', 'inspection-specs', 'for-product', productId], spec);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'inspection_spec', entityId: specId },
+        [],
+        [
+          ['quality', 'inspection-specs', 'show', specId],
+          ['quality', 'inspection-specs', 'for-product', productId],
+        ],
+      );
       toast.success('Inspection spec restored');
     },
     onError: (error) => reportMutationError(error, 'Failed to restore inspection spec'),
@@ -540,6 +570,7 @@ export default function InspectionSpecEditorPage() {
         }
         className="min-w-0 w-full px-5 py-4"
       >
+        {!readOnly && <FormDraftBanner safety={formSafety} inset={false} />}
         <input type="hidden" {...register('product_id')} value={productId} />
 
         <fieldset className="mb-8 min-w-0">

@@ -16,6 +16,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { LuRefreshCw } from '@/lib/icons';
+import { useDemandForecastRealtime } from '@/hooks/useDemandForecastRealtime';
 
 interface Props {
   /** Max rows to show. Default 8. */
@@ -37,6 +38,8 @@ export function DemandForecastPanel({
   hideWhenEmpty = false,
   year = new Date().getFullYear(),
 }: Props) {
+  useDemandForecastRealtime();
+
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['forecasting', 'demand', year, productId],
     queryFn: () => forecastingApi.list({ product_id: productId, year }),

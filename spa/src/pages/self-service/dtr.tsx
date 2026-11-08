@@ -102,7 +102,6 @@ export default function SelfServiceDtrPage() {
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['self-service', 'dtr', from, to],
  queryFn: () => selfServiceApi.attendance({ per_page: 100, from, to }),
- placeholderData: (prev) => prev,
  });
  const { data: attendanceOptions } = useQuery({
  queryKey: ['self-service', 'dtr', 'options'],

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supplierActivityApi } from '@/api/b2b/supplier-activity';
+import { purchaseOrderQueryKeys } from '@/lib/queryKeys/purchasing';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
@@ -65,7 +66,7 @@ export function SupplierActivityPanel({ purchaseOrderId, orderedLines }: {
   orderedLines: Array<{ id: string; quantity: string; description: string }>;
 }) {
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['purchasing', 'purchase-orders', purchaseOrderId, 'supplier-activity'],
+    queryKey: purchaseOrderQueryKeys.supplierActivity(purchaseOrderId),
     queryFn: () => supplierActivityApi.forPurchaseOrder(purchaseOrderId),
   });
 

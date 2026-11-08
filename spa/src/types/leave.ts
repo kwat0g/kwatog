@@ -44,6 +44,7 @@ export interface EmployeeLeaveBalance {
 }
 
 export type LeaveStatus = 'pending_dept' | 'pending_hr' | 'approved' | 'rejected' | 'cancelled';
+export type LeaveRequestAction = 'approve_dept' | 'approve_hr' | 'reject' | 'cancel';
 
 export interface LeaveRequest {
  id: string;
@@ -59,6 +60,11 @@ export interface LeaveRequest {
  has_document: boolean;
  status: LeaveStatus;
  can_approve: boolean;
+ /** Server-computed actions for the current authenticated viewer. */
+ available_actions?: LeaveRequestAction[];
+ permissions?: { approve: boolean; reject: boolean; cancel: boolean };
+ /** ISO timestamp version for conflict-aware clients. */
+ version?: string;
  status_label?: string;
  dept_approver: { id: string; name: string } | null;
  dept_approved_at: string | null;

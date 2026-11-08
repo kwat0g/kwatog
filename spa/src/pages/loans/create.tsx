@@ -16,6 +16,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPercent, formatPeso } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { AmortizationItem, LoanType } from '@/types/loans';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
@@ -113,9 +114,11 @@ export default function CreateLoanPage() {
  purpose: d.purpose || undefined,
  }),
  onSuccess: (loan) => {
- qc.invalidateQueries({ queryKey: ['loans'] });
+ qc.setQueryData(['loans', 'show', loan.id], loan);
+ void invalidateRealtimeChange(qc, { entityType: 'employee_loan', entityId: loan.id });
  toast.success(`Loan request ${loan.loan_no} submitted.`);
- navigate(`/hr/loans/${loan.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/hr/loans/${loan.id}`);
  },
  onError: (e) => {
    applyServerValidationErrors(e, setError, 'Failed to submit loan request.');

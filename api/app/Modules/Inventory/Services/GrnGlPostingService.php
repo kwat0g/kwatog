@@ -12,9 +12,9 @@ use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Exceptions\GrnStateConflictException;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -59,14 +59,14 @@ class GrnGlPostingService
     private function postLocked(GoodsReceiptNote $grn): ?int
     {
         if ($grn->status !== GrnStatus::Accepted && $grn->status !== GrnStatus::PartialAccepted) {
-            throw new BusinessRuleException('Only accepted GRNs can be posted to the GL.');
+            throw new GrnStateConflictException('This GRN is no longer accepted. Refresh and review its current status.');
         }
 
         // Serialize cumulative posting with acceptance updates. This also
         // makes a retried queue/job invocation observe the same posted total.
         $grn = GoodsReceiptNote::query()->lockForUpdate()->findOrFail($grn->id);
         if ($grn->status !== GrnStatus::Accepted && $grn->status !== GrnStatus::PartialAccepted) {
-            throw new BusinessRuleException('Only accepted GRNs can be posted to the GL.');
+            throw new GrnStateConflictException('This GRN is no longer accepted. Refresh and review its current status.');
         }
 
         $accountingEnabled = $this->settings->get('modules.accounting', false) === true;
@@ -74,11 +74,13 @@ class GrnGlPostingService
             Log::info('GrnGlPostingService: accounting module disabled; skipping GL post', [
                 'grn_id' => $grn->id,
             ]);
+
             return null;
         }
 
         if (! Schema::hasTable('journal_entries') || ! Schema::hasTable('accounts')) {
             Log::warning('GrnGlPostingService: journal_entries / accounts table missing; skipping');
+
             return null;
         }
 
@@ -132,6 +134,7 @@ class GrnGlPostingService
             Log::info('GrnGlPostingService: no accepted value to post', [
                 'grn_id' => $grn->id,
             ]);
+
             return $grn->journal_entry_id ? (int) $grn->journal_entry_id : null;
         }
 
@@ -238,23 +241,23 @@ class GrnGlPostingService
                 throw new BusinessRuleException("Inventory account {$code} missing from chart of accounts.");
             }
             $lines[] = [
-                'account_id'  => $accountIds[$code],
-                'debit'       => $amount,
-                'credit'      => '0.00',
+                'account_id' => $accountIds[$code],
+                'debit' => $amount,
+                'credit' => '0.00',
                 'description' => "GRN {$grn->grn_number} — inventory receipt",
             ];
         }
         $lines[] = [
-            'account_id'  => $accountIds[$grniCode],
-            'debit'       => '0.00',
-            'credit'      => $deltaGrni,
+            'account_id' => $accountIds[$grniCode],
+            'debit' => '0.00',
+            'credit' => $deltaGrni,
             'description' => "GRN {$grn->grn_number} — GRNI clearing",
         ];
         if (! Money::isZero($deltaLanded)) {
             $lines[] = [
-                'account_id'  => $accountIds[$landedCode],
-                'debit'       => '0.00',
-                'credit'      => $deltaLanded,
+                'account_id' => $accountIds[$landedCode],
+                'debit' => '0.00',
+                'credit' => $deltaLanded,
                 'description' => "GRN {$grn->grn_number} — landed cost clearing",
             ];
         }
@@ -270,15 +273,15 @@ class GrnGlPostingService
             }
 
             $je = $this->journals->create([
-                'date'           => $postingDate,
-                'description'    => sprintf(
+                'date' => $postingDate,
+                'description' => sprintf(
                     'GRN %s — %s',
                     $grn->grn_number,
                     $grn->journal_entry_id ? 'incremental inventory acceptance' : 'inventory receipt',
-                ) . $descriptionNote,
+                ).$descriptionNote,
                 'reference_type' => 'goods_receipt_note',
-                'reference_id'   => $grn->id,
-                'lines'          => $lines,
+                'reference_id' => $grn->id,
+                'lines' => $lines,
             ]);
 
             // Promote the system-generated draft through the canonical
@@ -310,10 +313,10 @@ class GrnGlPostingService
         $type = $item->item_type instanceof ItemType ? $item->item_type->value : (string) $item->item_type;
 
         return match ($type) {
-            ItemType::RawMaterial->value  => 'accounting.accounts.inventory_raw_material_code',
+            ItemType::RawMaterial->value => 'accounting.accounts.inventory_raw_material_code',
             ItemType::FinishedGood->value => 'accounting.accounts.inventory_finished_goods_code',
-            ItemType::Packaging->value    => 'accounting.accounts.inventory_packaging_code',
-            ItemType::SparePart->value    => 'accounting.accounts.inventory_spare_parts_code',
+            ItemType::Packaging->value => 'accounting.accounts.inventory_packaging_code',
+            ItemType::SparePart->value => 'accounting.accounts.inventory_spare_parts_code',
             default => throw new BusinessRuleException("No inventory account configured for item type {$type}"),
         };
     }
@@ -351,6 +354,7 @@ class GrnGlPostingService
         }
 
         $str = (string) $receivedDate;
+
         return $str !== '' ? $str : null;
     }
 }

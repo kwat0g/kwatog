@@ -148,9 +148,12 @@ class SupplierPortalController extends Controller
             $purchaseOrder,
             $request->validated(),
         );
+        $purchaseOrder->refresh();
+        $purchaseOrder = $this->service->purchaseOrderDetail($user->vendor_id, $purchaseOrder);
 
         return response()->json([
             'data'    => new PurchaseOrderResponseResource($response),
+            'purchase_order' => new SupplierPurchaseOrderResource($purchaseOrder),
             'message' => 'Supplier response recorded.',
         ], 201);
     }
@@ -162,9 +165,12 @@ class SupplierPortalController extends Controller
     {
         $user = $this->user($request);
         $response = $this->service->acknowledgePo($user->vendor_id, $user->id, $purchaseOrder, $request->validated());
+        $purchaseOrder->refresh();
+        $purchaseOrder = $this->service->purchaseOrderDetail($user->vendor_id, $purchaseOrder);
 
         return response()->json([
-            'data'    => new PurchaseOrderResponseResource($response),
+            'data' => new PurchaseOrderResponseResource($response),
+            'purchase_order' => new SupplierPurchaseOrderResource($purchaseOrder),
             'message' => 'Purchase order acknowledged.',
         ]);
     }

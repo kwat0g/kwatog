@@ -70,7 +70,7 @@ class ItemService
             });
         }
 
-        $q->with('stockLevels.location.zone.warehouse')->orderBy('code');
+        $q->with('stockLevels.location.zone.warehouse')->orderByDesc('created_at')->orderByDesc('id');
         $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
         $status = $filters['stock_status'] ?? null;
         $belowReorder = filter_var($filters['below_reorder'] ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -231,6 +231,14 @@ class ItemService
                 throw new BusinessRuleException('Cannot delete an item with stock, movements, open stock counts, or pending stock adjustments. Deactivate instead.');
             }
             $locked->delete();
+        });
+    }
+
+    public function restore(Item $item): void
+    {
+        DB::transaction(function () use ($item): void {
+            $locked = Item::withTrashed()->lockForUpdate()->findOrFail($item->getKey());
+            $locked->restore();
         });
     }
 

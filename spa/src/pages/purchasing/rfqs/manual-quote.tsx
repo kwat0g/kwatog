@@ -12,9 +12,11 @@ import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatDate, localIsoDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { fromCentavos, toCentavos } from '@/lib/money';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { lineCentavos, quoteTotals, trimQuantity, type QuoteVatTreatment } from '@/lib/quoteTotals';
 import type { SupplierQuoteWrite } from '@/types/purchasing';
 
@@ -32,6 +34,7 @@ const errMsg = (e: unknown, fallback: string) =>
  */
 export default function ManualRfqQuotePage() {
   const { id = '' } = useParams<{ id: string }>();
+  useRealtimeRecord('request_for_quote', id);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -125,7 +128,17 @@ export default function ManualRfqQuotePage() {
       toast.success('Quotation recorded.');
       navigate(`/purchasing/rfqs/${id}`);
     },
-    onError: (e) => toast.error(errMsg(e, 'The quotation could not be saved.')),
+    onError: (e) => {
+      const code = e instanceof AxiosError ? e.response?.data?.code : undefined;
+      if (
+        e instanceof AxiosError
+        && e.response?.status === 409
+        && ['request_for_quote_state_conflict', 'supplier_quote_state_conflict'].includes(code)
+      ) {
+        void invalidateRealtimeChange(qc, { entityType: 'request_for_quote', entityId: id });
+      }
+      toast.error(errMsg(e, 'The quotation could not be saved.'));
+    },
   });
 
   if (query.isLoading) return <SkeletonTable columns={4} rows={6} />;
@@ -134,15 +147,7 @@ export default function ManualRfqQuotePage() {
       <EmptyState icon="alert-circle" title="RFQ unavailable" action={<Button onClick={() => query.refetch()}>Retry</Button>} />
     );
   }
-  if (!rfq.actions.can_capture_quote) {
-    return (
-      <EmptyState
-        icon="lock"
-        title="Quotations can only be entered while the RFQ is open"
-        action={<Button onClick={() => navigate(`/purchasing/rfqs/${id}`)}>Back to RFQ</Button>}
-      />
-    );
-  }
+  const canCaptureQuote = rfq.available_actions.can_capture_quote;
 
   return (
     <div>
@@ -158,6 +163,14 @@ export default function ManualRfqQuotePage() {
       />
 
       <div className="min-w-0 w-full px-5 py-4 space-y-4">
+        {!canCaptureQuote && (
+          <div className="rounded-md border border-default bg-subtle px-4 py-3 text-sm" role="status">
+            This RFQ no longer accepts quotations. Your entered details are preserved for review.
+            <Button className="ml-2" variant="secondary" onClick={() => navigate(`/purchasing/rfqs/${id}`)}>
+              Back to RFQ
+            </Button>
+          </div>
+        )}
         <Panel title="Supplier">
           <Select label="Invited supplier" value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
             <option value="">Choose a supplier</option>
@@ -292,16 +305,16 @@ export default function ManualRfqQuotePage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" disabled={save.isPending} onClick={() => navigate(`/purchasing/rfqs/${id}`)}>
+              <Button variant="secondary" disabled={save.isPending || query.isFetching} onClick={() => navigate(`/purchasing/rfqs/${id}`)}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
-                disabled={save.isPending || problems.length > 0}
-                loading={save.isPending}
+                disabled={save.isPending || problems.length > 0 || !canCaptureQuote || query.isFetching}
+                loading={save.isPending || query.isFetching}
                 onClick={() => save.mutate()}
               >
-                {save.isPending ? 'Saving…' : 'Save quotation'}
+                {save.isPending ? 'Saving…' : query.isFetching ? 'Refreshing…' : 'Save quotation'}
               </Button>
             </div>
           </div>

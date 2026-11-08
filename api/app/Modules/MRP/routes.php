@@ -78,6 +78,7 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::post('/scheduler/confirm',                [SchedulerController::class, 'confirm'])->middleware('permission:production.schedule.confirm');
     Route::patch('/scheduler/{schedule}/reorder',    [SchedulerController::class, 'reorder'])->middleware('permission:mrp.schedule');
     Route::patch('/scheduler/{schedule}/reassign',   [SchedulerController::class, 'reassign'])->middleware('permission:mrp.schedule');
+    Route::patch('/scheduler/{schedule}/move',       [SchedulerController::class, 'move'])->middleware('permission:mrp.schedule');
     Route::get('/scheduler/snapshot',                [SchedulerController::class, 'snapshot'])->middleware('permission:production.schedule.view');
     Route::get('/scheduler/options',                 [SchedulerController::class, 'options'])->middleware('permission:production.schedule.view');
 

@@ -1,6 +1,7 @@
 import type { Recommendation } from '@/types/dss';
 
 export function recommendationFixture(overrides: Partial<Recommendation> = {}): Recommendation {
+  const status = overrides.status ?? 'open';
   return {
     id: 'rec-1',
     detector_id: 'dss.chain_bottlenecks',
@@ -42,6 +43,16 @@ export function recommendationFixture(overrides: Partial<Recommendation> = {}): 
     decided_at: null,
     created_at: '2026-10-23T00:00:00Z',
     updated_at: '2026-10-23T00:00:00Z',
+    version: 1,
     ...overrides,
+    permissions: overrides.permissions ?? { view: true, act: true },
+    available_actions: overrides.available_actions ?? {
+      accept: ['open', 'in_progress'].includes(status),
+      dismiss: ['open', 'in_progress', 'snoozed'].includes(status),
+      snooze: ['open', 'in_progress'].includes(status),
+      execute: status === 'accepted',
+      start_follow_up: ['open', 'snoozed'].includes(status),
+      record_outcome: ['accepted', 'executed', 'dismissed'].includes(status),
+    },
   };
 }

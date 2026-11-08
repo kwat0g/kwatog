@@ -64,6 +64,51 @@ class ProfileUpdateSodTest extends TestCase
         $this->assertSame((int) $reviewer->id, (int) $approved->reviewed_by);
     }
 
+    public function test_review_queue_projects_current_viewer_actions_and_separation_rules(): void
+    {
+        $service = app(ProfileUpdateRequestService::class);
+        $hr = $this->hrUser();
+        $finance = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]);
+        $requester = User::factory()->create();
+        $employee = Employee::factory()->create();
+
+        $hrPending = $service->submit($employee, $requester, ['mobile_number' => '09170000001']);
+        $hrSelfPending = $service->submit($employee, $hr, ['mobile_number' => '09170000002']);
+        $financePending = $service->submit($employee, $requester, ['bank_name' => 'Review Bank']);
+        $service->approve($financePending, $hr);
+        $financeSelfPending = $service->submit($employee, $finance, ['bank_name' => 'Self Bank']);
+        $service->approve($financeSelfPending, $hr);
+
+        $hrRows = collect($this->actingAs($hr)->getJson('/api/v1/hr/profile-update-requests?status=all')
+            ->assertOk()->json('data'))->keyBy('id');
+        $this->assertTrue($hrRows[$hrPending->hash_id]['available_actions']['can_review_hr']);
+        $this->assertFalse($hrRows[$hrSelfPending->hash_id]['available_actions']['can_review_hr']);
+        $this->assertFalse($hrRows[$financePending->hash_id]['available_actions']['can_approve_finance']);
+
+        $financeRows = collect($this->actingAs($finance)->getJson('/api/v1/hr/profile-update-requests?status=all')
+            ->assertOk()->json('data'))->keyBy('id');
+        $this->assertTrue($financeRows[$financePending->hash_id]['available_actions']['can_approve_finance']);
+        $this->assertFalse($financeRows[$financeSelfPending->hash_id]['available_actions']['can_approve_finance']);
+    }
+
+    public function test_stale_profile_review_returns_conflict_after_request_changes_state(): void
+    {
+        $service = app(ProfileUpdateRequestService::class);
+        $requester = User::factory()->create();
+        $firstReviewer = $this->hrUser();
+        $secondReviewer = $this->hrUser();
+        $request = $service->submit(Employee::factory()->create(), $requester, ['mobile_number' => '09170000003']);
+
+        $service->approve($request, $firstReviewer);
+
+        $this->actingAs($secondReviewer)
+            ->patchJson("/api/v1/hr/profile-update-requests/{$request->hash_id}/review", ['action' => 'approve'])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'profile_update_request_state_conflict');
+    }
+
     public function test_override_permission_does_not_allow_self_approval(): void
     {
         $svc = app(ProfileUpdateRequestService::class);
@@ -77,11 +122,11 @@ class ProfileUpdateSodTest extends TestCase
             ['name' => 'Review Own Profile-Change Request (override)', 'module' => 'hr']
         );
         UserPermissionOverride::create([
-            'user_id'       => $requester->id,
+            'user_id' => $requester->id,
             'permission_id' => $perm->id,
-            'type'          => 'grant',
-            'granted_by'    => $requester->id,
-            'reason'        => 'Test override grant',
+            'type' => 'grant',
+            'granted_by' => $requester->id,
+            'reason' => 'Test override grant',
         ]);
         $requester->flushPermissionsCache();
 
@@ -120,11 +165,11 @@ class ProfileUpdateSodTest extends TestCase
         foreach (['hr.employees.view_sensitive', 'hr.employees.edit'] as $slug) {
             $permission = Permission::query()->where('slug', $slug)->firstOrFail();
             UserPermissionOverride::create([
-                'user_id'       => $reviewer->id,
+                'user_id' => $reviewer->id,
                 'permission_id' => $permission->id,
-                'type'          => 'grant',
-                'granted_by'    => $reviewer->id,
-                'reason'        => 'SoD integration test',
+                'type' => 'grant',
+                'granted_by' => $reviewer->id,
+                'reason' => 'SoD integration test',
             ]);
         }
         $reviewer->flushPermissionsCache();

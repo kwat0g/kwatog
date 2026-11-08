@@ -65,6 +65,21 @@ export interface PayrollPeriod {
  status_label: string;
  lifecycle_steps?: Array<{ key: string; label: string; state: 'pending' | 'active' | 'done' }>;
  is_locked: boolean;
+ permissions?: Record<string, boolean>;
+ compute_available_on?: string | null;
+ available_actions?: {
+  compute?: boolean;
+  recompute?: boolean;
+  approve?: boolean;
+  request_correction?: boolean;
+  finalize?: boolean;
+  bank_file?: boolean;
+  disburse?: boolean;
+  retry_gl?: boolean;
+  force_unlock?: boolean;
+  void?: boolean;
+  retry_stale_compute?: boolean;
+ };
  label: string;
  /** Scope — false when this run is limited to a slice of the workforce. */
  is_company_wide?: boolean;
@@ -132,11 +147,7 @@ export interface PayrollPeriod {
  updated_at: string;
 }
 
-/**
- * Live compute-run progress. Arrives two ways: pushed over Reverb as
- * `.payroll.progress` on `payroll.period.{id}`, and cached server-side so a
- * page loaded mid-run renders a real bar on first paint.
- */
+/** Current compute-run snapshot returned by the authorized payroll API. */
 export interface PayrollComputeProgress {
  processed: number;
  total: number;
@@ -145,10 +156,11 @@ export interface PayrollComputeProgress {
  updated_at: string;
 }
 
-/** Broadcast payload — same shape plus the period's status at emit time. */
-export interface PayrollProgressEventPayload extends PayrollComputeProgress {
- period_id: string;
- status?: PayrollPeriodStatus | null;
+/** Content-free Reverb signal. Progress values always come from the API. */
+export interface PayrollProgressEventPayload {
+ refresh: true;
+ action: 'progress' | 'completed';
+ event_id: string;
 }
 
 /**
@@ -208,9 +220,36 @@ export interface PayrollDeductionDetail {
  reference_id: number | null;
 }
 
+export interface PayrollAttendanceRecord {
+ date: string;
+ status: string;
+ status_label: string;
+ regular_hours: string;
+ overtime_hours: string;
+ night_diff_hours: string;
+ tardiness_minutes: number;
+ undertime_minutes: number;
+}
+
+export interface PayrollAttendanceSummary {
+ dtr_record_count: number;
+ present_days: number;
+ late_days: number;
+ absent_days: number;
+ half_days: number;
+ leave_days: number;
+ holiday_days: number;
+ rest_days: number;
+ records: PayrollAttendanceRecord[];
+}
+
 export interface Payroll {
  id: string;
  period_id?: string;
+ permissions?: { recompute?: boolean };
+ available_actions?: { recompute?: boolean };
+ compute_available_on?: string | null;
+ attendance_summary?: PayrollAttendanceSummary;
  employee?: PayrollEmployeeRef | null;
  pay_type: string;
  days_worked: string | null;
@@ -219,6 +258,8 @@ export interface Payroll {
  overtime_pay: string;
  night_diff_pay: string;
  holiday_pay: string;
+ tardiness_deduction: string;
+ undertime_deduction: string;
  gross_pay: string;
  sss_ee: string;
  sss_er: string;
@@ -258,6 +299,8 @@ export interface PayrollAdjustment {
  reason: string;
  status: PayrollAdjustmentStatusValue;
  status_label: string;
+ permissions: { view: boolean; approve: boolean; reject: boolean };
+ available_actions: { approve: boolean; reject: boolean };
  approver?: { id: string; name: string } | null;
  applied_at: string | null;
  created_at: string;

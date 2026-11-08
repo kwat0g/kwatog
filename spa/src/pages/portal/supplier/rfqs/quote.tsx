@@ -15,6 +15,7 @@ import { formatDate, formatDateTime, localIsoDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { fromCentavos, toCentavos } from '@/lib/money';
 import { lineCentavos, quoteTotals, trimQuantity } from '@/lib/quoteTotals';
+import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
 import type { SupplierQuoteWrite } from '@/types/purchasing';
 
 type VatTreatment = SupplierQuoteWrite['vat_treatment'];
@@ -140,6 +141,11 @@ export default function SupplierRfqQuotePage() {
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'rfqs'] });
+  const recoverConflict = (error: unknown) => {
+    if ((error as { response?: { status?: number } })?.response?.status === 409) {
+      void invalidateRealtimeSignal(queryClient, 'supplier_rfqs_changed');
+    }
+  };
 
   const saveDraft = useMutation({
     mutationFn: () => supplierRfqsApi.saveQuote(id, { ...payload(), submit: false }),
@@ -147,7 +153,10 @@ export default function SupplierRfqQuotePage() {
       await refresh();
       toast.success('Draft saved. Ogami cannot see it until you submit.');
     },
-    onError: (e) => toast.error(errMsg(e, 'The draft could not be saved.')),
+    onError: (e) => {
+      recoverConflict(e);
+      toast.error(errMsg(e, 'The draft could not be saved.'));
+    },
   });
 
   const submit = useMutation({
@@ -169,7 +178,10 @@ export default function SupplierRfqQuotePage() {
       toast.success('Quotation submitted.');
       navigate(`/portal/supplier/rfqs/${id}`);
     },
-    onError: (e) => toast.error(errMsg(e, 'The quotation could not be submitted.')),
+    onError: (e) => {
+      recoverConflict(e);
+      toast.error(errMsg(e, 'The quotation could not be submitted.'));
+    },
   });
 
   if (rfqQuery.isLoading) return <SkeletonTable columns={4} rows={6} />;
@@ -193,6 +205,7 @@ export default function SupplierRfqQuotePage() {
   }
 
   const pending = saveDraft.isPending || submit.isPending;
+  const refreshing = rfqQuery.isFetching;
   const submitted = quote?.status === 'submitted';
 
   return (
@@ -352,14 +365,14 @@ export default function SupplierRfqQuotePage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Link to={`/portal/supplier/rfqs/${id}`}>
-                <Button variant="secondary" disabled={pending}>
+                <Button variant="secondary" disabled={pending || refreshing}>
                   Cancel
                 </Button>
               </Link>
               {!submitted && (
                 <Button
                   variant="secondary"
-                  disabled={pending}
+                  disabled={pending || refreshing}
                   loading={saveDraft.isPending}
                   onClick={() => saveDraft.mutate()}
                 >
@@ -368,7 +381,7 @@ export default function SupplierRfqQuotePage() {
               )}
               <Button
                 variant="primary"
-                disabled={pending || !quotingSomething || problems.length > 0 || !hasPdf}
+                disabled={pending || refreshing || !quotingSomething || problems.length > 0 || !hasPdf}
                 loading={submit.isPending}
                 onClick={() => submit.mutate()}
               >

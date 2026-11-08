@@ -24,12 +24,19 @@ export interface AuthUser {
  sidebar_collapsed: boolean;
  sidebar_peek?: boolean;
  sidebar_expand_all?: boolean;
- table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[]; columnWidths?: Record<string, number> }>;
+ table_preferences?: Record<string, {
+  density?: 'compact' | 'default' | 'spacious';
+  hiddenColumns?: string[];
+  columnWidths?: Record<string, number>;
+  savedViews?: Array<{ id: string; name: string; filters: Record<string, string> }>;
+ }>;
  role: AuthRole;
  /** Linked HR employee, when this user account is wired to one. */
  employee: AuthEmployee | null;
  permissions: string[];
  delegated_approvals: string[];
+ /** Next known permission/delegation expiry for one-shot /me refresh. */
+ access_scope_refresh_at?: string | null;
  features: string[];
 }
 
@@ -54,7 +61,12 @@ export interface PreferencesPayload {
  sidebar_collapsed?: boolean;
  sidebar_peek?: boolean;
  sidebar_expand_all?: boolean;
- table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[]; columnWidths?: Record<string, number> } | null>;
+ table_preferences?: Record<string, {
+  density?: 'compact' | 'default' | 'spacious';
+  hiddenColumns?: string[];
+  columnWidths?: Record<string, number>;
+  savedViews?: Array<{ id: string; name: string; filters: Record<string, string> }>;
+ } | null>;
 }
 
 export const authApi = {

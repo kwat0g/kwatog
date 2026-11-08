@@ -26,7 +26,6 @@ export default function CareersPage() {
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['public-postings', page],
  queryFn: () => publicRecruitmentApi.listPostings({ page }).then((r) => r.data),
- placeholderData: (prev) => prev,
  });
  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
  const { data: landingContent } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });

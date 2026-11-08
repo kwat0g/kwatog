@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\NotificationService;
@@ -111,6 +112,11 @@ class AutoPurchaseOrderServiceTest extends TestCase
             'id'     => $po->id,
             'status' => PurchaseOrderStatus::PendingApproval->value,
         ]);
+        self::assertSame(1, DB::table('chain_step_runs')
+            ->where('entity_type', 'purchase_order')
+            ->where('entity_id', $po->id)
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count());
         self::assertDatabaseMissing('purchase_orders', ['status' => 'pending_vp']);
 
         // Money-only PO chain: Finance (step 1) pending, VP (step 2, ₱50k
@@ -122,5 +128,10 @@ class AutoPurchaseOrderServiceTest extends TestCase
 
         self::assertNull($service->createForCriticalShortage($item->fresh()));
         self::assertSame(1, PurchaseOrder::query()->where('is_auto_generated', true)->count());
+        self::assertSame(1, DB::table('chain_step_runs')
+            ->where('entity_type', 'purchase_order')
+            ->where('entity_id', $po->id)
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count());
     }
 }

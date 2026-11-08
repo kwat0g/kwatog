@@ -13,8 +13,18 @@ class StockMovementResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $canPostJournal = $request->user()?->hasPermission('accounting.journal.post') ?? false;
+        $canRetryGl = $canPostJournal
+            && $this->journal_entry_id === null
+            && $this->gl_handoff_status === MovementGlHandoffStatus::ManualRequired;
+
         return $this->resource->workOrderReference() + [
             'id' => $this->hash_id,
+            'version' => max(1, (int) $this->version),
+            'permissions' => [
+                'retry_gl' => $canPostJournal,
+            ],
+            'available_actions' => $canRetryGl ? ['retry_gl'] : [],
             'created_at' => optional($this->created_at)->toIso8601String(),
             'movement_type' => (string) $this->movement_type?->value,
             'movement_type_label' => Str::headline((string) $this->movement_type?->value),

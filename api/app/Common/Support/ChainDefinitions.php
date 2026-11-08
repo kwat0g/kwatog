@@ -37,6 +37,10 @@ final class ChainDefinitions
     /** @var array<string,string> SO status → active step key. */
     private const STATUS_MAP_SALES_ORDER = [
         'draft'              => 'draft',
+        // These are pre-confirmation lifecycle labels, but the existing O2C
+        // chain intentionally represents them in its Draft step.
+        'awaiting_confirmation' => 'draft',
+        'delivery_negotiation'  => 'draft',
         'confirmed'          => 'confirmed',
         'in_production'      => 'in_production',
         'partial_production' => 'in_production',
@@ -137,6 +141,10 @@ final class ChainDefinitions
         'scheduled'  => 'scheduled',
         'loading'    => 'loading',
         'in_transit' => 'in_transit',
+        // Failed-delivery and depot-return branches never satisfy customer
+        // delivery/confirmation; retain the last outbound checkpoint.
+        'return_pending' => 'in_transit',
+        'returned'   => 'in_transit',
         'delivered'  => 'delivered',
         'confirmed'  => 'confirmed',
         'cancelled'  => 'confirmed',

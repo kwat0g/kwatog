@@ -9,9 +9,12 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Models\DashboardWidget;
+use App\Modules\Dashboard\Services\BadgeService;
 use App\Modules\Dashboard\Services\DashboardLayoutService;
+use App\Modules\Dashboard\Services\DashboardCacheGeneration;
 use App\Modules\Dashboard\Services\DashboardWidgetDataService;
 use App\Modules\Dashboard\Services\WidgetAnalyticsService;
+use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use Database\Seeders\DashboardRoleLayoutSeeder;
@@ -221,8 +224,13 @@ class DashboardWidgetDataTest extends TestCase
     {
         $firstUser = User::factory()->create();
         $secondUser = User::factory()->create();
-        $summaryKey = "dashboard:widget:summary:{$firstUser->id}:production.active_wo";
-        $richKey = "dashboard:widget:rich:{$firstUser->id}:breakdown:production.wo_breakdown";
+        $cacheScopes = app(PanelGate::class);
+        $firstScope = $cacheScopes->cacheScope($firstUser);
+        $secondScope = $cacheScopes->cacheScope($secondUser);
+        $summaryVersion = DashboardCacheGeneration::current('widget-summary:production.active_wo');
+        $richVersion = DashboardCacheGeneration::current('widget-rich:production.wo_breakdown');
+        $summaryKey = "dashboard:widget:summary:v3:{$summaryVersion}:{$firstUser->id}:{$firstScope}:production.active_wo";
+        $richKey = "dashboard:widget:rich:v3:{$richVersion}:{$firstUser->id}:{$firstScope}:breakdown:production.wo_breakdown";
         Cache::forget($summaryKey);
         Cache::forget($richKey);
 
@@ -248,8 +256,30 @@ class DashboardWidgetDataTest extends TestCase
         $widgetData->summaries(['production.active_wo'], $secondUser);
         $analytics->payload('production.wo_breakdown', RenderKind::Breakdown, $secondUser);
         $this->assertGreaterThan($queriesAfterFirstPayload, $workOrderQueries);
-        $this->assertTrue(Cache::has("dashboard:widget:summary:{$secondUser->id}:production.active_wo"));
-        $this->assertTrue(Cache::has("dashboard:widget:rich:{$secondUser->id}:breakdown:production.wo_breakdown"));
+        $this->assertTrue(Cache::has("dashboard:widget:summary:v3:{$summaryVersion}:{$secondUser->id}:{$secondScope}:production.active_wo"));
+        $this->assertTrue(Cache::has("dashboard:widget:rich:v3:{$richVersion}:{$secondUser->id}:{$secondScope}:breakdown:production.wo_breakdown"));
+    }
+
+    public function test_late_dashboard_widget_fill_cannot_repopulate_the_active_generation(): void
+    {
+        $user = User::factory()->create();
+        $scope = app(PanelGate::class)->cacheScope($user);
+        $oldVersion = DashboardCacheGeneration::current('widget-summary:production.active_wo');
+        $oldKey = "dashboard:widget:summary:v3:{$oldVersion}:{$user->id}:{$scope}:production.active_wo";
+        Cache::put($oldKey, ['value' => 'stale'], 30);
+
+        BadgeService::touch();
+        $newVersion = DashboardCacheGeneration::current('widget-summary:production.active_wo');
+        $this->assertNotSame($oldVersion, $newVersion);
+
+        // A reader that started before the write may finish late, but can only
+        // refill the retired generation.
+        Cache::put($oldKey, ['value' => 'late-stale'], 30);
+        $summary = app(DashboardWidgetDataService::class)
+            ->summaries(['production.active_wo'], $user)['production.active_wo'];
+
+        $this->assertNotSame('late-stale', $summary['value']);
+        $this->assertTrue(Cache::has("dashboard:widget:summary:v3:{$newVersion}:{$user->id}:{$scope}:production.active_wo"));
     }
 
     public function test_cash_position_uses_configured_account_codes_only(): void

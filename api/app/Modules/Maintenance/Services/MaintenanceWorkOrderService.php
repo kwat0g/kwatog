@@ -15,6 +15,7 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Assets\Services\AssetRealtimeService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Maintenance\Enums\MaintainableType;
@@ -23,6 +24,7 @@ use App\Modules\Maintenance\Enums\MaintenanceScheduleInterval;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
 use App\Modules\Maintenance\Events\MaintenanceWorkOrderCreated;
+use App\Modules\Maintenance\Exceptions\MaintenanceWorkOrderStateConflictException;
 use App\Modules\Maintenance\Listeners\NotifyMaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\MaintenanceLog;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
@@ -513,7 +515,7 @@ class MaintenanceWorkOrderService
             // The fixed-asset register follows the existing maintenance
             // work-order lifecycle; no sensor or separate IoT status writer is
             // required for the dashboard to reflect an active MWO.
-            $this->markLinkedAssetUnderMaintenance($locked);
+            $this->markLinkedAssetUnderMaintenance($locked, $by);
 
             $this->recordLifecycleLog($locked, 'Maintenance started.', $by);
 
@@ -528,6 +530,11 @@ class MaintenanceWorkOrderService
     {
         return DB::transaction(function () use ($wo, $data, $by) {
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
+            if ($locked->status !== MaintenanceWorkOrderStatus::InProgress) {
+                throw new MaintenanceWorkOrderStateConflictException(
+                    'This maintenance work order has changed. Refresh and review its current status.',
+                );
+            }
             if ($locked->verification_required) {
                 throw ValidationException::withMessages(['status' => ['Submit repair evidence for independent verification instead of completing this order.']]);
             }
@@ -614,7 +621,7 @@ class MaintenanceWorkOrderService
                 );
             }
         }
-        $this->restoreLinkedAssetAfterMaintenance($locked);
+        $this->restoreLinkedAssetAfterMaintenance($locked, $by);
 
         // Recompute schedule next_due_at
         if ($locked->schedule_id) {
@@ -858,7 +865,7 @@ class MaintenanceWorkOrderService
                     DB::afterCommit(static fn () => ProductionDashboardService::forgetCache());
                 }
             }
-            $this->restoreLinkedAssetAfterMaintenance($locked);
+            $this->restoreLinkedAssetAfterMaintenance($locked, $by);
             // Cancellation does not count as maintenance performed. Leave the
             // schedule due so the next sweep can create a replacement WO.
             $this->recordLifecycleLog($locked, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
@@ -1027,7 +1034,7 @@ class MaintenanceWorkOrderService
         }
     }
 
-    private function markLinkedAssetUnderMaintenance(MaintenanceWorkOrder $wo): void
+    private function markLinkedAssetUnderMaintenance(MaintenanceWorkOrder $wo, User $by): void
     {
         $assetId = match ($wo->maintainable_type) {
             MaintainableType::Machine => Machine::query()->find($wo->maintainable_id)?->asset_id,
@@ -1049,10 +1056,11 @@ class MaintenanceWorkOrderService
         }
         if ($asset->status === AssetStatus::Active) {
             $asset->forceFill(['status' => AssetStatus::UnderMaintenance->value])->save();
+            app(AssetRealtimeService::class)->stage($asset, 'status_changed', $by);
         }
     }
 
-    private function restoreLinkedAssetAfterMaintenance(MaintenanceWorkOrder $wo): void
+    private function restoreLinkedAssetAfterMaintenance(MaintenanceWorkOrder $wo, User $by): void
     {
         $type = $wo->maintainable_type;
         if (! in_array($type, [MaintainableType::Machine, MaintainableType::Mold], true)) {
@@ -1086,6 +1094,7 @@ class MaintenanceWorkOrderService
         $asset = Asset::query()->lockForUpdate()->find($assetId);
         if ($asset?->status === AssetStatus::UnderMaintenance) {
             $asset->forceFill(['status' => AssetStatus::Active->value])->save();
+            app(AssetRealtimeService::class)->stage($asset, 'status_changed', $by);
         }
     }
 

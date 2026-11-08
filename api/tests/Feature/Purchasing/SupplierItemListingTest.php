@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\SupplierListingStatus;
+use App\Modules\Purchasing\Events\SupplierCatalogChanged;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Purchasing\Services\SupplierListingService;
@@ -145,6 +147,82 @@ class SupplierItemListingTest extends TestCase
         ]);
         // Nothing may touch approved_suppliers before approval.
         $this->assertDatabaseCount('approved_suppliers', 0);
+    }
+
+    public function test_supplier_listing_submission_stages_a_content_free_catalog_refresh(): void
+    {
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
+
+        $this->actingAsSupplier($this->supplier);
+        $this->postJson('/api/v1/b2b/supplier/item-listings', [
+            'item_id' => $item->hash_id,
+            'supplier_item_code' => 'PRIVATE-VENDOR-CODE',
+            'supplier_item_name' => 'Private supplier item title',
+            'price' => '2450.00',
+            'order_uom' => 'bag',
+            'base_qty_per_order_unit' => '25',
+            'lead_time_days' => 12,
+            'valid_until' => now()->addMonths(3)->format('Y-m-d'),
+        ])->assertCreated();
+
+        $outbox = DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->first();
+        $this->assertNotNull($outbox);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->count());
+
+        $payload = json_decode((string) $outbox->payload, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(['action', 'version', 'vendorHashId', 'eventId'], array_keys($payload));
+        $this->assertSame('created', $payload['action']);
+        $this->assertSame($this->vendor->hash_id, $payload['vendorHashId']);
+        $event = app(OutboxEventCodec::class)->decode(SupplierCatalogChanged::class, $payload);
+        $this->assertSame([
+            'private-entity.supplier_listing.visible',
+            'private-entity.approved_supplier.visible',
+            "private-supplier.vendor.{$this->vendor->hash_id}",
+        ], array_map(static fn ($channel): string => $channel->name, $event->broadcastOn()));
+        $this->assertArrayNotHasKey('vendorHashId', $event->broadcastWith());
+        $this->assertStringNotContainsString('PRIVATE-VENDOR-CODE', (string) $outbox->payload);
+        $this->assertStringNotContainsString('Private supplier item title', (string) $outbox->payload);
+        $this->assertStringNotContainsString('2450.00', (string) $outbox->payload);
+    }
+
+    public function test_listing_update_approval_and_rejection_each_stage_a_catalog_refresh(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        $otherItem = Item::factory()->create(['is_active' => true]);
+        $service = app(SupplierListingService::class);
+        $listing = $service->submit($this->vendor->id, [
+            'item_id' => $item->id,
+            'supplier_item_code' => 'ITEM-A',
+            'price' => '100.00',
+            'lead_time_days' => 5,
+        ]);
+        $service->update($listing, ['price' => '105.00']);
+        $service->approve($listing, $this->purchasingOfficer);
+
+        $rejected = $service->submit($this->vendor->id, [
+            'item_id' => $otherItem->id,
+            'supplier_item_code' => 'ITEM-B',
+            'price' => '200.00',
+            'lead_time_days' => 7,
+        ]);
+        $service->reject($rejected, $this->purchasingOfficer, 'Does not meet the required specification.');
+
+        $actions = DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->get(['payload'])
+            ->map(fn ($row): string => json_decode((string) $row->payload, true, 512, JSON_THROW_ON_ERROR)['action'])
+            ->countBy()
+            ->all();
+        $this->assertSame([
+            'created' => 2,
+            'updated' => 1,
+            'approved' => 1,
+            'rejected' => 1,
+        ], $actions);
     }
 
     public function test_listing_notice_excludes_reviewer_without_list_view_permission(): void

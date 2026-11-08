@@ -19,7 +19,9 @@ use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\DefectParetoService;
 use App\Modules\Quality\Services\NcrEscalationService;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -75,8 +77,15 @@ final class NcrCapaReauditRegressionTest extends TestCase
         {
             public function __construct() {}
 
-            public function send($recipients, string $type, array $data, ?string $dedupeKey = null): void
-            {
+            public function sendForSubject(
+                Model $subject,
+                User|Collection|array $recipients,
+                string $type,
+                array $data,
+                ?string $dedupeKey = null,
+                array $recipientReasons = [],
+                bool $emailEnabled = true,
+            ): void {
                 throw new \RuntimeException('notification transport is down');
             }
         });

@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Production;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Events\WorkOrderOutputRecorded;
 use App\Modules\Production\Models\DefectType;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
@@ -17,6 +19,7 @@ use App\Modules\Production\Services\WorkOrderOutputService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\HasAssignedProductionCrew;
 use Tests\Support\HasPassedInProcessQc;
 use Tests\TestCase;
@@ -55,7 +58,7 @@ class WorkOrderOutputIdempotencyKeyTest extends TestCase
         ]);
     }
 
-    private function makeWo(): WorkOrder
+    private function makeWo(?WorkOrder $parent = null): WorkOrder
     {
         $product = Product::create([
             'part_number' => 'FG-IDEM-'.substr(uniqid(), -4),
@@ -86,6 +89,7 @@ class WorkOrderOutputIdempotencyKeyTest extends TestCase
             'machine_id' => $machine->id,
             'mold_id' => $mold->id,
             'status' => WorkOrderStatus::InProgress->value,
+            'parent_wo_id' => $parent?->id,
             'quantity_target' => 100,
             'quantity_produced' => 0,
             'quantity_good' => 0,
@@ -119,13 +123,37 @@ class WorkOrderOutputIdempotencyKeyTest extends TestCase
 
     public function test_same_idempotency_key_on_same_wo_replays_cached_output(): void
     {
-        $wo = $this->makeWo();
+        $parent = WorkOrder::factory()->create();
+        $wo = $this->makeWo($parent);
 
         $first = $this->service->record($wo, $this->outputForCrew($wo, $this->payload(), $this->user), $this->user->id, 'shift-A');
         $second = $this->service->record($wo->fresh(), $this->outputForCrew($wo->fresh(), $this->payload(), $this->user), $this->user->id, 'shift-A');
 
         $this->assertSame($first->id, $second->id);
         $this->assertSame(1, $wo->outputs()->count());
+
+        $message = DB::table('event_outbox')
+            ->where('event_type', WorkOrderOutputRecorded::class)
+            ->firstOrFail();
+        $laterWorkOrderVersion = now()->addMinute();
+        DB::table('work_orders')
+            ->where('id', $wo->id)
+            ->update(['updated_at' => $laterWorkOrderVersion]);
+        $event = app(OutboxEventCodec::class)->decode(
+            $message->event_type,
+            json_decode($message->payload, true, 512, JSON_THROW_ON_ERROR),
+        );
+        $payload = $event->broadcastWith();
+        $this->assertSame('work_order', $payload['entity_type']);
+        $this->assertSame($wo->hash_id, $payload['entity_id']);
+        $this->assertSame('updated', $payload['action']);
+        $this->assertSame($laterWorkOrderVersion->utc()->toIso8601String(), $payload['version']);
+        $this->assertSame(app('hashids')->encode($this->user->id), $payload['actor_id']);
+        $this->assertSame([[
+            'entity_type' => 'work_order',
+            'hash_id' => $parent->hash_id,
+        ]], $payload['related']);
+        $this->assertSame($event->eventId, $payload['event_id']);
     }
 
     public function test_same_key_replays_durably_after_cache_flush_and_terminal_wo(): void

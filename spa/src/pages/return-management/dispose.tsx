@@ -12,6 +12,7 @@ import { formatQuantity } from '@/lib/formatNumber';
 import { manilaIsoDate } from '@/lib/formatDate';
 import toast from 'react-hot-toast';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 interface Props {
  rma: ReturnRequest;
@@ -39,6 +40,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  )
  ); const [createReplacementPo, setCreateReplacementPo] = useState(qcSupplierReturn);
  const [requiredDeliveryDate, setRequiredDeliveryDate] = useState('');
+ const [stateConflict, setStateConflict] = useState(false);
  // Customer-return good stock stays in quarantine until its separate MRB
  // release chooses a destination. Supplier returns still need a source.
  const [locationId, setLocationId] = useState('');
@@ -76,15 +78,21 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
    return returnManagementApi.dispose(rma.id, payload, qcSupplierReturn || createReplacementPo, needsLocation ? locationId : undefined, needsDeliveryDate ? requiredDeliveryDate : undefined);
   },
  onSuccess: (result) => {
+ const current = queryClient.getQueryData<ReturnRequest>(['return-request', rma.id]);
+ queryClient.setQueryData<ReturnRequest>(['return-request', rma.id], current ? { ...current, ...result } : result);
+ void invalidateRealtimeChange(queryClient, { entityType: 'return_request', entityId: rma.id });
  if (needsDeliveryDate && result.replacement_purchase_order?.status !== 'sent') {
   toast.error('Return arranged. Replacement PO needs supplier dispatch; check its status.');
  } else {
   toast.success(qcSupplierReturn ? 'Return arranged and replacement PO sent to supplier.' : 'Disposition recorded successfully.');
  }
- queryClient.invalidateQueries({ queryKey: ['return-request', rma.id] });
  onClose();
  },
  onError: (e) => {
+  if (e instanceof AxiosError && e.response?.status === 409) {
+   setStateConflict(true);
+   void invalidateRealtimeChange(queryClient, { entityType: 'return_request', entityId: rma.id });
+  }
  // Supplier returns fail with specific, actionable messages ("Each
  // supplier-return line requires source GRN and PO lines"). The old
  // generic toast hid every one of them.
@@ -110,6 +118,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
 
  return (
  <Modal isOpen={isOpen} onClose={onClose} title={qcSupplierReturn ? 'Finish earlier supplier return' : 'Dispose Return Items'} size="lg"> <div className="space-y-4">
+  {stateConflict && <p role="status" className="rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm text-warning-fg">This RMA changed while you were preparing its disposition. Your selections are preserved; review the refreshed status before closing this dialog.</p>}
   {optionsError && <div role="alert" className="text-sm text-danger-fg">
    Disposition options could not be loaded. <Button variant="secondary" size="sm" onClick={() => refetchOptions()}>Retry dispositions</Button>
   </div>}
@@ -228,7 +237,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
      variant="primary"
      loading={mutation.isPending}
      onClick={() => mutation.mutate()}
-     disabled={items.length === 0 || hasMissingDisposition || optionsLoading || optionsError || dispositionOptions.length === 0 || (needsLocation && (!locationId || warehousesLoading || warehousesError)) || (needsDeliveryDate && (!requiredDeliveryDate || requiredDeliveryDate < manilaIsoDate()))}
+     disabled={stateConflict || items.length === 0 || hasMissingDisposition || optionsLoading || optionsError || dispositionOptions.length === 0 || (needsLocation && (!locationId || warehousesLoading || warehousesError)) || (needsDeliveryDate && (!requiredDeliveryDate || requiredDeliveryDate < manilaIsoDate()))}
     >
      {mutation.isPending ? 'Recording...' : qcSupplierReturn ? 'Finish earlier return' : 'Record Disposition'}
     </Button>

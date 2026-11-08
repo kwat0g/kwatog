@@ -572,6 +572,12 @@ class DepreciationService
             $row['asset']->forceFill(['accumulated_depreciation' => $row['accumulated_after']])->save();
         }
 
+        app(AssetRealtimeService::class)->stageMany(
+            array_map(static fn (array $row): Asset => $row['asset'], $rows),
+            'updated',
+            $by,
+        );
+
         return $je;
     }
 

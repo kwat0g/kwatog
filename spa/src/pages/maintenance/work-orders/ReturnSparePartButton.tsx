@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { reportMutationError } from '@/lib/formErrors';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { createRequestKey } from '@/lib/requestKey';
 import type { SparePartUsage } from '@/types/maintenance';
 
@@ -26,8 +27,7 @@ export function ReturnSparePartButton({ workOrderId, usage, desktop }: {
     mutationFn: () => workOrdersApi.returnPart(workOrderId, usage.id, quantity, operationKey),
     onSuccess: () => {
       toast.success('Unused part returned.');
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', workOrderId] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      void invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: workOrderId });
       setOpen(false);
       setQuantity('');
       setOperationKey(createRequestKey());

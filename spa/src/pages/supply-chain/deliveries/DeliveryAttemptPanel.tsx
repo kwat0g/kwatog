@@ -6,6 +6,7 @@ import { isAxiosError } from 'axios';
 import { Link } from 'react-router-dom';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
+import { invalidateRealtimeChange, reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -87,6 +88,9 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
   const [open, setOpen] = useState(Boolean(pending));
   const [failure, setFailure] = useState('');
   const qc = useQueryClient();
+  const actorDetailKey = driver
+    ? (['driver', 'delivery', deliveryId] as const)
+    : (['supply-chain', 'deliveries', deliveryId] as const);
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -107,14 +111,19 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
       else localStorage.removeItem(storageKey);
     } catch { /* Exact retry remains in memory when browser storage is unavailable. */ }
   }
-  const refresh = () => Promise.all([
-    qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] }),
-    qc.invalidateQueries({ queryKey: ['driver'] }),
-    qc.invalidateQueries({ queryKey: ['portal', 'customer'] }),
-  ]);
+  const refresh = () => invalidateRealtimeChange(qc, { entityType: 'delivery', entityId: deliveryId });
   const mutation = useMutation({
     mutationFn: (payload: ReportDeliveryAttempt) => payload.expected_version && amend ? amend(payload) : report(payload),
-    onSuccess: async () => {
+    onSuccess: (updated) => {
+      const hasUpdatedRecord = typeof updated === 'object' && updated !== null && !Array.isArray(updated);
+      if (hasUpdatedRecord) {
+        reconcileRealtimeMutationResponse(
+          qc,
+          { entityType: 'delivery', entityId: deliveryId },
+          actorDetailKey,
+          updated,
+        );
+      }
       // The server has the report. Drop the retry draft before the refetch:
       // refreshing can remount this panel, and a draft still in storage would
       // re-open it in the retry state and hide the correction control.
@@ -122,7 +131,7 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
       setFailure('');
       setOpen(false);
       toast.success('Delivery outcome recorded.');
-      await refresh();
+      if (!hasUpdatedRecord) void refresh();
     },
     onError: (error) => {
       const definitive = isAxiosError(error) && error.response && error.response.status < 500;

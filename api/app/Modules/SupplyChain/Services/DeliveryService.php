@@ -417,7 +417,10 @@ class DeliveryService
                 $reservationKey = Str::uuid()->toString();
                 $this->stockReservations->reserveForDelivery($delivery, $by, $reservationKey);
 
-                return $this->show($delivery);
+                $delivery = $this->show($delivery);
+                app(ChainBroadcaster::class)->broadcastFor($delivery, DeliveryStatus::Scheduled->value, $by);
+
+                return $delivery;
             });
         } catch (QueryException $e) {
             if ($idempotencyKey === null
@@ -436,6 +439,25 @@ class DeliveryService
 
             return $this->show($existing);
         }
+    }
+
+    public function reserveStock(Delivery $delivery, User $by, string $requestKey): Delivery
+    {
+        return DB::transaction(function () use ($delivery, $by, $requestKey): Delivery {
+            $salesOrderId = Delivery::query()->whereKey($delivery->id)->value('sales_order_id');
+            if ($salesOrderId) {
+                SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+            }
+            $locked = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $alreadyReserved = $locked->stockReservationBatch()->exists();
+
+            $this->stockReservations->reserveForDelivery($locked, $by, $requestKey, true);
+            if (! $alreadyReserved) {
+                $this->broadcastDeliveryRefresh($locked, $by);
+            }
+
+            return $this->show($locked);
+        }, 3);
     }
 
     /** Identify automatic drafts which have no operational or financial commitment. */
@@ -594,7 +616,9 @@ class DeliveryService
                 if (! $draft || $draft->stockReservationBatch()->exists()) {
                     return null;
                 }
-                $this->stockReservations->ensureForDelivery($draft, User::findOrFail($wo->created_by));
+                $by = User::findOrFail($wo->created_by);
+                $this->stockReservations->ensureForDelivery($draft, $by);
+                $this->broadcastDeliveryRefresh($draft, $by);
 
                 return $draft;
             }
@@ -612,6 +636,7 @@ class DeliveryService
                 DeliveryItem::create($row + ['delivery_id' => $draft->id, 'unit_price' => (string) $soItem->unit_price]);
             }
             $this->stockReservations->ensureForDelivery($draft, $by);
+            $this->broadcastDeliveryRefresh($draft, $by);
 
             return $this->show($draft);
         }, 3);
@@ -685,6 +710,10 @@ class DeliveryService
                     }
 
                     return $this->updateStatus($locked, DeliveryStatus::InTransit);
+                }
+
+                if ($locked->status === DeliveryStatus::Loading) {
+                    $this->broadcastDeliveryRefresh($locked, $by);
                 }
 
                 return $this->show($locked);
@@ -798,6 +827,8 @@ class DeliveryService
                 throw new BusinessRuleException('The delivery order changed. Reload before assigning the shipment.');
             }
 
+            $previousDriverId = $locked->driver_id === null ? null : (int) $locked->driver_id;
+
             $this->assertDispatchAssignmentAvailable(
                 (int) $data['vehicle_id'],
                 (int) $data['driver_id'],
@@ -823,6 +854,15 @@ class DeliveryService
             $locked = $this->snapshotShipTo($locked);
 
             $this->stockReservations->ensureForDelivery($locked, $by);
+
+            // Assignment affects both the newly assigned run sheet and the
+            // former driver's list when a scheduled delivery is reassigned.
+            app(ChainBroadcaster::class)->broadcastFor(
+                $locked,
+                $status->value,
+                $by,
+                $previousDriverId === null ? [] : [$previousDriverId],
+            );
 
             return $this->show($locked);
         });
@@ -1251,6 +1291,15 @@ class DeliveryService
         });
     }
 
+    private function broadcastDeliveryRefresh(Delivery $delivery, ?User $by = null): void
+    {
+        $status = $delivery->status instanceof DeliveryStatus
+            ? $delivery->status
+            : DeliveryStatus::from((string) $delivery->status);
+
+        app(ChainBroadcaster::class)->broadcastFor($delivery, $status->value, $by);
+    }
+
     private function normaliseIdempotencyKey(?string $key): ?string
     {
         $key = trim((string) $key);
@@ -1609,8 +1658,13 @@ class DeliveryService
                 if ($type === DeliveryProofType::Photo) {
                     $locked->forceFill(['receipt_photo_path' => $path])->save();
                 }
+                $statusChanged = false;
                 if ($locked->status === DeliveryStatus::InTransit && in_array($type, [DeliveryProofType::Photo, DeliveryProofType::SignedDeliveryReceipt, DeliveryProofType::CustomerPoConfirmation], true)) {
-                    $this->updateStatus($locked, DeliveryStatus::Delivered);
+                    $locked = $this->updateStatus($locked, DeliveryStatus::Delivered);
+                    $statusChanged = true;
+                }
+                if (! $statusChanged) {
+                    $this->broadcastDeliveryRefresh($locked, $by);
                 }
 
                 return $proof->load('uploader')->setRelation('delivery', $locked);
@@ -1619,6 +1673,76 @@ class DeliveryService
             Storage::disk('local')->delete($path);
             throw $e;
         }
+    }
+
+    public function archiveProof(Delivery $delivery, DeliveryProof $proof): void
+    {
+        if ((int) $proof->delivery_id !== (int) $delivery->id) {
+            abort(404, 'Proof does not belong to this delivery.');
+        }
+
+        DB::transaction(function () use ($delivery, $proof): void {
+            $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Delivery not found.');
+            }
+
+            $target = DeliveryProof::query()->lockForUpdate()->find($proof->id);
+            if (! $target) {
+                throw new BusinessRuleException('Delivery proof not found.');
+            }
+
+            $remaining = $locked->proofs()
+                ->where('id', '!=', $target->id)
+                ->whereIn('proof_type', [
+                    DeliveryProofType::Photo->value,
+                    DeliveryProofType::SignedDeliveryReceipt->value,
+                    DeliveryProofType::CustomerPoConfirmation->value,
+                ])
+                ->count();
+            $status = $locked->status instanceof \BackedEnum ? $locked->status->value : $locked->status;
+            if ($target->proof_type === DeliveryProofType::LoadingPhoto->value
+                && ! in_array($status, [DeliveryStatus::Scheduled->value, DeliveryStatus::Loading->value, DeliveryStatus::Cancelled->value], true)) {
+                throw new BusinessRuleException('Loading evidence cannot be archived after dispatch.');
+            }
+            if ($status === DeliveryStatus::Confirmed->value && $target->proof_type === DeliveryProofType::CertificateOfConformance->value) {
+                throw new BusinessRuleException('The Certificate of Conformance cannot be deleted from a confirmed delivery.');
+            }
+            if ($status === DeliveryStatus::Confirmed->value && $remaining === 0) {
+                throw new BusinessRuleException('Cannot delete the only proof of a confirmed delivery.');
+            }
+
+            $target->delete();
+            $this->broadcastDeliveryRefresh($locked);
+        });
+    }
+
+    public function restoreProof(Delivery $delivery, DeliveryProof $proof): void
+    {
+        if ((int) $proof->delivery_id !== (int) $delivery->id) {
+            abort(404, 'Proof does not belong to this delivery.');
+        }
+
+        DB::transaction(function () use ($delivery, $proof): void {
+            $lockedDelivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $lockedProof = DeliveryProof::withTrashed()->lockForUpdate()->findOrFail($proof->id);
+            if (! $lockedProof->trashed()) {
+                throw new BusinessRuleException('Only archived delivery proofs can be restored.');
+            }
+            if (! Storage::disk('local')->exists((string) $lockedProof->file_path)) {
+                throw new BusinessRuleException('The archived delivery proof file is missing and cannot be restored.');
+            }
+            if ($lockedDelivery->status === 'confirmed'
+                && $lockedProof->proof_type === DeliveryProofType::CertificateOfConformance->value) {
+                $lockedProof->restore();
+                $this->broadcastDeliveryRefresh($lockedDelivery);
+
+                return;
+            }
+
+            $lockedProof->restore();
+            $this->broadcastDeliveryRefresh($lockedDelivery);
+        });
     }
 
     private function registerProof(Delivery $delivery, UploadedFile $file, string $path, DeliveryProofType $type, ?User $by, ?string $notes): DeliveryProof
@@ -1883,6 +2007,9 @@ class DeliveryService
                     $locked->forceFill(['invoice_handoff_status' => DeliveryInvoiceHandoffStatus::NotRequired->value,
                         'invoice_handoff_message' => 'Approved no-charge replacement; no customer invoice is due.',
                         'invoice_handoff_at' => now()])->save();
+                    if ($locked->wasChanged(['invoice_handoff_status', 'invoice_handoff_message', 'invoice_handoff_at'])) {
+                        $this->broadcastDeliveryRefresh($locked, $by);
+                    }
 
                     return $this->show($locked);
                 }
@@ -1893,6 +2020,9 @@ class DeliveryService
                         'invoice_handoff_message' => null,
                         'invoice_handoff_at' => $locked->invoice_handoff_at ?? now(),
                     ])->save();
+                    if ($locked->wasChanged(['invoice_handoff_status', 'invoice_handoff_message', 'invoice_handoff_at'])) {
+                        $this->broadcastDeliveryRefresh($locked, $by);
+                    }
 
                     return $this->show($locked);
                 }
@@ -1913,6 +2043,9 @@ class DeliveryService
                         'invoice_handoff_message' => null,
                         'invoice_handoff_at' => now(),
                     ])->save();
+                    if ($locked->wasChanged(['invoice_id', 'invoice_handoff_status', 'invoice_handoff_message', 'invoice_handoff_at'])) {
+                        $this->broadcastDeliveryRefresh($locked, $by);
+                    }
 
                     return $this->show($locked);
                 }
@@ -1930,6 +2063,9 @@ class DeliveryService
                     'invoice_handoff_message' => null,
                     'invoice_handoff_at' => now(),
                 ])->save();
+                if ($locked->wasChanged(['invoice_id', 'invoice_handoff_status', 'invoice_handoff_message', 'invoice_handoff_at'])) {
+                    $this->broadcastDeliveryRefresh($locked, $by);
+                }
 
                 return $this->show($locked);
             });
@@ -1966,6 +2102,9 @@ class DeliveryService
                 'invoice_handoff_message' => self::INVOICE_HANDOFF_MANUAL_MESSAGE,
                 'invoice_handoff_at' => now(),
             ])->save();
+            if ($delivery->wasChanged(['invoice_handoff_status', 'invoice_handoff_message', 'invoice_handoff_at'])) {
+                $this->broadcastDeliveryRefresh($delivery);
+            }
         });
     }
 
@@ -2083,6 +2222,7 @@ class DeliveryService
                     'coc_handoff_message' => null,
                     'coc_handoff_at' => now(),
                 ])->save();
+                $this->broadcastDeliveryRefresh($locked, $by);
 
                 return $this->show($locked);
             });
@@ -2105,6 +2245,7 @@ class DeliveryService
                 'coc_handoff_message' => self::COC_HANDOFF_MANUAL_MESSAGE,
                 'coc_handoff_at' => now(),
             ])->save();
+            $this->broadcastDeliveryRefresh($delivery);
         });
     }
 
@@ -2237,6 +2378,7 @@ class DeliveryService
 
             $this->stockReservations->releaseForDelivery($locked);
             $locked->delete();
+            app(ChainBroadcaster::class)->broadcastFor($locked, $current->value, auth()->user());
         });
     }
 
@@ -2274,6 +2416,7 @@ class DeliveryService
             }
 
             $locked->restore();
+            app(ChainBroadcaster::class)->broadcastFor($locked, $status->value, auth()->user());
         });
     }
 

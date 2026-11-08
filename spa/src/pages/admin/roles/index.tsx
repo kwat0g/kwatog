@@ -21,6 +21,10 @@ import { usePermission } from '@/hooks/usePermission';
 import type { RoleListParams } from '@/api/admin/roles';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { PaginatedResponse } from '@/types';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 /**
  * Series R — Task R1.
  *
@@ -49,36 +53,56 @@ export default function RolesIndexPage() {
  sort: 'name',
  direction: 'asc',
  });
-const [confirmDelete, setConfirmDelete] = useState<Role | null>(null);
- const [confirmRestore, setConfirmRestore] = useState<Role | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
- const { data, isLoading, isError } = useQuery({
-  queryKey: ['admin', 'roles', scope, filters],
+  const queryKey = ['admin', 'roles', scope, filters] as const;
+  const { data, isLoading, isError, isFetching } = useQuery({
+   queryKey,
   queryFn: () => rolesApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
-  placeholderData: (prev) => prev,
+   placeholderData: (previous, previousQuery) =>
+     sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined,
  });
 
+ const deleteActionTarget = useQueryRecordTarget(data?.data, { isFetching, isError });
+ const restoreActionTarget = useQueryRecordTarget(data?.data, { isFetching, isError });
+ const deleteTarget = deleteActionTarget.target;
+ const restoreTarget = restoreActionTarget.target;
+ const canArchiveTarget = Boolean(
+  deleteTarget
+  && deleteActionTarget.isFresh
+  && !deleteTarget.is_system
+  && Number(deleteTarget.users_count ?? 0) === 0,
+ );
+ const canRestoreTarget = Boolean(restoreTarget && restoreActionTarget.isFresh);
+
 const remove = useMutation({
-  mutationFn: (role: Role) => rolesApi.delete(role.id),
-  onSuccess: () => {
+  mutationFn: (roleId: string) => rolesApi.delete(roleId),
+  onSuccess: (_, roleId) => {
   toast.success('Role archived.');
-  setConfirmDelete(null);
-  queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] });
+  deleteActionTarget.close();
+  queryClient.setQueriesData<PaginatedResponse<Role>>({ queryKey: ['admin', 'roles'] }, (current) => current
+   ? { ...current, data: current.data.filter((role) => role.id !== roleId) }
+   : current);
+  void invalidateRealtimeChange(queryClient, { entityType: 'role', entityId: roleId });
   },
-  onError: (err: { response?: { data?: { message?: string } } }) => {
+  onError: (err: { response?: { data?: { message?: string } } }, roleId) => {
+  void invalidateRealtimeChange(queryClient, { entityType: 'role', entityId: roleId });
   toast.error(err?.response?.data?.message ?? 'Could not archive role.');
   },
  });
 
  const restore = useMutation({
-  mutationFn: (role: Role) => rolesApi.restore(role.id),
-  onSuccess: () => {
+  mutationFn: (roleId: string) => rolesApi.restore(roleId),
+  onSuccess: (_, roleId) => {
   toast.success('Role restored.');
-  setConfirmRestore(null);
-  queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] });
+  restoreActionTarget.close();
+  queryClient.setQueriesData<PaginatedResponse<Role>>({ queryKey: ['admin', 'roles'] }, (current) => current
+   ? { ...current, data: current.data.filter((role) => role.id !== roleId) }
+   : current);
+  void invalidateRealtimeChange(queryClient, { entityType: 'role', entityId: roleId });
   },
-  onError: (err: { response?: { data?: { message?: string } } }) => {
+  onError: (err: { response?: { data?: { message?: string } } }, roleId) => {
+  void invalidateRealtimeChange(queryClient, { entityType: 'role', entityId: roleId });
   toast.error(err?.response?.data?.message ?? 'Could not restore role.');
   },
  });
@@ -186,7 +210,7 @@ const remove = useMutation({
   variant="ghost"
   size="sm"
   icon={<LuArchiveRestore size={12} />}
-  onClick={() => setConfirmRestore(row)}
+  onClick={() => restoreActionTarget.open(row)}
   aria-label={`Restore ${row.name}`}
   >
   Restore
@@ -211,7 +235,7 @@ const remove = useMutation({
   size="sm"
   icon={<LuTrash2 size={12} />}
   disabled={row.is_system || (row.users_count ?? 0) > 0}
-  onClick={() => setConfirmDelete(row)}
+  onClick={() => deleteActionTarget.open(row)}
   aria-label={`Delete ${row.name}`}
   >
   Delete
@@ -328,34 +352,56 @@ const remove = useMutation({
  </div>
 
 <ConfirmDialog
-  isOpen={!!confirmDelete}
+  isOpen={deleteActionTarget.targetId !== null}
   title="Archive role?"
   description={
-  confirmDelete
-  ? `“${confirmDelete.name}” will be archived and can be restored later.`
-  : ''
+  canArchiveTarget && deleteTarget
+   ? `“${deleteTarget.name}” will be archived and can be restored later.`
+   : isFetching
+    ? 'Checking the latest role details…'
+    : isError
+     ? 'Could not verify the latest role details. Retry before archiving.'
+     : !deleteTarget
+      ? 'This role is no longer available in the current list.'
+      : deleteTarget.is_system
+       ? 'System roles cannot be archived.'
+       : (deleteTarget.users_count ?? 0) > 0
+        ? 'A role assigned to users cannot be archived.'
+        : 'This role can no longer be archived.'
   }
   confirmLabel={remove.isPending ? 'Archiving…' : 'Archive'}
   variant="danger"
+  disabled={!canArchiveTarget}
   onConfirm={() => {
-  if (confirmDelete) remove.mutate(confirmDelete);
+  const latest = queryClient.getQueryData<PaginatedResponse<Role>>(queryKey)?.data
+   .find((role) => role.id === deleteActionTarget.targetId);
+  if (!deleteActionTarget.targetId || !deleteActionTarget.isFresh || !latest || latest.is_system || Number(latest.users_count ?? 0) > 0) return;
+  remove.mutate(deleteActionTarget.targetId);
   }}
-  onClose={() => setConfirmDelete(null)}
+  onClose={deleteActionTarget.close}
   pending={remove.isPending}
   />
  <ConfirmDialog
-  isOpen={!!confirmRestore}
+  isOpen={restoreActionTarget.targetId !== null}
   title="Restore role?"
   description={
-  confirmRestore
-  ? `“${confirmRestore.name}” will be restored to active roles.`
-  : ''
+  canRestoreTarget && restoreTarget
+   ? `“${restoreTarget.name}” will be restored to active roles.`
+   : isFetching
+    ? 'Checking the latest role details…'
+    : isError
+     ? 'Could not verify the latest role details. Retry before restoring.'
+     : 'This role is no longer available in the current list.'
   }
   confirmLabel={restore.isPending ? 'Restoring…' : 'Restore'}
+  disabled={!canRestoreTarget}
   onConfirm={() => {
-  if (confirmRestore) restore.mutate(confirmRestore);
+  const latest = queryClient.getQueryData<PaginatedResponse<Role>>(queryKey)?.data
+   .find((role) => role.id === restoreActionTarget.targetId);
+  if (!restoreActionTarget.targetId || !restoreActionTarget.isFresh || !latest) return;
+  restore.mutate(restoreActionTarget.targetId);
   }}
-  onClose={() => setConfirmRestore(null)}
+  onClose={restoreActionTarget.close}
   pending={restore.isPending}
   />
  </div>

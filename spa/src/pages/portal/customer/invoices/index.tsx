@@ -13,6 +13,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { invoiceStatusVariant } from '@/lib/statusVariants';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import type { PortalInvoiceSummary } from '@/types/b2b';
 
 type InvoiceFilters = { page: number; per_page: number; status?: string; signal?: 'unpaid' | 'overdue' };
@@ -22,10 +23,12 @@ const DEFAULT_FILTERS: InvoiceFilters = { page: 1, per_page: 25 };
 export default function CustomerInvoicesPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useUrlFilters<InvoiceFilters>(DEFAULT_FILTERS);
+  const queryKey = ['portal', 'customer', 'invoices', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'customer', 'invoices', filters],
+    queryKey,
     queryFn: () => customerPortalApi.listInvoices(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined,
   });
 
   const columns: Column<PortalInvoiceSummary>[] = [

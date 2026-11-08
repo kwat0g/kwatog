@@ -4,6 +4,17 @@ Original discovery was read-only research against PRIMARY SOURCES. Code wins ove
 follow-up below records shipped changes and verification.
 Branch: `docs/dss-discovery-phase0`.
 
+**Current-state correction (2026-10-30):** this section preserves the original Phase 0
+snapshot and its counts; it is not a current broadcast inventory. `MachineStatusChanged`
+was later made a domain-only after-commit event for breakdown/restoration workflow
+listeners, and `MachineBreakdownDetected` is now an internal notification event. Neither
+event broadcasts or has a SPA subscriber; `MachineChanged` owns the machine UI refresh.
+The current event inventory and machine/work-order status evidence are in
+`docs/realtime/00-event-catalog.csv`, `docs/realtime/00-discovery.md` (deltas 50, 53 and 54), and
+`docs/realtime/PROGRESS.md` (deltas 50, 52, 53 and 54). Current catalog totals are 87 event
+classes, 33 broadcasters. `WorkOrderStatusChanged` refreshes authorized Production dashboard
+viewers; `ChainStepAdvanced` separately refreshes work-order detail/list viewers.
+
 **Ground truth used:** `docker-compose.yml`, `api/config/broadcasting.php`, `api/config/queue.php`,
 `api/config/cache.php`, `api/config/database.php`, `api/.env.example`, `api/routes/channels.php`,
 `api/routes/console.php`, `api/app/Providers/AppServiceProvider.php` (boot listeners),
@@ -69,9 +80,9 @@ Every one uses `PrivateChannel` (no public channels). Auth rules live in `api/ro
 | 7 | `api/app/Modules/MRP/Events/MachineStatusChanged.php:19,30-39` | `production.machine.{hash}` + `production.dashboard` | (SPA `.machine.status_changed`) | `spa/src/pages/production/dashboard.tsx:41-43`; channels gated `production.dashboard.view` / `mrp.machines.view` (`api/routes/channels.php:20-27`) |
 | 8 | `api/app/Modules/MRP/Events/MoldShotLimitNearing.php:20,26-32` | `production.dashboard` | (SPA `.mold.shot_limit_nearing`) | `spa/src/pages/production/dashboard.tsx:56-58` |
 | 9 | `api/app/Modules/MRP/Events/MoldShotLimitReached.php:19,25-31` | `production.dashboard` | (SPA `.mold.shot_limit_reached`) | `spa/src/pages/production/dashboard.tsx:59-61` |
-| 10 | `api/app/Modules/Production/Events/WorkOrderStatusChanged.php:20,31-40` | `production.wo.{hash}` + `production.dashboard` | (SPA `.work_order.status_changed`) | `spa/src/pages/production/dashboard.tsx:62-64`, `spa/src/pages/production/work-orders/detail.tsx:149` (`production.wo.${id}` + `.output.recorded`) |
+| 10 | `api/app/Modules/Production/Events/WorkOrderStatusChanged.php` | `production.wo.{hash}` + `production.dashboard` | `.work_order.status_changed` | `spa/src/hooks/useProductionDashboardRealtime.ts` refreshes the production dashboard; `useChainProgress` separately handles record/list refresh through the chain event. |
 | 11 | `api/app/Modules/Production/Events/WorkOrderOutputRecorded.php:25,35-43` | `production.wo.{hash}` + `production.dashboard` | (SPA `.output.recorded`) | `spa/src/pages/production/dashboard.tsx:37-39`, `detail.tsx:149`, `record-output.tsx:97` |
-| 12 | `api/app/Modules/Production/Events/MachineBreakdownDetected.php:20,32-41` | `production.dashboard` + `production.machine.{hash}` | (SPA `.machine.breakdown_detected`) | `spa/src/pages/production/dashboard.tsx:53-55` |
+| 12 | `api/app/Modules/Production/Events/MachineBreakdownDetected.php:20,32-41` | (initial snapshot) `production.dashboard` + `production.machine.{hash}` | (initial snapshot; `.machine.breakdown_detected` subscription removed) | Internal notification event now; `MachineChanged` owns machine UI refresh. |
 | 13 | `api/app/Modules/Maintenance/Events/MaintenanceWorkOrderCreated.php:20,26-35` | `maintenance.dashboard` | `maintenance.wo_created` | `spa/src/pages/maintenance/work-orders/index.tsx:49` (gated `maintenance.view`); channel `api/routes/channels.php:40-41` |
 | 14 | `api/app/Modules/Payroll/Events/PayrollProgressEvent.php:29,40-52` | `payroll.period.{hash}` | `payroll.progress` | `spa/src/pages/payroll/periods/detail.tsx:151` (typed `PayrollProgressEventPayload`); 3s poll fallback + cached snapshot (see §1.3); channel gated `payroll.periods.view` (`api/routes/channels.php:32-33`) |
 

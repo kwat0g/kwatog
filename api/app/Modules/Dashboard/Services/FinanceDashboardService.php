@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
@@ -56,16 +57,20 @@ class FinanceDashboardService
 
     public function summary(User $user): array
     {
-        // Task D5 — bumped cache key (`v2`) so existing cached payloads from
-        // before this revision aren't served with the new schema missing.
+        // The finance-only generation retires this snapshot when one of its
+        // source tables changes without churning unrelated dashboard caches.
         //
         // The key now also carries the caller's answers to GATES. The old shared
         // key was correct only while every panel was ungated; with gating it
         // would have handed a viewer another viewer's panel set.
         $signature = $this->gate->signature($user, self::GATES);
+        $generation = DashboardCacheGeneration::scopedVersion('dashboard:finance');
 
-        return Cache::tags(['financial_statements', 'finance_dashboard'])
-            ->remember("finance_dashboard:summary:v2:{$signature}", now()->addSeconds(30), function () use ($user) {
+        return FailOpenCache::remember(
+            Cache::tags(['financial_statements', 'finance_dashboard']),
+            "finance_dashboard:summary:v5:{$generation}:{$signature}",
+            now()->addSeconds(30),
+            function () use ($user) {
                 // Lazy loading is intentional: a refused panel must not read
                 // its accounting source before PanelGate evaluates the grant.
                 $arAging = null;
@@ -73,7 +78,9 @@ class FinanceDashboardService
                     return $arAging ??= $this->invoiceService->aging();
                 };
 
-                return $this->gate->panels($user, [
+                return [
+                    'generated_at' => now()->toIso8601String(),
+                    'panels' => $this->gate->panels($user, [
                     'cash_balance'           => ['accounting.dashboard.view', fn () => Money::round2($this->cashBalance())],
                     'revenue_mtd'            => ['accounting.dashboard.view', fn () => Money::round2($this->revenueMtd())],
                     'ar_outstanding'         => ['accounting.invoices.view',  fn () => Money::round2((string) Invoice::query()
@@ -103,8 +110,11 @@ class FinanceDashboardService
                     // Configured windows, not data.
                     'payroll_pipeline_history_days' => [null,                 fn () => $this->settings->requiredInt('dashboard.finance.payroll_pipeline_history_days', 1)],
                     'ap_due_horizon_days'    => [null,                        fn () => $this->settings->requiredInt('dashboard.widgets.ap_due_horizon_days', 0)],
-                ]);
-            });
+                    ]),
+                ];
+            },
+            'dashboard.finance.summary',
+        );
     }
 
     private function cashBalance(): string

@@ -24,53 +24,81 @@ class ClearanceResource extends JsonResource
         $financial = $request->user()?->hasPermission('hr.separation.view_all') ?? false;
         $cleared = collect($items)
             ->filter(fn ($i) => ($i['status'] ?? '') === 'cleared')->count();
-        $total   = count($items);
+        $total = count($items);
+        $status = $this->status instanceof \BackedEnum ? $this->status->value : (string) $this->status;
+        $terminal = in_array($status, ['finalized', 'cancelled'], true);
+        $canSignItem = ! $terminal && collect($items)->contains(
+            fn (array $item): bool => ($item['status'] ?? '') === 'pending'
+                && $service->canSignChecklistItem($item, $request->user()),
+        );
+        $availableActions = [];
+        if ($canSignItem) {
+            $availableActions[] = 'sign_checklist_item';
+        }
+        if ($request->user()?->hasPermission('hr.separation.finalize')
+            && $status === 'completed'
+            && ! $this->final_pay_computed) {
+            $availableActions[] = 'compute_final_pay';
+        }
+        if ($request->user()?->hasPermission('hr.separation.finalize')
+            && $status === 'completed'
+            && $this->final_pay_computed) {
+            $availableActions[] = 'finalize';
+        }
+        if ($request->user()?->hasPermission('hr.separation.cancel')
+            && in_array($status, ['pending', 'in_progress'], true)
+            && ! $this->final_pay_computed) {
+            $availableActions[] = 'cancel';
+        }
 
         return [
-            'id'                  => $this->hash_id,
-            'clearance_no'        => $this->clearance_no,
-            'employee'            => $this->whenLoaded('employee', fn () => $this->employee ? [
-                'id'           => $this->employee->hash_id,
-                'employee_no'  => $this->employee->employee_no,
-                'full_name'    => trim(($this->employee->first_name ?? '').' '.($this->employee->last_name ?? '')),
-                'department'   => $this->employee->department ? [
-                    'id'   => $this->employee->department->hash_id,
+            'id' => $this->hash_id,
+            'clearance_no' => $this->clearance_no,
+            'employee' => $this->whenLoaded('employee', fn () => $this->employee ? [
+                'id' => $this->employee->hash_id,
+                'employee_no' => $this->employee->employee_no,
+                'full_name' => trim(($this->employee->first_name ?? '').' '.($this->employee->last_name ?? '')),
+                'department' => $this->employee->department ? [
+                    'id' => $this->employee->department->hash_id,
                     'name' => $this->employee->department->name,
                     'code' => $this->employee->department->code,
                 ] : null,
-                'position'     => $this->employee->position ? [
-                    'id'    => $this->employee->position->hash_id,
+                'position' => $this->employee->position ? [
+                    'id' => $this->employee->position->hash_id,
                     'title' => $this->employee->position->title,
                 ] : null,
-                'pay_type'     => $financial ? $this->employee->pay_type : null,
-                'date_hired'   => $financial ? optional($this->employee->date_hired)?->toDateString() : null,
+                'pay_type' => $financial ? $this->employee->pay_type : null,
+                'date_hired' => $financial ? optional($this->employee->date_hired)?->toDateString() : null,
             ] : null),
-            'separation_date'     => optional($this->separation_date)?->toDateString(),
-            'separation_reason'   => $this->separation_reason instanceof \BackedEnum ? $this->separation_reason->value : $this->separation_reason,
-            'clearance_items'     => $this->clearanceItems($items, $request),
-            'can_view_final_pay'  => $financial,
-            'cleared_count'       => $cleared,
-            'items_total'         => $total,
-            'progress_pct'        => $total > 0 ? (int) round(($cleared / $total) * 100) : 0,
-            'final_pay_computed'  => (bool) $this->final_pay_computed,
-            'final_pay_amount'    => $financial && $this->final_pay_amount !== null ? (string) $this->final_pay_amount : null,
+            'separation_date' => optional($this->separation_date)?->toDateString(),
+            'separation_reason' => $this->separation_reason instanceof \BackedEnum ? $this->separation_reason->value : $this->separation_reason,
+            'clearance_items' => $this->clearanceItems($items, $request),
+            'can_view_final_pay' => $financial,
+            'permissions' => ['view_final_pay' => $financial],
+            'available_actions' => $availableActions,
+            'cleared_count' => $cleared,
+            'items_total' => $total,
+            'progress_pct' => $total > 0 ? (int) round(($cleared / $total) * 100) : 0,
+            'final_pay_computed' => (bool) $this->final_pay_computed,
+            'final_pay_amount' => $financial && $this->final_pay_amount !== null ? (string) $this->final_pay_amount : null,
             'final_pay_breakdown' => $financial ? $this->final_pay_breakdown : null,
-            'journal_entry'       => $financial && $this->journal_entry_id ? (function () {
+            'journal_entry' => $financial && $this->journal_entry_id ? (function () {
                 $je = JournalEntry::find($this->journal_entry_id);
+
                 return $je ? ['id' => $je->hash_id, 'entry_number' => $je->entry_number] : null;
             })() : null,
-            'status'              => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
-            'status_label'        => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
-            'initiator'           => $this->whenLoaded('initiator', fn () => $this->initiator ? [
+            'status' => $status,
+            'status_label' => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
+            'initiator' => $this->whenLoaded('initiator', fn () => $this->initiator ? [
                 'id' => $this->initiator->hash_id, 'name' => $this->initiator->name,
             ] : null),
-            'finalizer'           => $this->whenLoaded('finalizer', fn () => $this->finalizer ? [
+            'finalizer' => $this->whenLoaded('finalizer', fn () => $this->finalizer ? [
                 'id' => $this->finalizer->hash_id, 'name' => $this->finalizer->name,
             ] : null),
-            'finalized_at'        => optional($this->finalized_at)?->toISOString(),
-            'remarks'             => $financial ? $this->remarks : null,
-            'created_at'          => optional($this->created_at)?->toISOString(),
-            'updated_at'          => optional($this->updated_at)?->toISOString(),
+            'finalized_at' => optional($this->finalized_at)?->toISOString(),
+            'remarks' => $financial ? $this->remarks : null,
+            'created_at' => optional($this->created_at)?->toISOString(),
+            'updated_at' => optional($this->updated_at)?->toISOString(),
         ];
     }
 

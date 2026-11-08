@@ -13,36 +13,115 @@ use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PayrollAdjustmentService
 {
+    /**
+     * Return user-scoped capabilities for this adjustment.
+     *
+     * The request memo stores the actor's direct/delegated permission grants so
+     * serializing a list does not issue delegation queries for every row. The
+     * final action decision still excludes the adjustment's maker and checks
+     * the current persisted status; approve()/reject() revalidate both under
+     * the row lock when the action is submitted.
+     *
+     * @return array{permissions: array{view: bool, approve: bool, reject: bool}, available_actions: array{approve: bool, reject: bool}}
+     */
+    public function actionContext(PayrollAdjustment $adjustment, ?User $actor, Request $request): array
+    {
+        $empty = [
+            'permissions' => ['view' => false, 'approve' => false, 'reject' => false],
+            'available_actions' => ['approve' => false, 'reject' => false],
+        ];
+        if ($actor === null) {
+            return $empty;
+        }
+
+        $cacheKey = 'payroll_adjustment.permission_grants.'.$actor->getKey();
+        $grants = $request->attributes->get($cacheKey);
+        if (! is_array($grants)) {
+            $grants = [];
+            foreach ([
+                'approve' => 'payroll.adjustments.approve',
+                'reject' => 'payroll.adjustments.reject',
+            ] as $action => $permission) {
+                $direct = $actor->hasPermission($permission);
+                $delegatorIds = $direct
+                    ? []
+                    : ApprovalDelegation::delegatorsForPermission($actor, $permission)
+                        ->map(static fn (User $delegator): int => (int) $delegator->id)
+                        ->all();
+                $grants[$action] = [
+                    'direct' => $direct,
+                    'delegator_ids' => $delegatorIds,
+                ];
+            }
+            $request->attributes->set($cacheKey, $grants);
+        }
+
+        $permissions = [
+            'view' => $actor->hasPermission('payroll.adjustments.view'),
+            'approve' => $grants['approve']['direct'] || $grants['approve']['delegator_ids'] !== [],
+            'reject' => $grants['reject']['direct'] || $grants['reject']['delegator_ids'] !== [],
+        ];
+        $isMaker = (int) $adjustment->created_by === (int) $actor->id;
+        $isPending = $adjustment->status === PayrollAdjustmentStatus::Pending;
+
+        $mayActForMaker = static function (array $grant) use ($adjustment): bool {
+            if ($grant['direct']) {
+                return true;
+            }
+
+            $makerId = (int) $adjustment->created_by;
+            foreach ($grant['delegator_ids'] as $delegatorId) {
+                if ((int) $delegatorId !== $makerId) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        return [
+            'permissions' => $permissions,
+            'available_actions' => [
+                'approve' => $isPending && ! $isMaker && $mayActForMaker($grants['approve']),
+                'reject' => $isPending && ! $isMaker && $mayActForMaker($grants['reject']),
+            ],
+        ];
+    }
+
     public function list(array $filters): LengthAwarePaginator
     {
         $query = PayrollAdjustment::query()
             ->with(['period', 'employee.department', 'employee.position', 'originalPayroll', 'approver']);
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
-        if (!empty($filters['type'])) {
+        if (! empty($filters['type'])) {
             $query->where('type', $filters['type']);
         }
-        if (!empty($filters['employee_id'])) {
+        if (! empty($filters['employee_id'])) {
             $emp = Employee::tryDecodeHash((string) $filters['employee_id']);
-            if ($emp) $query->where('employee_id', $emp);
+            if ($emp) {
+                $query->where('employee_id', $emp);
+            }
         }
 
         $sort = $filters['sort'] ?? 'created_at';
-        $dir  = $filters['direction'] ?? 'desc';
+        $dir = $filters['direction'] ?? 'desc';
         $allowed = ['created_at', 'amount', 'status'];
         if (in_array($sort, $allowed, true)) {
             $query->orderBy($sort, $dir);
         }
 
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
+
         return $query->paginate($perPage);
     }
 
@@ -52,7 +131,7 @@ class PayrollAdjustmentService
             /** @var Payroll $original */
             $original = Payroll::findOrFail($data['original_payroll_id']);
             $this->assertCanAccessPayroll($original, $user);
-            $period   = $original->period;
+            $period = $original->period;
 
             // Adjustments are only meaningful against finalized periods (you can
             // edit drafts directly). Reject otherwise.
@@ -61,13 +140,13 @@ class PayrollAdjustmentService
             }
 
             $adj = PayrollAdjustment::create([
-                'payroll_period_id'   => $period->id,
-                'employee_id'         => $original->employee_id,
+                'payroll_period_id' => $period->id,
+                'employee_id' => $original->employee_id,
                 'original_payroll_id' => $original->id,
-                'type'                => $data['type'],
-                'amount'              => $data['amount'],
-                'reason'              => $data['reason'],
-                'created_by'          => $user->id,
+                'type' => $data['type'],
+                'amount' => $data['amount'],
+                'reason' => $data['reason'],
+                'created_by' => $user->id,
             ]);
             // status non-fillable; service-only.
             $adj->forceFill(['status' => PayrollAdjustmentStatus::Pending->value])->save();
@@ -126,6 +205,7 @@ class PayrollAdjustmentService
         if ($adjustment->status !== PayrollAdjustmentStatus::Pending) {
             throw new BusinessRuleException('Only pending adjustments can be approved.');
         }
+
         return DB::transaction(function () use ($adjustment, $user) {
             // Lock-then-guard: re-read so a stale approve/reject cannot race
             // the decision and flip the status after the other one committed.
@@ -139,10 +219,11 @@ class PayrollAdjustmentService
             if (! ApprovalDelegation::canActForPermission($user, 'payroll.adjustments.approve', [(int) $locked->created_by])) {
                 throw new AuthorizationException('You do not have permission to approve payroll adjustments.');
             }
-            $locked->status      = PayrollAdjustmentStatus::Approved;
+            $locked->status = PayrollAdjustmentStatus::Approved;
             $locked->approved_by = $user->id;
             $locked->save();
             $this->notifyRequester($locked, 'approval.completed', 'Payroll adjustment approved');
+
             return $locked->fresh();
         });
     }
@@ -152,6 +233,7 @@ class PayrollAdjustmentService
         if ($adjustment->status !== PayrollAdjustmentStatus::Pending) {
             throw new BusinessRuleException('Only pending adjustments can be rejected.');
         }
+
         return DB::transaction(function () use ($adjustment, $user, $remarks) {
             $locked = PayrollAdjustment::query()->lockForUpdate()->findOrFail($adjustment->getKey());
             if ($locked->status !== PayrollAdjustmentStatus::Pending) {
@@ -163,13 +245,14 @@ class PayrollAdjustmentService
             if (! ApprovalDelegation::canActForPermission($user, 'payroll.adjustments.reject', [(int) $locked->created_by])) {
                 throw new AuthorizationException('You do not have permission to reject payroll adjustments.');
             }
-            $locked->status      = PayrollAdjustmentStatus::Rejected;
+            $locked->status = PayrollAdjustmentStatus::Rejected;
             $locked->approved_by = $user->id;
             if ($remarks) {
                 $locked->reason = trim($locked->reason."\n\n[Rejected: {$remarks}]");
             }
             $locked->save();
             $this->notifyRequester($locked, 'approval.rejected', 'Payroll adjustment rejected');
+
             return $locked->fresh();
         });
     }

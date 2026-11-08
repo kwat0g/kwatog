@@ -36,6 +36,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { formatDate } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
 import type { ProfileUpdateRequestRecord, SelfServiceProfile } from '@/types/self-service';
+import { useProfileUpdateRequestRealtime } from '@/hooks/useRealtimeRecord';
 
 type FieldDef = { key: string; label: string; type?: string; placeholder?: string; mono?: boolean };
 
@@ -85,6 +86,7 @@ export default function SelfServiceProfilePage() {
  const navigate = useNavigate();
  const user = useAuthStore((s) => s.user);
  const logout = useAuthStore((s) => s.logout);
+ useProfileUpdateRequestRealtime();
 
  const { data: profile, isLoading, isError, refetch } = useQuery({
  queryKey: ['self-service', 'profile'],

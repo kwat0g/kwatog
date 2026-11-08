@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Services;
 
 use App\Modules\Auth\Models\User;
-use App\Modules\Maintenance\Models\MaintenanceWindow;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
+use App\Modules\Maintenance\Models\MaintenanceWindow;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
-use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\Production\Models\ProductionSchedule;
+use App\Modules\Production\Services\AssignedWorkOrderRefreshService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -25,10 +26,12 @@ class MaintenanceWindowService
             'suggestions' => [], 'blockers' => ['schedule' => [], 'production' => [], 'maintenance' => [], 'staffing' => []]];
         if (! $schedule->is_active) {
             $result['blockers']['schedule'][] = 'Schedule is disabled.';
+
             return $result;
         }
         if (! $order) {
             $result['blockers']['schedule'][] = 'No active preventive work order exists for this schedule.';
+
             return $result;
         }
         $confirmed = MaintenanceWindow::confirmed()->where('work_order_id', $order->id)->first();
@@ -37,10 +40,12 @@ class MaintenanceWindowService
                 'planned_end_at' => $confirmed->planned_end_at->toIso8601String(),
                 'technician' => $order->assignee ? ['id' => $order->assignee->hash_id,
                     'name' => trim($order->assignee->first_name.' '.$order->assignee->last_name)] : null];
+
             return $result;
         }
         if ($order->status->value !== 'open') {
             $result['blockers']['schedule'][] = 'Only an open preventive work order can reserve a window.';
+
             return $result;
         }
 
@@ -76,6 +81,7 @@ class MaintenanceWindowService
                             'technician' => ['id' => $technician['id'], 'name' => $technician['name'],
                                 'employee_no' => $technician['employee_no']]];
                         $start->addMinutes((int) (ceil($duration / 15) * 15));
+
                         continue;
                     }
                     $reasons = collect($candidate['candidates'])->pluck('blocked_reason')->filter()->unique()->values()->all();
@@ -107,7 +113,7 @@ class MaintenanceWindowService
             $type = $order->maintainable_type->value;
             ($type === 'machine' ? Machine::query() : Mold::query())->lockForUpdate()->findOrFail($order->maintainable_id);
             $this->assertAvailable($order, $start, $end);
-            MaintenanceWindow::confirmed()->where('work_order_id', $order->id)->update(['state' => 'released']);
+            $this->release($order);
 
             return MaintenanceWindow::create([
                 'maintainable_type' => $type, 'maintainable_id' => $order->maintainable_id,
@@ -134,6 +140,21 @@ class MaintenanceWindowService
 
     public function release(MaintenanceWorkOrder $order): void
     {
+        $windows = MaintenanceWindow::confirmed()->where('work_order_id', $order->id)
+            ->get(['maintainable_type', 'maintainable_id']);
+        if ($windows->isEmpty()) {
+            return;
+        }
+
         MaintenanceWindow::confirmed()->where('work_order_id', $order->id)->update(['state' => 'released']);
+
+        $readiness = app(AssignedWorkOrderRefreshService::class);
+        foreach ($windows->unique(fn (MaintenanceWindow $window): string => $window->maintainable_type.':'.$window->maintainable_id) as $window) {
+            if ($window->maintainable_type === 'machine') {
+                $readiness->stageForMachine((int) $window->maintainable_id);
+            } elseif ($window->maintainable_type === 'mold') {
+                $readiness->stageForMold((int) $window->maintainable_id);
+            }
+        }
     }
 }

@@ -21,6 +21,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { TouchCardSkeleton } from '@/components/layout/TouchShell';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { deliveryStatusVariant } from '@/lib/statusVariants';
 import { focusRing } from '@/lib/focus';
 import { formatDate, localIsoDate } from '@/lib/formatDate';
@@ -86,10 +87,12 @@ export default function DriverDeliveryList() {
  // to "my deliveries for today", and Back restores the previous view.
  const [filters, setFilters] = useUrlFilters<DriverListFilters>(DEFAULT_FILTERS);
 
- const { data, isLoading, isError, isFetching, refetch } = useQuery({
- queryKey: ['driver', 'deliveries', filters],
+  const queryKey = ['driver', 'deliveries', filters] as const;
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+  queryKey,
  queryFn: () => driverApi.listDeliveries(filters),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
 
  const rows = data?.data ?? [];

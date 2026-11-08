@@ -31,14 +31,17 @@ import { ActivityStream } from '@/components/chain/ActivityStream';
 import { ChainHeader } from '@/components/chain';
 import { buildNcrChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatQuantity } from '@/lib/formatNumber';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type {
   NcrActionType,
   NcrDisposition,
   NcrSeverity,
   NcrStatus,
   NcrAction,
+  Ncr,
   EffectivenessStatus,
 } from '@/types/quality';
 
@@ -56,11 +59,24 @@ const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neu
   critical: 'danger',
 };
 
+function replaceNcrAction(current: Ncr | undefined, action: NcrAction): Ncr | undefined {
+  if (!current) return current;
+  const actions = current.actions ?? [];
+  const index = actions.findIndex((candidate) => candidate.id === action.id);
+  return {
+    ...current,
+    actions: index === -1
+      ? [...actions, action]
+      : actions.map((candidate, actionIndex) => actionIndex === index ? action : candidate),
+  };
+}
+
 export default function NcrDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
   const canManageNcr = can('quality.ncr.manage');
+  useRealtimeRecord('ncr', id);
   const [actionType, setActionType] = useState<NcrActionType>('containment');
   const [actionDesc, setActionDesc] = useState('');
   const [ownerId, setOwnerId] = useState('');
@@ -82,18 +98,10 @@ export default function NcrDetailPage() {
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['quality', 'ncrs', id],
     queryFn: () => ncrsApi.show(id),
     enabled: Boolean(id),
-    placeholderData: (prev) => prev,
-    // Another role (QC review, MRB, containment) can move this record while
-    // we watch it. Poll while open so cross-user changes appear without a
-    // manual refresh — same precedent as the sales-order detail page.
-    refetchInterval: (query) =>
-      query.state.data && !['closed', 'cancelled'].includes(query.state.data.status)
-        ? 15_000
-        : false,
   });
   const { data: options } = useQuery({
     queryKey: ['quality', 'ncrs', 'options'],
@@ -128,10 +136,14 @@ export default function NcrDetailPage() {
 
   const retryQuarantine = useMutation({
     mutationFn: () => ncrsApi.retryQuarantine(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs'] });
-      qc.invalidateQueries({ queryKey: ['inventory', 'mrb'] });
-      qc.invalidateQueries({ queryKey: ['inventory', 'stock-levels'] });
+    onSuccess: (ncr) => {
+      qc.setQueryData(['quality', 'ncrs', id], ncr);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'ncr', entityId: id },
+        [],
+        [['quality', 'ncrs', id]],
+      );
       toast.success('Missing quarantine holds recovered.');
     },
     onError: (error: AxiosError<{ message?: string }>) =>
@@ -146,12 +158,13 @@ export default function NcrDetailPage() {
         ...(ownerId ? { owner_id: ownerId } : {}),
         ...(dueDate ? { due_date: dueDate } : {}),
       }),
-    onSuccess: () => {
+    onSuccess: (action) => {
+      qc.setQueryData<Ncr | undefined>(['quality', 'ncrs', id], (current) => replaceNcrAction(current, action));
       toast.success('Action added');
       setActionDesc('');
       setOwnerId('');
       setDueDate('');
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+      void invalidateRealtimeChange(qc, { entityType: 'ncr', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Could not add action. Try again.'),
@@ -273,12 +286,22 @@ export default function NcrDetailPage() {
             }
           : {}),
       }),
-    onSuccess: () => {
+    onSuccess: (ncr) => {
+      qc.setQueryData(['quality', 'ncrs', id], ncr);
       toast.success('Disposition saved');
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'ncr', entityId: id },
+        [],
+        [['quality', 'ncrs', id]],
+      );
     },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Could not save disposition. Try again.'),
+    onError: (e: AxiosError<{ message?: string; code?: string }>) => {
+      if (e.response?.status === 409 && e.response.data?.code === 'ncr_state_conflict') {
+        void invalidateRealtimeChange(qc, { entityType: 'ncr', entityId: id });
+      }
+      toast.error(e.response?.data?.message ?? 'Could not save disposition. Try again.');
+    },
   });
 
   const close = useMutation({
@@ -289,22 +312,42 @@ export default function NcrDetailPage() {
           ? `NCR closed; replacement WO ${ncr.replacement_work_order.wo_number} created`
           : 'NCR closed',
       );
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+      qc.setQueryData(['quality', 'ncrs', id], ncr);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'ncr', entityId: id },
+        [],
+        [['quality', 'ncrs', id]],
+      );
       setConfirmClose(false);
     },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Could not close'),
+    onError: (e: AxiosError<{ message?: string; code?: string }>) => {
+      if (e.response?.status === 409 && e.response.data?.code === 'ncr_state_conflict') {
+        void invalidateRealtimeChange(qc, { entityType: 'ncr', entityId: id });
+      }
+      toast.error(e.response?.data?.message ?? 'Could not close');
+    },
   });
 
   const cancel = useMutation({
     mutationFn: (reason: string) => ncrsApi.cancel(id, reason),
-    onSuccess: () => {
+    onSuccess: (ncr) => {
+      qc.setQueryData(['quality', 'ncrs', id], ncr);
       toast.success('NCR cancelled');
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'ncr', entityId: id },
+        [],
+        [['quality', 'ncrs', id]],
+      );
       setConfirmCancel(false);
     },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Could not cancel'),
+    onError: (e: AxiosError<{ message?: string; code?: string }>) => {
+      if (e.response?.status === 409 && e.response.data?.code === 'ncr_state_conflict') {
+        void invalidateRealtimeChange(qc, { entityType: 'ncr', entityId: id });
+      }
+      toast.error(e.response?.data?.message ?? 'Could not cancel');
+    },
   });
 
   if (isLoading && !data) return <SkeletonDetail />;
@@ -441,16 +484,18 @@ export default function NcrDetailPage() {
                 variant="primary"
                 size="sm"
                 icon={<LuCheck size={14} />}
+                disabled={isFetching || close.isPending}
                 onClick={() => setConfirmClose(true)}
               >
                 Close NCR
               </Button>
             )}
-            {!isTerminal && can('quality.ncr.manage') && (
+            {data.available_actions?.can_cancel && (
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<LuBan size={14} />}
+                disabled={isFetching || cancel.isPending}
                 onClick={() => setConfirmCancel(true)}
               >
                 Cancel
@@ -1158,10 +1203,10 @@ export default function NcrDetailPage() {
           {data.status === 'closed' &&
             capaActions.map((action) => (
               <ActionEffectivenessPanel
-                key={`${action.id}-${action.effectiveness_status ?? 'unscheduled'}`}
+                key={action.id}
                 ncrId={id}
                 action={action}
-                canManage={can('quality.ncr.manage')}
+                ncrIsFetching={isFetching}
               />
             ))}
         </div>
@@ -1205,6 +1250,7 @@ export default function NcrDetailPage() {
         onConfirm={() => close.mutate()}
         onClose={() => setConfirmClose(false)}
         pending={close.isPending}
+        disabled={isFetching || isTerminal}
       />
       <ReasonDialog
         isOpen={confirmCancel}
@@ -1214,6 +1260,7 @@ export default function NcrDetailPage() {
         onConfirm={(reason) => cancel.mutate(reason)}
         onClose={() => setConfirmCancel(false)}
         pending={cancel.isPending}
+        disabled={isFetching || data.available_actions?.can_cancel === false}
       />
     </div>
   );
@@ -1222,11 +1269,11 @@ export default function NcrDetailPage() {
 function ActionEffectivenessPanel({
   ncrId,
   action,
-  canManage,
+  ncrIsFetching,
 }: {
   ncrId: string;
   action: NcrAction;
-  canManage: boolean;
+  ncrIsFetching: boolean;
 }) {
   const qc = useQueryClient();
   const [status, setStatus] =
@@ -1234,19 +1281,21 @@ function ActionEffectivenessPanel({
   const [notes, setNotes] = useState(action.effectiveness_notes ?? '');
   const terminal =
     action.effectiveness_status === 'effective' || action.effectiveness_status === 'not_applicable';
-  const canVerify =
-    canManage &&
-    !terminal &&
-    (action.effectiveness_status === 'pending_verification' ||
-      action.effectiveness_status === 'ineffective');
+  const canVerify = action.available_actions?.can_verify === true;
   const verify = useMutation({
     mutationFn: () =>
       ncrsApi.verifyAction(ncrId, action.id, { effectiveness_status: status, notes }),
-    onSuccess: () => {
+    onSuccess: (updatedAction) => {
+      qc.setQueryData<Ncr | undefined>(['quality', 'ncrs', ncrId], (current) =>
+        replaceNcrAction(current, updatedAction),
+      );
       toast.success('CAPA effectiveness recorded');
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', ncrId] });
+      void invalidateRealtimeChange(qc, { entityType: 'ncr', entityId: ncrId });
     },
-    onError: (error: AxiosError<{ message?: string }>) => {
+    onError: (error: AxiosError<{ message?: string; code?: string }>) => {
+      if (error.response?.status === 409 && error.response.data?.code === 'ncr_action_state_conflict') {
+        void invalidateRealtimeChange(qc, { entityType: 'ncr', entityId: ncrId });
+      }
       toast.error(
         error.response?.data?.message ??
           'This CAPA changed before it could be verified. Reload and try again.',
@@ -1302,7 +1351,7 @@ function ActionEffectivenessPanel({
               variant="secondary"
               size="sm"
               loading={verify.isPending}
-              disabled={!notes.trim()}
+              disabled={!notes.trim() || ncrIsFetching || verify.isPending}
               onClick={() => verify.mutate()}
             >
               Record verdict

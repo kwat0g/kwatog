@@ -16,6 +16,8 @@ class ScheduledExportResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $isTrashed = $this->deleted_at !== null;
+
         return [
             'id'           => $this->hash_id,
             'name'         => $this->name,
@@ -34,6 +36,11 @@ class ScheduledExportResource extends JsonResource
             'processing'   => $this->processing_until !== null && $this->processing_until->isFuture(),
             'next_run_at'  => optional($this->next_run_at)->toIso8601String(),
             'is_active'    => (bool) $this->is_active,
+            'available_actions' => [
+                'update' => ! $isTrashed,
+                'archive' => ! $isTrashed,
+                'restore' => $isTrashed,
+            ],
             'owner'        => $this->whenLoaded('owner', function () {
                 return $this->owner ? [
                     'id'   => $this->owner->hash_id,

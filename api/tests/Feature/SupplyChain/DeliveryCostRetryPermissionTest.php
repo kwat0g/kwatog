@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryCostHandoff;
 use App\Modules\SupplyChain\Resources\DeliveryResource;
+use App\Modules\SupplyChain\Services\DeliveryCostRecognitionService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -59,6 +62,38 @@ class DeliveryCostRetryPermissionTest extends TestCase
         $request->setUserResolver(fn () => $finance);
         $resource = (new DeliveryResource($delivery->fresh()))->resolve($request);
         $this->assertTrue($resource['cogs_handoff']['can_retry']);
+    }
+
+    public function test_retrying_a_delivery_cost_handoff_stages_one_delivery_refresh(): void
+    {
+        $finance = $this->userWithRole('finance_officer');
+        $delivery = $this->delivery();
+        DeliveryCostHandoff::create([
+            'delivery_id' => $delivery->id,
+            'request_key' => (string) Str::uuid(),
+            'payload_fingerprint' => str_repeat('b', 64),
+            'handoff_type' => 'customer_cogs',
+            'status' => 'manual_required',
+            'target_amount' => '12.00',
+            'delta_amount' => '12.00',
+            'created_by' => $finance->id,
+            'attempted_at' => now(),
+        ]);
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
+        $requestKey = (string) Str::uuid();
+
+        app(DeliveryCostRecognitionService::class)->retry(
+            $delivery,
+            'customer_cogs',
+            $requestKey,
+            $finance,
+        );
+
+        $this->assertSame($initialSignals + 1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        app(DeliveryCostRecognitionService::class)->retry($delivery, 'customer_cogs', $requestKey, $finance);
+
+        $this->assertSame($initialSignals + 1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
     }
 
     public function test_employee_cannot_reach_delivery_cost_retry_validation(): void

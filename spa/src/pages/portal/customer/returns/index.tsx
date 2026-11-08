@@ -15,7 +15,6 @@ export default function CustomerReturnsPage() {
   const query = useQuery({
     queryKey: ['portal', 'customer', 'returns'],
     queryFn: () => customerPortalApi.listReturnRequests({ per_page: 25 }),
-    placeholderData: (previous) => previous,
   });
 
   return <div>

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Resources;
 
+use App\Modules\Auth\Models\User;
+use App\Modules\Quality\Enums\PpapElementStatus;
+use App\Modules\Quality\Enums\PpapStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,6 +14,30 @@ class PpapSubmissionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $viewer = $request->user();
+        $canManage = $viewer instanceof User && $viewer->hasPermission('quality.ppap.manage');
+        $status = $this->status instanceof PpapStatus
+            ? $this->status
+            : PpapStatus::tryFrom((string) $this->status);
+        $elements = $this->relationLoaded('elements') ? $this->getRelation('elements') : collect();
+        $hasElements = $this->relationLoaded('elements')
+            ? $elements->isNotEmpty()
+            : $this->elements()->exists();
+        $canProgress = $canManage
+            && in_array($status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)
+            && (int) $this->submitted_by !== (int) $viewer->id;
+        $hasUnresolvedElements = $this->relationLoaded('elements')
+            ? $elements->contains(static function ($element): bool {
+                $elementStatus = $element->status instanceof PpapElementStatus
+                    ? $element->status
+                    : PpapElementStatus::tryFrom((string) $element->status);
+
+                return ! in_array($elementStatus, [PpapElementStatus::Accepted, PpapElementStatus::NotApplicable], true);
+            })
+            : $this->elements()
+                ->whereNotIn('status', [PpapElementStatus::Accepted->value, PpapElementStatus::NotApplicable->value])
+                ->exists();
+
         return [
             'id'              => $this->hash_id,
             'ppap_number'     => $this->ppap_number,
@@ -25,6 +52,18 @@ class PpapSubmissionResource extends JsonResource
             'expires_at'      => optional($this->expires_at)?->toISOString(),
             'revision'        => (int) $this->revision,
             'notes'           => $this->notes,
+            'permissions'     => [
+                'view' => $viewer instanceof User && $viewer->hasPermission('quality.ppap.view'),
+                'manage' => $canManage,
+            ],
+            'available_actions' => [
+                'update' => $canManage && $status !== null && ! $status->isTerminal() && $status !== PpapStatus::Approved,
+                'submit' => $canManage && $status === PpapStatus::Draft && $hasElements,
+                'review' => $canProgress,
+                'approve' => $canProgress && ! $hasUnresolvedElements,
+                'reject' => $canManage && $status !== null && ! $status->isTerminal() && $status !== PpapStatus::Approved,
+                'update_elements' => $canManage && $status !== PpapStatus::Approved,
+            ],
             'vendor'          => $this->whenLoaded('vendor', fn () => $this->vendor ? [
                 'id' => $this->vendor->hash_id, 'name' => $this->vendor->name,
             ] : null),

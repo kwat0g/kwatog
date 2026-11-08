@@ -3,8 +3,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Modules\Dashboard\Services\AdminDashboardService;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class AdminDashboardServiceTest extends TestCase
@@ -32,6 +35,7 @@ class AdminDashboardServiceTest extends TestCase
 
         $this->assertArrayHasKey('kpis', $result);
         $this->assertArrayHasKey('panels', $result);
+        $this->assertArrayHasKey('generated_at', $result);
         $this->assertCount(4, $result['kpis']);
         $this->assertArrayHasKey('active_sessions',  $result['panels']);
         $this->assertArrayHasKey('account_security', $result['panels']);
@@ -83,5 +87,50 @@ class AdminDashboardServiceTest extends TestCase
             ->getJson('/api/v1/dashboards/admin')
             ->assertStatus(200)
             ->assertJsonStructure(['data' => ['kpis', 'panels']]);
+    }
+
+    public function test_cached_admin_panels_are_not_reused_after_the_same_user_loses_a_permission(): void
+    {
+        Cache::flush();
+        $permissionIds = collect([
+            'dashboard.admin.view',
+            'admin.users.manage',
+            'admin.audit_logs.view',
+            'admin.settings.manage',
+            'alerts.view',
+        ])->mapWithKeys(function (string $slug): array {
+            $permission = Permission::query()->firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $slug, 'module' => explode('.', $slug)[0]],
+            );
+
+            return [$slug => $permission->id];
+        });
+
+        $createRole = static function (string $suffix, array $permissions) use ($permissionIds): Role {
+            $role = Role::query()->create([
+                'name' => 'Admin dashboard cache '.$suffix,
+                'slug' => 'admin-dash-cache-'.$suffix,
+                'is_system' => false,
+            ]);
+            $role->permissions()->sync($permissionIds->only($permissions)->values()->all());
+
+            return $role;
+        };
+
+        $authorizedRole = $createRole('authorized', array_keys($permissionIds->all()));
+        $restrictedRole = $createRole('restricted', ['dashboard.admin.view']);
+        $user = User::factory()->create(['role_id' => $authorizedRole->id]);
+        $service = app(AdminDashboardService::class);
+
+        $before = $service->admin($user);
+        $this->assertArrayHasKey('auth_events', $before['panels']);
+        $this->assertArrayHasKey('account_security', $before['panels']);
+
+        $user->forceFill(['role_id' => $restrictedRole->id])->save();
+        $after = $service->admin(User::query()->findOrFail($user->id));
+
+        $this->assertSame([], $after['panels'], 'a cache hit must not preserve panels after permission revocation');
+        $this->assertSame([], $after['kpis']);
     }
 }

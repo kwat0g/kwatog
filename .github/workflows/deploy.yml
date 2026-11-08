@@ -203,16 +203,23 @@ jobs:
             AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
             AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-}" \
             ./scripts/db-backup-cron.sh
-            # The one-shot service is the only migration entry point for this
-            # release; API and consumers depend on its successful completion.
+            # Stop old code before the new schema and do not resume consumers
+            # until framework caches have been rebuilt from this release.
+            docker compose -f docker-compose.prod.yml stop api nginx reverb horizon queue-mail scheduler
+            # The one-shot service is the only migration entry point for this release.
             docker compose -f docker-compose.prod.yml up migrate
-            docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler
+            docker compose -f docker-compose.prod.yml up -d --force-recreate api
           EOF
 
-      - name: Cache config + routes
+      - name: Build framework caches and verify realtime config
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan route:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan view:cache"
+            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan route:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan event:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan view:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan realtime:config-check && docker compose -f docker-compose.prod.yml restart api"
+
+      - name: Start fresh application consumers
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml up -d --force-recreate nginx reverb horizon queue-mail scheduler"
 
       - name: Smoke test /api/v1/health
         run: |
@@ -228,7 +235,7 @@ jobs:
       - name: Smoke test SPA and service state
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current; CODE=\$(curl -ksS -o /dev/null -w '%{http_code}' https://localhost/); echo \"SPA HTTP \$CODE\"; [ \"\$CODE\" = 200 ]; for service in api nginx db redis reverb horizon scheduler; do cid=\$(docker compose -f docker-compose.prod.yml ps -q \"\$service\"); [ -n \"\$cid\" ]; state=\$(docker inspect -f '{{.State.Status}}' \"\$cid\"); [ \"\$state\" = running ]; done"
+            "set -e; cd ${{ secrets.DEPLOY_PATH }}/current; CODE=\$(curl -ksS -o /dev/null -w '%{http_code}' https://localhost/); echo \"SPA HTTP \$CODE\"; [ \"\$CODE\" = 200 ]; for service in api nginx db redis reverb horizon queue-mail scheduler; do cid=\$(docker compose -f docker-compose.prod.yml ps -q \"\$service\"); [ -n \"\$cid\" ]; state=\$(docker inspect -f '{{.State.Status}}' \"\$cid\"); [ \"\$state\" = running ]; done"
 
       - name: Roll back failed release
         if: failure()
@@ -256,8 +263,19 @@ jobs:
             ln -sfn "$PREVIOUS" "$ROOT/current.new"
             mv -Tf "$ROOT/current.new" "$ROOT/current"
             cd "$ROOT/current"
+            docker compose -f docker-compose.prod.yml stop api nginx reverb horizon queue-mail scheduler
+            docker compose -f docker-compose.prod.yml build --pull
             docker compose -f docker-compose.prod.yml up -d db redis
-            docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler
+            # Database changes are forward-compatible; do not replay a failed
+            # migration while restoring the previous application release.
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api
+            docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache
+            docker compose -f docker-compose.prod.yml exec -T api php artisan route:cache
+            docker compose -f docker-compose.prod.yml exec -T api php artisan event:cache
+            docker compose -f docker-compose.prod.yml exec -T api php artisan view:cache
+            docker compose -f docker-compose.prod.yml exec -T api php artisan realtime:config-check
+            docker compose -f docker-compose.prod.yml restart api
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate nginx reverb horizon queue-mail scheduler
             rm -f "$MARKER"
             echo "Rolled back to $PREVIOUS; investigate the failed release before retrying."
           EOF

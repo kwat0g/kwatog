@@ -10,7 +10,9 @@ vi.mock('@/api/dashboards', () => ({ dashboardsApi: { purchasing: vi.fn() }, DAS
 vi.mock('@/api/forecasting', () => ({
   forecastingApi: { list: vi.fn(), stockOut: vi.fn(), accuracySummary: vi.fn(), options: vi.fn() },
 }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ can: () => true, canAll: () => true }),
+}));
 vi.mock('@/components/dashboard/KpiStrip', () => ({ KpiStrip: () => null }));
 
 const supplierRisk = {

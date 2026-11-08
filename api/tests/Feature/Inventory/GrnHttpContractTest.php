@@ -129,6 +129,55 @@ class GrnHttpContractTest extends TestCase
         ]);
     }
 
+    public function test_grn_detail_projects_actions_and_permissions_for_the_current_user(): void
+    {
+        $grn = GoodsReceiptNote::factory()->create([
+            'status' => GrnStatus::Draft->value,
+            'received_by' => $this->user->id,
+        ]);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/v1/inventory/grn/{$grn->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.permissions.view', true)
+            ->assertJsonPath('data.permissions.receive', true)
+            ->assertJsonPath('data.available_actions', ['finalize'])
+            ->assertJsonPath('data.updated_at', fn ($value) => is_string($value))
+            ->assertJsonPath('data.version', fn ($value) => is_string($value));
+
+        $viewOnlyRole = Role::firstOrCreate(['slug' => 'grn_view_only'], ['name' => 'GRN View Only']);
+        $viewPermission = Permission::firstOrCreate(
+            ['slug' => 'inventory.view'],
+            ['name' => 'View inventory', 'module' => 'inventory'],
+        );
+        $viewOnlyRole->permissions()->sync([$viewPermission->id]);
+        $viewer = User::factory()->create(['role_id' => $viewOnlyRole->id, 'is_active' => true]);
+
+        $this->actingAs($viewer)
+            ->getJson("/api/v1/inventory/grn/{$grn->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.permissions.view', true)
+            ->assertJsonPath('data.permissions.receive', false)
+            ->assertJsonPath('data.available_actions', []);
+    }
+
+    public function test_reject_returns_a_conflict_when_the_grn_state_changed_after_loading(): void
+    {
+        $grn = GoodsReceiptNote::factory()->create([
+            'status' => GrnStatus::PendingQc->value,
+            'received_by' => $this->user->id,
+        ]);
+        $grn->forceFill(['status' => GrnStatus::Accepted])->save();
+
+        $this->actingAs($this->user)
+            ->patchJson("/api/v1/inventory/grn/{$grn->hash_id}/reject", [
+                'reason' => 'Material no longer needs rejection',
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'grn_state_conflict')
+            ->assertJsonPath('errors.state.0', 'This GRN is no longer pending QC. Refresh and review its current status.');
+    }
+
     public function test_store_grn_replay_returns_the_original_receipt_without_receiving_twice(): void
     {
         [$po, $poItem, $item, $location] = $this->fixture();

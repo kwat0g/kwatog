@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
 import { focusRing } from '@/lib/focus';
+import { useRealtimeApprovalsBoard } from '@/hooks/useRealtimeApprovalsBoard';
 import type { ApprovalKind, ApprovalCardActive, ApprovalCardActioned } from '@/types/approvals';
 
 /** Hours remaining against the SLA for a card, given the current clock. */
@@ -54,6 +55,7 @@ export default function ApprovalsBoardPage() {
   const [pendingLimit, setPendingLimit] = useState(100);
   const [historyLimit, setHistoryLimit] = useState(50);
   const now = useNow();
+  useRealtimeApprovalsBoard();
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['approvals', 'board', kind, pendingLimit, historyLimit],
@@ -62,8 +64,8 @@ export default function ApprovalsBoardPage() {
       pending_limit: pendingLimit,
       history_limit: historyLimit,
     }),
-    placeholderData: (prev) => prev,
-    refetchInterval: 30_000, // light polling — websocket upgrade is a future task
+    placeholderData: (prev, previousQuery) =>
+      previousQuery?.queryKey[2] === kind ? prev : undefined,
   });
   const { data: options, isError: optionsError, refetch: refetchOptions } = useQuery({
     queryKey: ['approvals', 'options'],

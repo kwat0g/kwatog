@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 import { Select } from './Select';
 import { Toolbar } from './Toolbar';
+import { SavedViewsMenu } from './SavedViewsMenu';
 
 export interface FilterOption {
  value: string;
@@ -32,6 +33,10 @@ interface FilterBarProps {
  dateRange?: { fromKey: string; toKey: string; label?: string };
  /** Trailing controls (export, view switch) pinned to the right of the bar. */
  actions?: ReactNode;
+ /** Apply a complete saved view atomically for pages with local filter state. */
+ onApplySavedView?: (filters: Record<string, string>, clearKeys: string[]) => void;
+ /** Turn off saved views for filter bars that are demos or do not represent a list view. */
+ savedViewsEnabled?: boolean;
  /**
   * Hide the search box. Set false when the endpoint has no search — the bar
   * always rendered one, so inventory/movements shipped a search field wired to
@@ -56,6 +61,8 @@ export function FilterBar({
  searchMaxLength,
  dateRange,
  actions,
+ onApplySavedView,
+ savedViewsEnabled = true,
  className,
  inset = true,
  searchable = true,
@@ -112,6 +119,53 @@ export function FilterBar({
  });
  const hasActive = activeFilters.length > 0 || hasActiveDate || searchValue !== '';
  const activeFilterCount = activeFilters.length + (hasActiveDate ? 1 : 0) + (searchValue !== '' ? 1 : 0);
+ const dateRangeControl = dateRange && (
+  <div className="flex items-center gap-1.5">
+   <span className="whitespace-nowrap text-xs font-medium uppercase tracking-wide text-subtle">
+    {dateRange.label ?? 'Date'}
+   </span>
+   <input
+    type="date"
+    aria-label={`${dateRange.label ?? 'Date'} from`}
+    value={String(values[dateRange.fromKey] ?? '')}
+    onChange={(e) => onFilter?.(dateRange.fromKey, e.target.value || undefined)}
+    className="h-8 rounded-md border border-default bg-canvas px-2 text-sm font-mono tabular-nums text-primary outline-none transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent"
+   />
+   <span className="text-subtle" aria-hidden>
+    →
+   </span>
+   <input
+    type="date"
+    aria-label={`${dateRange.label ?? 'Date'} to`}
+    value={String(values[dateRange.toKey] ?? '')}
+    onChange={(e) => onFilter?.(dateRange.toKey, e.target.value || undefined)}
+    className="h-8 rounded-md border border-default bg-canvas px-2 text-sm font-mono tabular-nums text-primary outline-none transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent"
+   />
+  </div>
+ );
+
+ const renderFilter = (filter: FilterConfig) => (
+  <Select
+   key={filter.key}
+   aria-label={filter.label}
+   value={String(values[filter.key] ?? '')}
+   searchable
+   fieldSize="md"
+   onChange={(e) => onFilter?.(filter.key, e.target.value || undefined)}
+   containerClassName="min-w-[140px]"
+  >
+   {filter.options.some((option) => String(option.value) === '') ? null : (
+    <option value="">{filter.placeholder ?? `${filter.label}: All`}</option>
+   )}
+   {filter.options.map((option) => (
+    <option key={option.value} value={option.value}>
+     {String(option.value) === '' && !option.label.startsWith(`${filter.label}:`)
+      ? `${filter.label}: ${option.label}`
+      : option.label}
+    </option>
+   ))}
+  </Select>
+ );
 
  const filterChips = [
   ...activeFilters.map((filter) => {
@@ -156,7 +210,7 @@ export function FilterBar({
  <form
  onSubmit={submit}
  role="search"
- className="flex items-center h-8 w-64 rounded-md border border-default bg-canvas px-2.5 transition-colors duration-fast focus-within:ring-2 focus-within:ring-accent focus-within:border-accent"
+ className="flex items-center h-8 w-56 sm:w-64 rounded-md border border-default bg-canvas px-2.5 transition-colors duration-fast focus-within:ring-2 focus-within:ring-accent focus-within:border-accent"
  >
  <LuSearch size={14} className="text-muted shrink-0" aria-hidden />
  <input
@@ -182,53 +236,17 @@ export function FilterBar({
  </form>
  )}
 
- {filters.map((f) => (
- <Select
- key={f.key}
- aria-label={f.label}
- value={String(values[f.key] ?? '')}
-   searchable
-   fieldSize="md"
- onChange={(e) => onFilter?.(f.key, e.target.value || undefined)}
- containerClassName="min-w-[160px]"
- >
- {f.options.some((o) => String(o.value) === '') ? null : (
- <option value="">{f.placeholder ?? `${f.label}: All`}</option>
+ {savedViewsEnabled && (
+  <SavedViewsMenu
+   values={values}
+   searchValue={searchValue}
+   searchable={searchable}
+   onApply={onApplySavedView}
+  />
  )}
- {f.options.map((o) => (
- <option key={o.value} value={o.value}>
-          {String(o.value) === '' && !o.label.startsWith(`${f.label}:`)
-            ? `${f.label}: ${o.label}`
- : o.label}
- </option>
- ))}
- </Select>
- ))}
 
- {dateRange && (
- <div className="flex items-center gap-1.5">
- <span className="text-xs font-medium uppercase tracking-wide text-subtle whitespace-nowrap">
- {dateRange.label ?? 'Date'}
- </span>
- <input
- type="date"
- aria-label={`${dateRange.label ?? 'Date'} from`}
- value={String(values[dateRange.fromKey] ?? '')}
- onChange={(e) => onFilter?.(dateRange.fromKey, e.target.value || undefined)}
- className="h-8 rounded-md border border-default bg-canvas px-2 text-sm font-mono tabular-nums text-primary outline-none transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent"
- />
- <span className="text-subtle" aria-hidden>
- →
- </span>
- <input
- type="date"
- aria-label={`${dateRange.label ?? 'Date'} to`}
- value={String(values[dateRange.toKey] ?? '')}
- onChange={(e) => onFilter?.(dateRange.toKey, e.target.value || undefined)}
- className="h-8 rounded-md border border-default bg-canvas px-2 text-sm font-mono tabular-nums text-primary outline-none transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent"
- />
- </div>
- )}
+ {filters.map(renderFilter)}
+ {dateRangeControl}
 
  {hasActive && (
   <div role="group" aria-label="Active filters" className="flex min-w-0 flex-wrap items-center gap-1.5">

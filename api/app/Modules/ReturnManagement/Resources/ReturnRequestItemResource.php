@@ -4,31 +4,39 @@ declare(strict_types=1);
 
 namespace App\Modules\ReturnManagement\Resources;
 
+use App\Common\Support\HashId;
 use App\Modules\ReturnManagement\Enums\DispositionType;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class ReturnRequestItemResource extends JsonResource
 {
+    /** @param array<string, bool> $availableActions */
+    public function __construct($resource, private readonly array $availableActions = [])
+    {
+        parent::__construct($resource);
+    }
+
     public function toArray(Request $request): array
     {
         return [
+            'available_actions' => $this->availableActions,
             'reused_incoming_inspection_id' => $this->resource->reusedIncomingInspection()?->hash_id,
-            'id'                => $this->hash_id,
+            'id' => $this->hash_id,
             // These leaked the raw integer PKs of products / items straight to
             // the client, which the URL-obfuscation rule forbids and which the
             // SPA cannot use anyway (it addresses everything by hash_id).
-            'product_id'        => $this->product_id ? \App\Common\Support\HashId::encode((int) $this->product_id) : null,
-            'item_id'           => $this->item_id ? \App\Common\Support\HashId::encode((int) $this->item_id) : null,
-            'quantity'          => (string) $this->quantity,
+            'product_id' => $this->product_id ? HashId::encode((int) $this->product_id) : null,
+            'item_id' => $this->item_id ? HashId::encode((int) $this->item_id) : null,
+            'quantity' => (string) $this->quantity,
             'returned_quantity' => (string) $this->returned_quantity,
-            'received_total'    => (string) $this->returned_quantity,
+            'received_total' => (string) $this->returned_quantity,
             'remaining_quantity' => bccomp(
                 bcsub((string) $this->quantity, (string) $this->returned_quantity, 3),
                 '0',
                 3,
             ) > 0 ? bcsub((string) $this->quantity, (string) $this->returned_quantity, 3) : '0.000',
-            'receipt_recorded'  => (bool) $this->receipt_recorded,
+            'receipt_recorded' => (bool) $this->receipt_recorded,
             // RMA-010 — the reservation this line holds on its source document.
             // Without it the source contract was invisible: an operator hitting
             // "exceeds the remaining quantity" could not see which RMA had taken
@@ -38,36 +46,36 @@ class ReturnRequestItemResource extends JsonResource
                 $active = $this->sourceAllocations->firstWhere('released_at', null);
 
                 return $active ? [
-                    'id'          => $active->hash_id,
+                    'id' => $active->hash_id,
                     'source_kind' => (string) $active->source_kind,
-                    'quantity'    => (string) $active->quantity,
-                    'unit_price'  => (string) $active->unit_price,
+                    'quantity' => (string) $active->quantity,
+                    'unit_price' => (string) $active->unit_price,
                     'reserved_at' => $active->created_at?->toIso8601String(),
                 ] : null;
             }),
-            'unit_price'        => (string) $this->unit_price,
+            'unit_price' => (string) $this->unit_price,
             'original_unit_price' => $this->original_unit_price !== null ? (string) $this->original_unit_price : null,
-            'total'             => (string) $this->total,
-            'lot_number'        => $this->lot_number,
-            'serial_number'     => $this->serial_number,
+            'total' => (string) $this->total,
+            'lot_number' => $this->lot_number,
+            'serial_number' => $this->serial_number,
             'source_sales_order_item_id' => $this->source_sales_order_item_id
-                ? \App\Common\Support\HashId::encode((int) $this->source_sales_order_item_id) : null,
+                ? HashId::encode((int) $this->source_sales_order_item_id) : null,
             'source_invoice_item_id' => $this->source_invoice_item_id
-                ? \App\Common\Support\HashId::encode((int) $this->source_invoice_item_id) : null,
+                ? HashId::encode((int) $this->source_invoice_item_id) : null,
             'source_delivery_item_id' => $this->source_delivery_item_id
-                ? \App\Common\Support\HashId::encode((int) $this->source_delivery_item_id) : null,
+                ? HashId::encode((int) $this->source_delivery_item_id) : null,
             'source_po_item_id' => $this->source_po_item_id
-                ? \App\Common\Support\HashId::encode((int) $this->source_po_item_id) : null,
+                ? HashId::encode((int) $this->source_po_item_id) : null,
             'source_grn_item_id' => $this->source_grn_item_id
-                ? \App\Common\Support\HashId::encode((int) $this->source_grn_item_id) : null,
+                ? HashId::encode((int) $this->source_grn_item_id) : null,
             'source_bill_item_id' => $this->source_bill_item_id
-                ? \App\Common\Support\HashId::encode((int) $this->source_bill_item_id) : null,
+                ? HashId::encode((int) $this->source_bill_item_id) : null,
             'quarantine_status' => $this->quarantine_status,
             'quarantine_location_id' => $this->quarantine_location_id
-                ? \App\Common\Support\HashId::encode((int) $this->quarantine_location_id) : null,
-            'reason'            => $this->reason,
-            'condition'         => $this->condition,
-            'disposition'       => $this->disposition,
+                ? HashId::encode((int) $this->quarantine_location_id) : null,
+            'reason' => $this->reason,
+            'condition' => $this->condition,
+            'disposition' => $this->disposition,
             'disposition_label' => DispositionType::tryFrom((string) $this->disposition)?->label(),
             'disposition_notes' => $this->disposition_notes,
             'mrb' => $this->whenLoaded('materialReviewRecord', fn () => $this->materialReviewRecord ? [
@@ -76,7 +84,7 @@ class ReturnRequestItemResource extends JsonResource
                 'status' => $this->materialReviewRecord->status->value,
                 'status_label' => $this->materialReviewRecord->status->label(),
                 'release_movement_id' => $this->materialReviewRecord->release_movement_id
-                    ? \App\Common\Support\HashId::encode((int) $this->materialReviewRecord->release_movement_id)
+                    ? HashId::encode((int) $this->materialReviewRecord->release_movement_id)
                     : null,
             ] : null),
             // Quantity actually moved into good stock, scrapped, or returned.
@@ -85,19 +93,19 @@ class ReturnRequestItemResource extends JsonResource
                     ? (string) $this->stock_movement_quantity
                     : null,
             'stock_movement_id' => $this->stock_movement_id
-                ? \App\Common\Support\HashId::encode((int) $this->stock_movement_id)
+                ? HashId::encode((int) $this->stock_movement_id)
                 : null,
-            'ncr'               => $this->whenLoaded('ncr', fn () => $this->ncr ? [
-                'id'         => $this->ncr->hash_id,
+            'ncr' => $this->whenLoaded('ncr', fn () => $this->ncr ? [
+                'id' => $this->ncr->hash_id,
                 'ncr_number' => $this->ncr->ncr_number,
             ] : null),
-            'product'           => $this->whenLoaded('product', fn () => $this->product ? [
-                'id'          => $this->product->hash_id,
+            'product' => $this->whenLoaded('product', fn () => $this->product ? [
+                'id' => $this->product->hash_id,
                 'part_number' => $this->product->part_number,
-                'name'        => $this->product->name,
+                'name' => $this->product->name,
             ] : null),
-            'item'              => $this->whenLoaded('item', fn () => $this->item ? [
-                'id'   => $this->item->hash_id,
+            'item' => $this->whenLoaded('item', fn () => $this->item ? [
+                'id' => $this->item->hash_id,
                 'code' => $this->item->code,
                 'name' => $this->item->name,
             ] : null),

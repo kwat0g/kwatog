@@ -19,6 +19,7 @@ import { punchApi } from '@/api/attendance/punch';
 import { useFeature } from '@/hooks/useFeature';
 import { useAuthStore } from '@/stores/authStore';
 import { formatTime } from '@/lib/formatDate';
+import { scheduleRealtimeQueryInvalidation } from '@/lib/realtime/invalidationMap';
 import type { GpsFix, PunchResult } from '@/types/attendance';
 
 /** Pause after a failed attempt before the button works again. */
@@ -176,11 +177,13 @@ export function useTimeClock({ requireEmployee = false }: Options = {}) {
     onSuccess: (r) => {
       setResult(r);
       toast.success(`Timed ${r.direction} at ${formatTime(r.punched_at)}`, { id: TOAST_ID });
-      qc.invalidateQueries({ queryKey: ['attendance'] });
-      qc.invalidateQueries({ queryKey: ['self-service'] });
-      qc.invalidateQueries({ queryKey: ['production', 'execution-readiness'] });
-      qc.invalidateQueries({ queryKey: ['production', 'crew'] });
-      qc.invalidateQueries({ queryKey: ['production', 'crew-options'] });
+      scheduleRealtimeQueryInvalidation(qc, [
+        ['attendance'],
+        ['self-service'],
+        ['production', 'execution-readiness'],
+        ['production', 'crew'],
+        ['production', 'crew-options'],
+      ]);
     },
     onError: (e) => {
       const described = describeFailure(e);

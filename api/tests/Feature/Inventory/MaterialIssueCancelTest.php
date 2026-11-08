@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
+use App\Modules\Dashboard\Events\DashboardWidgetDataChanged;
+use App\Modules\Inventory\Events\MaterialIssueSlipChanged;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\MaterialIssueSlipItem;
@@ -61,6 +64,44 @@ class MaterialIssueCancelTest extends TestCase
                 'quantity_issued'  => $qty,
             ]],
         ], $this->user);
+    }
+
+    public function test_material_issue_create_and_cancel_stage_realtime_signals(): void
+    {
+        $eventType = 'App\\Modules\\Inventory\\Events\\MaterialIssueSlipChanged';
+        $slip = $this->issue('4');
+        $refresh = DB::table('event_outbox')->where('event_type', $eventType)->first();
+
+        $this->assertNotNull($refresh, 'Creating a material issue slip must stage its viewer refresh signal.');
+        $created = json_decode((string) $refresh->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($slip->hash_id, $created['entityHashId']);
+        $this->assertSame('created', $created['action']);
+        $event = app(OutboxEventCodec::class)->decode($refresh->event_type, $created);
+        $this->assertInstanceOf(MaterialIssueSlipChanged::class, $event);
+        $broadcast = $event->broadcastWith();
+        $this->assertSame('material_issue_slip', $broadcast['entity_type']);
+        $this->assertArrayNotHasKey('slip_number', $broadcast);
+        $this->assertArrayNotHasKey('total_value', $broadcast);
+
+        $aggregateType = DashboardWidgetDataChanged::class;
+        $aggregateRow = DB::table('event_outbox')->where('event_type', $aggregateType)->first();
+        $this->assertNotNull($aggregateRow, 'Inventory widget viewers need a separate aggregate refresh signal.');
+        $aggregate = app(OutboxEventCodec::class)->decode(
+            $aggregateRow->event_type,
+            json_decode((string) $aggregateRow->payload, true, flags: JSON_THROW_ON_ERROR),
+        );
+        $this->assertInstanceOf(DashboardWidgetDataChanged::class, $aggregate);
+        $this->assertSame(['private-dashboard.widgets'], array_map(
+            static fn ($channel): string => $channel->name,
+            $aggregate->broadcastOn(),
+        ));
+        $this->assertSame('dashboard_widget_data', $aggregate->broadcastWith()['entity_type']);
+        $this->assertNull($aggregate->broadcastWith()['entity_id']);
+
+        DB::table('event_outbox')->where('event_type', $eventType)->delete();
+        $this->service->cancel($slip, $this->user);
+        $cancelled = DB::table('event_outbox')->where('event_type', $eventType)->firstOrFail();
+        $this->assertSame('status_changed', json_decode((string) $cancelled->payload, true, flags: JSON_THROW_ON_ERROR)['action']);
     }
 
     public function test_cancel_issued_slip_reverses_stock(): void

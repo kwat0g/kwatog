@@ -63,7 +63,6 @@ export default function SupplierRankingPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'supplier-performance', 'ranking', queryParams],
     queryFn: () => supplierPerformanceApi.ranking(queryParams),
-    placeholderData: (previous) => previous,
   });
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {

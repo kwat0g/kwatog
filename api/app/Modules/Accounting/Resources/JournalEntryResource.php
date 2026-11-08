@@ -48,6 +48,44 @@ class JournalEntryResource extends JsonResource
             'created_at'           => optional($this->created_at)->toIso8601String(),
             'updated_at'           => optional($this->updated_at)->toIso8601String(),
             'deleted_at'           => optional($this->deleted_at)?->toIso8601String(),
+            // Journal actions are evaluated for the current viewer from the
+            // same status, source-link and maker-checker guards used by the
+            // service. Lists do not need per-row action policy work.
+            'available_actions'    => $this->availableActions($request),
+        ];
+    }
+
+    /** @return array{can_edit: bool, can_delete: bool, can_restore: bool, can_post: bool, can_reverse: bool}|null */
+    private function availableActions(Request $request): ?array
+    {
+        $viewer = $request->user();
+        if ($request->route('journalEntry') === null || $viewer === null) {
+            return null;
+        }
+
+        $draft = $this->isDraft();
+        $posted = $this->isPosted();
+        $archived = $this->trashed();
+        $canCreate = $viewer->can('accounting.journal.create');
+        $differentMaker = $this->created_by === null || (int) $this->created_by !== (int) $viewer->getKey();
+        $manualOrReversal = $this->reference_type === null
+            || $this->reference_type === 'journal_entry_reversal';
+
+        return [
+            'can_edit' => $canCreate && $draft && ! $archived,
+            'can_delete' => $canCreate && $draft && ! $archived,
+            'can_restore' => $canCreate && $draft && $archived,
+            'can_post' => $viewer->can('accounting.journal.post')
+                && $draft
+                && ! $archived
+                && $this->reference_type === null
+                && $differentMaker,
+            'can_reverse' => $viewer->can('accounting.journal.reverse')
+                && $posted
+                && ! $archived
+                && $this->reversed_by_entry_id === null
+                && $manualOrReversal
+                && $differentMaker,
         ];
     }
 }

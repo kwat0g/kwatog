@@ -13,17 +13,22 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { EmployeeLoan } from '@/types/loans';
+import { useEmployeeLoanListRealtime } from '@/hooks/useRealtimeRecord';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 export default function LoansPage() {
+ useEmployeeLoanListRealtime();
  const navigate = useNavigate();
  const { can } = usePermission();
  const [filters, setFilters] = useUrlFilters<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
 
+ const queryKey = ['loans', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['loans', filters],
+ queryKey,
  queryFn: () => loansApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined });
  const { data: loanOptions } = useQuery({
  queryKey: ['loan-options'],
  queryFn: loansApi.options,

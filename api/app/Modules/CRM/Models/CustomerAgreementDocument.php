@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +20,11 @@ class CustomerAgreementDocument extends Model
     {
         static::updating(fn () => throw new \LogicException('Customer agreement document versions are immutable.'));
         static::deleting(fn () => throw new \LogicException('Customer agreement document versions cannot be deleted.'));
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
     }
 
     public function uploadedBy(): BelongsTo

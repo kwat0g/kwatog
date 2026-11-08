@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { LeaveCalendarDay } from '@/types/leave';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const MONTH_NAMES = [
@@ -47,6 +48,7 @@ function coverageTextColor(pct: number, successPct?: number, warningPct?: number
 }
 
 export default function LeaveCalendarPage() {
+  useRealtimeList('leave_request', 'visible');
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);

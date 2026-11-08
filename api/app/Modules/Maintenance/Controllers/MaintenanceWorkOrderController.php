@@ -14,8 +14,9 @@ use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
+use App\Modules\Maintenance\Exceptions\MaintenanceWorkOrderStateConflictException;
+use App\Modules\Maintenance\Models\MaintenancePartRequest;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
-use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
 use App\Modules\Maintenance\Models\SparePartUsage;
 use App\Modules\Maintenance\Requests\AssignMaintenanceWorkOrderRequest;
 use App\Modules\Maintenance\Requests\CompleteMaintenanceWorkOrderRequest;
@@ -25,17 +26,19 @@ use App\Modules\Maintenance\Requests\SubmitMaintenanceRepairRequest;
 use App\Modules\Maintenance\Requests\VerifyMaintenanceRepairRequest;
 use App\Modules\Maintenance\Resources\MaintenanceWorkOrderResource;
 use App\Modules\Maintenance\Services\MaintenanceAssigneeSuggestionService;
-use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
+use App\Modules\Maintenance\Services\MaintenancePartRequestService;
 use App\Modules\Maintenance\Services\MaintenanceWindowService;
+use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\Maintenance\Services\SparePartUsageService;
+use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class MaintenanceWorkOrderController
@@ -201,12 +204,22 @@ class MaintenanceWorkOrderController
             fn (MaintenanceWorkOrder $locked) => $this->service->start($locked, $request->user()), claim: true, supervisorMayExecute: true));
     }
 
-    public function complete(CompleteMaintenanceWorkOrderRequest $request, MaintenanceWorkOrder $workOrder): MaintenanceWorkOrderResource
-    {
-        return new MaintenanceWorkOrderResource(
-            $this->asExecutor($request, $workOrder,
-                fn (MaintenanceWorkOrder $locked) => $this->service->complete($locked, $request->validated(), $request->user()), supervisorMayExecute: true)
-        );
+    public function complete(
+        CompleteMaintenanceWorkOrderRequest $request,
+        MaintenanceWorkOrder $workOrder,
+    ): JsonResponse|MaintenanceWorkOrderResource {
+        try {
+            $updated = $this->asExecutor($request, $workOrder,
+                fn (MaintenanceWorkOrder $locked) => $this->service->complete($locked, $request->validated(), $request->user()), supervisorMayExecute: true);
+        } catch (MaintenanceWorkOrderStateConflictException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+                'code' => $exception->errorCode(),
+            ], 409);
+        }
+
+        return new MaintenanceWorkOrderResource($updated);
     }
 
     public function submitRepair(SubmitMaintenanceRepairRequest $request, MaintenanceWorkOrder $workOrder): MaintenanceWorkOrderResource
@@ -277,18 +290,20 @@ class MaintenanceWorkOrderController
     public function recordSparePart(RecordSparePartUsageRequest $request, MaintenanceWorkOrder $workOrder): JsonResponse
     {
         $partRequest = $this->asExecutor($request, $workOrder,
-            fn (MaintenanceWorkOrder $locked) => app(\App\Modules\Maintenance\Services\MaintenancePartRequestService::class)
+            fn (MaintenanceWorkOrder $locked) => app(MaintenancePartRequestService::class)
                 ->request($locked, $request->validated(), $request->user()), recording: true);
+
         return response()->json(['data' => ['id' => $partRequest->hash_id, 'status' => $partRequest->status,
             'quantity' => $partRequest->quantity]], 201);
     }
 
     public function withdrawPartRequest(Request $request, MaintenanceWorkOrder $workOrder,
-        \App\Modules\Maintenance\Models\MaintenancePartRequest $partRequest): JsonResponse
+        MaintenancePartRequest $partRequest): JsonResponse
     {
         $result = $this->asExecutor($request, $workOrder,
-            fn (MaintenanceWorkOrder $locked) => app(\App\Modules\Maintenance\Services\MaintenancePartRequestService::class)
+            fn (MaintenanceWorkOrder $locked) => app(MaintenancePartRequestService::class)
                 ->withdraw($locked, $partRequest, $request->user()), recording: true);
+
         return response()->json(['data' => ['id' => $result->hash_id, 'status' => $result->status]]);
     }
 

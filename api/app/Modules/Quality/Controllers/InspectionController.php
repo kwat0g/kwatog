@@ -170,6 +170,7 @@ class InspectionController
      *     @OA\RequestBody(required=true, @OA\JsonContent(
      *         required={"measurements"},
      *
+     *         @OA\Property(property="expected_result_version", type="integer", minimum=0, description="Optional stale-edit guard; send the result_version from the inspection response."),
      *         @OA\Property(property="measurements", type="array", @OA\Items(type="object",
      *             required={"id"},
      *             @OA\Property(property="id", type="string", description="Measurement hash ID"),
@@ -180,6 +181,7 @@ class InspectionController
      *     )),
      *
      *     @OA\Response(response=200, description="Measurements recorded"),
+     *     @OA\Response(response=409, description="Inspection changed since it was read"),
      *     @OA\Response(response=422, description="Validation error")
      * )
      */
@@ -188,7 +190,12 @@ class InspectionController
         Inspection $inspection
     ): InspectionResource {
         $rows = $request->decodedRows();
-        $insp = $this->service->recordMeasurements($inspection, $rows, $request->user());
+        $insp = $this->service->recordMeasurements(
+            $inspection,
+            $rows,
+            $request->user(),
+            $request->has('expected_result_version') ? $request->integer('expected_result_version') : null,
+        );
 
         return new InspectionResource($insp);
     }
@@ -231,8 +238,10 @@ class InspectionController
 
     public function recordItemResults(RecordInspectionItemResultsRequest $request, Inspection $inspection): InspectionResource
     {
-        return new InspectionResource($this->service->recordItemResults($inspection, array_replace($request->validated(), $inspection->usesChecklistCapture()
-            ? ['expected_result_version' => $request->integer('expected_result_version')] : []), $request->user()));
+        return new InspectionResource($this->service->recordItemResults($inspection, array_replace(
+            $request->validated(),
+            $request->has('expected_result_version') ? ['expected_result_version' => $request->integer('expected_result_version')] : [],
+        ), $request->user()));
     }
 
     public function replaceChecklist(ReplaceInspectionChecklistRequest $request, Inspection $inspection): InspectionResource

@@ -7,6 +7,7 @@ namespace App\Modules\SupplyChain\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\TrashedFilter;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Exceptions\ShipmentStateConflictException;
 use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -48,11 +49,22 @@ class ContainerService
         });
     }
 
-    public function update(Container $container, array $data): Container
+    public function update(
+        Container $container,
+        array $data,
+        ?string $expectedVersion = null,
+        ?string $expectedShipmentVersion = null,
+    ): Container
     {
-        return DB::transaction(function () use ($container, $data): Container {
+        return DB::transaction(function () use ($container, $data, $expectedVersion, $expectedShipmentVersion): Container {
             $locked = Container::query()->lockForUpdate()->findOrFail($container->id);
+            if ($expectedVersion !== null && $expectedVersion !== $locked->updated_at?->toISOString()) {
+                throw new ShipmentStateConflictException('Container changed since you opened it. Refresh before saving these changes.');
+            }
             $shipment = Shipment::query()->lockForUpdate()->findOrFail($locked->shipment_id);
+            if ($expectedShipmentVersion !== null && $expectedShipmentVersion !== $shipment->updated_at?->toISOString()) {
+                throw new ShipmentStateConflictException('Shipment changed since you opened this container. Refresh before saving these changes.');
+            }
             $this->assertMutable($shipment);
             $locked->update($data);
 

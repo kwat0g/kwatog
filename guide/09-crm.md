@@ -24,6 +24,9 @@ Complaints + 8D (when something goes wrong).
 1. Open `/crm/products` (**Products** in the sidebar).
 2. Open a product (`/crm/products/:id`) to see specs and pricing.
 3. Adding products needs manage permission — held by PPC, not Sales.
+4. Seeded base and minimum prices are fictional thesis-demo values; see the
+   [price table](../docs/SEEDS.md#18-thesis-demo-extension). Customer price
+   agreements remain separate and can override the base price.
 
 ## 4. Price agreements (as Sales — view only)
 

@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
@@ -49,6 +51,12 @@ const CHANNEL_DEFAULT: Record<Channel, boolean> = {
 
 export default function NotificationPreferencesPage() {
  const qc = useQueryClient();
+ const userId = useAuthStore((state) => state.user?.id);
+ useRealtimeSignal(
+  'notification_preferences_changed',
+  userId ? `user.notification-preferences.${userId}` : '',
+  '.auth.notification-preferences.changed',
+ );
  const [search, setSearch] = useState('');
 
  const {

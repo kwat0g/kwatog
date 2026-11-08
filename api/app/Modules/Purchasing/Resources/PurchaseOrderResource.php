@@ -12,6 +12,10 @@ class PurchaseOrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $availableActions = $request->route('purchaseOrder') !== null && $request->user()
+            ? app(PurchaseOrderAccessPolicy::class)->actionsFor($request->user(), $this->resource)
+            : null;
+
         return [
             'id' => $this->hash_id,
             'po_number' => $this->po_number,
@@ -51,7 +55,7 @@ class PurchaseOrderResource extends JsonResource
                     'proposed_total' => $proposed['total_amount'],
                 ];
             }),
-            'latest_response' => $this->latestResponseBlock(),
+            'latest_response' => $this->latestResponseBlock($request),
             'requires_vp_approval' => (bool) $this->requires_vp_approval,
             'is_auto_generated' => (bool) $this->is_auto_generated,
             'current_approval_step' => (int) $this->current_approval_step,
@@ -161,9 +165,9 @@ class PurchaseOrderResource extends JsonResource
             // PU-13 — action decisions for detail/action responses, mirroring
             // PurchaseRequestResource. Null on the paginated list to keep the
             // delegation/step queries off per-row execution.
-            'actions' => $request->route('purchaseOrder') !== null && $request->user()
-                ? app(PurchaseOrderAccessPolicy::class)->actionsFor($request->user(), $this->resource)
-                : null,
+            'available_actions' => $availableActions,
+            // Keep the established API field for existing integrations.
+            'actions' => $availableActions,
         ];
     }
 
@@ -174,18 +178,22 @@ class PurchaseOrderResource extends JsonResource
      *
      * @return array<string, mixed>|null
      */
-    private function latestResponseBlock(): ?array
+    private function latestResponseBlock(Request $request): ?array
     {
         if (! $this->relationLoaded('latestResponse') || ! $this->latestResponse) {
             return null;
         }
 
         $response = $this->latestResponse;
+        $viewer = $request->user();
 
         return [
             'id' => $response->hash_id,
             'type' => $response->response_type?->value ?? (string) $response->response_type,
             'status' => $response->status?->value ?? (string) $response->status,
+            'available_actions' => $viewer instanceof \App\Modules\Auth\Models\User
+                ? app(PurchaseOrderAccessPolicy::class)->responseActionsFor($viewer, $response)
+                : ['accept' => false, 'reject' => false],
             'proposed_delivery_date' => optional($response->proposed_delivery_date)->toDateString(),
             'notes' => $response->notes,
             'responded_at' => optional($response->responded_at)->toIso8601String(),

@@ -18,7 +18,7 @@ export default function CustomerServiceDashboardPage() {
   return (
     <RoleDashboardShell
       title="Customer Service"
-      subtitle="Complaints and return cases: what is open, what is waiting on us."
+      subtitle="Complaints, returns, and service queues."
       kpiCodes={[]}
       emptyTitle="No customer-service blocks configured"
       emptyDescription="Complaints and return cases appear here as you hold those module reads."

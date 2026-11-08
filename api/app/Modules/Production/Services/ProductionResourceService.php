@@ -440,7 +440,15 @@ final class ProductionResourceService
 
     public function releaseReservation(WorkOrder $wo, ?int $ncrId = null): void
     {
-        ProductionSchedule::query()->where('work_order_id', $wo->id)->where('rework_ncr_id', $ncrId)->where('reserves_capacity', true)->update(['reserves_capacity' => false]);
+        $schedules = ProductionSchedule::query()
+            ->where('work_order_id', $wo->id)
+            ->where('rework_ncr_id', $ncrId)
+            ->where('reserves_capacity', true)
+            ->lockForUpdate()
+            ->get();
+        foreach ($schedules as $schedule) {
+            $schedule->update(['reserves_capacity' => false]);
+        }
     }
 
     public function assertCanAcquire(WorkOrder $wo, Machine $machine, Mold $mold, ?int $ncrId = null): void

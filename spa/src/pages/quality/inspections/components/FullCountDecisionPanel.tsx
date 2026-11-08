@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { inspectionsApi } from '@/api/quality/inspections';
+import { inspectionQueryKeys } from '@/lib/queryKeys/inspections';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
@@ -28,7 +30,7 @@ export function FullCountDecisionPanel({ inspection, canManage }: { inspection: 
     && current.measurements?.length === 1;
   useUnsavedChangesGuard(editable && (counted || defects !== '' || reason !== '' || segregated), true);
 
-  const submit = useMutation<Inspection, AxiosError<{ message?: string }>>({
+  const submit = useMutation<Inspection, AxiosError<{ code?: string; message?: string }>>({
     mutationFn: () => inspectionsApi.recordBatchResult(current.id, {
       expected_result_version: current.result_version ?? 0,
       coverage_confirmed: true,
@@ -45,10 +47,20 @@ export function FullCountDecisionPanel({ inspection, canManage }: { inspection: 
       setDefects('');
       setReason('');
       setSegregated(false);
-      queryClient.setQueryData(['quality', 'inspections', current.id], result);
-      for (const key of [['quality', 'inspections'], ['quality', 'ncrs'], ['inventory', 'grn']])
-        queryClient.invalidateQueries({ queryKey: key });
+      queryClient.setQueryData(inspectionQueryKeys.detail(current.id), result);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'inspection', entityId: current.id },
+        [['inventory', 'grn']],
+        [inspectionQueryKeys.detail(current.id)],
+      );
       toast.success(result.status === 'awaiting_review' ? 'Submitted for independent QC review.' : 'Inspection submitted.');
+    },
+    onError: (error) => {
+      if (error.response?.status === 409 && error.response.data?.code === 'inspection_state_conflict') {
+        void invalidateRealtimeChange(queryClient, { entityType: 'inspection', entityId: current.id });
+        toast.error('Inspection changed in another session. The latest saved version was loaded; your entries are retained for review.');
+      }
     },
   });
 

@@ -10,6 +10,7 @@ use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\SupplyChain\Enums\LandedCostAllocationMethod;
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Exceptions\ShipmentStateConflictException;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
 use App\Modules\SupplyChain\Requests\CreateShipmentRequest;
@@ -102,21 +103,27 @@ class ShipmentController
         return new ShipmentResource($this->service->create($request->validated(), $request->user()));
     }
 
-    public function updateStatus(Request $request, Shipment $shipment): ShipmentResource
+    public function updateStatus(Request $request, Shipment $shipment): ShipmentResource|JsonResponse
     {
         $data = $request->validate([
             'status' => ['required', Rule::in(ShipmentStatus::values())],
             'note' => ['nullable', 'string', 'max:500'],
+            'expected_version' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
-        return new ShipmentResource($this->service->updateStatus(
-            $shipment,
-            ShipmentStatus::from((string) $data['status']),
-            $data['note'] ?? null,
-        ));
+        try {
+            return new ShipmentResource($this->service->updateStatus(
+                $shipment,
+                ShipmentStatus::from((string) $data['status']),
+                $data['note'] ?? null,
+                $data['expected_version'] ?? null,
+            ));
+        } catch (ShipmentStateConflictException $exception) {
+            return response()->json(['message' => $exception->getMessage(), 'code' => $exception->errorCode()], 409);
+        }
     }
 
-    public function updateMeta(Request $request, Shipment $shipment): ShipmentResource
+    public function updateMeta(Request $request, Shipment $shipment): ShipmentResource|JsonResponse
     {
         $data = $request->validate([
             'carrier' => ['nullable', 'string', 'max:100'],
@@ -146,9 +153,18 @@ class ShipmentController
                 }
             }],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'expected_version' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
-        return new ShipmentResource($this->service->updateMeta($shipment, $data));
+        try {
+            return new ShipmentResource($this->service->updateMeta(
+                $shipment,
+                $data,
+                $data['expected_version'] ?? null,
+            ));
+        } catch (ShipmentStateConflictException $exception) {
+            return response()->json(['message' => $exception->getMessage(), 'code' => $exception->errorCode()], 409);
+        }
     }
 
     public function uploadDocument(Request $request, Shipment $shipment): ShipmentDocumentResource

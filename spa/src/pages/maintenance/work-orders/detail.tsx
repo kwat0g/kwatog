@@ -27,6 +27,8 @@ import { SparePartSheet } from './SparePartSheet';
 import { AssignmentPanel } from './AssignmentPanel';
 import { PartReconciliationPanel } from './PartReconciliationPanel';
 import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 export default function MaintenanceWorkOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -34,6 +36,7 @@ export default function MaintenanceWorkOrderDetailPage() {
   const selfService = useLocation().pathname.startsWith('/self-service/');
   const isSupervisor = useAuthStore((state) => state.user?.role.slug === 'maintenance_supervisor');
   const qc = useQueryClient();
+  useRealtimeRecord('maintenance_work_order', id);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeRemarks, setCompleteRemarks] = useState('');
   const [assignmentDialogOpen, setAssignmentDialogOpen] = useState(false);
@@ -44,11 +47,9 @@ export default function MaintenanceWorkOrderDetailPage() {
   const [partOpen, setPartOpen] = useState(false);
   const [inspectionReason, setInspectionReason] = useState('');
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'work-order', id],
     queryFn: () => workOrdersApi.show(id),
-    refetchInterval: 15_000,
-    refetchOnWindowFocus: true,
   });
   const { data: options } = useQuery({
     queryKey: ['maintenance', 'work-order-options'],
@@ -57,9 +58,9 @@ export default function MaintenanceWorkOrderDetailPage() {
   });
   const startMutation = useMutation({
     mutationFn: () => workOrdersApi.start(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+    onSuccess: (updated) => {
+      qc.setQueryData(['maintenance', 'work-order', id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'maintenance_work_order', entityId: id });
       setStartDialogOpen(false);
       toast.success('Work order started.');
     },
@@ -70,13 +71,21 @@ export default function MaintenanceWorkOrderDetailPage() {
       workOrdersApi.complete(id, {
         remarks: completeRemarks || undefined,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+    onSuccess: (updated) => {
+      qc.setQueryData(['maintenance', 'work-order', id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'maintenance_work_order', entityId: id });
       toast.success('Work order completed.');
       setCompleteOpen(false);
     },
-    onError: (error) => reportMutationError(error, 'Could not complete the work order.'),
+    onError: async (error) => {
+      if ((error as { response?: { status?: number; data?: { message?: string } } })?.response?.status === 409) {
+        await qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id], exact: true });
+        setCompleteOpen(false);
+        toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'The work order changed. Review its current status.');
+        return;
+      }
+      reportMutationError(error, 'Could not complete the work order.');
+    },
   });
   const cancelMutation = useMutation({
     mutationFn: async (reason: string) => {
@@ -86,13 +95,13 @@ export default function MaintenanceWorkOrderDetailPage() {
           inspection_reason: inspectionReason.trim(),
         });
         qc.setQueryData(['maintenance', 'work-order', id], updated);
-        void qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
+        void invalidateRealtimeChange(qc, { entityType: 'maintenance_work_order', entityId: id });
       }
       return workOrdersApi.cancel(id, reason);
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+    onSuccess: (updated) => {
+      qc.setQueryData(['maintenance', 'work-order', id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'maintenance_work_order', entityId: id });
       toast.success('Work order cancelled.');
       setCancelOpen(false);
       setInspectionReason('');
@@ -138,6 +147,8 @@ export default function MaintenanceWorkOrderDetailPage() {
   const canAssign = data.status !== 'in_progress' && hasAction('assign') && can('maintenance.wo.assign');
   const canCloseWork = data.closure_readiness?.can_close_work ?? false;
   const canCloseParts = data.parts_readiness?.can_close_parts ?? data.spare_parts?.length === 0;
+  const canCompleteNow = !data.verification_required && hasAction('complete') && canCloseWork && canCloseParts
+    && canAny('maintenance.wo.complete', 'maintenance.wo.assign');
 
   return (
     <div>
@@ -257,7 +268,7 @@ export default function MaintenanceWorkOrderDetailPage() {
             title="Spare parts"
             meta={data.spare_parts?.length ? `${data.spare_parts.length}` : undefined}
             scrollBody
-            actions={(data.can_record_work ?? ((hasAction('complete') || hasAction('submit_repair')) && can('maintenance.wo.complete'))) ? (
+            actions={data.can_record_work === true ? (
               <Button variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => setPartOpen(true)}>
                 Request spare parts
               </Button>
@@ -327,6 +338,11 @@ export default function MaintenanceWorkOrderDetailPage() {
             rows={3}
           />
           <p className="text-xs text-muted">Downtime is calculated from the machine downtime record.</p>
+          {(isFetching || !canCompleteNow) && (
+            <p className="text-sm text-warning" role="status">
+              {isFetching ? 'Refreshing the current work order status…' : 'This work order changed and can no longer be completed from its current state.'}
+            </p>
+          )}
         </div>
         <ModalFooter>
           <Button variant="secondary" onClick={() => setCompleteOpen(false)}>
@@ -336,6 +352,7 @@ export default function MaintenanceWorkOrderDetailPage() {
             variant="primary"
             onClick={() => completeMutation.mutate()}
             loading={completeMutation.isPending}
+            disabled={isFetching || !canCompleteNow}
           >
             {completeMutation.isPending ? 'Completing…' : 'Confirm complete'}
           </Button>
@@ -410,7 +427,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       <SparePartSheet
         workOrderId={id}
         logs={data.logs ?? []}
-        isOpen={partOpen && (data.can_record_work ?? ((hasAction('complete') || hasAction('submit_repair')) && can('maintenance.wo.complete')))}
+        isOpen={partOpen && data.can_record_work === true}
         onClose={() => setPartOpen(false)}
         desktop
       />

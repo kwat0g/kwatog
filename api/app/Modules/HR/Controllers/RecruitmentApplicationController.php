@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Common\Support\SearchOperator;
+use App\Modules\HR\Enums\ApplicationStage;
+use App\Modules\HR\Enums\InterviewOutcome;
+use App\Modules\HR\Exceptions\RecruitmentStateConflictException;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
@@ -14,13 +17,12 @@ use App\Modules\HR\Resources\ApplicationInterviewResource;
 use App\Modules\HR\Resources\JobApplicationResource;
 use App\Modules\HR\Resources\RecruitmentApplicationEventResource;
 use App\Modules\HR\Services\RecruitmentService;
-use App\Modules\HR\Enums\ApplicationStage;
-use App\Modules\HR\Enums\InterviewOutcome;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RecruitmentApplicationController
 {
@@ -43,7 +45,14 @@ class RecruitmentApplicationController
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = JobApplication::with(['jobPosting:id,title,posting_number']);
+        $query = JobApplication::with(['jobPosting' => static fn ($posting) => $posting
+            ->select(['id', 'title', 'posting_number'])
+            ->withCount('applications')])
+            ->withExists([
+                'interviews as has_interviews',
+                'interviews as has_passed_interview' => static fn ($interviews) => $interviews
+                    ->where('outcome', InterviewOutcome::Passed->value),
+            ]);
 
         if (! empty($filters['stage'])) {
             $query->where('stage', $filters['stage']);
@@ -88,23 +97,35 @@ class RecruitmentApplicationController
         );
     }
 
-    public function changeStage(AdvanceApplicationRequest $request, JobApplication $jobApplication): JobApplicationResource
+    public function changeStage(AdvanceApplicationRequest $request, JobApplication $jobApplication): JobApplicationResource|JsonResponse
     {
-        if ($request->input('action') === 'reject') {
-            $this->service->rejectApplication(
-                $jobApplication,
-                $request->input('rejection_reason'),
-                $request->user(),
-            );
-        } else {
-            $interviewData = $request->input('interview');
-            if ($interviewData) {
-                $interviewData['created_by'] = $request->user()->id;
+        $expectedStage = $request->validated('expected_stage');
+        $expectedStage = $expectedStage === null ? null : ApplicationStage::from($expectedStage);
+
+        try {
+            if ($request->input('action') === 'reject') {
+                $this->service->rejectApplication(
+                    $jobApplication,
+                    $request->input('rejection_reason'),
+                    $request->user(),
+                    $expectedStage,
+                );
+            } else {
+                $interviewData = $request->input('interview');
+                if ($interviewData) {
+                    $interviewData['created_by'] = $request->user()->id;
+                }
+                $this->service->advanceStage($jobApplication, $interviewData, $request->user(), $expectedStage);
             }
-            $this->service->advanceStage($jobApplication, $interviewData, $request->user());
+        } catch (RecruitmentStateConflictException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+                'code' => $exception->errorCode(),
+            ], 409);
         }
 
-        return new JobApplicationResource($jobApplication->fresh()->load('jobPosting'));
+        return new JobApplicationResource($jobApplication->fresh()->load(['jobPosting', 'interviews']));
     }
 
     public function storeInterview(StoreInterviewRequest $request, JobApplication $jobApplication): ApplicationInterviewResource
@@ -119,14 +140,15 @@ class RecruitmentApplicationController
     public function updateInterview(Request $request, ApplicationInterview $interview): ApplicationInterviewResource
     {
         $data = $request->validate([
-            'scheduled_at'     => ['sometimes', 'date', 'after:now'],
-            'location'         => ['sometimes', 'nullable', 'string', 'max:200'],
+            'scheduled_at' => ['sometimes', 'date', 'after:now'],
+            'location' => ['sometimes', 'nullable', 'string', 'max:200'],
             'interviewer_name' => ['sometimes', 'string', 'max:200'],
-            'notes'            => ['sometimes', 'nullable', 'string'],
-            'outcome'          => ['sometimes', 'nullable', Rule::enum(InterviewOutcome::class)],
+            'notes' => ['sometimes', 'nullable', 'string'],
+            'outcome' => ['sometimes', 'nullable', Rule::enum(InterviewOutcome::class)],
         ]);
 
         $this->service->updateInterview($interview, $data, $request->user());
+
         return new ApplicationInterviewResource($interview->fresh());
     }
 
@@ -144,7 +166,7 @@ class RecruitmentApplicationController
 
         return response()->json([
             'data' => [
-                'id'   => $note->hash_id,
+                'id' => $note->hash_id,
                 'body' => $note->body,
                 'user' => ['id' => $request->user()->hash_id, 'name' => $request->user()->name],
                 'created_at' => $note->created_at->toIso8601String(),
@@ -152,9 +174,9 @@ class RecruitmentApplicationController
         ], 201);
     }
 
-    public function downloadResume(JobApplication $jobApplication): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function downloadResume(JobApplication $jobApplication): StreamedResponse
     {
-        if (!Storage::disk('local')->exists($jobApplication->resume_path)) {
+        if (! Storage::disk('local')->exists($jobApplication->resume_path)) {
             abort(404, 'Resume file not found.');
         }
 

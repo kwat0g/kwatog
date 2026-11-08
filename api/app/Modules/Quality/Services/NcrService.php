@@ -39,6 +39,7 @@ use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Events\OutgoingQuantityReleased;
+use App\Modules\Quality\Exceptions\NcrStateConflictException;
 use App\Modules\Quality\Jobs\ProcessNcrRecurrenceScan;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NcrAction;
@@ -141,6 +142,7 @@ class NcrService
                 'performer:id,name,role_id',
                 'owner:id,name',
                 'verifier:id,name',
+                'ncr:id,ncr_number,status',
             ])->orderBy('performed_at'),
         ]);
     }
@@ -503,7 +505,7 @@ class NcrService
         array $sortingEvidence = [],
     ): NonConformanceReport {
         if ($ncr->status->isTerminal()) {
-            throw new BusinessRuleException('NCR is already closed.');
+            throw new NcrStateConflictException('NCR is already closed. Refresh and review its current status.');
         }
         $dispositionEnum = NcrDisposition::from($disposition);
 
@@ -516,7 +518,7 @@ class NcrService
             }
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
-                throw new BusinessRuleException('NCR is already closed.');
+                throw new NcrStateConflictException('NCR is already closed. Refresh and review its current status.');
             }
 
             // The MRB decision settled the receipt (stock in, remainder rejected).
@@ -866,7 +868,7 @@ class NcrService
     public function close(NonConformanceReport $ncr, User $by): NonConformanceReport
     {
         if ($ncr->status->isTerminal()) {
-            throw new BusinessRuleException('NCR is already closed.');
+            throw new NcrStateConflictException('NCR is already closed. Refresh and review its current status.');
         }
         if (! $ncr->disposition) {
             throw new BusinessRuleException('Cannot close NCR without a disposition.');
@@ -882,7 +884,7 @@ class NcrService
             }
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
-                throw new BusinessRuleException('NCR is already closed.');
+                throw new NcrStateConflictException('NCR is already closed. Refresh and review its current status.');
             }
             // Full-piece WO dispositions use segregation, repair and checked QC as evidence.
             $fullPieceDisposition = $locked->inspection?->stage === InspectionStage::Outgoing
@@ -1042,7 +1044,7 @@ class NcrService
     public function cancel(NonConformanceReport $ncr, ?string $reason, User $by): NonConformanceReport
     {
         if ($ncr->status->isTerminal()) {
-            throw new BusinessRuleException('NCR is already closed.');
+            throw new NcrStateConflictException('NCR is already closed. Refresh and review its current status.');
         }
 
         return DB::transaction(function () use ($ncr, $reason, $by) {
@@ -1055,7 +1057,7 @@ class NcrService
             }
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
-                throw new BusinessRuleException('NCR is already closed.');
+                throw new NcrStateConflictException('NCR is already closed. Refresh and review its current status.');
             }
             if ($locked->is_late_incoming) {
                 throw new BusinessRuleException('A late incoming incident owns suspect stock. Resolve its holds and close the NCR instead of cancelling it.');

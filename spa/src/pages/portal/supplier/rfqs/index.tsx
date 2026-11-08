@@ -11,6 +11,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { SupplierRfq } from '@/types/purchasing';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 const formatRelativeTime = (closesAt: string): string => {
   const now = new Date();
@@ -104,8 +105,9 @@ export default function SupplierRfqsPage() {
     direction: 'asc',
   });
 
+  const queryKey = ['portal', 'supplier', 'rfqs', filters] as const;
   const query = useQuery({
-    queryKey: ['portal', 'supplier', 'rfqs', filters],
+    queryKey,
     queryFn: () =>
       supplierRfqsApi.list({
         page: filters.page,
@@ -115,7 +117,8 @@ export default function SupplierRfqsPage() {
         sort: filters.sort,
         direction: filters.direction,
       }),
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined,
   });
 
   const rows = query.data?.data ?? [];

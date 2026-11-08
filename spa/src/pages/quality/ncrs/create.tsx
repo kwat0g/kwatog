@@ -7,7 +7,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +16,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { LuCopy } from '@/lib/icons';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
+import { inspectionQueryKeys } from '@/lib/queryKeys/inspections';
 import { ncrsApi } from '@/api/quality/ncrs';
 import { ncrTemplatesApi } from '@/api/quality/ncr-templates';
 import { productsApi } from '@/api/crm/products';
@@ -31,9 +32,11 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { focusRingInset } from '@/lib/focus';
 import type { CreateNcrData, NcrTemplate, NcrSeverity, NcrSource } from '@/types/quality';
 import { cn } from '@/lib/cn';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const schema = z.object({
   source: z.string().min(1, 'Source is required'),
   severity: z.string().min(1, 'Severity is required'),
@@ -53,13 +56,15 @@ const SEVERITY_CHIP: Record<string, ChipVariant> = {
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateNcrPage() {
+  useRealtimeList('ncr_template', 'visible');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const sourceInspectionId = searchParams.get('inspection_id') ?? '';
   const sourceInspection = useQuery({
-    queryKey: ['quality', 'inspections', sourceInspectionId],
-    queryFn: () => inspectionsApi.show(sourceInspectionId),
+    queryKey: inspectionQueryKeys.detail(sourceInspectionId),
+    queryFn: ({ signal }) => inspectionsApi.show(sourceInspectionId, signal),
     enabled: Boolean(sourceInspectionId),
   });
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
@@ -148,6 +153,13 @@ export default function CreateNcrPage() {
     mutationFn: (data: CreateNcrData) => ncrsApi.create(data),
     onSuccess: (ncr) => {
       toast.success(`NCR ${ncr.ncr_number} opened`);
+      reconcileRealtimeMutationResponse(
+        queryClient,
+        { entityType: 'ncr', entityId: ncr.id },
+        ['quality', 'ncrs', ncr.id],
+        ncr,
+      );
+      safety.allowNavigationAfterSave();
       navigate(`/quality/ncrs/${ncr.id}`);
     },
     onError: (e: AxiosError<{ message?: string }>) => {

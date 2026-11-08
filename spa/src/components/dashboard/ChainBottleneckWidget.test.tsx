@@ -15,6 +15,14 @@ import type { AuthUser } from '@/api/auth';
 import { useAuthStore } from '@/stores/authStore';
 import type { ChainBottlenecks } from '@/types/chain';
 
+const { realtimeSignal, canPermission } = vi.hoisted(() => ({
+ realtimeSignal: vi.fn(),
+ canPermission: vi.fn((_permission: string) => true),
+}));
+
+vi.mock('@/hooks/useRealtimeSignal', () => ({ useRealtimeSignal: realtimeSignal }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: canPermission }) }));
+
 function renderWithClient(ui: React.ReactElement) {
  // Disable retries so error states resolve quickly.
  const client = new QueryClient({
@@ -46,8 +54,34 @@ describe('ChainBottleneckWidget', () => {
  });
  });
 
+ it('uses a permission-scoped refresh signal and retains timed SLA checks', async () => {
+ const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+ vi.spyOn(chainApiModule.chainApi, 'bottlenecks').mockResolvedValue({ total: 0, groups: [] });
+
+ render(
+ <QueryClientProvider client={client}>
+ <MemoryRouter><ChainBottleneckWidget /></MemoryRouter>
+ </QueryClientProvider>,
+ );
+
+ const queryKey = ['chain-bottlenecks', 'anonymous', 'unknown', 'own-audience'];
+ await waitFor(() => expect(client.getQueryData(queryKey)).toBeDefined());
+
+ expect(realtimeSignal).toHaveBeenCalledWith(
+ 'chain_bottlenecks_changed',
+ 'dashboard.chain-bottlenecks',
+ '.chain.bottlenecks.changed',
+ );
+ const query = client.getQueryCache().find({ queryKey });
+ const options = query?.options as { refetchInterval?: number | false; staleTime?: number } | undefined;
+ expect(options?.refetchInterval).toBe(60_000);
+ expect(options?.staleTime).toBe(0);
+ client.clear();
+ });
+
  it('renders a row per stuck group with count chip', async () => {
  const data: ChainBottlenecks = {
+ generated_at: '2026-10-31T12:00:00Z',
  total: 3,
  groups: [
  {
@@ -85,6 +119,7 @@ describe('ChainBottleneckWidget', () => {
  await waitFor(() => {
  expect(screen.getByText(/SO awaiting production/i)).toBeInTheDocument();
  });
+ expect(screen.getByText(/As of/i)).toBeInTheDocument();
  // The count appears in the chip.
  expect(screen.getByText('3')).toBeInTheDocument();
  // The "View" link should target the first row's detail page.

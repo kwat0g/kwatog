@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { formatDateTime } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
 import { usePermission } from '@/hooks/usePermission';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { MaintenanceWorkOrder } from '@/types/maintenance';
 import { ReturnSparePartButton } from './ReturnSparePartButton';
 
@@ -31,8 +32,7 @@ export function PartReconciliationPanel({
   const canCloseParts = parts?.can_close_parts ?? order.spare_parts?.length === 0;
   const canReconcile = order.can_record_work || (can('maintenance.wo.complete') || can('maintenance.wo.assign'))
     && (order.available_actions?.some((action) => action === 'complete' || action === 'submit_repair' || action === 'cancel') ?? false);
-  const canReturn = order.can_record_work ?? (can('maintenance.wo.complete') && !order.repair_submitted_at
-    && (order.available_actions?.some((action) => action === 'complete' || action === 'submit_repair') ?? false));
+  const canReturn = order.can_record_work === true;
   const mutation = useMutation({
     mutationFn: () => workOrdersApi.reconcileParts(order.id, {
       ...(outstanding.length ? { confirm_consumed: true as const } : {}),
@@ -40,8 +40,7 @@ export function PartReconciliationPanel({
     }),
     onSuccess: (updated) => {
       queryClient.setQueryData(['maintenance', 'work-order', order.id], updated);
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      void invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: order.id });
       toast.success('Parts reconciliation recorded.');
     },
     onError: (error) => reportMutationError(error, 'Could not reconcile remaining parts.'),
@@ -56,7 +55,7 @@ export function PartReconciliationPanel({
           {request.status === 'requested' && order.can_record_work && <Button variant="danger" size="sm" className="mt-2" onClick={async () => {
             try {
               await workOrdersApi.withdrawPartRequest(order.id, request.id);
-              await queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
+              await invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: order.id });
               await queryClient.invalidateQueries({ queryKey: ['inventory', 'material-handovers'] });
               toast.success('Part request withdrawn.');
             } catch (error) { reportMutationError(error, 'Could not withdraw request.'); }

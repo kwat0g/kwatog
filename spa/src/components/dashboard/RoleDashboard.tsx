@@ -24,10 +24,10 @@ interface JeRow { id: string; entry_number: string; date: string; status: string
 type Role = 'plantManager' | 'hr' | 'ppc' | 'accounting';
 
 const TITLES: Record<Role, string> = {
- plantManager: 'Plant Manager Dashboard',
- hr: 'HR Dashboard',
- ppc: 'PPC Dashboard',
- accounting: 'Accounting Dashboard',
+ plantManager: 'Plant Manager',
+ hr: 'HR Officer',
+ ppc: 'PPC',
+ accounting: 'Accounting',
 };
 
 export function RoleDashboard({ role }: { role: Role }) {
@@ -58,7 +58,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
  return (
  <div>
- <PageHeader title={TITLES[role]} subtitle="Live · refreshes every 60s" />
+ <PageHeader title={TITLES[role]} />
  <div className="px-5 py-4 space-y-4">
  <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
  {data.kpis.map((k) => (

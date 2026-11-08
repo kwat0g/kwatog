@@ -20,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { adminUsersApi } from '@/api/admin/users';
 import { formatDateTime } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import type {
  AdminUserListItem,
@@ -46,10 +47,12 @@ export default function AdminUsersIndexPage() {
  const [selectedRoleId, setSelectedRoleId] = useState<string>('');
  const [bulkReason, setBulkReason] = useState<string>('');
 
- const usersQuery = useQuery({
- queryKey: ['admin-users', filters],
+  const usersQueryKey = ['admin-users', filters] as const;
+  const usersQuery = useQuery({
+  queryKey: usersQueryKey,
  queryFn: () => adminUsersApi.list(filters),
- placeholderData: (previousData) => previousData });
+  placeholderData: (previousData, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, usersQueryKey, 1) ? previousData : undefined });
 
  const optionsQuery = useQuery({
  queryKey: ['admin-user-options'],

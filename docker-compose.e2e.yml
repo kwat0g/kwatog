@@ -1,0 +1,337 @@
+# Dedicated disposable process-E2E stack. Start only through scripts/e2e/runner.mjs.
+# The project, DB name, and browser URL are also checked by Playwright global setup.
+x-e2e-app: &e2e-app
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+  working_dir: /var/www
+  env_file:
+    - .env.e2e
+  environment: &e2e-runtime
+    APP_ENV: testing
+    APP_DEBUG: "false"
+    E2E_ENV: "true"
+    E2E_DB_NAME: ogami_e2e
+    E2E_COMPOSE_PROJECT: ogami-erp-e2e
+    DB_CONNECTION: pgsql
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_DATABASE: ogami_e2e
+    REDIS_HOST: redis
+    REDIS_CACHE_HOST: redis-cache
+    REVERB_HOST: reverb
+    REVERB_PORT: "8080"
+    MAIL_MAILER: smtp
+    MAIL_HOST: mailpit
+    MAIL_PORT: "1025"
+    SEED_DEMO_DATA: "false"
+    SEED_REFERENCE_DATA: "true"
+  volumes:
+    - ./api:/var/www:ro
+    - ./scripts:/var/www/scripts:ro
+    - ./docker/e2e/php-fpm-pool.conf:/usr/local/etc/php-fpm.d/www.conf:ro
+    - e2e_storage:/var/www/storage
+    - e2e_bootstrap_cache:/var/www/bootstrap/cache
+  networks:
+    - e2e
+  init: true
+  restart: unless-stopped
+  mem_limit: 512m
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  e2e-volume-init:
+    image: ogami-erp-e2e-api:latest
+    user: "0:0"
+    entrypoint: ["sh", "-lc"]
+    command: ["mkdir -p /e2e-storage /e2e-bootstrap-cache && chown -R 1000:1000 /e2e-storage /e2e-bootstrap-cache"]
+    volumes:
+      - e2e_storage:/e2e-storage
+      - e2e_bootstrap_cache:/e2e-bootstrap-cache
+    networks: [e2e]
+    restart: "no"
+    mem_limit: 32m
+
+  e2e-tls-init:
+    image: ogami-erp-e2e-api:latest
+    user: "0:0"
+    entrypoint: ["php", "-r"]
+    command:
+      - >-
+        $$directory = '/e2e-tls';
+        if (!is_file($$directory . '/nginx.crt')) {
+          $$key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
+          $$request = openssl_csr_new(['commonName' => 'nginx'], $$key, ['digest_alg' => 'sha256']);
+          $$certificate = openssl_csr_sign($$request, null, $$key, 3650, ['digest_alg' => 'sha256']);
+          openssl_pkey_export($$key, $$keyPem);
+          openssl_x509_export($$certificate, $$certificatePem);
+          file_put_contents($$directory . '/nginx.key', $$keyPem);
+          file_put_contents($$directory . '/nginx.crt', $$certificatePem);
+          chmod($$directory . '/nginx.key', 0600);
+          chmod($$directory . '/nginx.crt', 0644);
+        }
+        echo 'E2E TLS certificate ready' . PHP_EOL;
+    volumes:
+      - e2e_tls:/e2e-tls
+    networks: [e2e]
+    restart: "no"
+    mem_limit: 48m
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ogami_e2e
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME in .env.e2e}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.e2e}
+      E2E_DB_READER_PASSWORD: ${DB_READER_PASSWORD:?Set DB_READER_PASSWORD in .env.e2e}
+    command: ["postgres", "-c", "max_locks_per_transaction=512"]
+    volumes:
+      - e2e_pgdata:/var/lib/postgresql/data
+      - ./docker/e2e/postgres-reader.sh:/docker-entrypoint-initdb.d/20-e2e-reader.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d ogami_e2e"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+    shm_size: 64m
+    mem_limit: 384m
+    restart: unless-stopped
+    networks: [e2e]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - e2e_redis_queue:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    mem_limit: 128m
+    restart: unless-stopped
+    networks: [e2e]
+
+  redis-cache:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "48mb", "--maxmemory-policy", "volatile-lru"]
+    volumes:
+      - e2e_redis_cache:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    mem_limit: 64m
+    restart: unless-stopped
+    networks: [e2e]
+
+  api:
+    <<: *e2e-app
+    depends_on:
+      e2e-volume-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  spa:
+    build:
+      context: .
+      dockerfile: docker/e2e/spa.Dockerfile
+      args:
+        VITE_REVERB_APP_KEY: ${VITE_REVERB_APP_KEY:?Set VITE_REVERB_APP_KEY in .env.e2e}
+        VITE_REVERB_HOST: nginx
+        VITE_REVERB_PORT: "443"
+        VITE_REVERB_SCHEME: https
+    working_dir: /app
+    command: ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]
+    environment:
+      E2E_ENV: "true"
+    depends_on:
+      api:
+        condition: service_started
+    init: true
+    restart: unless-stopped
+    mem_limit: 256m
+    networks: [e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5173/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "127.0.0.1:${E2E_HTTP_PORT:-18080}:80"
+      - "127.0.0.1:${E2E_HTTPS_PORT:-18443}:443"
+    volumes:
+      - ./api:/var/www:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/e2e/nginx-https.conf:/etc/nginx/conf.d/e2e-https.conf:ro
+      - ./docker/nginx/security-headers-dev.conf:/etc/nginx/security-headers-dev.conf:ro
+      - e2e_tls:/etc/nginx/e2e-certs:ro
+    depends_on:
+      e2e-tls-init:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+      spa:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 96m
+    networks: [e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/api/v1/health && wget -q --spider http://mailpit:8025/livez || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  reverb:
+    <<: *e2e-app
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    mem_limit: 96m
+
+  queue-main:
+    <<: *e2e-app
+    command: ["php", "artisan", "queue:work", "redis", "--queue=high,default,mail,automation,bulk", "--sleep=1", "--tries=3", "--timeout=3600"]
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    mem_limit: 96m
+
+  queue-broadcasts:
+    <<: *e2e-app
+    command: ["php", "artisan", "queue:work", "redis_broadcasts", "--queue=broadcasts", "--sleep=1", "--tries=3", "--timeout=120"]
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    mem_limit: 96m
+
+  queue-outbox:
+    <<: *e2e-app
+    command: ["php", "artisan", "queue:work", "redis_broadcasts", "--queue=high", "--sleep=1", "--tries=3", "--timeout=120"]
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    mem_limit: 96m
+
+  queue-dss:
+    <<: *e2e-app
+    command: ["php", "artisan", "queue:work", "redis_dss", "--queue=dss", "--sleep=1", "--tries=3", "--timeout=300"]
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    mem_limit: 96m
+
+  scheduler:
+    <<: *e2e-app
+    # Process journeys use the guarded runner's one-shot schedule command. Keep
+    # recurring jobs idle so they cannot create unrelated mail/notifications.
+    command: ["php", "-r", "while (true) { sleep(3600); }"]
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    environment:
+      MP_MAX_MESSAGES: "1000"
+      MP_SMTP_BIND_ADDR: 0.0.0.0:1025
+      MP_UI_BIND_ADDR: 0.0.0.0:8025
+    ports:
+      - "127.0.0.1:${E2E_MAILPIT_HTTP_PORT:-18025}:8025"
+    mem_limit: 64m
+    restart: unless-stopped
+    networks: [e2e]
+
+  playwright:
+    build:
+      context: .
+      dockerfile: docker/e2e/playwright.Dockerfile
+    profiles: [test]
+    working_dir: /work/spa
+    environment:
+      E2E_ENV: "true"
+      E2E_DB_NAME: ogami_e2e
+      E2E_COMPOSE_PROJECT: ogami-erp-e2e
+      E2E_BASE_URL: https://nginx
+      E2E_ACCOUNT_PASSWORD: ${E2E_ACCOUNT_PASSWORD:?Set E2E_ACCOUNT_PASSWORD in .env.e2e}
+      E2E_CONTROL_TOKEN: ${E2E_CONTROL_TOKEN:?Set E2E_CONTROL_TOKEN in .env.e2e}
+      E2E_ACCOUNT_MANIFEST: /e2e-storage/app/e2e/accounts.json
+      E2E_AUTH_ACTORS: ${E2E_AUTH_ACTORS:-}
+      E2E_DB_READER_USERNAME: ${DB_READER_USERNAME:?Set DB_READER_USERNAME in .env.e2e}
+      E2E_DB_READER_PASSWORD: ${DB_READER_PASSWORD:?Set DB_READER_PASSWORD in .env.e2e}
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ogami_e2e
+      PGSSLMODE: disable
+      APP_ENV: testing
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_DATABASE: ogami_e2e
+    volumes:
+      - ./spa:/work/spa
+      - ./scripts:/work/scripts:ro
+      - e2e_playwright_node_modules:/work/spa/node_modules
+      - e2e_storage:/e2e-storage:ro
+    command: ["npx", "playwright", "test", "-c", "playwright.process.config.ts"]
+    depends_on:
+      nginx:
+        condition: service_healthy
+    init: true
+    shm_size: 256m
+    mem_limit: 1280m
+    networks: [e2e]
+
+networks:
+  e2e:
+    name: ogami-erp-e2e-network
+    internal: true
+
+volumes:
+  e2e_pgdata:
+    name: ogami-erp-e2e-pgdata
+  e2e_redis_queue:
+    name: ogami-erp-e2e-redis-queue
+  e2e_redis_cache:
+    name: ogami-erp-e2e-redis-cache
+  e2e_storage:
+    name: ogami-erp-e2e-storage
+  e2e_bootstrap_cache:
+    name: ogami-erp-e2e-bootstrap-cache
+  e2e_playwright_node_modules:
+    name: ogami-erp-e2e-playwright-node-modules
+  e2e_tls:
+    name: ogami-erp-e2e-tls

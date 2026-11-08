@@ -15,10 +15,12 @@ import { Input } from '@/components/ui/Input';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import type { CalibrationRecord, CalibrationStatus } from '@/types/quality';
 import { localIsoDate } from '@/lib/formatDate';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const STATUS_VARIANT: Record<CalibrationStatus, ChipVariant> = {
  active: 'success',
@@ -30,25 +32,40 @@ const STATUS_VARIANT: Record<CalibrationStatus, ChipVariant> = {
 export default function CalibrationListPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
- const { can } = usePermission();
  const [filters, setFilters] = useUrlFilters<CalibrationListParams>({ page: 1, per_page: 25 });
+ useRealtimeList('calibration', 'visible');
  const [recording, setRecording] = useState<CalibrationRecord | null>(null);
  const [recordDate, setRecordDate] = useState(() => localIsoDate());
  const [recordDateError, setRecordDateError] = useState<string | undefined>();
 
- const query = useQuery({
-  queryKey: ['quality', 'calibration', filters],
+  const queryKey = ['quality', 'calibration', filters] as const;
+  const query = useQuery({
+   queryKey,
   queryFn: () => calibrationApi.list(filters),
-  placeholderData: (previous) => previous,
+   placeholderData: (previous, previousQuery) =>
+     sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
+ const recordingIsAvailable = recording !== null && query.data?.data.some(
+  (row) => row.id === recording.id && row.available_actions?.record_calibration === true,
+ );
 
  const recordMutation = useMutation({
   mutationFn: ({ id, date }: { id: string; date: string }) => calibrationApi.record(id, date),
-  onSuccess: () => {
+  onSuccess: (record) => {
+   queryClient.setQueryData(['quality', 'calibration', 'detail', record.id], record);
+   queryClient.setQueriesData({ queryKey: ['quality', 'calibration'] }, (current) => {
+    if (!current || typeof current !== 'object' || !('data' in current) || !Array.isArray(current.data)) return current;
+    return { ...current, data: current.data.map((row) => row?.id === record.id ? record : row) };
+   });
    toast.success('Calibration recorded');
    setRecording(null);
    setRecordDateError(undefined);
-   void queryClient.invalidateQueries({ queryKey: ['quality', 'calibration'] });
+   void invalidateRealtimeChange(
+    queryClient,
+    { entityType: 'calibration', entityId: record.id },
+    [],
+    [['quality', 'calibration', 'detail', record.id]],
+   );
   },
   onError: (error: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
    setRecordDateError(error.response?.data?.errors?.date?.[0]);
@@ -69,27 +86,31 @@ export default function CalibrationListPage() {
    header: '',
    align: 'right',
    togglable: false,
-   cell: (r) => can('quality.calibration.manage') ? (
+   cell: (r) => r.available_actions?.update === true || r.available_actions?.record_calibration === true ? (
     <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-     <Button
-      size="sm"
-      variant="ghost"
-      icon={<LuPencil size={13} />}
-      aria-label={`Edit ${r.equipment_code}`}
-      onClick={() => navigate(`/quality/calibration/${r.id}/edit`)}
-     />
-     <Button
-      size="sm"
-      variant="secondary"
-      icon={<LuCalendarClock size={13} />}
-      onClick={() => {
-       setRecording(r);
-       setRecordDate(localIsoDate());
-       setRecordDateError(undefined);
-      }}
-     >
-      Record
-     </Button>
+     {r.available_actions?.update === true && (
+      <Button
+       size="sm"
+       variant="ghost"
+       icon={<LuPencil size={13} />}
+       aria-label={`Edit ${r.equipment_code}`}
+       onClick={() => navigate(`/quality/calibration/${r.id}/edit`)}
+      />
+     )}
+     {r.available_actions?.record_calibration === true && (
+      <Button
+       size="sm"
+       variant="secondary"
+       icon={<LuCalendarClock size={13} />}
+       onClick={() => {
+        setRecording(r);
+        setRecordDate(localIsoDate());
+        setRecordDateError(undefined);
+       }}
+      >
+       Record
+      </Button>
+     )}
     </div>
    ) : null,
   },
@@ -115,7 +136,7 @@ export default function CalibrationListPage() {
    <PageHeader
     title="Calibration register"
     subtitle={query.data ? `${query.data.meta.total} ${query.data.meta.total === 1 ? 'instrument' : 'instruments'}` : undefined}
-    actions={can('quality.calibration.manage') ? (
+    actions={query.data?.permissions.create === true ? (
      <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/quality/calibration/new')}>
       New instrument
      </Button>
@@ -140,14 +161,16 @@ export default function CalibrationListPage() {
      icon="clipboard-check"
      title="No calibration instruments"
      description="Register the gauges and measuring equipment used by quality control."
-     action={can('quality.calibration.manage') ? <Button variant="primary" onClick={() => navigate('/quality/calibration/new')}>New instrument</Button> : undefined}
+     action={query.data?.permissions.create === true ? <Button variant="primary" onClick={() => navigate('/quality/calibration/new')}>New instrument</Button> : undefined}
     />
    )}
    {query.data && query.data.data.length > 0 && (
     <div className="px-5 py-4">
      <DataTable
       tableKey="quality.calibration"
-      onRowClick={can('quality.calibration.manage') ? (record) => navigate(`/quality/calibration/${record.id}/edit`) : undefined}
+      onRowClick={(record) => {
+       if (record.available_actions?.update === true) navigate(`/quality/calibration/${record.id}/edit`);
+      }}
       columns={columns}
       data={query.data.data}
       meta={query.data.meta}
@@ -178,8 +201,8 @@ export default function CalibrationListPage() {
      <Button
       variant="primary"
       loading={recordMutation.isPending}
-      disabled={!recording || !recordDate}
-      onClick={() => recording && recordMutation.mutate({ id: recording.id, date: recordDate })}
+      disabled={!recording || !recordingIsAvailable || !recordDate}
+      onClick={() => recording && recordingIsAvailable && recordMutation.mutate({ id: recording.id, date: recordDate })}
      >
       Record calibration
      </Button>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Controllers;
 
 use App\Modules\CRM\Models\PriceRequest;
+use App\Modules\CRM\Exceptions\PriceRequestStateConflictException;
 use App\Modules\CRM\Requests\PriceNegotiationRequest;
 use App\Modules\CRM\Resources\PriceRequestResource;
 use App\Modules\CRM\Services\PriceNegotiationService;
@@ -46,23 +47,44 @@ class PriceNegotiationController
         return (new PriceRequestResource($this->service->request($request->user('customer_portal'), $request->validated())))->response()->setStatusCode(201);
     }
 
-    public function offer(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource
+    public function offer(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource|JsonResponse
     {
-        return new PriceRequestResource($this->service->offer($priceRequest, $request->user(), $request->validated()));
+        try {
+            return new PriceRequestResource($this->service->offer($priceRequest, $request->user(), $request->validated(), $request->validated('version')));
+        } catch (PriceRequestStateConflictException $exception) {
+            return $this->conflict($exception);
+        }
     }
 
-    public function approve(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource
+    public function approve(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource|JsonResponse
     {
-        return new PriceRequestResource($this->service->approve($priceRequest, $request->user(), $request->validated()));
+        try {
+            return new PriceRequestResource($this->service->approve($priceRequest, $request->user(), $request->validated()));
+        } catch (PriceRequestStateConflictException $exception) {
+            return $this->conflict($exception);
+        }
     }
 
-    public function respond(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource
+    public function respond(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource|JsonResponse
     {
-        return new PriceRequestResource($this->service->respond($priceRequest, $request->user('customer_portal'), $request->validated('decision'), (int) $request->validated('version')));
+        try {
+            return new PriceRequestResource($this->service->respond($priceRequest, $request->user('customer_portal'), $request->validated('decision'), (int) $request->validated('version')));
+        } catch (PriceRequestStateConflictException $exception) {
+            return $this->conflict($exception);
+        }
     }
 
-    public function withdraw(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource
+    public function withdraw(PriceNegotiationRequest $request, PriceRequest $priceRequest): PriceRequestResource|JsonResponse
     {
-        return new PriceRequestResource($this->service->withdraw($priceRequest, $request->user(), $request->validated('notes')));
+        try {
+            return new PriceRequestResource($this->service->withdraw($priceRequest, $request->user(), $request->validated('notes'), $request->validated('version')));
+        } catch (PriceRequestStateConflictException $exception) {
+            return $this->conflict($exception);
+        }
+    }
+
+    private function conflict(PriceRequestStateConflictException $exception): JsonResponse
+    {
+        return response()->json(['message' => $exception->getMessage(), 'code' => $exception->errorCode()], 409);
     }
 }

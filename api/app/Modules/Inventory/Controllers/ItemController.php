@@ -101,7 +101,7 @@ class ItemController
 
     public function restore(Item $item): JsonResponse
     {
-        $item->restore();
+        $this->service->restore($item);
 
         return response()->json(['message' => 'Item restored.']);
     }

@@ -6,20 +6,18 @@ namespace App\Modules\Production\Events;
 
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Models\WorkOrder;
-use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
  * Sprint 6 audit §1.7 — Fired by HandleMachineBreakdown after a machine
  * transitions into the breakdown state and the running WO has been paused.
- * Drives the BreakdownAlertCard on the dashboard.
+ * Its listener creates notifications; MachineChanged owns UI refresh broadcasts.
  */
-class MachineBreakdownDetected implements ShouldBroadcast
+class MachineBreakdownDetected implements ShouldDispatchAfterCommit
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, SerializesModels;
 
     /** @param array<int, array{id: string, machine_code: string, name: string}> $candidates */
     public function __construct(
@@ -29,22 +27,4 @@ class MachineBreakdownDetected implements ShouldBroadcast
         public ?string $reason = null,
     ) {}
 
-    /** @return array<int, PrivateChannel> */
-    public function broadcastOn(): array
-    {
-        return [
-            new PrivateChannel('production.dashboard'),
-            new PrivateChannel('production.machine.'.$this->machine->hash_id),
-        ];
-    }
-
-    public function broadcastAs(): string
-    {
-        return 'machine.breakdown_detected';
-    }
-
-    public function broadcastWith(): array
-    {
-        return ['refresh' => true];
-    }
 }

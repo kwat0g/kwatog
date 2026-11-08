@@ -10,6 +10,7 @@ import { formatTime } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
 import { cn } from '@/lib/cn';
 import type { MaintenanceWorkOrder } from '@/types/maintenance';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 function TechnicianOption({
   candidate,
@@ -100,10 +101,14 @@ export function AssignmentPanel({
       expected_assignee_id: currentAssigneeId,
       presence_confirmed: candidate.can_attest_presence && !candidate.can_assign ? presenceConfirmed : undefined,
     }),
-    onSuccess: (_assigned, candidate) => {
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'assignee-suggestions', order.id] });
+    onSuccess: (assigned, candidate) => {
+      queryClient.setQueryData(['maintenance', 'work-order', order.id], assigned);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'maintenance_work_order', entityId: order.id },
+        [['maintenance', 'assignee-suggestions', order.id]],
+        [['maintenance', 'work-order', order.id]],
+      );
       setPresenceConfirmed(false);
       toast.success(candidate.id === currentAssigneeId ? 'Physical presence confirmed.' : 'Work order assigned.');
       onAssigned?.();
@@ -111,7 +116,7 @@ export function AssignmentPanel({
     onError: (error) => {
       reportMutationError(error, 'Could not assign the work order.');
       refetch();
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
+      void queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
     },
   });
 

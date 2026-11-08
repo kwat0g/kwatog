@@ -37,7 +37,7 @@ export default function CompanyDashboardPage() {
   return (
     <RoleDashboardShell
       title="Company Overview"
-      subtitle="Company risks, quality, cash flow, chain health and approval load."
+      subtitle="Key risks, quality, cash flow, approvals."
       kpiCodes={COMPANY_KPIS}
       emptyTitle="Nothing on this overview yet"
       emptyDescription="Your role has no default blocks for this page. Signals appear when your permissions include their source data."

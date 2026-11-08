@@ -354,7 +354,7 @@ class ReturnRequestController extends Controller
         ]);
         $returnRequest->loadCount('items');
 
-        return new ReturnRequestResource($returnRequest);
+        return $this->resourceWithActionRelations($returnRequest);
     }
 
     /**
@@ -364,7 +364,7 @@ class ReturnRequestController extends Controller
     {
         $rma = $this->service->create($request->validated(), $request->user());
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /** Update a still-editable draft and revalidate its source contract. */
@@ -373,7 +373,7 @@ class ReturnRequestController extends Controller
         $this->assertReturnTypeAccess($request, $returnRequest);
         $rma = $this->service->update($returnRequest, $request->validated(), $request->user());
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -391,7 +391,7 @@ class ReturnRequestController extends Controller
         ]);
         $rma = $this->service->submit($returnRequest, $request->user(), $validated['problem'] ?? null, $request->file('defect_photo'), $validated['required_delivery_date'] ?? null);
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     public function defectPhoto(Request $request, ReturnRequest $returnRequest): StreamedResponse
@@ -413,7 +413,7 @@ class ReturnRequestController extends Controller
         ]);
         $rma = $this->service->approve($returnRequest, $request->user(), $validated['remarks'] ?? null);
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -431,7 +431,7 @@ class ReturnRequestController extends Controller
             $request->requestKey(),
         );
 
-        return new ReturnRequestResource($rma->load([
+        return $this->resourceWithActionRelations($rma->load([
             'items',
             'customer',
             'vendor',
@@ -453,7 +453,7 @@ class ReturnRequestController extends Controller
 
         $rma = $this->service->inspect($returnRequest, $validated['internal_notes'] ?? null, $request->user());
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /** Retry a failed RMA → Quality inspection handoff. */
@@ -462,7 +462,7 @@ class ReturnRequestController extends Controller
         $this->assertReturnTypeAccess($request, $returnRequest);
         $rma = $this->service->retryInspectionHandoff($returnRequest, $request->user());
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspection', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspection', 'inspections.product']));
     }
 
     /**
@@ -475,13 +475,14 @@ class ReturnRequestController extends Controller
         abort_unless($lineId, 404);
         $rma = $this->service->splitItem($returnRequest, (int) $lineId, (string) $request->validated('split_quantity'), $request->user());
 
-        return new ReturnRequestResource($rma->load(['items.product', 'items.item', 'items.sourceAllocations', 'customer', 'vendor', 'inspections.product', 'receipts.items']));
+        return $this->resourceWithActionRelations($rma->load(['items.product', 'items.item', 'items.sourceAllocations', 'customer', 'vendor', 'inspections.product', 'receipts.items']));
     }
 
     public function dispose(DisposeReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
         $this->assertReturnTypeAccess($request, $returnRequest);
-        return new ReturnRequestResource(
+
+        return $this->resourceWithActionRelations(
             $this->service->dispose(
                 $returnRequest,
                 $request->validated()['dispositions'],
@@ -504,7 +505,7 @@ class ReturnRequestController extends Controller
             : null;
         $rma = $this->service->complete($returnRequest, $request->user(), $locationId);
 
-        return new ReturnRequestResource($rma->load(['items.materialReviewRecord', 'items', 'customer', 'vendor', 'inspections.product', 'stockMovement.toLocation', 'stockMovement.fromLocation']));
+        return $this->resourceWithActionRelations($rma->load(['items.materialReviewRecord', 'items', 'customer', 'vendor', 'inspections.product', 'stockMovement.toLocation', 'stockMovement.fromLocation']));
     }
 
     /**
@@ -519,7 +520,7 @@ class ReturnRequestController extends Controller
 
         $rma = $this->service->reject($returnRequest, $request->user(), $validated['reason']);
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     /**
@@ -534,7 +535,7 @@ class ReturnRequestController extends Controller
 
         $rma = $this->service->cancel($returnRequest, $validated['reason'] ?? null);
 
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        return $this->resourceWithActionRelations($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
     private function assertReturnTypeAccess(Request $request, ReturnRequest $returnRequest): void
@@ -544,5 +545,14 @@ class ReturnRequestController extends Controller
                 && $returnRequest->type === ReturnRequestType::SupplierReturn,
             404,
         );
+    }
+
+    private function resourceWithActionRelations(ReturnRequest $returnRequest): ReturnRequestResource
+    {
+        $returnRequest->loadMissing('approvalRecords.approver:id,name');
+        $returnRequest->loadMissing('items');
+        $returnRequest->loadMissing(['inspections.product', 'inspections.item']);
+
+        return new ReturnRequestResource($returnRequest);
     }
 }

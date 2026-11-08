@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import DeliveryDetailPage from './detail';
 import { deliveriesApi, vehiclesApi } from '@/api/supply-chain';
 import type { Delivery } from '@/types/supplyChain';
+import { invoicesApi } from '@/api/accounting/invoices';
+import type { Invoice } from '@/types/accounting';
 
 const permissions = vi.hoisted(() => ({ edit: true }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => permissions.edit }) }));
@@ -12,7 +14,7 @@ vi.mock('@/hooks/useChainProgress', () => ({ useChainProgress: vi.fn() }));
 vi.mock('react-router-dom', async (original) => ({ ...(await original<typeof import('react-router-dom')>()), useParams: () => ({ id: 'dr-1' }) }));
 vi.mock('@/api/supply-chain', () => ({
   deliveriesApi: {
-    show: vi.fn(), updateStatus: vi.fn(), shipmentPlan: vi.fn(),
+    show: vi.fn(), updateStatus: vi.fn(), shipmentPlan: vi.fn(), confirm: vi.fn(),
     driverOptions: vi.fn().mockResolvedValue([{ id: 'driver-1', name: 'Nestor Flores' }]),
     options: vi.fn().mockResolvedValue({ statuses: [
       { value: 'scheduled', label: 'Scheduled', next_status: 'loading' },
@@ -23,6 +25,7 @@ vi.mock('@/api/supply-chain', () => ({
   deliveryProofsApi: { upload: vi.fn(), options: vi.fn().mockResolvedValue({ proof_types: [{ value: 'signed_dr', label: 'Signed receipt' }, { value: 'photo', label: 'Delivery photo' }, { value: 'loading_photo', label: 'Loading photo' }, { value: 'coc', label: 'Certificate of Conformance' }, { value: 'other', label: 'Other document' }] }) },
   vehiclesApi: { list: vi.fn().mockResolvedValue({ data: [{ id: 'truck-1', name: 'Truck', plate_number: 'ABC-123' }] }) },
 }));
+vi.mock('@/api/accounting/invoices', () => ({ invoicesApi: { finalize: vi.fn() } }));
 const delivery = {
   id: 'dr-1', delivery_number: 'DR-202610-0001', status: 'scheduled', scheduled_date: '2026-10-10',
   sales_order: { id: 'so-1', so_number: 'SO-202610-0025' }, vehicle: null, driver: null,
@@ -34,10 +37,24 @@ const delivery = {
       unit_of_measure: 'pcs', inspection: { id: 'qc-2', inspection_number: 'QC-202610-0009', status: 'passed' }, quantity: 2, unit_price: '35.00' },
   ],
 } as Delivery;
-function show(data: Delivery) {
-  vi.mocked(deliveriesApi.show).mockResolvedValue(data);
+function show(data: Delivery, staleRefresh?: Promise<Delivery>) {
+  if (staleRefresh) {
+    let calls = 0;
+    vi.mocked(deliveriesApi.show).mockImplementation(() => {
+      calls += 1;
+      return calls === 1 ? Promise.resolve(data) : staleRefresh;
+    });
+  } else {
+    vi.mocked(deliveriesApi.show).mockResolvedValue(data);
+  }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(<QueryClientProvider client={client}><MemoryRouter><DeliveryDetailPage /></MemoryRouter></QueryClientProvider>);
+  return client;
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
 }
 beforeEach(() => {
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:loading-preview');
@@ -180,7 +197,7 @@ it('blocks shipment submission when fleet lookup fails, then recovers without lo
 it('keeps loading evidence separate from receipts and confirmation eligibility', async () => {
   show({ ...assigned, status: 'delivered', proofs: [loadingPhoto] });
   expect(await screen.findByText('Loading evidence')).toBeVisible();
-  expect(screen.getByRole('button', { name: /^Confirm$/ })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: /^Confirm$/ })).not.toBeInTheDocument();
   expect(screen.queryByText('1 receipt')).not.toBeInTheDocument();
   expect(screen.queryByRole('option', { name: 'Loading photo' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Arrange shipment|Quick photo|Choose loading photo/ })).not.toBeInTheDocument();
@@ -195,15 +212,83 @@ it('leaves customer receipt capture to the assigned driver while office reviews 
   expect(deliveriesApi.updateStatus).not.toHaveBeenCalled();
 });
 it('retains office receipt review and authorized confirmation after driver upload', async () => {
-  show({ ...assigned, status: 'delivered', proofs: [{ ...loadingPhoto, id: 'receipt-1', proof_type: 'photo', file_name: 'customer-receipt.jpg' }] });
+  show({ ...assigned, status: 'delivered', can_confirm: true, available_actions: { confirm: true }, proofs: [{ ...loadingPhoto, id: 'receipt-1', proof_type: 'photo', file_name: 'customer-receipt.jpg' }] });
   expect(await screen.findByRole('heading', { name: 'Customer receipt' })).toBeVisible();
   expect(screen.getByText('customer-receipt.jpg')).toBeVisible();
   expect(screen.getByRole('button', { name: /^Confirm$/ })).toBeEnabled();
   expect(screen.queryByRole('button', { name: 'Upload customer receipt' })).not.toBeInTheDocument();
+});
+it('fails closed when the server omits the viewer-specific confirm action', async () => {
+  const proof = { ...loadingPhoto, id: 'receipt-1', proof_type: 'photo' as const, file_name: 'customer-receipt.jpg' };
+  show({ ...assigned, status: 'delivered', can_confirm: true, proofs: [proof] });
+
+  expect(await screen.findByRole('heading', { name: 'Customer receipt' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /^Confirm$/ })).not.toBeInTheDocument();
 });
 it('keeps shipment actions unavailable to read-only viewers', async () => {
   permissions.edit = false;
   show(delivery);
   expect(await screen.findByText('Shipment items', { exact: false })).toBeVisible();
   expect(screen.queryByRole('button', { name: /Arrange shipment|Dispatch shipment|Upload customer receipt/ })).not.toBeInTheDocument();
+});
+
+it('keeps the confirmed API result when an older delivery detail read completes afterward', async () => {
+  const proof = { ...loadingPhoto, id: 'receipt-1', proof_type: 'photo' as const, file_name: 'customer-receipt.jpg' };
+  const deliveredDelivery: Delivery = { ...assigned, status: 'delivered', can_confirm: true, available_actions: { confirm: true }, proofs: [proof] };
+  const confirmedDelivery: Delivery = {
+    ...deliveredDelivery,
+    status: 'confirmed',
+    can_confirm: false,
+    available_actions: { confirm: false },
+    confirmed_at: '2026-11-02T09:00:00+08:00',
+    invoice: { id: 'invoice-1', invoice_number: 'INV-202611-0001', total_amount: '17500.00', status: 'draft' },
+  };
+  const staleRead = deferred<Delivery>();
+  const queryClient = show(deliveredDelivery, staleRead.promise);
+  const detailKey = ['supply-chain', 'deliveries', 'dr-1'] as const;
+  await screen.findByRole('button', { name: /^Confirm$/ });
+  const staleRefetch = queryClient.refetchQueries({ queryKey: detailKey });
+  await waitFor(() => expect(deliveriesApi.show).toHaveBeenCalledTimes(2));
+  vi.mocked(deliveriesApi.confirm).mockResolvedValue(confirmedDelivery);
+
+  fireEvent.click(screen.getByRole('button', { name: /^Confirm$/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm delivery' }));
+  await waitFor(() => expect(deliveriesApi.confirm).toHaveBeenCalledWith('dr-1', {}));
+  await act(async () => {
+    staleRead.resolve(deliveredDelivery);
+    await staleRefetch;
+  });
+
+  expect(queryClient.getQueryData<Delivery>(detailKey)?.status).toBe('confirmed');
+  expect(screen.queryByRole('button', { name: /^Confirm$/ })).not.toBeInTheDocument();
+});
+
+it('reconciles a finalized invoice into the delivery detail while an older read completes afterward', async () => {
+  const deliveryWithDraftInvoice: Delivery = {
+    ...assigned,
+    status: 'confirmed',
+    can_confirm: false,
+    invoice: { id: 'invoice-1', invoice_number: 'INV-202611-0001', total_amount: '17500.00', status: 'draft' },
+  };
+  const finalizedInvoice = {
+    id: 'invoice-1', invoice_number: 'INV-202611-0001', total_amount: '17500.00', status: 'finalized',
+  } as Invoice;
+  const staleRead = deferred<Delivery>();
+  const queryClient = show(deliveryWithDraftInvoice, staleRead.promise);
+  const detailKey = ['supply-chain', 'deliveries', 'dr-1'] as const;
+  await screen.findByRole('button', { name: 'Finalize' });
+  const staleRefetch = queryClient.refetchQueries({ queryKey: detailKey });
+  await waitFor(() => expect(deliveriesApi.show).toHaveBeenCalledTimes(2));
+  vi.mocked(invoicesApi.finalize).mockResolvedValue(finalizedInvoice);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Finalize' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Finalize invoice' }));
+  await waitFor(() => expect(invoicesApi.finalize).toHaveBeenCalledWith('invoice-1'));
+  await act(async () => {
+    staleRead.resolve(deliveryWithDraftInvoice);
+    await staleRefetch;
+  });
+
+  expect(queryClient.getQueryData<Delivery>(detailKey)?.invoice?.status).toBe('finalized');
+  expect(screen.queryByRole('button', { name: 'Finalize' })).not.toBeInTheDocument();
 });

@@ -64,6 +64,8 @@ return [
     */
     'waits' => [
         'redis:high' => 15,
+        'redis_broadcasts:high' => 15,
+        'redis_broadcasts:broadcasts' => 15,
         'redis:default' => 60,
         'redis:mail' => 120,
         'redis:automation' => 180,
@@ -103,7 +105,7 @@ return [
 
         // Realtime bus. Small timeout because nothing here is allowed to be slow.
         'supervisor-high' => [
-            'connection' => 'redis',
+            'connection' => 'redis_broadcasts',
             'queue' => ['high'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
@@ -113,10 +115,33 @@ return [
             'balanceCooldown' => 3,
             'maxTime' => 0,
             'maxJobs' => 0,
+            // Outbox pings share the one-second blocking connection used by
+            // broadcasts; do not add Horizon's default idle delay afterward.
+            'sleep' => 0,
             'memory' => 256,
             'tries' => 3,
             'timeout' => 120,
             'retry_after' => 300,
+            'nice' => 0,
+        ],
+
+        // Content-free record-change signals have a single isolated consumer.
+        // Keeping it at one process fits the low-memory shop-floor/dev host;
+        // the queue is independent of email, automation, and bulk work.
+        'supervisor-broadcasts' => [
+            'connection' => 'redis_broadcasts',
+            'queue' => ['broadcasts'],
+            'balance' => false,
+            'processes' => 1,
+            // Redis blocks for one second on the notify list. Do not add the
+            // worker's three-second idle sleep after that timed block; it
+            // would make the effective no-notification pickup delay four s.
+            'sleep' => 0,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 60,
             'nice' => 0,
         ],
 
@@ -219,6 +244,7 @@ return [
 
         'production' => [
             'supervisor-high' => ['maxProcesses' => 6],
+            'supervisor-broadcasts' => ['processes' => 2],
             'supervisor-default' => ['minProcesses' => 2, 'maxProcesses' => 12],
             'supervisor-mail' => ['minProcesses' => 2, 'maxProcesses' => 10],
             'supervisor-automation' => ['maxProcesses' => 3],
@@ -226,7 +252,10 @@ return [
         ],
 
         'local' => [
-            'supervisor-high' => ['minProcesses' => 1, 'maxProcesses' => 2],
+            // Keep two lightweight outbox workers warm: local queue telemetry
+            // showed a 1.70s p95 wait and 4.60s max during event bursts.
+            'supervisor-high' => ['minProcesses' => 2, 'maxProcesses' => 2],
+            'supervisor-broadcasts' => ['processes' => 1],
             'supervisor-default' => ['minProcesses' => 2, 'maxProcesses' => 4],
             'supervisor-mail' => ['minProcesses' => 2, 'maxProcesses' => 4],
             'supervisor-automation' => ['maxProcesses' => 2],

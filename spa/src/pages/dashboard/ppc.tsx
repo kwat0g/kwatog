@@ -13,7 +13,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { clampPercent } from '@/lib/progress';
-import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
+import { dashboardsApi } from '@/api/dashboards';
 import { chainApi } from '@/api/chain';
 import type { ChainBottleneckGroup, ChainBottleneckRow, ChainBottlenecks } from '@/types/chain';
 import { StatCard } from '@/components/ui/StatCard';
@@ -494,21 +494,18 @@ export default function PpcDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'ppc'],
   queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
-  refetchInterval: DASHBOARD_REFRESH_MS,
   });
 
  const bottlenecks = useQuery({
  queryKey: ['chain-bottlenecks', 'ppc_head'],
  queryFn: (): Promise<ChainBottlenecks> => chainApi.bottlenecks('ppc_head'),
   enabled: can('dashboard.view_bottlenecks'),
-  refetchInterval: DASHBOARD_REFRESH_MS,
   staleTime: 60_000,
   });
 
   return (
   <DashboardShell<PpcDashboardData>
-  title="PPC Dashboard"
-  subtitle="Live · refreshes every 60s"
+  title="PPC"
   query={q}
   refreshingQueryKey={['dashboard', 'ppc']}
   header={<KpiStrip codes={PPC_KPIS} compact />}

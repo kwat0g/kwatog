@@ -11,6 +11,10 @@ gets **inspected** against it (incoming resin / in-process / outgoing parts).
 Every finalized failure becomes an **NCR**. A checked outgoing pass with complete
 measurement evidence can generate a **Certificate of Conformance**.
 
+The demo also seeds an incoming QC plan for each existing inventory item that
+does not already have effective coverage. These are baseline demo checks; review
+the item-specific limits and certificates on the item before operational use.
+
 ## 2. Inspection specs + revisions
 
 1. Open `/quality/inspection-specs` (**Inspection Specifications** in sidebar).

@@ -33,6 +33,10 @@ auto-raise work orders when due, so maintenance happens before breakdowns.
    **Work performed**, click **Complete work order**, and confirm.
 6. Statuses move open → in progress → completed.
 
+For the seeded demo, use **SP-HYD-001** (Hydraulic Oil Filter) or
+**SP-HTR-001** (Barrel Heater Band). Both have opening stock in the Zone D
+spare-parts area. The item costs and quantities are fictional demo values.
+
 ## 4. Assignment note
 
 - `maintenance@ogami.test` does not hold `maintenance.wo.assign`, so the

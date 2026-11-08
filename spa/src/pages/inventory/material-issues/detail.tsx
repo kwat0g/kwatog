@@ -15,6 +15,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatPreciseQuantity, formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import type { MaterialIssueStatus } from '@/types/inventory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 const statusVariant = (s: MaterialIssueStatus) => {
  if (s === 'issued') return 'info' as const;
@@ -24,6 +25,7 @@ const statusVariant = (s: MaterialIssueStatus) => {
 
 export default function MaterialIssueDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
+ useRealtimeRecord('material_issue_slip', id || undefined);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['inventory', 'material-issues', id],

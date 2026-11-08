@@ -27,6 +27,15 @@ class Complaint8DReport extends Model
         'finalized_at' => 'datetime',
     ];
 
+    /** Opaque optimistic-concurrency token derived from the persisted row version. */
+    public function getVersionAttribute(): string
+    {
+        $attributes = $this->getAttributes();
+        ksort($attributes);
+
+        return hash('sha256', json_encode($attributes, JSON_THROW_ON_ERROR));
+    }
+
     public function complaint(): BelongsTo
     {
         return $this->belongsTo(CustomerComplaint::class, 'complaint_id');

@@ -9,7 +9,7 @@ vi.mock('@/api/b2b/customer', () => ({ customerPortalApi: { getInvoice: vi.fn(),
 
 beforeEach(() => vi.clearAllMocks());
 
-it('offers fixed-balance payment submission with required proof and live validation', async () => {
+it('allows partial bank-transfer submission with required proof and live validation', async () => {
   vi.mocked(customerPortalApi.getInvoice).mockResolvedValue({
     id: 'inv-1', invoice_number: 'INV-1', date: '2026-10-09', due_date: '2026-11-08',
     total_amount: '19600.00', balance: '19600.00', status: 'finalized', items: [], collections: [],
@@ -20,8 +20,10 @@ it('offers fixed-balance payment submission with required proof and live validat
   </QueryClientProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Submit payment' }));
   expect(screen.getByText('Awaiting payment')).toBeInTheDocument();
-  expect(screen.getByLabelText('Amount to settle')).toHaveValue('19600.00');
-  expect(screen.getByLabelText('Amount to settle')).toHaveAttribute('readonly');
+  expect(screen.getByLabelText(/Amount to pay/)).toHaveValue(19600);
+  expect(screen.getByLabelText(/Amount to pay/)).not.toHaveAttribute('readonly');
+  fireEvent.change(screen.getByLabelText(/Amount to pay/), { target: { value: '5000.00' } });
+  expect(screen.getByLabelText(/Amount to pay/)).toHaveValue(5000);
   expect(screen.getByRole('button', { name: 'Submit payment evidence' })).toBeDisabled();
   fireEvent.change(screen.getByLabelText(/Sending bank/), { target: { value: 'BDO' } });
   fireEvent.change(screen.getByLabelText(/Reference number/), { target: { value: '  ' } });

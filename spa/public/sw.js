@@ -1,4 +1,7 @@
-const CACHE_NAME = 'ogami-pwa-v2';
+const requestedBuildId = new URL(self.location.href).searchParams.get('build') || '';
+const CACHE_NAME = /^[a-zA-Z0-9._-]{1,80}$/.test(requestedBuildId)
+  ? `ogami-pwa-${requestedBuildId}`
+  : 'ogami-pwa-v4';
 const PRECACHE_URLS = [
   '/factory-manifest.webmanifest',
   '/driver-manifest.webmanifest',
@@ -8,9 +11,11 @@ const PRECACHE_URLS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    Promise.all([
+      caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
+      self.skipWaiting(),
+    ])
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -21,9 +26,8 @@ self.addEventListener('activate', (event) => {
           .filter((key) => key.startsWith('ogami-') && key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -51,25 +55,51 @@ self.addEventListener('fetch', (event) => {
         .then((response) => {
           if (response.ok) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
+            void caches.open(CACHE_NAME)
+              .then((cache) => cache.put('/', clone))
+              .catch(() => undefined);
           }
           return response;
         })
-        .catch(() => caches.match('/'))
+        .catch(async () => {
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            return (await cache.match('/')) ?? Response.error();
+          } catch {
+            return Response.error();
+          }
+        })
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetched = fetch(event.request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      });
-      return cached || fetched;
-    })
-  );
+  // Only Vite's versioned build output is safe for cache-first reuse. Other
+  // same-origin GETs may be authenticated pages, exports, or signed files;
+  // leave them network-only even when their URL is outside /api/.
+  if (!url.pathname.startsWith('/assets/')) return;
+
+  // Vite names production assets by content hash, so a cached URL is
+  // immutable. Avoid a redundant network request on every cache hit; a new
+  // index.html points at new hashes after deployment. If Cache Storage fails,
+  // the asset still loads directly from the network.
+  event.respondWith((async () => {
+    let cache;
+    try {
+      cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+    } catch {
+      return fetch(event.request);
+    }
+
+    const response = await fetch(event.request);
+    if (response.ok) {
+      try {
+        await cache.put(event.request, response.clone());
+      } catch {
+        // Cache quota or storage failures must not block the network response.
+      }
+    }
+    return response;
+  })());
 });

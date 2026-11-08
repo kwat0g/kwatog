@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button, Chip, ConfirmDialog, EmptyState, FilterBar, Select } from '@/components/ui';
@@ -10,6 +11,9 @@ import { Tag } from '@/components/ui/Tag';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
+import { useProfileUpdateRequestRealtime } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { PaginatedResponse } from '@/types';
 import {
   profileUpdateRequestsApi,
   type ProfileUpdateRequestStatus,
@@ -42,32 +46,28 @@ const STATUS_CHIP: Record<ProfileUpdateRequestStatus, 'warning' | 'info' | 'succ
 export default function ProfileUpdateRequestsPage() {
   const queryClient = useQueryClient();
   const { can } = usePermission();
+  useProfileUpdateRequestRealtime();
   const [searchParams] = useSearchParams();
   const awaitingMyAction = searchParams.get('signal') === 'awaiting_my_action';
   const canFinance = can('hr.profile_updates.finance_review');
   const canViewEmployees = can('hr.employees.view');
-  const canReviewHr = can('hr.employees.edit');
   const financeOnly = canFinance && !canViewEmployees;
-  const defaultStatus: ProfileUpdateRequestStatus = financeOnly ? 'pending_finance' : 'pending';
-  const [status, setStatus] = useState<ProfileUpdateRequestStatus | undefined>(
-    awaitingMyAction ? undefined : defaultStatus,
-  );
+  const [status, setStatus] = useState<ProfileUpdateRequestStatus | 'all'>('all');
   const [page, setPage] = useState(1);
   useEffect(() => {
-    setStatus(awaitingMyAction ? undefined : defaultStatus);
+    setStatus('all');
     setPage(1);
-  }, [awaitingMyAction, defaultStatus]);
+  }, [awaitingMyAction]);
   const [confirm, setConfirm] = useState<
     | null
-    | { kind: 'approve' | 'reject'; stage: 'hr' | 'finance'; row: ProfileUpdateReviewItem }
+    | { kind: 'approve' | 'reject'; stage: 'hr' | 'finance'; requestId: string }
   >(null);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['hr', 'profile-update-requests', awaitingMyAction ? undefined : status, page, awaitingMyAction],
     queryFn: () => profileUpdateRequestsApi.list(awaitingMyAction
       ? { signal: 'awaiting_my_action' }
-      : { status: status ?? defaultStatus, ...(page > 1 ? { page } : {}) }),
-    placeholderData: (prev) => prev,
+      : { status, ...(page > 1 ? { page } : {}) }),
   });
   const { data: options } = useQuery({
     queryKey: ['hr', 'profile-update-request-options'],
@@ -84,13 +84,62 @@ export default function ProfileUpdateRequestsPage() {
       args.stage === 'finance'
         ? profileUpdateRequestsApi.financeReview(args.id, args.action)
         : profileUpdateRequestsApi.review(args.id, args.action),
-    onSuccess: (_data, vars) => {
+    onSuccess: (updated, vars) => {
+      for (const [key, cached] of queryClient.getQueriesData<PaginatedResponse<ProfileUpdateReviewItem>>({
+        queryKey: ['hr', 'profile-update-requests'],
+      })) {
+        if (!cached?.data.some((row) => row.id === updated.id)) continue;
+        const awaitingMyActionList = key[4] === true;
+        const filteredStatus = typeof key[2] === 'string' && key[2] !== 'all' ? key[2] : null;
+        const actions = updated.available_actions;
+        const stillActionable = !actions
+          || actions.can_review_hr
+          || actions.can_approve_finance
+          || actions.can_reject_finance;
+        const removeFromList = (awaitingMyActionList && !stillActionable)
+          || (filteredStatus !== null && filteredStatus !== updated.status);
+        const rows = removeFromList
+          ? cached.data.filter((row) => row.id !== updated.id)
+          : cached.data.map((row) => row.id === updated.id ? updated : row);
+        const removed = rows.length !== cached.data.length;
+        queryClient.setQueryData<PaginatedResponse<ProfileUpdateReviewItem>>(key, {
+          ...cached,
+          data: rows,
+          meta: {
+            ...cached.meta,
+            total: Math.max(0, cached.meta.total - Number(removed)),
+            from: rows.length > 0 ? cached.meta.from : null,
+            to: rows.length > 0 ? (cached.meta.from ?? 1) + rows.length - 1 : null,
+          },
+        });
+      }
+      void invalidateRealtimeChange(queryClient, { entityType: 'profile_update_request', entityId: updated.id });
       toast.success(vars.action === 'approve' ? 'Request approved.' : 'Request rejected.');
       setConfirm(null);
-      queryClient.invalidateQueries({ queryKey: ['hr', 'profile-update-requests'] });
     },
-    onError: (error) => reportMutationError(error, 'Failed to update request.'),
+    onError: async (error, vars) => {
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        await invalidateRealtimeChange(queryClient, { entityType: 'profile_update_request', entityId: vars.id });
+        toast.error('This request changed while you were reviewing it. The queue has been refreshed.');
+        setConfirm(null);
+        return;
+      }
+      reportMutationError(error, 'Failed to update request.');
+    },
   });
+
+  const confirmedRow = confirm
+    ? data?.data.find((row) => row.id === confirm.requestId)
+    : undefined;
+  const confirmationActionAvailable = Boolean(
+    confirm && confirmedRow && !isFetching && (
+      confirm.stage === 'hr'
+        ? confirmedRow.available_actions?.can_review_hr === true
+        : confirm.kind === 'approve'
+          ? confirmedRow.available_actions?.can_approve_finance === true
+          : confirmedRow.available_actions?.can_reject_finance === true
+    ),
+  );
 
   const columns: Column<ProfileUpdateReviewItem>[] = [
     {
@@ -161,7 +210,7 @@ export default function ProfileUpdateRequestsPage() {
   ];
 
   const changeStatus = (value: unknown) => {
-    setStatus((value as ProfileUpdateRequestStatus) || defaultStatus);
+    setStatus((value as ProfileUpdateRequestStatus | 'all') || 'all');
     setPage(1);
   };
 
@@ -175,15 +224,18 @@ export default function ProfileUpdateRequestsPage() {
       {!awaitingMyAction && <FilterBar
         searchable={false}
         resultCount={data?.meta.total}
+        values={{ status }}
+        onApplySavedView={(saved) => changeStatus(saved.status ?? 'all')}
         actions={(
           <Select
             aria-label="Status"
-            value={status ?? defaultStatus}
+            value={status}
             searchable
             fieldSize="md"
             containerClassName="min-w-[190px]"
             onChange={(event) => changeStatus(event.target.value)}
           >
+            <option value="all">All statuses</option>
             {selectableStatuses.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
@@ -209,10 +261,11 @@ export default function ProfileUpdateRequestsPage() {
             density="compact"
             expandOnRowClick
             renderExpanded={(row) => {
-              const stage = row.status === 'pending_finance' ? 'finance' : 'hr';
-              const canAct = row.status === 'pending'
-                ? canReviewHr
-                : row.status === 'pending_finance' && canFinance;
+              const canApproveHr = row.available_actions?.can_review_hr === true;
+              const canApproveFinance = row.available_actions?.can_approve_finance === true;
+              const canRejectFinance = row.available_actions?.can_reject_finance === true;
+              const canAct = canApproveHr || canApproveFinance || canRejectFinance;
+              const stage = canApproveFinance || canRejectFinance ? 'finance' : 'hr';
               return (
                 <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)]">
                   <section aria-label="Requested changes">
@@ -236,28 +289,32 @@ export default function ProfileUpdateRequestsPage() {
                     {row.status === 'pending_finance' && row.reviewer && (
                       <p><span className="mr-2 text-caption text-muted">HR approved by</span>{row.reviewer.name}</p>
                     )}
-                    {row.status === 'pending_finance' && !canFinance && (
+                    {row.status === 'pending_finance' && !row.permissions?.review_finance && (
                       <p className="text-caption text-muted">Awaiting Finance Officer approval.</p>
                     )}
                     {canAct && (
                       <div className="flex flex-wrap justify-end gap-2 border-t border-subtle pt-3">
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => setConfirm({ kind: 'reject', stage, row })}
-                          disabled={review.isPending}
-                        >
-                          Reject
-                        </Button>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => setConfirm({ kind: 'approve', stage, row })}
-                          disabled={review.isPending}
-                          loading={review.isPending && confirm?.row.id === row.id}
-                        >
-                          {stage === 'finance' ? 'Finance Approve' : row.requires_finance ? 'HR Approve' : 'Approve'}
-                        </Button>
+                        {(canApproveHr || canRejectFinance) && (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setConfirm({ kind: 'reject', stage, requestId: row.id })}
+                            disabled={review.isPending || isFetching}
+                          >
+                            Reject
+                          </Button>
+                        )}
+                        {(canApproveHr || canApproveFinance) && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => setConfirm({ kind: 'approve', stage, requestId: row.id })}
+                            disabled={review.isPending || isFetching}
+                            loading={review.isPending && confirm?.requestId === row.id}
+                          >
+                            {stage === 'finance' ? 'Finance Approve' : row.requires_finance ? 'HR Approve' : 'Approve'}
+                          </Button>
+                        )}
                       </div>
                     )}
                   </section>
@@ -269,7 +326,9 @@ export default function ProfileUpdateRequestsPage() {
                 size="compact"
                 icon="inbox"
                 title="No requests"
-                description={`There are no ${(status ? statusLabels.get(status) : undefined)?.toLowerCase() ?? status ?? defaultStatus} profile update requests.`}
+                description={status === 'all'
+                  ? 'There are no profile update requests.'
+                  : `There are no ${statusLabels.get(status)?.toLowerCase() ?? status} profile update requests.`}
               />
             )}
           />
@@ -278,23 +337,28 @@ export default function ProfileUpdateRequestsPage() {
 
       <ConfirmDialog
         isOpen={confirm !== null}
-        title={`${confirm?.kind === 'approve' ? 'Approve' : 'Reject'} ${confirm?.row.employee?.full_name ?? 'profile change request'}?`}
+        title={`${confirm?.kind === 'approve' ? 'Approve' : 'Reject'} ${confirmedRow?.employee?.full_name ?? 'profile change request'}?`}
         description={
-          confirm?.kind === 'reject'
-            ? 'The employee will see the rejection on their next visit.'
-            : confirm?.stage === 'finance'
-              ? 'Finance approval applies the new bank account to the employee record.'
-              : confirm?.row.requires_finance
-                ? 'HR approval records your sign-off; the change still needs Finance approval before it applies.'
-                : 'The whitelisted fields will be applied to the employee record.'
+          !confirmationActionAvailable && confirm
+            ? 'This request changed or is being refreshed. Review the updated status before taking action.'
+            : confirm?.kind === 'reject'
+              ? 'The employee will see the rejection on their next visit.'
+              : confirm?.stage === 'finance'
+                ? 'Finance approval applies the new bank account to the employee record.'
+                : confirmedRow?.requires_finance
+                  ? 'HR approval records your sign-off; the change still needs Finance approval before it applies.'
+                  : 'The whitelisted fields will be applied to the employee record.'
         }
         confirmLabel={review.isPending ? '...' : confirm?.kind === 'approve' ? 'Approve' : 'Reject'}
         variant={confirm?.kind === 'approve' ? 'primary' : 'danger'}
         onConfirm={() => {
-          if (confirm) review.mutate({ id: confirm.row.id, action: confirm.kind, stage: confirm.stage });
+          if (confirm && confirmedRow && confirmationActionAvailable) {
+            review.mutate({ id: confirmedRow.id, action: confirm.kind, stage: confirm.stage });
+          }
         }}
         onClose={() => setConfirm(null)}
         pending={review.isPending}
+        disabled={!confirmationActionAvailable}
       />
     </div>
   );

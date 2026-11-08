@@ -16,6 +16,11 @@ class PayrollPeriodResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $hasDetailContext = $request->route()?->parameter('period') instanceof \App\Modules\Payroll\Models\PayrollPeriod;
+        $actionContext = $hasDetailContext && $this->resource instanceof \App\Modules\Payroll\Models\PayrollPeriod
+            ? app(\App\Modules\Payroll\Services\PayrollPeriodService::class)->actionContext($this->resource, $request->user())
+            : null;
+
         return [
             'id'                  => $this->hash_id,
             'period_start'        => optional($this->period_start)->toDateString(),
@@ -27,6 +32,9 @@ class PayrollPeriodResource extends JsonResource
             'status_label'        => $this->status?->label(),
             'lifecycle_steps'     => $this->lifecycleSteps(),
             'is_locked'           => $this->isLocked(),
+            'permissions'         => $this->when($actionContext !== null, $actionContext['permissions'] ?? []),
+            'available_actions'   => $this->when($actionContext !== null, $actionContext['available_actions'] ?? []),
+            'compute_available_on' => $this->when($actionContext !== null, $actionContext['compute_available_on'] ?? null),
             'label'               => $this->label(),
 
             // Scope — which slice of the workforce this run pays. All null /

@@ -9,6 +9,7 @@ import ApplicationDetailPage from './detail';
 
 const permissions = vi.hoisted(() => ({ manage: true }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => permissions.manage }) }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeRecord: vi.fn() }));
 vi.mock('@/api/recruitment', () => ({ recruitmentApi: {
   showApplication: vi.fn(), options: vi.fn(), changeStage: vi.fn(), scheduleInterview: vi.fn(),
   updateInterview: vi.fn(), addNote: vi.fn(), downloadResume: vi.fn(),
@@ -19,9 +20,20 @@ const application: JobApplication = {
   first_name: 'Jamie', last_name: 'Reyes', full_name: 'Jamie Reyes',
   email: 'jamie@test.com', phone: '09000000000', cover_letter: 'Available for shift work.',
   stage: 'screening', stage_label: 'Screening', rejected_at_stage: null, rejection_reason: null,
+  version: '2026-10-10T01:00:00.000000+00:00',
+  permissions: { view: true, manage_applications: true, hire: true },
+  available_actions: ['advance', 'reject', 'add_note'],
   applied_at: '2026-10-10T01:00:00Z', created_at: '2026-10-10T01:00:00Z', updated_at: '2026-10-10T01:00:00Z',
   interviews: [], notes: [], history: [],
 };
+
+function serverActions(stage: JobApplication['stage']): JobApplication['available_actions'] {
+  if (!permissions.manage) return [];
+  if (stage === 'hired') return ['convert_to_employee'];
+  if (stage === 'rejected') return [];
+  if (stage === 'interview') return ['reject', 'schedule_interview', 'add_note'];
+  return ['advance', 'reject', 'add_note'];
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -39,8 +51,8 @@ beforeEach(() => {
   } }, status: 200, statusText: 'OK', headers: {}, config: { headers: new AxiosHeaders() } });
 });
 
-function show(stage = application.stage) {
-  vi.mocked(recruitmentApi.showApplication).mockResolvedValue({ data: { data: { ...application, stage } } } as AxiosResponse<{ data: JobApplication }>);
+function show(stage = application.stage, actions = serverActions(stage)) {
+  vi.mocked(recruitmentApi.showApplication).mockResolvedValue({ data: { data: { ...application, stage, available_actions: actions } } } as AxiosResponse<{ data: JobApplication }>);
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={['/hr/recruitment/applications/app-1']}>
@@ -57,6 +69,9 @@ function fillInterview(dialog: HTMLElement, date = '2099-10-13T10:30') {
 }
 
 it('opens interview advancement in a modal, validates and submits existing stage payload', async () => {
+  vi.mocked(recruitmentApi.changeStage).mockResolvedValueOnce({
+    data: { data: { ...application, stage: 'interview', stage_label: 'Interview' } },
+  } as AxiosResponse<{ data: JobApplication }>);
   show();
   fireEvent.click(await screen.findByRole('button', { name: 'Move to Interview' }));
   const dialog = await screen.findByRole('dialog', { name: 'Schedule interview' });
@@ -68,7 +83,7 @@ it('opens interview advancement in a modal, validates and submits existing stage
   fillInterview(dialog);
   fireEvent.click(within(dialog).getByRole('button', { name: 'Schedule & Move to Interview' }));
   await waitFor(() => expect(recruitmentApi.changeStage).toHaveBeenCalledWith('app-1', {
-    action: 'advance', interview: { scheduled_at: new Date('2099-10-13T10:30').toISOString(), location: 'HR meeting room', interviewer_name: 'Maria Santos' },
+    action: 'advance', expected_stage: 'screening', interview: { scheduled_at: new Date('2099-10-13T10:30').toISOString(), location: 'HR meeting room', interviewer_name: 'Maria Santos' },
   }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
@@ -95,6 +110,70 @@ it('keeps entered details and maps nested server errors after failed advancement
   fireEvent.click(within(dialog).getByRole('button', { name: 'Schedule & Move to Interview' }));
   expect(await within(dialog).findByText('Choose another interviewer.')).toBeInTheDocument();
   expect(within(dialog).getByLabelText(/Date & Time/)).toHaveValue('2099-10-13T10:30');
+});
+
+it('refreshes the application after a stale-stage conflict and removes the old action', async () => {
+  vi.mocked(recruitmentApi.changeStage).mockRejectedValue(new AxiosError('Application changed.', '409', undefined, undefined, {
+    status: 409,
+    data: {
+      message: 'This application changed from New to Screening. Refresh and review the current stage.',
+      code: 'recruitment_state_conflict',
+    },
+  } as AxiosResponse));
+
+  show('new');
+  await screen.findByRole('button', { name: 'Move to Screening' });
+  vi.mocked(recruitmentApi.showApplication).mockResolvedValueOnce({
+    data: { data: { ...application, stage: 'screening', available_actions: serverActions('screening') } },
+  } as AxiosResponse<{ data: JobApplication }>);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Move to Screening' }));
+  const confirmation = await screen.findByRole('dialog', { name: 'Advance to next stage?' });
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Advance' }));
+
+  expect(await screen.findByRole('button', { name: 'Move to Interview' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Move to Screening' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: 'Advance to next stage?' })).not.toBeInTheDocument();
+  expect(recruitmentApi.changeStage).toHaveBeenCalledWith('app-1', { action: 'advance', expected_stage: 'new' });
+});
+
+it('keeps an interview draft while refreshing after a stale-stage conflict', async () => {
+  vi.mocked(recruitmentApi.changeStage).mockRejectedValue(new AxiosError('Application changed.', '409', undefined, undefined, {
+    status: 409,
+    data: {
+      message: 'This application changed from Screening to Interview. Refresh and review the current stage.',
+      code: 'recruitment_state_conflict',
+    },
+  } as AxiosResponse));
+
+  show('screening');
+  await screen.findByRole('button', { name: 'Move to Interview' });
+  vi.mocked(recruitmentApi.showApplication).mockResolvedValueOnce({
+    data: { data: {
+      ...application,
+      stage: 'interview',
+      available_actions: ['advance', 'reject', 'schedule_interview', 'update_interview_outcome', 'add_note'],
+      interviews: [{
+        id: 'interview-1', scheduled_at: '2099-10-13T10:30:00Z', location: 'HR meeting room',
+        interviewer_name: 'Maria Santos', notes: null, outcome: 'passed', created_at: '2099-10-13T10:30:00Z',
+      }],
+    } },
+  } as AxiosResponse<{ data: JobApplication }>);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Move to Interview' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Schedule interview' });
+  fillInterview(dialog);
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Schedule & Move to Interview' }));
+
+  expect(await within(dialog).findByText(
+    'This application changed from Screening to Interview. Refresh and review the current stage.',
+  )).toBeInTheDocument();
+  expect(within(dialog).getByLabelText(/Date & Time/)).toHaveValue('2099-10-13T10:30');
+  expect(await screen.findByRole('button', { name: 'Move to Offer' })).toBeInTheDocument();
+  expect(recruitmentApi.changeStage).toHaveBeenCalledWith('app-1', expect.objectContaining({
+    action: 'advance',
+    expected_stage: 'screening',
+  }));
 });
 
 it('schedules an additional interview through the same modal without advancing stage', async () => {
@@ -126,7 +205,9 @@ it('rejects through a modal with a reason', async () => {
   expect(confirm).toBeDisabled();
   fireEvent.change(within(dialog).getByLabelText(/Rejection reason/), { target: { value: 'Does not meet requirements.' } });
   fireEvent.click(confirm);
-  await waitFor(() => expect(recruitmentApi.changeStage).toHaveBeenCalledWith('app-1', { action: 'reject', rejection_reason: 'Does not meet requirements.' }));
+  await waitFor(() => expect(recruitmentApi.changeStage).toHaveBeenCalledWith('app-1', {
+    action: 'reject', expected_stage: 'screening', rejection_reason: 'Does not meet requirements.',
+  }));
 });
 
 it('hides editing controls without recruitment permission', async () => {
@@ -135,4 +216,12 @@ it('hides editing controls without recruitment permission', async () => {
   await screen.findByText('Jamie Reyes');
   expect(screen.queryByRole('button', { name: /Move to/ })).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Add a note')).not.toBeInTheDocument();
+});
+
+it('renders workflow controls only when the server includes those actions', async () => {
+  show('new', ['add_note']);
+  await screen.findByText('Jamie Reyes');
+  expect(screen.queryByRole('button', { name: /Move to/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Add a note')).toBeInTheDocument();
 });

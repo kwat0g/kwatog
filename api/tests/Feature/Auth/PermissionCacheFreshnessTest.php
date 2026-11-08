@@ -9,8 +9,10 @@ use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Services\RolePermissionCacheGeneration;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Database\Events\MigrationsEnded;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
@@ -72,15 +74,42 @@ class PermissionCacheFreshnessTest extends TestCase
 
         $this->assertTrue($user->fresh()->hasPermission('hr.employees.view'));
 
-        // Role-permission set is cached by role_id.
-        $this->assertTrue(Cache::has("auth:role_perms:{$user->role_id}"));
+        // Role-permission set is cached by restore namespace, role, and DB version.
+        $cacheKey = $this->rolePermissionCacheKey($user);
+        $this->assertTrue(Cache::has($cacheKey));
 
         // Flushing only the role cache should not break — next call rebuilds.
-        Cache::forget("auth:role_perms:{$user->role_id}");
-        $this->assertFalse(Cache::has("auth:role_perms:{$user->role_id}"));
+        Cache::forget($cacheKey);
+        $this->assertFalse(Cache::has($cacheKey));
 
         $this->assertTrue($user->fresh()->hasPermission('hr.employees.view'));
-        $this->assertTrue(Cache::has("auth:role_perms:{$user->role_id}"));
+        $this->assertTrue(Cache::has($cacheKey));
+    }
+
+    public function test_restore_namespace_prevents_reuse_when_permissions_version_repeats(): void
+    {
+        $user = $this->userWithRole('hr_officer');
+        $this->assertContains('hr.employees.view', $user->permission_slugs);
+
+        $oldKey = $this->rolePermissionCacheKey($user);
+        $this->assertTrue(Cache::has($oldKey));
+
+        self::assertTrue(app(RolePermissionCacheGeneration::class)->invalidateForDatabaseRestore());
+
+        $newKey = $this->rolePermissionCacheKey($user);
+        $this->assertNotSame($oldKey, $newKey, 'A restored DB version must not select an earlier permission snapshot.');
+        $this->assertTrue(Cache::has($oldKey), 'The retired entry remains TTL-bounded but is no longer addressable.');
+        $this->assertFalse(Cache::has($newKey));
+        $this->assertContains('hr.employees.view', $this->userWithRole('hr_officer')->permission_slugs);
+    }
+
+    public function test_completed_migration_batch_rotates_role_permission_namespace(): void
+    {
+        $generation = app(RolePermissionCacheGeneration::class)->current();
+
+        event(new MigrationsEnded('up'));
+
+        $this->assertNotSame($generation, app(RolePermissionCacheGeneration::class)->current());
     }
 
     public function test_expired_revoke_restores_role_permission(): void
@@ -125,11 +154,13 @@ class PermissionCacheFreshnessTest extends TestCase
         $user1 = $this->userWithRole('hr_officer');
         $user2 = $this->userWithRole('hr_officer');
         $user1->permission_slugs; // prime role cache
-        $this->assertTrue(Cache::has("auth:role_perms:{$user1->role_id}"));
+        $user1CacheKey = $this->rolePermissionCacheKey($user1);
+        $user2CacheKey = $this->rolePermissionCacheKey($user2);
+        $this->assertTrue(Cache::has($user1CacheKey));
 
         // Simulate a role permissions sync forgetting the role-keyed cache.
-        Cache::forget("auth:role_perms:{$user1->role_id}");
-        $this->assertFalse(Cache::has("auth:role_perms:{$user2->role_id}"));
+        Cache::forget($user1CacheKey);
+        $this->assertFalse(Cache::has($user2CacheKey));
     }
 
     public function test_request_scoped_memo_avoids_repeat_override_queries(): void
@@ -162,5 +193,13 @@ class PermissionCacheFreshnessTest extends TestCase
             'role_id' => Role::where('slug', $slug)->value('id'),
             'email'   => $slug.'+'.uniqid().'@t.test',
         ]);
+    }
+
+    private function rolePermissionCacheKey(User $user): string
+    {
+        return app(RolePermissionCacheGeneration::class)->keyFor(
+            (int) $user->role_id,
+            (int) $user->role->permissions_version,
+        );
     }
 }

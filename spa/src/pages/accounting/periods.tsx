@@ -25,6 +25,10 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { Textarea } from '@/components/ui/Textarea';
 import { implicitOpenCurrentPeriod } from './implicitOpenCurrentPeriod';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import type { PaginatedResponse } from '@/types';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -42,32 +46,51 @@ export default function AccountingPeriodsPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('accounting.periods.manage');
+ useRealtimeList('accounting_period', can('accounting.periods.view') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<PeriodPageFilters>({ page: 1, per_page: 24, year: '', status: '' });
 
  const [closeTarget, setCloseTarget] = useState<AccountingPeriod | null>(null);
  const [reopenTarget, setReopenTarget] = useState<AccountingPeriod | null>(null);
 
+ const periodsQueryKey = ['accounting', 'periods', filters] as const;
  const periodsQ = useQuery({
- queryKey: ['accounting', 'periods', filters],
+ queryKey: periodsQueryKey,
  queryFn: () => accountingPeriodsApi.list({
  page: filters.page,
  per_page: filters.per_page,
  year: filters.year || undefined,
  status: filters.status || undefined,
  }),
- placeholderData: (prev) => prev,
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, periodsQueryKey, 2) ? previous : undefined,
  });
+
+ const reconcileMutationResponse = (period: AccountingPeriod) => {
+  qc.setQueryData<PaginatedResponse<AccountingPeriod>>(
+   ['accounting', 'periods', filters],
+   (current) => reconcileAccountingPeriodList(current, period, filters),
+  );
+  void invalidateRealtimeChange(qc, { entityType: 'accounting_period', entityId: period.id });
+ };
 
  const closeMut = useMutation({
  mutationFn: (p: AccountingPeriod) => accountingPeriodsApi.close(p.year, p.month),
- onSuccess: () => { toast.success('Period closed.'); setCloseTarget(null); qc.invalidateQueries({ queryKey: ['accounting', 'periods'] }); },
+ onSuccess: (period) => { reconcileMutationResponse(period); toast.success('Period closed.'); setCloseTarget(null); },
  onError: (e: AxiosError<{ message?: string }>) => { setCloseTarget(null); toast.error(e.response?.data?.message ?? 'Failed to close period.'); },
  });
 
  const reopenMut = useMutation({
  mutationFn: (v: { p: AccountingPeriod; reason: string }) => accountingPeriodsApi.reopen(v.p.year, v.p.month, v.reason),
- onSuccess: () => { toast.success('Period reopened.'); setReopenTarget(null); qc.invalidateQueries({ queryKey: ['accounting', 'periods'] }); },
- onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to reopen period.'),
+ onSuccess: (period) => { reconcileMutationResponse(period); toast.success('Period reopened.'); setReopenTarget(null); },
+ onError: (e: AxiosError<{ message?: string }>) => {
+  if (e.response?.status === 409) {
+   if (reopenTarget) {
+    void invalidateRealtimeChange(qc, { entityType: 'accounting_period', entityId: reopenTarget.id });
+   }
+   setReopenTarget(null);
+  }
+  toast.error(e.response?.data?.message ?? 'Failed to reopen period.');
+ },
  });
 
  const periodsResponse = periodsQ.data;
@@ -162,12 +185,12 @@ export default function AccountingPeriodsPage() {
  </Td>
  <Td className="text-xs text-muted max-w-[220px] truncate">{p.reopen_reason ?? '—'}</Td>
  <Td align="right">
- {canManage && p.status !== 'closed' && (
+ {p.available_actions?.includes('close') && (
  <Button variant="secondary" size="sm" icon={<LuLock size={13} />} onClick={() => setCloseTarget(p)}>
  Close
  </Button>
  )}
- {canManage && p.status === 'closed' && (
+ {p.available_actions?.includes('reopen') && (
  <Button variant="secondary" size="sm" icon={<LuLockOpen size={13} />} onClick={() => setReopenTarget(p)}>
  Reopen
  </Button>
@@ -249,4 +272,35 @@ function ReopenModal({
  </ModalFooter>
  </Modal>
  );
+}
+
+function reconcileAccountingPeriodList(
+ current: PaginatedResponse<AccountingPeriod> | undefined,
+ period: AccountingPeriod,
+ filters: PeriodPageFilters,
+): PaginatedResponse<AccountingPeriod> | undefined {
+ if (!current) return current;
+
+ const hadPeriod = current.data.some((row) => row.id === period.id);
+ const matchesFilters = (!filters.year || period.year === Number(filters.year))
+  && (!filters.status || period.status === filters.status);
+ let data = current.data.filter((row) => row.id !== period.id);
+ if (matchesFilters && (hadPeriod || filters.page === 1)) {
+  data = [...data, period]
+   .sort((a, b) => b.year - a.year || b.month - a.month)
+   .slice(0, current.meta.per_page);
+ }
+
+ const totalDelta = matchesFilters && !hadPeriod ? 1 : !matchesFilters && hadPeriod ? -1 : 0;
+ const total = Math.max(0, current.meta.total + totalDelta);
+
+ return {
+  ...current,
+  data,
+  meta: {
+   ...current.meta,
+   total,
+   last_page: Math.max(1, Math.ceil(total / current.meta.per_page)),
+  },
+ };
 }

@@ -12,6 +12,9 @@ export const inquiriesApi = {
  client.get<PaginatedResponse<ContactInquiry>>('/crm/inquiries', { params }).then((r) => r.data),
  show: (id: string) =>
  client.get<ApiSuccess<ContactInquiry>>(`/crm/inquiries/${id}`).then((r) => r.data.data),
- updateStatus: (id: string, status: ContactInquiryStatus) =>
- client.patch<ApiSuccess<ContactInquiry>>(`/crm/inquiries/${id}/status`, { status }).then((r) => r.data.data),
+ updateStatus: (id: string, status: ContactInquiryStatus, expectedStatus?: ContactInquiryStatus) =>
+ client.patch<ApiSuccess<ContactInquiry>>(`/crm/inquiries/${id}/status`, {
+  status,
+  ...(expectedStatus ? { expected_status: expectedStatus } : {}),
+ }).then((r) => r.data.data),
 };

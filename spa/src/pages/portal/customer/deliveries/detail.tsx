@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { NotArrivedPanel } from './NotArrivedPanel';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuCheck, LuFileText, LuInfo, LuMessageSquare } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { deliveryStatusVariant } from '@/lib/statusVariants';
+import type { CustomerPortalUser } from '@/types/b2b';
 
 async function openProof(deliveryId: string, proofId: string, fileName: string) {
   try {
@@ -36,12 +37,12 @@ async function openProof(deliveryId: string, proofId: string, fileName: string) 
 export default function CustomerDeliveryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const portalUser = useOutletContext<CustomerPortalUser>();
 
   const { data: delivery, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'delivery', id],
     queryFn: () => customerPortalApi.getDelivery(id!),
     enabled: !!id,
-    refetchInterval: (query) => query.state.data?.status === 'confirmed' ? false : 30_000,
   });
 
   const [showTrace, setShowTrace] = useState(false);
@@ -50,7 +51,6 @@ export default function CustomerDeliveryDetailPage() {
     queryKey: ['portal', 'customer', 'receipt-group', id],
     queryFn: () => customerPortalApi.getReceiptGroup(id!),
     enabled: !!delivery && ['delivered', 'confirmed'].includes(delivery.status),
-    refetchInterval: (query) => query.state.data?.shipments.every((shipment) => shipment.already_confirmed) ? false : 30_000,
   });
   const group = receiptGroup.data;
   const canConfirmGroup = group?.can_confirm === true;
@@ -117,7 +117,7 @@ export default function CustomerDeliveryDetailPage() {
 
         {!isLoading && !isError && delivery && (
           <>
-            {showTrace && <NotArrivedPanel deliveryId={delivery.id} onClose={() => setShowTrace(false)} />}
+            {showTrace && <NotArrivedPanel deliveryId={delivery.id} portalUserId={portalUser.id} onClose={() => setShowTrace(false)} />}
             {delivery.status === 'return_pending' && <Panel title="Delivery follow-up in progress">
               <p className="text-sm">Our team is checking the delivery outcome and the goods returning to the depot. Receipt confirmation is on hold while we reconcile the quantities.</p>
             </Panel>}

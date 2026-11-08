@@ -99,7 +99,7 @@ class MrbDoubleReleaseRaceTest extends TestCase
         ], $by);
     }
 
-    public function test_second_concurrent_release_is_blocked_with_business_rule(): void
+    public function test_second_concurrent_release_is_blocked_with_state_conflict(): void
     {
         $warehouse = $this->userWith('warehouse_staff');
         $checker = $this->userWith('warehouse_staff');
@@ -116,10 +116,17 @@ class MrbDoubleReleaseRaceTest extends TestCase
 
         // Releaser B acts on its stale instance — must be a business-rule
         // rejection, not a second movement attempt.
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('not held');
+        try {
+            $this->svc->release($releaserB, 'scrap', $checker);
+            $this->fail('A stale MRB release must return a state conflict.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertSame('material_review_record_state_conflict', $exception->errorCode());
+        }
 
-        $this->svc->release($releaserB, 'scrap', $checker);
+        $this->actingAs($checker, 'sanctum')
+            ->postJson("/api/v1/inventory/mrb/{$mrb->hash_id}/release", ['disposition' => 'scrap'])
+            ->assertConflict()
+            ->assertJsonPath('code', 'material_review_record_state_conflict');
     }
 
     public function test_release_records_exactly_one_release_movement(): void

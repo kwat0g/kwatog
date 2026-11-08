@@ -50,14 +50,12 @@ export default function CustomerOrderDetailPage() {
     queryKey: ['portal', 'customer', 'order', id],
     queryFn: () => customerPortalApi.getOrder(id!),
     enabled: !!id,
-    refetchInterval: (query) => query.state.data && !['closed', 'cancelled'].includes(query.state.data.status) ? 30_000 : false,
   });
 
   const { data: chainSteps, isError: chainError, refetch: refetchChain } = useQuery({
     queryKey: ['portal', 'customer', 'order-chain', id],
     queryFn: () => customerPortalApi.getOrderChain(id!),
     enabled: !!id,
-    refetchInterval: order && !['closed', 'cancelled'].includes(order.status) ? 30_000 : false,
   });
 
   const cancelMutation = useMutation({

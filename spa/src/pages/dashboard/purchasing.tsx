@@ -7,7 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
+import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -18,6 +18,8 @@ import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/Dashbo
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { usePermission } from '@/hooks/usePermission';
+import { useFeature } from '@/hooks/useFeature';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { PURCHASING_KPIS } from '@/lib/dashboardKpis';
@@ -360,16 +362,19 @@ const SUPPLIER_RISK_VARIANT: Record<string, ChipVariant> = {
 
 export default function PurchasingDashboard() {
   const { can } = usePermission();
+  const purchasingEnabled = useFeature('purchasing');
+  // The PR action queue and PO pipeline/upcoming-delivery panels are derived
+  // from these records. Use the same private list scopes as their source APIs.
+  useRealtimeList('purchase_request', purchasingEnabled && can('purchasing.view') ? 'visible' : undefined);
+  useRealtimeList('purchase_order', purchasingEnabled && can('purchasing.view') ? 'visible' : undefined);
   const q = useQuery({
  queryKey: ['dashboard', 'purchasing'],
  queryFn: () => dashboardsApi.purchasing<PurchasingDashboardData>(),
- refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
  <DashboardShell<PurchasingDashboardData>
- title="Purchasing Dashboard"
- subtitle="Live · refreshes every 60s"
+ title="Purchasing"
  query={q}
  refreshingQueryKey={['dashboard', 'purchasing']}
  header={<KpiStrip codes={PURCHASING_KPIS} compact />}

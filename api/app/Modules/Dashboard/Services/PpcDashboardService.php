@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use App\Modules\Dashboard\Support\PanelGate;
@@ -38,8 +39,12 @@ class PpcDashboardService
 
     public function ppc(User $user): array
     {
-        return Cache::remember("dashboard:ppc:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+
+        $generation = DashboardCacheGeneration::current('dashboard:ppc');
+        return FailOpenCache::remember(Cache::store(), "dashboard:ppc:v4:{$generation}:{$user->id}:{$cacheScope}", self::CACHE_TTL, function () use ($user) {
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => $this->gate->kpis($user, [
                     ['production.work_orders.view', fn () => $this->kpi('Active WOs', (string) $this->safeCount('work_orders', fn ($q) => $q->whereIn('status', [
                         WorkOrderStatus::Planned->value,
@@ -76,13 +81,20 @@ class PpcDashboardService
                     'wo_status_breakdown'  => ['production.work_orders.view',  fn () => $this->woStatusBreakdown()],
                 ]),
             ];
-        });
+        }, 'dashboard.ppc');
     }
 
     public function accounting(User $user): array
     {
-        return Cache::remember("dashboard:accounting:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+
+        // Share the finance-only generation with FinanceDashboardService so
+        // finance writes invalidate both API snapshots without flushing every
+        // other dashboard cache family.
+        $generation = DashboardCacheGeneration::scopedVersion('dashboard:finance');
+        return FailOpenCache::remember(Cache::store(), "dashboard:accounting:v4:{$generation}:{$user->id}:{$cacheScope}", self::CACHE_TTL, function () use ($user) {
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => $this->gate->kpis($user, [
                     ['accounting.dashboard.view', fn () => $this->kpi('Cash Balance', $this->cashBalance(), $this->functionalCurrency())],
                     ['accounting.invoices.view', fn () => $this->kpi('AR Outstanding', $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value])), $this->functionalCurrency())],
@@ -95,7 +107,7 @@ class PpcDashboardService
                     'top_overdue_ar' => ['accounting.invoices.view', fn () => $this->topOverdueArCustomers()],
                 ]),
             ];
-        });
+        }, 'dashboard.ppc');
     }
 
     /* ─── D3 — PPC helpers ─── */

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { LuArrowRight } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Chip } from '@/components/ui/Chip';
@@ -15,10 +15,12 @@ import {
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import type { SupplierPortalUser } from '@/types/b2b';
 
 export default function SupplierDashboardPage() {
+  const portalUser = useOutletContext<SupplierPortalUser | undefined>();
   const dashboard = useQuery({
-    queryKey: ['portal', 'supplier', 'dashboard'],
+    queryKey: ['portal', 'supplier', 'dashboard', portalUser?.vendor?.id],
     queryFn: () => supplierPortalApi.dashboard(),
   });
 

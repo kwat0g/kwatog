@@ -42,7 +42,6 @@ export default function SupplierPerformancePage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'supplier-performance', id],
     queryFn: () => supplierPerformanceApi.show(id),
-    placeholderData: (prev) => prev,
   });
 
   const recompute = useMutation({

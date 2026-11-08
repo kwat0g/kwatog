@@ -10,6 +10,7 @@ use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
+use App\Modules\Inventory\Exceptions\MaterialReviewRecordStateConflictException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -102,6 +103,12 @@ class MrbController
                 $data['notes'] ?? null,
                 array_replace(array_intersect_key($data, array_flip(['inspected_quantity', 'evidence_reference', 'recovery_passed', 'concession_approval_reference'])), ['recovery_passed' => $request->boolean('recovery_passed')]),
             );
+        } catch (MaterialReviewRecordStateConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

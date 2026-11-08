@@ -16,7 +16,7 @@ export default function SalesDashboardPage() {
   return (
     <RoleDashboardShell
       title="Sales"
-      subtitle="Track order intake, the live order pipeline, and price requests."
+      subtitle="Orders, pipeline, and price requests."
       kpiCodes={[]}
       emptyTitle="No sales blocks configured"
       emptyDescription="Order intake, order stages, and price-request status appear here."

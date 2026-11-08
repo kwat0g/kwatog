@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { formatDateTime } from '@/lib/formatDate';
 import type { PortalDeliveryDetail, PortalReceiptGroup } from '@/types/b2b';
+import { invalidateQueryPrefixExcept } from '@/lib/queryInvalidation';
 
 function quantityValue(value: string): bigint | null {
   if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(value)) return null;
@@ -62,7 +63,11 @@ export function ConfirmReceiptDialog({ delivery, group, onClose }: { delivery: P
       for (const confirmed of result.deliveries) {
         queryClient.setQueryData(['portal', 'customer', 'delivery', confirmed.id], confirmed);
       }
-      await queryClient.invalidateQueries({ queryKey: ['portal', 'customer'] });
+      await invalidateQueryPrefixExcept(
+        queryClient,
+        ['portal', 'customer'],
+        result.deliveries.map((confirmed) => ['portal', 'customer', 'delivery', confirmed.id]),
+      );
       toast.success(result.message ?? 'Receipt confirmed.');
       onClose();
     },

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuPlus, LuX, LuFileText } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
@@ -17,11 +18,11 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import type { EightDReportData, PortalComplaint } from '@/types/b2b';
-import type { PortalReturnSourceLine } from '@/types/b2b';
+import type { CustomerPortalUser, EightDReportData, PortalComplaint, PortalReturnSourceLine } from '@/types/b2b';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { CompanyName } from '@/components/brand/CompanyName';
 import { complaintStatusVariant } from '@/lib/statusVariants';
+import { useCustomerComplaintReportRealtime } from '@/hooks/useCustomerComplaintRealtime';
 
 type ComplaintFilters = {
   page: number;
@@ -36,14 +37,24 @@ const DEFAULT_FILTERS: ComplaintFilters = { page: 1, per_page: 25 };
 
 export default function CustomerComplaintsPage() {
   const queryClient = useQueryClient();
+  const portalUser = useOutletContext<CustomerPortalUser>();
   const [showForm, setShowForm] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [deliveryItemId, setDeliveryItemId] = useState('');
   const [severity, setSeverity] = useState('');
   const [description, setDescription] = useState('');
   const [affectedQty, setAffectedQty] = useState('');
-  const [viewing8d, setViewing8d] = useState<EightDReportData | null>(null);
+  const [viewing8d, setViewing8d] = useState<(EightDReportData & { complaint_id: string }) | null>(null);
   const [filters, setFilters] = useUrlFilters<ComplaintFilters>(DEFAULT_FILTERS);
+  const refreshOpenReport = useCallback(() => {
+    const complaintId = viewing8d?.complaint_id;
+    if (!complaintId) return;
+
+    void customerPortalApi.get8dReport(complaintId)
+      .then((report) => setViewing8d({ ...report, complaint_id: complaintId }))
+      .catch(() => setViewing8d(null));
+  }, [viewing8d?.complaint_id]);
+  useCustomerComplaintReportRealtime(portalUser.customer_id, refreshOpenReport);
 
   const { data: complaintOptions } = useQuery({
     queryKey: ['portal', 'customer', 'complaint-options'],
@@ -87,7 +98,6 @@ export default function CustomerComplaintsPage() {
         date_from: filters.date_from || undefined,
         date_to: filters.date_to || undefined,
       }),
-    placeholderData: (prev) => prev,
   });
   const complaints = complaintsPage?.data ?? [];
 
@@ -119,7 +129,7 @@ export default function CustomerComplaintsPage() {
   const open8d = async (complaintId: string) => {
     try {
       const data = await customerPortalApi.get8dReport(complaintId);
-      setViewing8d(data);
+      setViewing8d({ ...data, complaint_id: complaintId });
     } catch {
       toast.error('No 8D report available for this complaint.');
     }

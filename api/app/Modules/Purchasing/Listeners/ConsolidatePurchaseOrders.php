@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Listeners;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
@@ -18,6 +19,7 @@ use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\VendorSourcingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -158,7 +160,22 @@ class ConsolidatePurchaseOrders implements ShouldQueue
             // just persisted — only attach the reason and alert purchasing.
             if ($resolution['unresolved'] !== []) {
                 $note = $this->unresolvedNote($pr, $resolution['unresolved']);
-                $pr->fresh()?->forceFill(['po_conversion_note' => $note])->save();
+                DB::transaction(function () use ($pr, $note): void {
+                    $locked = PurchaseRequest::query()->lockForUpdate()->find($pr->id);
+                    if (! $locked) {
+                        return;
+                    }
+                    $locked->forceFill(['po_conversion_note' => $note]);
+                    if (! $locked->isDirty('po_conversion_note')) {
+                        return;
+                    }
+                    $locked->save();
+                    app(ChainBroadcaster::class)->broadcastFor(
+                        $locked,
+                        $locked->status?->value ?? PurchaseRequestStatus::Approved->value,
+                        action: 'updated',
+                    );
+                });
                 $this->notifySkipped($pr, $note);
                 app(ChainListenerRunService::class)->recordOutcome(
                     'manual_required',

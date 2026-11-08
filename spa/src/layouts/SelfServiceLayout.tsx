@@ -11,6 +11,8 @@ import { useFeature } from '@/hooks/useFeature';
 import { usePermission } from '@/hooks/usePermission';
 import { focusRingInset } from '@/lib/focus';
 import { cn } from '@/lib/cn';
+import { useAuthStore } from '@/stores/authStore';
+import { useEmployeeShiftRealtime, usePersonalLoanRealtime } from '@/hooks/useRealtimeRecord';
 
 /**
  * M024 mobile shell. The generic ERP shell remains in place for desktop and
@@ -18,6 +20,10 @@ import { cn } from '@/lib/cn';
  * promised by the employee mobile contract.
  */
 export default function SelfServiceLayout() {
+ const employeeHashId = useAuthStore((state) => state.user?.employee?.id);
+ const userHashId = useAuthStore((state) => state.user?.id);
+ useEmployeeShiftRealtime(employeeHashId);
+ usePersonalLoanRealtime(userHashId);
  const attendance = useFeature('attendance');
  const leave = useFeature('leave');
  const payroll = useFeature('payroll');

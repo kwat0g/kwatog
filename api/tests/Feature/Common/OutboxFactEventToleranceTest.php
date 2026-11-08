@@ -202,13 +202,22 @@ class OutboxFactEventToleranceTest extends TestCase
         $this->assertNull($event->actorUserId);
     }
 
-    public function test_sales_order_production_dashboard_broadcast_contains_only_a_refresh_ping(): void
+    public function test_sales_order_production_dashboard_broadcast_uses_the_standard_envelope(): void
     {
-        $event = new SalesOrderConfirmed($this->confirmedOrder());
+        $salesOrder = $this->confirmedOrder();
+        $event = new SalesOrderConfirmed($salesOrder);
+        $payload = $event->broadcastWith();
 
         $this->assertInstanceOf(PrivateChannel::class, $event->broadcastOn()[0]);
         $this->assertSame('private-production.dashboard', $event->broadcastOn()[0]->name);
-        $this->assertSame(['refresh' => true], $event->broadcastWith());
+        $this->assertSame('sales_order', $payload['entity_type']);
+        $this->assertSame($salesOrder->hash_id, $payload['entity_id']);
+        $this->assertSame('status_changed', $payload['action']);
+        $this->assertSame($salesOrder->updated_at->utc()->toIso8601String(), $payload['version']);
+        $this->assertNull($payload['actor_id']);
+        $this->assertSame([], $payload['related']);
+        $this->assertSame($event->eventId, $payload['event_id']);
+        $this->assertSame($event->timestamp, $payload['timestamp']);
     }
 
     public function test_an_order_cancelled_before_delivery_is_not_announced_as_confirmed(): void
@@ -283,7 +292,7 @@ class OutboxFactEventToleranceTest extends TestCase
         $plan->update(['draft_wo_count' => 1]);
 
         $event = $codec->decode($encoded['event_type'], $encoded['payload']);
-        $this->assertSame(['refresh' => true], $event->broadcastWith());
+        $this->assertSame(['refresh' => true, 'event_id' => $event->eventId], $event->broadcastWith());
         $this->assertTrue($event->broadcastWhen());
 
         $this->travel(5)->seconds();

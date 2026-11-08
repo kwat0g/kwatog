@@ -21,6 +21,7 @@ interface ReasonDialogProps {
  cancelLabel?: string;
  variant?: 'danger' | 'primary' | 'warning';
  pending?: boolean;
+ disabled?: boolean;
 }
 
 /**
@@ -42,6 +43,7 @@ export function ReasonDialog({
  cancelLabel = 'Cancel',
  variant = 'danger',
  pending = false,
+ disabled = false,
 }: ReasonDialogProps) {
  const [reason, setReason] = useState('');
  const [busy, setBusy] = useState(false);
@@ -71,7 +73,7 @@ export function ReasonDialog({
 
  const handleSubmit = async () => {
  setTouched(true);
- if (tooShort || tooLong) return;
+ if (disabled || tooShort || tooLong) return;
  try {
  setBusy(true);
  await onConfirm(trimmed);
@@ -123,7 +125,7 @@ export function ReasonDialog({
  variant={buttonVariant}
  onClick={handleSubmit}
  loading={isPending}
- disabled={isPending || tooShort || tooLong}
+ disabled={isPending || disabled || tooShort || tooLong}
  >
  {confirmLabel}
  </Button>

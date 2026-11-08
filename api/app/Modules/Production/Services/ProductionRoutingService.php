@@ -93,7 +93,7 @@ class ProductionRoutingService
                 $this->assertRoutingDefinitionValid($product, $data['operations'] ?? []);
                 $routing = $this->createVersion($product, $data);
 
-                $this->propagateRoutingChange($routing, 'routing_created');
+                $this->propagateRoutingChange($routing, $product, 'routing_created', 'created');
 
                 return $this->show($routing->fresh());
             });
@@ -148,7 +148,7 @@ class ProductionRoutingService
                     'operations' => $data['operations'],
                 ]);
 
-                $this->propagateRoutingChange($newRouting, 'routing_updated');
+                $this->propagateRoutingChange($newRouting, $product, 'routing_updated', 'created');
 
                 return $this->show($newRouting->fresh());
             });
@@ -182,7 +182,7 @@ class ProductionRoutingService
                     'operations' => $operations,
                 ]);
 
-                $this->propagateRoutingChange($newRouting, 'routing_duplicated');
+                $this->propagateRoutingChange($newRouting, $product, 'routing_duplicated', 'created');
 
                 return $this->show($newRouting->fresh());
             });
@@ -233,7 +233,7 @@ class ProductionRoutingService
                 $row->is_active = true;
                 $row->save();
 
-                $this->propagateRoutingChange($row, 'routing_activated');
+                $this->propagateRoutingChange($row, $product, 'routing_activated', 'status_changed');
 
                 return $this->show($row->fresh());
             });
@@ -521,10 +521,11 @@ class ProductionRoutingService
      * transaction as the routing rows, keyed by the new routing id, so a
      * crashed queue worker cannot lose it and a retry cannot double-plan.
      */
-    private function propagateRoutingChange(ProductRouting $routing, string $reason): void
+    private function propagateRoutingChange(ProductRouting $routing, Product $product, string $reason, string $action): void
     {
         $this->recalculateActiveBom((int) $routing->product_id);
         $this->requestAutomaticReplan($routing, $reason);
+        app(ProductionRoutingRealtimeService::class)->stage($routing, $product, $action);
     }
 
     private function requestAutomaticReplan(ProductRouting $routing, string $reason): void

@@ -1,59 +1,63 @@
-import { useEffect } from 'react';
 import { LuBell } from '@/lib/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getEcho } from '@/lib/echo';
 import { useAuthStore } from '@/stores/authStore';
 import { getNotificationById } from '@/api/notifications';
 import { notificationMeta } from '@/lib/notificationMeta';
+import { scheduleRealtimeQueryInvalidation } from '@/lib/realtime/invalidationMap';
+import { useRealtimeEvent } from './useRealtimeEvent';
+import type { QueryKey } from '@tanstack/react-query';
 
 interface NotificationPayload {
-  id: string;
-  type: string;
+  action?: string;
+  id?: string;
+  type?: string;
 }
 
-export function useNotificationRealtime(enabled = true): void {
-  const qc = useQueryClient();
-  const user = useAuthStore((s) => s.user);
+export interface NotificationRealtimeOptions {
+  /** Portal principals use their own guard and private per-user channel. */
+  channel?: string;
+  /** The notification query family to refresh for this principal. */
+  queryKey?: QueryKey;
+  /** Internal notices fetch a detail for the toast; portal pings stay metadata-only. */
+  showToast?: boolean;
+}
 
-  useEffect(() => {
-    if (!enabled || !user?.id) return;
+export function useNotificationRealtime(options: NotificationRealtimeOptions = {}): void {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const queryKey = options.queryKey ?? ['notifications'];
+  const channel = options.channel ?? (user?.id ? `user.${user.id}` : '');
+  const showToast = options.showToast ?? options.channel === undefined;
+  const catchUp = () => {
+    scheduleRealtimeQueryInvalidation(queryClient, [queryKey]);
+  };
 
-    // Echo loads on demand (see `@/lib/echo`); subscribe once it resolves and
-    // skip entirely if we unmounted while the import was in flight.
-    let disposed = false;
-    let teardown: (() => void) | undefined;
+  useRealtimeEvent<NotificationPayload>(
+    channel,
+    options.channel ? '.portal.notification.changed' : '.notification.created',
+    (payload) => {
+      scheduleRealtimeQueryInvalidation(queryClient, [queryKey]);
+      if (!showToast || !payload.id || !payload.type) return;
 
-    void getEcho()
-      .then((echo) => {
-        if (disposed) return;
+      void getNotificationById(payload.id)
+        .then((notification) => {
+          const title = notification.data?.title ?? notificationMeta(payload.type).label;
+          toast(title, { icon: <LuBell size={16} className="text-muted" />, duration: 4000 });
+        })
+        .catch(() => undefined);
+    },
+    catchUp,
+    catchUp,
+  );
 
-        const channel = echo.private(`user.${user.id}`);
-
-        channel.listen('.notification.created', (payload: NotificationPayload) => {
-          qc.invalidateQueries({ queryKey: ['notifications'] });
-          void getNotificationById(payload.id).then((notification) => {
-            const title = notification.data?.title ?? notificationMeta(notification.type).label;
-            toast(title, { icon: <LuBell size={16} className="text-muted" />, duration: 4000 });
-          }).catch(() => undefined);
-        });
-
-        teardown = () => {
-          try {
-            channel.stopListening('.notification.created');
-          } catch {
-            // ignore HMR teardown
-          }
-          echo.leave(`user.${user.id}`);
-        };
-      })
-      .catch(() => {
-        // The bell's polling query remains the delivery fallback when Reverb is unavailable.
-      });
-
-    return () => {
-      disposed = true;
-      teardown?.();
-    };
-  }, [enabled, user?.id, qc]);
+  // A user's read/delete action also needs to refresh the same inbox in their
+  // other tabs. Portal bells already use one portal-specific changed event.
+  useRealtimeEvent<NotificationPayload>(
+    options.channel ? '' : channel,
+    '.notification.changed',
+    catchUp,
+    catchUp,
+    catchUp,
+  );
 }

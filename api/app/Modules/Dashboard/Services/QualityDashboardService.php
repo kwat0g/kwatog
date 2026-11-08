@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use App\Modules\Dashboard\Support\PanelGate;
@@ -36,8 +37,12 @@ class QualityDashboardService
 
     public function quality(User $user): array
     {
-        return Cache::remember("dashboard:quality:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+
+        $generation = DashboardCacheGeneration::current('dashboard:quality');
+        return FailOpenCache::remember(Cache::store(), "dashboard:quality:v4:{$generation}:{$user->id}:{$cacheScope}", self::CACHE_TTL, function () use ($user) {
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => $this->gate->kpis($user, [
                     ['quality.inspections.view', fn () => $this->kpi('Pending Inspections', (string) $this->safeCount('inspections', fn ($q) => $q->where('status', 'in_progress')), 'count')],
                     ['quality.view', fn () => $this->kpi('Pass Rate Today', $this->qualityPassRateToday(), 'pct')],
@@ -65,7 +70,7 @@ class QualityDashboardService
                     'coverage_warning_pct' => $this->settings->requiredFloat('quality.dashboard.coverage_warning_pct', 0, 100),
                 ],
             ];
-        });
+        }, 'dashboard.quality');
     }
 
 

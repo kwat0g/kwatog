@@ -6,6 +6,7 @@ import { supplierPortalApi } from '@/api/b2b/supplier';
 import { formatPeso } from '@/lib/formatNumber';
 import SupplierPurchaseOrderDetailPage from './detail';
 import type { PortalPoDetail } from '@/types/b2b';
+import type { PurchaseOrderResponse } from '@/types/purchasing';
 
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router-dom')>()),
@@ -391,7 +392,14 @@ it('accepts the required date as written and sends date changes through Propose 
   };
   vi.mocked(supplierPortalApi.getPo).mockResolvedValue(po);
   vi.mocked(supplierPortalApi.listShippingDocuments).mockResolvedValue([]);
-  vi.mocked(supplierPortalApi.respondToPurchaseOrder).mockResolvedValue(po);
+  vi.mocked(supplierPortalApi.respondToPurchaseOrder).mockResolvedValue({
+    response: {
+      id: 'response-1', type: 'accept', status: 'accepted', proposed_delivery_date: null,
+      notes: null, responded_at: '2026-10-08T10:00:00Z', resolved_at: null,
+      resolution_notes: null, items: [],
+    } satisfies PurchaseOrderResponse,
+    purchase_order: po,
+  });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><MemoryRouter><SupplierPurchaseOrderDetailPage /></MemoryRouter></QueryClientProvider>);
 

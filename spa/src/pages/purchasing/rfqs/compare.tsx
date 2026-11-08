@@ -10,8 +10,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import {
+  invalidateRealtimeChange,
+  reconcileRealtimeMutationResponse,
+} from '@/lib/realtime/invalidationMap';
 import type { SupplierQuote } from '@/types/purchasing';
 
 const errMsg = (e: unknown, fallback: string) =>
@@ -37,6 +42,7 @@ const DOC_LABEL: Record<string, string> = {
  */
 export default function RfqComparisonPage() {
   const { id = '' } = useParams<{ id: string }>();
+  useRealtimeRecord('request_for_quote', id);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [reason, setReason] = useState('');
@@ -50,7 +56,7 @@ export default function RfqComparisonPage() {
   });
   const rfq = query.data;
   const quotes = useMemo(() => rfq?.quotes ?? [], [rfq?.quotes]);
-  const canAward = !!rfq?.actions.can_award;
+  const canAward = !!rfq?.available_actions.can_award;
   // Ogami recovers input VAT, so suppliers are ranked on cost excluding it.
   const exVat = rfq?.ranking_basis === 'ex_vat';
 
@@ -79,16 +85,22 @@ export default function RfqComparisonPage() {
           })),
       }),
     onSuccess: async (result) => {
-      await qc.invalidateQueries({ queryKey: ['purchasing', 'rfqs'] });
-      if (rfq?.purchase_request?.id) {
-        await qc.invalidateQueries({
-          queryKey: ['purchasing', 'purchase-requests', rfq.purchase_request.id],
-        });
-      }
+      await reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'request_for_quote', entityId: id },
+        ['purchasing', 'rfqs', id],
+        result.data,
+      );
       toast.success(`Awarded. ${result.purchase_orders.length} draft purchase order(s) created.`);
       navigate(`/purchasing/rfqs/${id}`);
     },
-    onError: (e) => toast.error(errMsg(e, 'The award could not be saved.')),
+    onError: (e) => {
+      const code = e instanceof AxiosError ? e.response?.data?.code : undefined;
+      if (e instanceof AxiosError && e.response?.status === 409 && code === 'request_for_quote_state_conflict') {
+        void invalidateRealtimeChange(qc, { entityType: 'request_for_quote', entityId: id });
+      }
+      toast.error(errMsg(e, 'The award could not be saved.'));
+    },
   });
 
   if (query.isLoading) return <SkeletonTable columns={5} rows={6} />;
@@ -368,11 +380,11 @@ export default function RfqComparisonPage() {
                 </span>
                 <Button
                   variant="primary"
-                  disabled={pickedCount === 0 || !reason.trim() || award.isPending}
-                  loading={award.isPending}
+                  disabled={pickedCount === 0 || !reason.trim() || award.isPending || query.isFetching || !canAward}
+                  loading={award.isPending || query.isFetching}
                   onClick={() => award.mutate()}
                 >
-                  {award.isPending ? 'Awarding…' : 'Award & create draft POs'}
+                  {award.isPending ? 'Awarding…' : query.isFetching ? 'Refreshing…' : 'Award & create draft POs'}
                 </Button>
               </div>
             </div>

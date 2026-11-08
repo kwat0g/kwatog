@@ -13,6 +13,7 @@ vi.mock('@/stores/authStore', () => ({
     select({ user: { role: { slug: auth.role } } }),
 }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true, canAny: () => true }) }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeRecord: vi.fn() }));
 vi.mock('@/api/maintenance/workOrders', () => ({ workOrdersApi: {
   show: vi.fn(), options: vi.fn(), reconcileParts: vi.fn(),
 } }));
@@ -24,6 +25,7 @@ const outstandingOrder = {
   maintainable: { id: 'machine-5', code: 'IMM-05', name: 'Nissei NEX180' },
   type: 'corrective', priority: 'critical', description: 'Repair coupling',
   status: 'in_progress', available_actions: ['complete', 'submit_repair', 'cancel'], verification_required: true,
+  can_record_work: true,
   closure_readiness: { latest_work_result: 'passed', can_close_work: true, blocker: null },
   parts_readiness: {
     outstanding: [{ usage_id: 'usage-1', item_code: 'BEAR-9', item_name: 'Bearing', lot_number: 'LOT-24', quantity: '2.000' }],
@@ -87,6 +89,21 @@ it.each([
 it.each([
   ['desktop', DesktopWorkOrderDetail],
   ['phone', MobileWorkOrderDetail],
+] as const)('%s hides part return when assignment-specific work access is missing', async (_layout, Page) => {
+  auth.role = 'maintenance_supervisor';
+  show(Page, {
+    ...outstandingOrder,
+    can_record_work: undefined,
+    available_actions: ['submit_repair'],
+  });
+  await screen.findByText('MWO-202610-0008');
+
+  expect(screen.queryByRole('button', { name: /Return.*LOT-24/i })).not.toBeInTheDocument();
+});
+
+it.each([
+  ['desktop', DesktopWorkOrderDetail],
+  ['phone', MobileWorkOrderDetail],
 ] as const)('%s says no parts to reconcile when net outstanding is zero', async (_layout, Page) => {
   const empty: MaintenanceWorkOrder = {
     ...reconciledOrder,
@@ -116,8 +133,8 @@ it.each([
   ['phone', MobileWorkOrderDetail],
 ] as const)('%s lets an unavailable technician’s supervisor inspect parts before cancellation', async (_layout, Page) => {
   auth.role = 'maintenance_supervisor';
-  const order: MaintenanceWorkOrder = { ...outstandingOrder, available_actions: ['cancel'] };
-  const reconciled: MaintenanceWorkOrder = { ...reconciledOrder, available_actions: ['cancel'] };
+  const order: MaintenanceWorkOrder = { ...outstandingOrder, can_record_work: false, available_actions: ['cancel'] };
+  const reconciled: MaintenanceWorkOrder = { ...reconciledOrder, can_record_work: false, available_actions: ['cancel'] };
   show(Page, order, reconciled);
   await screen.findByText('MWO-202610-0008');
 

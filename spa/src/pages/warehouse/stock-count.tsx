@@ -20,13 +20,16 @@ import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
-import type { StockCountItem } from '@/types/warehouse';
+import type { StockCountItem, StockCountSession } from '@/types/warehouse';
+import type { PaginatedResponse } from '@/types';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { focusRingInset } from '@/lib/focus';
+import { useRealtimeList, useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 const statusVariant: Record<string, 'warning' | 'success' | 'info' | 'danger' | 'neutral'> = {
   draft: 'neutral',
@@ -68,8 +71,9 @@ const countSchema = z.object({
  */
 export function StockCountManager() {
   const qc = useQueryClient();
-  const { can, canApprove: canAct } = usePermission();
+  const { can } = usePermission();
   const canManage = can('inventory.stock_count.manage');
+  const canView = can('inventory.stock_count.view');
   const actorId = useAuthStore((state) => state.user?.id);
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedSessionId = searchParams.get('session_id');
@@ -79,7 +83,9 @@ export function StockCountManager() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [countModalItem, setCountModalItem] = useState<StockCountItem | null>(null);
-  const [approveTarget, setApproveTarget] = useState<StockCountItem | null>(null);
+
+  useRealtimeList('stock_count_session', canView ? 'visible' : undefined);
+  useRealtimeRecord('stock_count_session', activeSessionId ?? undefined);
 
   const [sessionPage, setSessionPage] = useState(1);
   const {
@@ -100,13 +106,18 @@ export function StockCountManager() {
   });
   const { data: activeSession, refetch: refetchSession } = sessionQuery;
   const sessionUnavailable = sessionQuery.isError || sessionQuery.isFetching;
+  const approveActionTarget = useQueryRecordTarget(activeSession?.items, {
+    isFetching: sessionQuery.isFetching,
+    isError: sessionQuery.isError,
+  });
+  const approveTarget = approveActionTarget.target;
 
   const warehousesQuery = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
     queryFn: () => warehouseApi.tree(),
   });
   const optionsQuery = useQuery({
-    queryKey: ['warehouse', 'stock-counts', 'options'],
+    queryKey: ['warehouse', 'stock-count-options'],
     queryFn: () => stockCountApi.options(),
     staleTime: 300_000,
   });
@@ -117,7 +128,67 @@ export function StockCountManager() {
   const lookupPending = lookups.some((query) => query.isFetching);
 
   const inv = () => {
-    qc.invalidateQueries({ queryKey: ['warehouse', 'stock-counts'] });
+    void qc.invalidateQueries({ queryKey: ['warehouse', 'stock-counts'] });
+  };
+
+  const reconcileSessionList = (sessionId: string, update: Partial<StockCountSession>) => {
+    qc.setQueryData<PaginatedResponse<StockCountSession>>(
+      ['warehouse', 'stock-counts', sessionPage],
+      (current) => current
+        ? {
+            ...current,
+            data: current.data.map((session) => session.id === sessionId
+              ? { ...session, ...update }
+              : session),
+          }
+        : current,
+    );
+  };
+
+  const reconcileSessionResponse = async (session: StockCountSession) => {
+    const queryKey = ['warehouse', 'stock-count', session.id] as const;
+    await qc.cancelQueries({ queryKey, exact: true });
+    qc.setQueryData<StockCountSession>(queryKey, (current) => {
+      if (!current) return session;
+      const items = session.items?.map((item) => {
+        const previous = current.items?.find((line) => line.id === item.id);
+        return previous ? { ...previous, ...item } : item;
+      });
+
+      return { ...current, ...session, ...(items ? { items } : {}) };
+    });
+    reconcileSessionList(session.id, {
+      status: session.status,
+      status_label: session.status_label,
+      counted_locations: session.counted_locations,
+      total_locations: session.total_locations,
+      variance_count: session.variance_count,
+      variance_value: session.variance_value,
+      completed_at: session.completed_at,
+      updated_at: session.updated_at,
+    });
+  };
+
+  const reconcileItemResponse = async (sessionId: string, item: StockCountItem) => {
+    const queryKey = ['warehouse', 'stock-count', sessionId] as const;
+    await qc.cancelQueries({ queryKey, exact: true });
+    const current = qc.getQueryData<StockCountSession>(queryKey);
+    if (!current?.items) return;
+    let found = false;
+    const items = current.items.map((line) => {
+      if (line.id !== item.id) return line;
+      found = true;
+      return { ...line, ...item };
+    });
+    if (!found) return;
+
+    const countedLocations = items.filter((line) => line.status !== 'pending').length;
+    qc.setQueryData<StockCountSession>(queryKey, {
+      ...current,
+      items,
+      counted_locations: countedLocations,
+    });
+    reconcileSessionList(sessionId, { counted_locations: countedLocations });
   };
 
   const refreshAfterRejectedAction = (error: AxiosError) => {
@@ -158,9 +229,9 @@ export function StockCountManager() {
   // ── Start session ──
   const startSession = useMutation({
     mutationFn: (id: string) => stockCountApi.start(id),
-    onSuccess: () => {
+    onSuccess: async (session) => {
+      await reconcileSessionResponse(session);
       toast.success('Count session started.');
-      refetchSession();
       inv();
       setConfirmAction(null);
     },
@@ -182,9 +253,7 @@ export function StockCountManager() {
     const item = activeSession.items?.find((line) => line.id === linkedItemId);
     if (
       item &&
-      canManage &&
-      activeSession.status === 'in_progress' &&
-      ['pending', 'counted', 'verified'].includes(item.status)
+      item.available_actions?.includes('record_count')
     ) {
       resetCount({
         counted_quantity: item.counted_quantity ?? '',
@@ -210,9 +279,10 @@ export function StockCountManager() {
         ...d,
         variance_allocations: d.variance_allocations?.filter((line) => Number(line.quantity) > 0),
       }),
-    onSuccess: () => {
+    onSuccess: async (item) => {
+      const sessionId = item.session_id ?? activeSessionId;
+      if (sessionId) await reconcileItemResponse(sessionId, item);
       toast.success('Count recorded.');
-      refetchSession();
       setCountModalItem(null);
       countForm.reset();
     },
@@ -225,23 +295,24 @@ export function StockCountManager() {
   // ── Approve variance ──
   const approveVariance = useMutation({
     mutationFn: (id: string) => stockCountApi.approveVariance(id),
-    onSuccess: () => {
+    onSuccess: async (item) => {
+      const sessionId = item.session_id ?? activeSessionId;
+      if (sessionId) await reconcileItemResponse(sessionId, item);
       toast.success('Variance approved.');
-      refetchSession();
-      setApproveTarget(null);
+      approveActionTarget.close();
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to approve.');
-      if (refreshAfterRejectedAction(e)) setApproveTarget(null);
+      if (refreshAfterRejectedAction(e)) approveActionTarget.close();
     },
   });
 
   // ── Complete session ──
   const completeSession = useMutation({
     mutationFn: (id: string) => stockCountApi.complete(id),
-    onSuccess: () => {
+    onSuccess: async (session) => {
+      await reconcileSessionResponse(session);
       toast.success('Session completed! Adjustments created.');
-      refetchSession();
       inv();
       setConfirmAction(null);
     },
@@ -254,9 +325,17 @@ export function StockCountManager() {
   // ── Cancel session ──
   const cancelSession = useMutation({
     mutationFn: (id: string) => stockCountApi.cancel(id),
-    onSuccess: () => {
+    onSuccess: async (_response, sessionId) => {
+      const queryKey = ['warehouse', 'stock-count', sessionId] as const;
+      await qc.cancelQueries({ queryKey, exact: true });
+      qc.setQueryData<StockCountSession>(queryKey, (current) => current
+        ? { ...current, status: 'cancelled', status_label: 'Cancelled' }
+        : current);
+      reconcileSessionList(sessionId, { status: 'cancelled', status_label: 'Cancelled' });
+      if (activeSessionId === sessionId) {
+        void refetchSession();
+      }
       inv();
-      refetchSession();
       setConfirmAction(null);
       toast.success('Session cancelled.');
     },
@@ -278,6 +357,11 @@ export function StockCountManager() {
     !!actorId &&
     items.some((item) => item.counted_by?.id === actorId || item.verified_by?.id === actorId);
   const cannotComplete = isSessionCreator || isLineActor;
+  const canApproveVariance = Boolean(
+    approveActionTarget.isFresh &&
+    approveTarget &&
+    approveTarget.available_actions?.includes('approve_variance'),
+  );
 
   return (
     <div>
@@ -389,7 +473,7 @@ export function StockCountManager() {
                   <Panel
                     title={`${activeSession.session_number} — ${activeSession.title}`}
                     actions={
-                      canManage && activeSession.status === 'draft' ? (
+                      activeSession.available_actions?.includes('start') ? (
                         <div className="flex gap-1">
                           <Button
                             size="sm"
@@ -400,18 +484,20 @@ export function StockCountManager() {
                           >
                             Start count
                           </Button>
-                          <Button
-                            disabled={sessionUnavailable}
-                            size="sm"
-                            variant="danger"
-                            onClick={() => setConfirmAction('cancel')}
-                          >
-                            Cancel
-                          </Button>
+                          {activeSession.available_actions?.includes('cancel') && (
+                            <Button
+                              disabled={sessionUnavailable}
+                              size="sm"
+                              variant="danger"
+                              onClick={() => setConfirmAction('cancel')}
+                            >
+                              Cancel
+                            </Button>
+                          )}
                         </div>
-                      ) : canManage && activeSession.status === 'in_progress' ? (
+                      ) : activeSession.status === 'in_progress' ? (
                         <div className="flex gap-1">
-                          {!cannotComplete && (
+                          {activeSession.available_actions?.includes('complete') && (
                             <Button
                               disabled={sessionUnavailable}
                               size="sm"
@@ -421,14 +507,16 @@ export function StockCountManager() {
                               Complete session
                             </Button>
                           )}
-                          <Button
-                            disabled={sessionUnavailable}
-                            size="sm"
-                            variant="danger"
-                            onClick={() => setConfirmAction('cancel')}
-                          >
-                            Cancel
-                          </Button>
+                          {activeSession.available_actions?.includes('cancel') && (
+                            <Button
+                              disabled={sessionUnavailable}
+                              size="sm"
+                              variant="danger"
+                              onClick={() => setConfirmAction('cancel')}
+                            >
+                              Cancel
+                            </Button>
+                          )}
                         </div>
                       ) : null
                     }
@@ -568,9 +656,7 @@ export function StockCountManager() {
                                 </Chip>
                               </Td>
                               <Td align="right" mono>
-                                {activeSession.status === 'in_progress' &&
-                                  ['pending', 'counted', 'verified'].includes(item.status) &&
-                                  canManage && (
+                                {item.available_actions?.includes('record_count') && (
                                     <Button
                                       size="sm"
                                       variant="secondary"
@@ -589,19 +675,12 @@ export function StockCountManager() {
                                       {item.status === 'pending' ? 'Count' : 'Recount'}
                                     </Button>
                                   )}
-                                {activeSession.status === 'in_progress' &&
-                                  item.status === 'counted' &&
-                                  stockCountOptions?.variance_tolerance_pct != null &&
-                                  Math.abs(Number(item.variance_percent)) >
-                                    stockCountOptions.variance_tolerance_pct &&
-                                  canAct('inventory.stock_count.manage') &&
-                                  !isSessionCreator &&
-                                  item.counted_by?.id !== actorId && (
+                                {item.available_actions?.includes('approve_variance') && (
                                     <Button
                                       disabled={sessionUnavailable}
                                       size="xs"
                                       variant="danger"
-                                      onClick={() => setApproveTarget(item)}
+                                      onClick={() => approveActionTarget.open(item)}
                                     >
                                       Approve
                                     </Button>
@@ -723,7 +802,6 @@ export function StockCountManager() {
           <form
             noValidate
             onSubmit={countForm.handleSubmit((d) => {
-              if (sessionUnavailable) return;
               if (wholeUnit && !Number.isInteger(Number(d.counted_quantity))) {
                 countForm.setError('counted_quantity', { type: 'validate', message: 'Piece quantities must be whole numbers.' });
                 return;
@@ -831,14 +909,21 @@ export function StockCountManager() {
 
       {/* Approve variance */}
       <ConfirmDialog
-        isOpen={!!approveTarget}
-        onClose={() => setApproveTarget(null)}
+        isOpen={approveActionTarget.targetId !== null}
+        onClose={approveActionTarget.close}
         onConfirm={() => {
-          if (!sessionUnavailable && approveTarget) approveVariance.mutate(approveTarget.id);
+          if (canApproveVariance && approveTarget && !approveVariance.isPending) {
+            approveVariance.mutate(approveTarget.id);
+          }
         }}
         title="Approve variance?"
-        description={
-          approveTarget ? (
+        description={approveActionTarget.isChecking ? (
+          'Checking the latest count session and variance status…'
+        ) : approveActionTarget.isUnverified ? (
+          'The latest count session status could not be checked. Refresh before approving.'
+        ) : !canApproveVariance || !approveTarget ? (
+          'This variance is no longer available for approval. The session or count line has changed.'
+        ) : (
             <>
               Variance of{' '}
               <span className="font-mono font-medium text-warning-fg">
@@ -848,11 +933,11 @@ export function StockCountManager() {
               <span className="font-mono">{approveTarget.location?.full_code}</span>. This will
               allow it through when counting completes.
             </>
-          ) : null
-        }
+        )}
         confirmLabel="Approve"
         variant="warning"
         pending={approveVariance.isPending}
+        disabled={!canApproveVariance || approveVariance.isPending}
       />
 
       {/* Confirm dialogs for session actions */}

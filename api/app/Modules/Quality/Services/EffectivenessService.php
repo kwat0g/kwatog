@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Enums\EffectivenessStatus;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Exceptions\NcrActionStateConflictException;
 use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NcrEffectivenessNotification;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -85,15 +86,15 @@ class EffectivenessService
 
             foreach ($actions as $action) {
                 $action->forceFill([
-                    'effectiveness_status'        => EffectivenessStatus::PendingVerification->value,
+                    'effectiveness_status' => EffectivenessStatus::PendingVerification->value,
                     'next_effectiveness_check_at' => $due->toDateString(),
-                    'due_date'                    => $action->due_date ?? $due->toDateString(),
-                    'owner_id'                    => $action->owner_id ?? $ownerId,
+                    'due_date' => $action->due_date ?? $due->toDateString(),
+                    'owner_id' => $action->owner_id ?? $ownerId,
                 ])->save();
             }
 
             $lockedNcr->forceFill([
-                'effectiveness_status'    => EffectivenessStatus::PendingVerification->value,
+                'effectiveness_status' => EffectivenessStatus::PendingVerification->value,
                 'effectiveness_closed_at' => null,
             ])->save();
         });
@@ -120,7 +121,7 @@ class EffectivenessService
             $lockedNcr = NonConformanceReport::query()->lockForUpdate()->findOrFail($lockedAction->ncr_id);
 
             if ($lockedNcr->status !== NcrStatus::Closed) {
-                throw new BusinessRuleException('Only actions on a closed NCR can be verified for effectiveness.');
+                throw new NcrActionStateConflictException('This NCR is no longer closed. Refresh and review its current status.');
             }
 
             $actionType = $lockedAction->action_type instanceof \BackedEnum
@@ -133,6 +134,9 @@ class EffectivenessService
             $current = $lockedAction->effectiveness_status instanceof EffectivenessStatus
                 ? $lockedAction->effectiveness_status
                 : EffectivenessStatus::tryFrom((string) $lockedAction->getRawOriginal('effectiveness_status'));
+            if (in_array($current, [EffectivenessStatus::Effective, EffectivenessStatus::NotApplicable], true)) {
+                throw new NcrActionStateConflictException('This CAPA already has a final verdict. Refresh and review its current status.');
+            }
             NcrEffectivenessStateMachine::assertCanTransition($current, $status);
 
             $next = $status === EffectivenessStatus::Ineffective
@@ -140,18 +144,18 @@ class EffectivenessService
                 : null;
 
             $lockedAction->forceFill([
-                'effectiveness_status'        => $status->value,
-                'effectiveness_notes'         => $notes,
-                'effectiveness_checked_at'    => now(),
-                'verified_at'                 => now(),
-                'verified_by'                 => $by->id,
-                'effectiveness_check_count'   => (int) $lockedAction->effectiveness_check_count + 1,
+                'effectiveness_status' => $status->value,
+                'effectiveness_notes' => $notes,
+                'effectiveness_checked_at' => now(),
+                'verified_at' => now(),
+                'verified_by' => $by->id,
+                'effectiveness_check_count' => (int) $lockedAction->effectiveness_check_count + 1,
                 'next_effectiveness_check_at' => $next,
             ])->save();
 
             $this->updateNcrEffectiveness($lockedNcr);
 
-            return $lockedAction->fresh(['verifier:id,name', 'performer:id,name', 'owner:id,name']);
+            return $lockedAction->fresh(['verifier:id,name', 'performer:id,name', 'owner:id,name', 'ncr:id,ncr_number,status']);
         });
     }
 
@@ -195,7 +199,7 @@ class EffectivenessService
         });
 
         $ncr->forceFill([
-            'effectiveness_status'    => $anyIneffective
+            'effectiveness_status' => $anyIneffective
                 ? EffectivenessStatus::Ineffective->value
                 : EffectivenessStatus::Effective->value,
             'effectiveness_closed_at' => now(),
@@ -311,25 +315,25 @@ class EffectivenessService
             }
 
             $this->notifications->sendForSubject($ncr, $recipient, $type, [
-                'title'       => $title,
-                'message'     => $message,
-                'link_to'     => "/quality/ncrs/{$ncr->hash_id}",
+                'title' => $title,
+                'message' => $message,
+                'link_to' => "/quality/ncrs/{$ncr->hash_id}",
                 'entity_type' => 'ncr',
-                'entity_id'   => $ncr->hash_id,
-                'ncr_number'  => $ncr->ncr_number,
-                'action_id'   => $lockedAction->hash_id,
-                'due_date'    => $dueDate,
+                'entity_id' => $ncr->hash_id,
+                'ncr_number' => $ncr->ncr_number,
+                'action_id' => $lockedAction->hash_id,
+                'due_date' => $dueDate,
             ]);
 
             // The notification row and its deduplication ledger commit as one
             // unit. A failure before commit leaves this key retryable.
             NcrEffectivenessNotification::create([
-                'ncr_action_id'   => $lockedAction->id,
-                'user_id'         => $recipient->id,
+                'ncr_action_id' => $lockedAction->id,
+                'user_id' => $recipient->id,
                 'notification_type' => $type,
-                'due_date'        => $dueDate,
+                'due_date' => $dueDate,
                 'idempotency_key' => $key,
-                'sent_at'         => now(),
+                'sent_at' => now(),
             ]);
         });
     }

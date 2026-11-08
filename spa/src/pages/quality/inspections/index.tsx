@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { inspectionsApi, type InspectionListParams } from '@/api/quality/inspections';
+import { inspectionQueryKeys } from '@/lib/queryKeys/inspections';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -16,6 +17,8 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import type { Inspection } from '@/types/quality';
 import { inspectionStatusVariant } from '@/lib/statusVariants';
 import { formatDateIso } from '@/lib/formatDate';
@@ -30,6 +33,7 @@ const DEFAULT_FILTERS: InspectionListParams = {
 export default function InspectionsListPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useUrlFilters<InspectionListParams>(DEFAULT_FILTERS);
+  useRealtimeList('inspection', 'visible');
 
   // Dashboard KPI links to ?date=today — expand to a from/to range at mount
   // because the backend filters on created_at via from/to.
@@ -41,14 +45,16 @@ export default function InspectionsListPage() {
     }
   }, [filters.date, setFilters]);
 
+  const queryKey = inspectionQueryKeys.list(filters);
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['quality', 'inspections', filters],
-    queryFn: () => inspectionsApi.list(filters),
-    placeholderData: (prev) => prev,
+    queryKey,
+    queryFn: ({ signal }) => inspectionsApi.list(filters, signal),
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined,
   });
   const { data: inspectionOptions } = useQuery({
-    queryKey: ['quality', 'inspection-options'],
-    queryFn: inspectionsApi.options,
+    queryKey: inspectionQueryKeys.options,
+    queryFn: ({ signal }) => inspectionsApi.options(signal),
     staleTime: 5 * 60 * 1000,
   });
   const labels = new Map(

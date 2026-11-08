@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Permission;
@@ -15,6 +16,7 @@ use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -81,6 +83,17 @@ class DeliveryDeleteGuardsTest extends TestCase
 
         $this->assertNull(Delivery::find($id),
             'Scheduled delivery without an invoice link must delete cleanly.');
+    }
+
+    public function test_delete_and_restore_each_stage_one_chain_refresh(): void
+    {
+        $user = $this->makeUser();
+        $delivery = $this->seedDelivery($user, status: 'scheduled');
+
+        $this->svc->delete($delivery);
+        $this->svc->restore($delivery);
+
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
     }
 
     public function test_delete_refuses_loading_and_in_transit_deliveries(): void

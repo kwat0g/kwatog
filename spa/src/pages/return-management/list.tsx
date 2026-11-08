@@ -12,9 +12,12 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { MetricPanel } from '@/components/dashboard/MetricPanel';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatDate } from '@/lib/formatDate';
 import { returnRequestStatusVariant } from '@/lib/statusVariants';
 import type { ReturnRequest } from '@/types/returnManagement';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { useAuthStore } from '@/stores/authStore';
 
 const TYPE_VARIANT: Record<string, ChipVariant> = {
  customer_return: 'info',
@@ -23,12 +26,17 @@ const TYPE_VARIANT: Record<string, ChipVariant> = {
 export default function ReturnManagementListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
+ const roleSlug = useAuthStore((state) => state.user?.role?.slug);
+ const returnScope = roleSlug === 'customer_service_officer' && !can('purchasing.po.create') ? 'customer' : 'all';
+ useRealtimeList('return_request', returnScope);
  const [filters, setFilters] = useUrlFilters<Record<string, unknown>>({ page: 1, per_page: 25 });
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['return-requests', filters],
+  const queryKey = ['return-requests', returnScope, filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => returnManagementApi.list(filters as Record<string, string | number | undefined>),
- placeholderData: (prev) => prev });
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: options } = useQuery({
  queryKey: ['return-management', 'options'],
  queryFn: () => returnManagementApi.options(),

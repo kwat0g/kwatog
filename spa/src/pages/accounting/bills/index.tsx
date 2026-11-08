@@ -13,6 +13,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { billStatusVariant } from '@/lib/statusVariants';
@@ -24,16 +26,19 @@ const DEFAULT_FILTERS: BillListParams = {
 };
 
 export default function BillsPage() {
+ useRealtimeList('bill', 'visible');
  const navigate = useNavigate();
  const { can } = usePermission();
  // Bound to the URL so dashboard drill-downs (?status=unpaid) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<BillListParams>(DEFAULT_FILTERS);
 
+ const queryKey = ['accounting', 'bills', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['accounting', 'bills', filters],
+ queryKey,
  queryFn: () => billsApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: billOptions } = useQuery({
  queryKey: ['accounting', 'bills', 'options'],
  queryFn: billsApi.options,

@@ -12,6 +12,7 @@ use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteResponseStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteStatus;
 use App\Modules\Purchasing\Events\RfqLifecycleEvent;
+use App\Modules\Purchasing\Exceptions\RequestForQuoteStateConflictException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RfqAward;
@@ -36,6 +37,7 @@ class RfqAwardService
         private readonly RfqCommercialCalculator $calculator,
         private readonly RequestForQuoteAccessPolicy $access,
         private readonly OutboxService $outbox,
+        private readonly RequestForQuoteRealtimeService $realtime,
     ) {}
 
     /**
@@ -50,10 +52,10 @@ class RfqAwardService
                 throw new BusinessRuleException('RFQ award needs purchasing authority. System administration does not grant it.');
             }
             if ($locked->status === RfqStatus::Awarded) {
-                throw new BusinessRuleException('This RFQ has already been awarded.');
+                throw new RequestForQuoteStateConflictException('This RFQ has already been awarded. Refresh and review its current status.');
             }
             if ($locked->status !== RfqStatus::Closed) {
-                throw new BusinessRuleException('Only a closed RFQ can be awarded.');
+                throw new RequestForQuoteStateConflictException('This RFQ is no longer closed. Refresh and review its current status.');
             }
             if (trim($reason) === '') {
                 throw new BusinessRuleException('Record the reason for this award.');
@@ -125,6 +127,7 @@ class RfqAwardService
             $locked->forceFill(['status' => RfqStatus::Awarded, 'resolved_at' => now()])->save();
             $this->rfqs->handBack($locked, "RFQ {$locked->rfq_number} awarded part of this request. Convert the rest by Direct PO or start a new RFQ.");
             $this->outbox->record(RfqLifecycleEvent::capture($locked, 'awarded'), 'rfq:'.$locked->id.':awarded');
+            $this->realtime->changed($locked, 'status_changed', $by);
 
             return ['rfq' => $locked->fresh(), 'purchase_orders' => $created];
         });

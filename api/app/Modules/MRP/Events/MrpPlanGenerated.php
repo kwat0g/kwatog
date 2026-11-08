@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Events;
 
+use App\Common\Events\Concerns\BroadcastsOnDedicatedQueue;
+use App\Common\Events\Concerns\HasBroadcastEventId;
 use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -18,16 +21,21 @@ use Illuminate\Queue\SerializesModels;
  * the plan is committed. Drives the dashboard "MRP plan generated" pulse
  * and the SO detail page's chain header refresh.
  */
-class MrpPlanGenerated implements ShouldBroadcast, ToleratesNewerModelState
+class MrpPlanGenerated implements ShouldBroadcast, ShouldDispatchAfterCommit, ToleratesNewerModelState
 {
+    use BroadcastsOnDedicatedQueue;
     use Dispatchable, InteractsWithSockets, SerializesModels;
+    use HasBroadcastEventId;
 
     public function __construct(
         public MrpPlan $plan,
         public ?int $sourceRunId = null,
         public ?int $initiatingActorId = null,
         public ?string $reason = null,
-    ) {}
+        ?string $eventId = null,
+    ) {
+        $this->initializeBroadcastEventId($eventId);
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
@@ -49,6 +57,6 @@ class MrpPlanGenerated implements ShouldBroadcast, ToleratesNewerModelState
 
     public function broadcastWith(): array
     {
-        return ['refresh' => true];
+        return ['refresh' => true, 'event_id' => $this->eventId];
     }
 }

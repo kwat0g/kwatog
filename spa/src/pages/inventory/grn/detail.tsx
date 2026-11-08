@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -16,6 +16,11 @@ import { billsApi } from '@/api/accounting/bills';
 import { grnApi } from '@/api/inventory/grn';
 import { supplierActivityApi } from '@/api/b2b/supplier-activity';
 import { warehouseApi } from '@/api/inventory/warehouse';
+import { purchaseOrderQueryKeys } from '@/lib/queryKeys/purchasing';
+import {
+  invalidateRealtimeChange,
+  reconcileRealtimeMutationResponse,
+} from '@/lib/realtime/invalidationMap';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -37,7 +42,7 @@ import { formatPeso, formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { grnStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import type { GrnItem } from '@/types/inventory';
+import type { GoodsReceiptNote, GrnItem } from '@/types/inventory';
 import type { SupplierActivityShipment } from '@/types/supplierActivity';
 
 interface FinalizeLine {
@@ -69,11 +74,11 @@ export default function GrnDetailPage() {
   const [selectedSupplierShipment, setSelectedSupplierShipment] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'grn', id],
+    queryKey: ['inventory', 'grn', 'detail', id],
     queryFn: () => grnApi.show(id),
     enabled: !!id,
   });
-  useChainProgress('grn', id, ['inventory', 'grn', id]);
+  useChainProgress('grn', id, ['inventory', 'grn', 'detail', id]);
   const { data: grnOptions } = useQuery({
     queryKey: ['inventory', 'grn', 'options'],
     queryFn: grnApi.options,
@@ -85,7 +90,7 @@ export default function GrnDetailPage() {
     isError: supplierEvidenceError,
     refetch: refetchSupplierEvidence,
   } = useQuery({
-    queryKey: ['inventory', 'grn', id, 'supplier-documents'],
+    queryKey: ['inventory', 'grn', 'detail', id, 'supplier-documents'],
     queryFn: () => supplierActivityApi.forGoodsReceipt(id),
     enabled: !!id && data?.status === 'draft',
   });
@@ -146,37 +151,64 @@ export default function GrnDetailPage() {
     return storedBins.length === 1 ? storedBins[0].id : '';
   };
 
+  const applyGrnMutationResult = (updated: GoodsReceiptNote, additionalPrefixes: QueryKey[] = []) => {
+    qc.setQueryData(['inventory', 'grn', 'detail', id], updated);
+    void invalidateRealtimeChange(
+      qc,
+      { entityType: 'grn', entityId: id },
+      additionalPrefixes,
+      [['inventory', 'grn', 'detail', id]],
+    );
+  };
+
+  const reconcileGrnConflict = async (
+    error: AxiosError<{ message?: string }>,
+    fallback: string,
+  ) => {
+    if (error.response?.status === 409) {
+      try {
+        const current = await grnApi.show(id);
+        qc.setQueryData(['inventory', 'grn', 'detail', id], current);
+      } catch {
+        void qc.invalidateQueries({ queryKey: ['inventory', 'grn', 'detail', id] });
+      }
+    }
+    toast.error(error.response?.data?.message ?? fallback);
+  };
+
   const accept = useMutation({
     mutationFn: (map?: Record<string, string>) => grnApi.accept(id, map),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+    onSuccess: (updated) => {
+      applyGrnMutationResult(updated);
       toast.success('GRN accepted, stock updated.');
       setConfirmAccept(false);
       setConfirmPartial(false);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to accept GRN.'),
+      reconcileGrnConflict(e, 'Failed to accept GRN.'),
   });
   const reject = useMutation({
     mutationFn: (reason: string) => grnApi.reject(id, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+    onSuccess: (updated) => {
+      applyGrnMutationResult(updated);
       toast.success('GRN rejected.');
       setRejectOpen(false);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to reject GRN.'),
+      reconcileGrnConflict(e, 'Failed to reject GRN.'),
   });
   const rejectRemainder = useMutation({
     mutationFn: (reason: string) => grnApi.rejectRemainder(id, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+    onSuccess: (updated) => {
+      applyGrnMutationResult(
+        updated,
+        data?.purchase_order?.id ? [purchaseOrderQueryKeys.detail(data.purchase_order.id)] : [],
+      );
       toast.success('Remainder rejected — supplier return opened');
       setRejectRemainderOpen(false);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to reject remainder.'),
+      reconcileGrnConflict(e, 'Failed to reject remainder.'),
   });
   const finalize = useMutation({
     mutationFn: () =>
@@ -198,8 +230,8 @@ export default function GrnDetailPage() {
           ];
         }),
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+    onSuccess: (updated) => {
+      applyGrnMutationResult(updated);
       toast.success('GRN finalized — goods sent to incoming QC.');
       setConfirmFinalize(false);
     },
@@ -210,7 +242,7 @@ export default function GrnDetailPage() {
       setConfirmFinalize(false);
       try {
         const current = await grnApi.show(id);
-        qc.setQueryData(['inventory', 'grn', id], current);
+        qc.setQueryData(['inventory', 'grn', 'detail', id], current);
         if (current.status === 'draft') {
           toast.error(
             e.response?.data?.message ??
@@ -222,7 +254,7 @@ export default function GrnDetailPage() {
           );
         }
       } catch {
-        void qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+        void qc.invalidateQueries({ queryKey: ['inventory', 'grn', 'detail', id] });
         toast.error(
           'Could not confirm the GRN status. Use Retry to check the current handoff before submitting again.',
         );
@@ -238,21 +270,21 @@ export default function GrnDetailPage() {
   };
   const retryIncomingQc = useMutation({
     mutationFn: () => grnApi.retryIncomingQc(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+    onSuccess: (updated) => {
+      applyGrnMutationResult(updated);
       toast.success('Incoming QC trigger retried.');
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to retry incoming QC.'),
+      reconcileGrnConflict(e, 'Failed to retry incoming QC.'),
   });
   const retryGl = useMutation({
     mutationFn: () => grnApi.retryGl(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+    onSuccess: (updated) => {
+      applyGrnMutationResult(updated);
       toast.success('GRN GL posting retried.');
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to retry GRN GL posting.'),
+      reconcileGrnConflict(e, 'Failed to retry GRN GL posting.'),
   });
   // 2026-08-08 — post the auto-created draft bill straight from the receipt.
   const postBill = useMutation({
@@ -260,9 +292,28 @@ export default function GrnDetailPage() {
       if (!data?.bill?.id) throw new Error('No bill to post.');
       return billsApi.postDraft(data.bill.id);
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+    onSuccess: async (postedBill) => {
+      const grnKey = ['inventory', 'grn', 'detail', id] as const;
+      const current = qc.getQueryData<GoodsReceiptNote>(grnKey);
+      if (current?.bill?.id === postedBill.id) {
+        reconcileRealtimeMutationResponse(
+          qc,
+          { entityType: 'bill', entityId: postedBill.id },
+          grnKey,
+          {
+            ...current,
+            bill: {
+              ...current.bill,
+              bill_number: postedBill.bill_number,
+              status: postedBill.status,
+              status_label: postedBill.status_label,
+              total_amount: postedBill.total_amount,
+            },
+          },
+        );
+      } else {
+        await invalidateRealtimeChange(qc, { entityType: 'bill', entityId: postedBill.id });
+      }
       toast.success('Draft bill posted to AP + GL.');
       setConfirmPostBill(false);
     },
@@ -271,9 +322,9 @@ export default function GrnDetailPage() {
   });
 
   // A rejected remainder closes the receipt; the API refuses further acceptance.
-  const isEditable =
-    data?.status === 'pending_qc' ||
-    (data?.status === 'partial_accepted' && !data?.remainder_rejected_at);
+  const hasAction = (action: GoodsReceiptNote['available_actions'][number]) =>
+    data?.available_actions.includes(action) ?? false;
+  const isEditable = hasAction('accept') || hasAction('reject') || hasAction('reject_remainder');
   const isDraft = data?.status === 'draft';
 
   useEffect(() => {
@@ -293,6 +344,18 @@ export default function GrnDetailPage() {
     // background refetch does not overwrite quantities the operator is editing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditable, data?.id, data?.status]);
+
+  useEffect(() => {
+    if (!data) return;
+    const actions = data.available_actions;
+    if (!actions.includes('accept')) {
+      setConfirmAccept(false);
+      setConfirmPartial(false);
+    }
+    if (!actions.includes('reject')) setRejectOpen(false);
+    if (!actions.includes('reject_remainder')) setRejectRemainderOpen(false);
+    if (!actions.includes('finalize')) setConfirmFinalize(false);
+  }, [data]);
 
   if (isLoading) return <SkeletonTable rows={6} columns={5} />;
   if (isError || !data)
@@ -359,12 +422,10 @@ export default function GrnDetailPage() {
     (!!incomingQcNeedsAttention ||
       (!!data.qc_inspection && data.qc_inspection.status !== 'passed') ||
       (data.items ?? []).some((l) => l.inspection && l.inspection.status !== 'passed'));
-  const canAcceptHere = isEditable && !awaitingIncomingQc;
+  const canAcceptHere = hasAction('accept') && !awaitingIncomingQc;
   const columnCount = isDraft ? 4 : 8 + (canAcceptHere ? 1 : 0);
   const glNeedsAttention =
-    (data.status === 'accepted' || data.status === 'partial_accepted') &&
-    !data.journal_entry &&
-    can('accounting.journal.post');
+    hasAction('retry_gl');
 
   return (
     <PageShell className="flex flex-col gap-4">
@@ -377,10 +438,11 @@ export default function GrnDetailPage() {
         actions={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Chip variant={grnStatusVariant[data.status]}>
-              {grnOptions?.statuses?.find((option) => option.value === data.status)?.label ??
+              {data.status_label ??
+                grnOptions?.statuses?.find((option) => option.value === data.status)?.label ??
                 data.status}
             </Chip>
-            {data.status !== 'draft' && can('return_management.manage') && (
+            {hasAction('report_problem') && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -394,7 +456,7 @@ export default function GrnDetailPage() {
                 Report a problem
               </Button>
             )}
-            {incomingQcNeedsAttention && can('quality.inspections.manage') && (
+            {hasAction('retry_incoming_qc') && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -416,9 +478,9 @@ export default function GrnDetailPage() {
                 Retry GL posting
               </Button>
             )}
-            {isEditable && can('inventory.grn.create') && (
+            {isEditable && (
               <>
-                {data.status === 'pending_qc' && (
+                {hasAction('reject') && (
                   <Button
                     variant="secondary"
                     size="xs"
@@ -455,7 +517,7 @@ export default function GrnDetailPage() {
                     Accept
                   </Button>
                 )}
-                {data.can_reject_remainder && (
+                {hasAction('reject_remainder') && (
                   <Button
                     variant="secondary"
                     size="xs"
@@ -632,7 +694,7 @@ export default function GrnDetailPage() {
                   'No incoming Quality inspection has been staged yet.'}
               </div>
             </div>
-            {can('quality.inspections.manage') && (
+            {hasAction('retry_incoming_qc') && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -655,15 +717,17 @@ export default function GrnDetailPage() {
                 handoff after Accounting is available.
               </div>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<LuRefreshCw size={14} />}
-              onClick={() => retryGl.mutate()}
-              loading={retryGl.isPending}
-            >
-              Retry posting
-            </Button>
+            {glNeedsAttention && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuRefreshCw size={14} />}
+                onClick={() => retryGl.mutate()}
+                loading={retryGl.isPending}
+              >
+                Retry posting
+              </Button>
+            )}
           </div>
         )}
         {data.bill && (
@@ -703,7 +767,7 @@ export default function GrnDetailPage() {
         )}
         <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
           <Panel title={isDraft ? 'Record received goods' : 'Line items'}>
-            {isDraft && can('inventory.grn.create') && (
+            {hasAction('finalize') && (
               <div className="mb-4 border-b border-default pb-4">
                 <p className="mb-2 text-xs font-medium text-secondary">Supplier shipment</p>
                 {supplierEvidenceLoading ? (
@@ -1065,7 +1129,7 @@ export default function GrnDetailPage() {
                 </tbody>
               </table>
             </TableScrollRegion>
-            {isDraft && can('inventory.grn.create') && (
+            {hasAction('finalize') && (
               <div className="mt-4 flex flex-col gap-3 border-t border-default pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-secondary" role="status">
                   {!supplierShipmentId
@@ -1096,10 +1160,7 @@ export default function GrnDetailPage() {
               <Panel
                 title="Dispatch versus receipt"
                 actions={
-                  data.status !== 'draft' &&
-                  data.supplier_shipment.items.some((item) => Number(item.difference) < 0) &&
-                  can('inventory.grn.create') &&
-                  !can('return_management.manage') ? (
+                  hasAction('report_shortage') ? (
                     <Button
                       variant="secondary"
                       size="sm"

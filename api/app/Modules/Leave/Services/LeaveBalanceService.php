@@ -63,6 +63,10 @@ class LeaveBalanceService
                     'updated_at' => now(),
                 ]);
             });
+
+            if ($created > 0) {
+                app(LeaveBalanceRealtimeService::class)->stageForEmployee((int) $employee->id);
+            }
         });
 
         return $created;
@@ -93,6 +97,8 @@ class LeaveBalanceService
             $bal->used = (float) $bal->used + $days;
             $bal->remaining = (float) $bal->total_credits - (float) $bal->used;
             $bal->save();
+            app(LeaveBalanceRealtimeService::class)->stageForEmployee($employeeId);
+
             return $bal;
         });
     }
@@ -116,6 +122,7 @@ class LeaveBalanceService
             $bal->used = max(0, (float) $bal->used - $days);
             $bal->remaining = (float) $bal->total_credits - (float) $bal->used;
             $bal->save();
+            app(LeaveBalanceRealtimeService::class)->stageForEmployee($employeeId);
         });
     }
 

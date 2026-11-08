@@ -15,6 +15,9 @@ class CalibrationRecordResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $viewer = $request->user();
+        $canManage = $viewer?->can('quality.calibration.manage') ?? false;
+
         return [
             'id'                    => $this->hash_id,
             'equipment_code'        => $this->equipment_code,
@@ -27,6 +30,14 @@ class CalibrationRecordResource extends JsonResource
             'status_label'          => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'responsible'           => $this->responsible,
             'remarks'               => $this->remarks,
+            'permissions'           => [
+                'view'   => $viewer?->can('quality.calibration.view') ?? false,
+                'manage' => $canManage,
+            ],
+            'available_actions'     => [
+                'update'              => $canManage,
+                'record_calibration'  => $canManage,
+            ],
             'created_at'            => optional($this->created_at)->toIso8601String(),
             'updated_at'            => optional($this->updated_at)->toIso8601String(),
         ];

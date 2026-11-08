@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Requests;
 
-use App\Modules\Accounting\Enums\PaymentMethod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +14,9 @@ class StoreCollectionRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('accounting.invoices.collect_manual') ?? false;
+        return $this->user()?->hasPermission('accounting.invoices.collect')
+            || $this->user()?->hasPermission('accounting.invoices.collect_manual')
+            || $this->user()?->role?->slug === 'system_admin';
     }
 
     /**
@@ -37,9 +38,9 @@ class StoreCollectionRequest extends FormRequest
             'cash_account_id'  => ['required', 'string'],
             'collection_date'  => ['required', 'date'],
             'amount'           => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:'.self::MAX_AMOUNT],
-            'payment_method'   => ['required', Rule::in(PaymentMethod::values())],
+            'payment_method'   => ['required', Rule::in(['cash', 'check', 'bank_transfer'])],
             'reference_number' => ['nullable', 'string', 'max:50'],
-            'manual_reason' => ['required', 'string', 'min:10', 'max:500'],
+            'manual_reason' => ['nullable', 'string', 'min:10', 'max:500'],
             'idempotency_key'  => ['required', 'string', 'max:100', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
         ];
     }

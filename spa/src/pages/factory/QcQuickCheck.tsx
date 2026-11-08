@@ -9,10 +9,12 @@ import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { TouchConfirmSheet, useTouchSubmitLabel } from '@/components/layout/TouchShell';
 import type { WorkOrder } from '@/types/production';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
 export default function QcQuickCheck() {
   const queryClient = useQueryClient();
+  useRealtimeList('work_order', 'visible');
 
   // Fetch active WOs for selection
   // An empty picker used to mean either "no work orders running" or "the

@@ -7,6 +7,7 @@ namespace App\Modules\HR\Controllers;
 use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Enums\OvertimeStatus;
+use App\Modules\Attendance\Exceptions\OvertimeStateConflictException;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Resources\AttendanceResource;
@@ -29,6 +30,7 @@ use App\Modules\Loans\Services\LoanService;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Exceptions\LoanStateConflictException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -241,21 +243,7 @@ class SelfServiceController
             ->when($loanId === null, fn ($query) => $query->limit($historyLimit))
             ->get();
 
-        $map = fn (EmployeeLoan $loan) => [
-            'id' => $loan->hash_id,
-            'loan_type' => $loan->loan_type?->value,
-            'loan_type_label' => $loan->loan_type?->label(),
-            'principal' => $loan->principal !== null ? (string) $loan->principal : null,
-            'outstanding_balance' => $loan->balance !== null ? (string) $loan->balance : null,
-            'monthly_amortization' => $loan->monthly_amortization !== null ? (string) $loan->monthly_amortization : null,
-             'periods' => (int) ($loan->pay_periods_total ?? 0),
-             'periods_remaining' => (int) ($loan->pay_periods_remaining ?? 0),
-             'repayment_months' => (int) ($loan->pay_periods_total ?? 0),
-             'remaining_repayment_months' => (int) ($loan->pay_periods_remaining ?? 0),
-            'status' => $loan->status?->value,
-            'status_label' => $loan->status?->label(),
-            'created_at' => optional($loan->created_at)->toIso8601String(),
-        ];
+        $map = fn (EmployeeLoan $loan) => $this->selfServiceLoanData($loan);
 
         $active = $activeRows->map($map)->values()->all();
         $history = $historyRows->map($map)->values()->all();
@@ -297,6 +285,7 @@ class SelfServiceController
             'data' => [
                 'id' => $loan->hash_id,
                 'status' => $loan->status?->value,
+                'loan' => $this->selfServiceLoanData($loan),
             ],
         ], 201);
     }
@@ -333,21 +322,8 @@ class SelfServiceController
             ->when($overtimeId === null, fn ($query) => $query->limit($this->settings->requiredInt('self_service.history_limit', 1, 500)))
             ->get();
 
-        $map = fn (OvertimeRequest $r) => [
-            'id' => $r->hash_id,
-            'date' => optional($r->date)->toDateString(),
-            'hours_requested' => (string) $r->hours_requested,
-            'reason' => $r->reason,
-            'status' => $r->status?->value,
-            'status_label' => $r->status?->label(),
-            'rejection_reason' => $r->rejection_reason,
-            'approver' => $r->approver?->name,
-            'cancelled_at' => optional($r->cancelled_at)->toIso8601String(),
-            'can_restore' => $r->status === OvertimeStatus::Rejected
-                && $r->cancelled_at !== null
-                && (int) $r->cancelled_by === (int) $request->user()?->id,
-            'created_at' => optional($r->created_at)->toIso8601String(),
-        ];
+        $actorId = $request->user()?->id;
+        $map = fn (OvertimeRequest $r) => $this->overtimeRequestResponseData($r, $actorId, (int) $employee->id);
 
         $pending = $rows->where('status', OvertimeStatus::Pending)->map($map)->values()->all();
         $history = $rows->whereNotIn('status', [OvertimeStatus::Pending])->map($map)->values()->all();
@@ -398,7 +374,7 @@ class SelfServiceController
 
         return response()->json([
             'message' => 'Overtime request submitted for Dept Head approval.',
-            'data' => ['id' => $ot->hash_id, 'status' => $ot->status?->value],
+            'data' => $this->overtimeRequestResponseData($ot, $request->user()?->id, (int) $employee->id),
         ], 201);
     }
 
@@ -414,7 +390,9 @@ class SelfServiceController
             ->firstOrFail();
 
         try {
-            $loan = $this->loans->withdraw($loan, $employee);
+            $loan = $this->loans->withdraw($loan, $employee, $request->header('If-Match'));
+        } catch (LoanStateConflictException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -424,8 +402,33 @@ class SelfServiceController
             'data' => [
                 'id' => $loan->hash_id,
                 'status' => $loan->status?->value,
+                'loan' => $this->selfServiceLoanData($loan),
             ],
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function selfServiceLoanData(EmployeeLoan $loan): array
+    {
+        return [
+            'id' => $loan->hash_id,
+            'loan_type' => $loan->loan_type?->value,
+            'loan_type_label' => $loan->loan_type?->label(),
+            'principal' => $loan->principal !== null ? (string) $loan->principal : null,
+            'outstanding_balance' => $loan->balance !== null ? (string) $loan->balance : null,
+            'monthly_amortization' => $loan->monthly_amortization !== null ? (string) $loan->monthly_amortization : null,
+            'periods' => (int) ($loan->pay_periods_total ?? 0),
+            'periods_remaining' => (int) ($loan->pay_periods_remaining ?? 0),
+            'repayment_months' => (int) ($loan->pay_periods_total ?? 0),
+            'remaining_repayment_months' => (int) ($loan->pay_periods_remaining ?? 0),
+            'status' => $loan->status?->value,
+            'status_label' => $loan->status?->label(),
+            'available_actions' => [
+                'can_withdraw' => $loan->status === LoanStatus::Pending,
+            ],
+            'version' => optional($loan->updated_at)->format('Y-m-d\\TH:i:s.uP'),
+            'created_at' => optional($loan->created_at)->toIso8601String(),
+        ];
     }
 
     /**
@@ -446,15 +449,18 @@ class SelfServiceController
             ->first();
 
         abort_if(! $ot, 404);
-        abort_if($ot->status !== OvertimeStatus::Pending, 422, 'Only pending requests can be cancelled.');
-
         try {
-            $this->overtime->cancel($ot, $request->user(), 'Cancelled by employee.');
+            $ot = $this->overtime->cancel($ot, $request->user(), 'Cancelled by employee.', $request->header('If-Match'));
+        } catch (OvertimeStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
-        return response()->json(['message' => 'Overtime request cancelled.']);
+        return response()->json([
+            'message' => 'Overtime request cancelled.',
+            'data' => $this->overtimeRequestResponseData($ot, $request->user()?->id, (int) $employee->id),
+        ]);
     }
 
     /**
@@ -478,17 +484,16 @@ class SelfServiceController
 
         abort_if(! $ot, 404);
         try {
-            $this->overtime->restore($ot, $request->user());
+            $ot = $this->overtime->restore($ot, $request->user(), $request->header('If-Match'));
+        } catch (OvertimeStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
         return response()->json([
             'message' => 'Overtime request restored.',
-            'data' => [
-                'id' => $ot->hash_id,
-                'status' => OvertimeStatus::Pending->value,
-            ],
+            'data' => $this->overtimeRequestResponseData($ot, $request->user()?->id, (int) $employee->id),
         ]);
     }
 
@@ -850,6 +855,50 @@ class SelfServiceController
         }
 
         return number_format($daily / $this->settings->requiredInt('payroll.hours_per_day', 1), 2, '.', '');
+    }
+
+    /**
+     * The owner-scoped shape returned by overtime list and mutation endpoints.
+     * Keep available actions server-owned and include them in mutation results
+     * so the acting tab can reconcile without waiting for a socket/refetch.
+     *
+     * @return array<string, mixed>
+     */
+    private function overtimeRequestResponseData(OvertimeRequest $overtime, ?int $actorUserId, ?int $employeeId): array
+    {
+        $isOwner = $employeeId !== null
+            && (int) $overtime->employee_id === (int) $employeeId;
+        $canRestore = $isOwner
+            && $actorUserId !== null
+            && $overtime->status === OvertimeStatus::Rejected
+            && $overtime->cancelled_at !== null
+            && (int) $overtime->cancelled_by === (int) $actorUserId;
+
+        return [
+            'id' => $overtime->hash_id,
+            'version' => (int) $overtime->version,
+            'date' => optional($overtime->date)->toDateString(),
+            'hours_requested' => (string) $overtime->hours_requested,
+            'reason' => $overtime->reason,
+            'status' => $overtime->status?->value,
+            'status_label' => $overtime->status?->label(),
+            'rejection_reason' => $overtime->rejection_reason,
+            'approver' => $overtime->approver?->name,
+            'cancelled_at' => optional($overtime->cancelled_at)->toIso8601String(),
+            'can_restore' => $canRestore,
+            'permissions' => [
+                'cancel' => $isOwner,
+                'restore' => $isOwner
+                    && $actorUserId !== null
+                    && (int) $overtime->cancelled_by === (int) $actorUserId,
+            ],
+            'available_actions' => [
+                'cancel' => $isOwner && $overtime->status === OvertimeStatus::Pending,
+                'restore' => $canRestore,
+            ],
+            'created_at' => optional($overtime->created_at)->toIso8601String(),
+            'updated_at' => optional($overtime->updated_at)->toIso8601String(),
+        ];
     }
 
     private function overtimeHours(string $key): float

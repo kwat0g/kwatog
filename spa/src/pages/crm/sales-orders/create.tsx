@@ -33,6 +33,7 @@ import { businessPoliciesApi } from '@/api/businessPolicies';
 import type { CreateSalesOrderData } from '@/types/crm';
 import type { Incoterm } from '@/types/supplyChain';
 import { formatPeso } from '@/lib/formatNumber';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
@@ -160,9 +161,15 @@ export default function CreateSalesOrderPage() {
  onSuccess: (so) => {
  createdDraftRef.current = null;
  setCreatedDraft(null);
- qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
+ reconcileRealtimeMutationResponse(
+ qc,
+ { entityType: 'sales_order', entityId: so.id },
+ ['crm', 'sales-orders', 'detail', so.id],
+ so,
+ );
  toast.success(submitMode === 'confirm' ? `Sales order ${so.so_number} confirmed.` : `Draft ${so.so_number} created.`);
- navigate(`/crm/sales-orders/${so.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/crm/sales-orders/${so.id}`);
  },
  onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
  const draft = createdDraftRef.current;
@@ -185,9 +192,15 @@ export default function CreateSalesOrderPage() {
  onSuccess: (result) => {
  createdDraftRef.current = null;
  setCreatedDraft(null);
- qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
+ reconcileRealtimeMutationResponse(
+ qc,
+ { entityType: 'sales_order', entityId: result.data.id },
+ ['crm', 'sales-orders', 'detail', result.data.id],
+ result.data,
+ );
  toast.success(`Sales order ${result.data.so_number} confirmed.`);
- navigate(`/crm/sales-orders/${result.data.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/crm/sales-orders/${result.data.id}`);
  },
  onError: (e: AxiosError<{ message?: string }>) => {
  toast.error(e.response?.data?.message ?? 'Confirmation failed again. The draft is still available.');

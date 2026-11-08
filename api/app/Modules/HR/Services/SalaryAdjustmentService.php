@@ -85,6 +85,7 @@ class SalaryAdjustmentService
             $locked = SalaryAdjustment::query()->lockForUpdate()->findOrFail($adjustment->getKey());
 
             $this->approvals->approve($locked, $user, $remarks);
+            $locked->refresh();
 
             if ($this->approvals->isFullyApproved($locked)) {
                 $this->apply($locked, $user);
@@ -100,6 +101,7 @@ class SalaryAdjustmentService
             $locked = SalaryAdjustment::query()->lockForUpdate()->findOrFail($adjustment->getKey());
 
             $this->approvals->reject($locked, $user, $remarks);
+            $locked->refresh();
             $locked->forceFill(['status' => SalaryAdjustmentStatus::Rejected])->save();
 
             return $locked->fresh(['employee', 'requester']);

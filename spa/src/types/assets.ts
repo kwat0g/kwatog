@@ -4,6 +4,7 @@ export type DepreciationMethod = 'straight_line' | 'declining_balance';
 
 export interface Asset {
  id: string;
+ available_actions?: { can_edit: boolean };
  asset_code: string;
  name: string;
  description: string | null;

@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -13,7 +14,6 @@ import { HR_KPIS } from '@/lib/dashboardKpis';
 import { PeriodNote } from '@/components/dashboard/period';
 import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
-import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import type { ApiSuccess } from '@/types';
 import type { AttendanceForecastData, ForecastPanelData } from '@/types/forecasting-dashboard';
 import { formatPeso } from '@/lib/formatNumber';
@@ -30,6 +30,7 @@ import { formatPeso } from '@/lib/formatNumber';
  */
 
 interface HrDashboardData {
+  next_transition_at?: string;
   kpis: Array<{ label: string; value: string; unit: string }>;
   /**
    * Panels are OPTIONAL: the server gates each one on the viewer's grant and
@@ -96,17 +97,31 @@ interface HrDashboardData {
 }
 
 export default function HrDashboard() {
+  const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: ['dashboard', 'hr'],
     queryFn: (): Promise<HrDashboardData> =>
       client.get<ApiSuccess<HrDashboardData>>('/dashboards/hr').then((r) => r.data.data),
-    refetchInterval: DASHBOARD_REFRESH_MS,
   });
+
+  useEffect(() => {
+    const timestamp = q.data?.next_transition_at;
+    if (!timestamp) return;
+
+    const deadline = Date.parse(timestamp);
+    if (!Number.isFinite(deadline)) return;
+
+    const timeout = window.setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: ['dashboard', 'hr'], refetchType: 'active' });
+    }, Math.max(0, deadline - Date.now()));
+
+    return () => window.clearTimeout(timeout);
+  }, [q.data?.next_transition_at, queryClient]);
 
   return (
     <DashboardShell<HrDashboardData>
-      title="HR Officer Dashboard"
-      subtitle="Workforce, attendance, leave, and compliance overview."
+      title="HR Officer"
+      subtitle="Workforce, attendance, leave, compliance."
       query={q}
       refreshingQueryKey={['dashboard', 'hr']}
       header={<KpiStrip codes={HR_KPIS} compact />}

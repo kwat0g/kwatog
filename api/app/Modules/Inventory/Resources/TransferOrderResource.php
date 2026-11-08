@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Modules\Inventory\Enums\TransferOrderStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -12,39 +13,47 @@ class TransferOrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $actor = $request->user();
+        $pending = $this->status === TransferOrderStatus::Pending;
+        $canManage = $actor !== null && $actor->hasPermission('inventory.adjust');
+
         return [
-            'id'              => $this->hash_id,
+            'id' => $this->hash_id,
             'transfer_number' => $this->transfer_number,
-            'from_location'   => $this->whenLoaded('fromLocation', fn () => [
-                'id'        => $this->fromLocation?->hash_id,
-                'code'      => $this->fromLocation?->code,
+            'from_location' => $this->whenLoaded('fromLocation', fn () => [
+                'id' => $this->fromLocation?->hash_id,
+                'code' => $this->fromLocation?->code,
                 'full_code' => $this->fromLocation?->full_code,
             ]),
-            'to_location'     => $this->whenLoaded('toLocation', fn () => [
-                'id'        => $this->toLocation?->hash_id,
-                'code'      => $this->toLocation?->code,
+            'to_location' => $this->whenLoaded('toLocation', fn () => [
+                'id' => $this->toLocation?->hash_id,
+                'code' => $this->toLocation?->code,
                 'full_code' => $this->toLocation?->full_code,
             ]),
-            'item'            => $this->whenLoaded('item', fn () => [
-                'id'              => $this->item?->hash_id,
-                'code'            => $this->item?->code,
-                'name'            => $this->item?->name,
+            'item' => $this->whenLoaded('item', fn () => [
+                'id' => $this->item?->hash_id,
+                'code' => $this->item?->code,
+                'name' => $this->item?->name,
                 'unit_of_measure' => $this->item?->unit_of_measure,
             ]),
-            'quantity'        => $this->quantity,
-            'reason'          => $this->reason,
-            'status'          => $this->status,
-            'status_label'    => $this->status?->label() ?? Str::headline((string) $this->status),
-            'created_by'      => $this->whenLoaded('creator', fn () => $this->creator ? [
+            'quantity' => $this->quantity,
+            'reason' => $this->reason,
+            'status' => $this->status,
+            'status_label' => $this->status?->label() ?? Str::headline((string) $this->status),
+            'available_actions' => [
+                'execute' => $pending && $canManage && (int) $this->created_by !== (int) $actor?->getAuthIdentifier(),
+                'cancel' => $pending && $canManage,
+            ],
+            'created_by' => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id' => $this->creator->hash_id,
                 'name' => $this->creator->name,
             ] : null),
-            'transferred_by'  => $this->whenLoaded('transferrer', fn () => $this->transferrer ? [
+            'transferred_by' => $this->whenLoaded('transferrer', fn () => $this->transferrer ? [
                 'id' => $this->transferrer->hash_id,
                 'name' => $this->transferrer->name,
             ] : null),
-            'transferred_at'  => $this->transferred_at?->toISOString(),
-            'created_at'      => $this->created_at?->toISOString(),
+            'transferred_at' => $this->transferred_at?->toISOString(),
+            'created_at' => $this->created_at?->toISOString(),
         ];
     }
 }

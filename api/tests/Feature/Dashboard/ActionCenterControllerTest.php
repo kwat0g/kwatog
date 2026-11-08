@@ -5,18 +5,25 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Common\Models\Alert;
+use App\Common\Jobs\DispatchOutboxMessage;
 use App\Common\Services\SettingsService;
+use App\Modules\Dashboard\Events\BadgesChanged;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Dashboard\Services\ActionCenterTaskService;
+use App\Modules\Dashboard\Services\BadgeService;
+use App\Modules\Dashboard\Services\DashboardCacheGeneration;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Testing\Fakes\QueueFake;
 use PDOException;
 use Tests\TestCase;
 
@@ -59,6 +66,66 @@ class ActionCenterControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.summary.total', 0)
             ->assertJsonPath('data.items', []);
+    }
+
+    public function test_shared_task_action_stages_one_after_commit_refresh_signal(): void
+    {
+        $user = $this->userWithPermissions(['dashboard.action_center.view', 'alerts.view']);
+        $alert = $this->createAlert();
+        $before = DB::table('event_outbox')->where('event_type', BadgesChanged::class)->count();
+
+        $this->actingAs($user, 'sanctum')->patchJson('/api/v1/dashboards/action-center/tasks', [
+            'item_ids' => ['alert:'.$alert->hash_id], 'action' => 'claim',
+        ])->assertOk();
+
+        $this->assertSame(
+            $before + 1,
+            DB::table('event_outbox')->where('event_type', BadgesChanged::class)->count(),
+            'One shared queue action should stage one content-free refresh signal.',
+        );
+    }
+
+    public function test_action_center_cache_generations_rotate_before_outbox_job_is_queued(): void
+    {
+        $recordingQueue = new class(app(), [], Queue::getFacadeRoot()) extends QueueFake {
+            /** @var array<int, array{badge: string, dashboard: string}> */
+            public array $generationsAtOutboxDispatch = [];
+
+            public function push($job, $data = '', $queue = null)
+            {
+                if ($job instanceof DispatchOutboxMessage) {
+                    $this->generationsAtOutboxDispatch[] = [
+                        'badge' => BadgeService::version(),
+                        'dashboard' => DashboardCacheGeneration::current(),
+                    ];
+                }
+
+                return parent::push($job, $data, $queue);
+            }
+        };
+        Queue::swap($recordingQueue);
+
+        $user = $this->userWithPermissions(['dashboard.action_center.view', 'alerts.view']);
+        $alert = $this->createAlert();
+        Cache::put('badges.version', 'before-action-badge-generation', 3600);
+        Cache::put('dashboard:cache:version', 'before-action-dashboard-generation', 3600);
+        $recordingQueue->generationsAtOutboxDispatch = [];
+
+        $this->actingAs($user, 'sanctum')->patchJson('/api/v1/dashboards/action-center/tasks', [
+            'item_ids' => ['alert:'.$alert->hash_id], 'action' => 'claim',
+        ])->assertOk();
+
+        $this->assertCount(1, $recordingQueue->generationsAtOutboxDispatch);
+        $this->assertNotSame(
+            'before-action-badge-generation',
+            $recordingQueue->generationsAtOutboxDispatch[0]['badge'],
+            'Badge snapshots must be retired before the refresh job can reach a worker.',
+        );
+        $this->assertNotSame(
+            'before-action-dashboard-generation',
+            $recordingQueue->generationsAtOutboxDispatch[0]['dashboard'],
+            'Dashboard snapshots must be retired before the refresh job can reach a worker.',
+        );
     }
 
     public function test_ncr_overdue_uses_the_shared_escalation_clock_and_inclusive_boundary(): void
@@ -161,10 +228,16 @@ class ActionCenterControllerTest extends TestCase
         ])->assertOk()->assertJsonPath('data.0.state', 'acknowledged')
             ->assertJsonPath('data.0.assigned_to.name', $user->name);
 
+        $alertsWidgetGeneration = DashboardCacheGeneration::current('widget-summary:alerts');
         $this->actingAs($user, 'sanctum')->patchJson('/api/v1/dashboards/action-center/tasks', [
             'item_ids' => [$itemKey], 'action' => 'resolve', 'notes' => 'Replenishment submitted.',
         ])->assertOk()->assertJsonPath('data.0.state', 'resolved');
 
+        $this->assertNotSame(
+            $alertsWidgetGeneration,
+            DashboardCacheGeneration::current('widget-summary:alerts'),
+            'Dismissing an alert from Action Center must retire the cached alert-widget count.',
+        );
         $this->assertTrue($alert->fresh()->is_dismissed);
         $this->assertDatabaseCount('action_center_task_events', 2);
         $this->actingAs($user, 'sanctum')->getJson('/api/v1/dashboards/action-center')

@@ -74,6 +74,13 @@ export interface JournalEntry {
   created_by?: { id?: string; name?: string } | null;
   lines?: JournalEntryLine[];
   deleted_at?: string | null;
+  available_actions?: {
+    can_edit: boolean;
+    can_delete: boolean;
+    can_restore: boolean;
+    can_post: boolean;
+    can_reverse: boolean;
+  } | null;
 }
 
 export interface CreateJournalEntryLineData {
@@ -163,6 +170,12 @@ export interface BillPayment {
 export interface Bill {
   id: string;
   bill_number: string;
+  available_actions?: {
+    post_draft: boolean;
+    override_three_way_match: boolean;
+    record_payment: boolean;
+    cancel: boolean;
+  };
   /** The supplier's own invoice reference, set when they submit through the portal. */
   supplier_invoice_number?: string | null;
   supplier_invoice_group_total?: string | null;
@@ -346,7 +359,7 @@ export interface Invoice {
   can_submit_payment?: boolean;
   payment_submission_blocked_reason?: string | null;
   /** 2026-08-08 — O2C stepper: upstream sales order + delivery. */
-  sales_order?: { id: string; so_number: string } | null;
+  sales_order?: { id: string; so_number: string; payment_method?: PaymentMethod | null } | null;
   delivery?: { id: string; delivery_number: string; status?: string } | null;
   id: string;
   invoice_number: string | null;
@@ -357,6 +370,10 @@ export interface Invoice {
   prebill_reason?: string | null;
   prebill_approved_at?: string | null;
   prebill_approved_by?: { id: string; name: string } | null;
+  available_actions?: {
+    approve_prebill?: boolean;
+    review_payment?: boolean;
+  };
   status_history?: Array<{
     event_type: 'created' | 'updated' | 'prebill_approved' | 'status_changed';
     from_status: InvoiceStatus | null;
@@ -373,6 +390,7 @@ export interface Invoice {
   amount_paid: string;
   balance: string;
   status: InvoiceStatus;
+  status_label?: string;
   display_status: string;
   is_overdue: boolean;
   aging_bucket: string;
@@ -588,6 +606,7 @@ export interface CreditNote {
   type_label: string;
   status: CreditNoteStatus;
   status_label: string;
+  available_actions?: { can_finalize: boolean; can_apply: boolean } | null;
   date: string;
   is_vatable: boolean;
   subtotal: string;

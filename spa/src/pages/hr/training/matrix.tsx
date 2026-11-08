@@ -14,6 +14,8 @@ import { cn } from '@/lib/cn';
 import type { TrainingMatrixCell, TrainingMatrixCellStatus } from '@/types/hr';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList, useSkillCatalogRealtime } from '@/hooks/useRealtimeRecord';
 
 const STATUS_COLORS: Record<TrainingMatrixCellStatus, string> = {
  trained: 'bg-success-bg border-success',
@@ -36,6 +38,9 @@ function cellTooltipContent(cell: TrainingMatrixCell, skillName: string, statusL
 export default function TrainingMatrixPage() {
  const [departmentId, setDepartmentId] = useState<string>('');
  const navigate = useNavigate();
+ const { can } = usePermission();
+ useRealtimeList('employee_skill', can('hr.trainings.view') ? 'visible' : undefined);
+ useSkillCatalogRealtime();
 
  const { data: departments } = useQuery({
  queryKey: ['departments-tree'],

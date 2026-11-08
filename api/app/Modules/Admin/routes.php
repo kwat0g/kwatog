@@ -11,6 +11,7 @@ use App\Modules\Admin\Controllers\ApprovalDelegationController;
 use App\Modules\Admin\Controllers\AuditLogController;
 use App\Modules\Admin\Controllers\BackupController;
 use App\Modules\Admin\Controllers\BulkPrintController;
+use App\Modules\Admin\Controllers\CacheGroupController;
 use App\Modules\Admin\Controllers\PermissionController;
 use App\Modules\Admin\Controllers\RoleController;
 use App\Modules\Admin\Controllers\SearchController;
@@ -139,6 +140,13 @@ Route::prefix('admin')
             ->middleware('permission:admin.settings.manage');
         Route::get('system-info', [SettingsController::class, 'systemInfo'])
             ->middleware('permission:admin.settings.manage');
+        Route::get('system-health', [SettingsController::class, 'systemHealth'])
+            ->middleware('permission:admin.settings.manage');
+        Route::get('cache-groups', [CacheGroupController::class, 'index'])
+            ->middleware('permission:admin.settings.manage');
+        Route::post('cache-groups/{group}/clear', [CacheGroupController::class, 'clear'])
+            ->middleware(['permission:admin.settings.manage', 'throttle:sensitive'])
+            ->name('admin.cache-groups.clear');
         Route::get('sessions', [SessionController::class, 'index'])
             ->middleware('permission:admin.settings.manage');
         Route::delete('sessions/{session}', [SessionController::class, 'destroy'])

@@ -15,6 +15,10 @@ import { Textarea } from '@/components/ui/Textarea';
 import { formatDateTime } from '@/lib/formatDate';
 import { useElapsedSeconds } from '@/hooks/useElapsedSeconds';
 import {
+  invalidateRealtimeChange,
+  reconcileRealtimeMutationResponse,
+} from '@/lib/realtime/invalidationMap';
+import {
   productionDateTime,
   scheduleDateKey,
   offsetScheduleDate,
@@ -24,6 +28,7 @@ import type { CrewContext } from '@/types/production-crew';
 import type {
   DefectType,
   RecordOutputData,
+  WorkOrder,
   WorkOrderRework,
   WorkOrderStatus,
 } from '@/types/production';
@@ -118,8 +123,17 @@ export function ReworkPanel({
       setSubmission(pending);
       return workOrdersApi.recordRework(woId, rework.id, pending.data, pending.key);
     },
-    onSuccess: (_, action) => {
-      queryClient.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+    onSuccess: (result, action) => {
+      if (action === 'record') {
+        void invalidateRealtimeChange(queryClient, { entityType: 'work_order', entityId: woId });
+      } else {
+        reconcileRealtimeMutationResponse(
+          queryClient,
+          { entityType: 'work_order', entityId: woId },
+          ['production', 'work-orders', 'detail', woId],
+          result as WorkOrder,
+        );
+      }
       setFinishOpen(false);
       if (action === 'record') {
         setSubmission(null);
@@ -159,7 +173,7 @@ export function ReworkPanel({
       setGood('0');
       setReject('0');
       setDefect('');
-      queryClient.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+      void invalidateRealtimeChange(queryClient, { entityType: 'work_order', entityId: woId });
       toast.success('Output receipt found. Repair recording saved.');
     },
     onError: (error) =>
@@ -604,6 +618,31 @@ export function RepairScheduleForm({
     refetchOnWindowFocus: false,
   });
   const proposal = suggestion.data;
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+  const [conflictRefreshComplete, setConflictRefreshComplete] = useState(false);
+  const [conflictRefreshFailed, setConflictRefreshFailed] = useState(false);
+  const [conflictRefreshing, setConflictRefreshing] = useState(false);
+  const refreshConflict = async () => {
+    setConflictRefreshComplete(false);
+    setConflictRefreshFailed(false);
+    setConflictRefreshing(true);
+    try {
+      const [freshSuggestion] = await Promise.all([
+        suggestion.refetch(),
+        queryClient.fetchQuery({
+          queryKey: ['production', 'crew', woId, ncrId],
+          queryFn: () => workOrdersApi.crew(woId, ncrId),
+          staleTime: 0,
+        }),
+      ]);
+      if (freshSuggestion.isError) throw freshSuggestion.error;
+      setConflictRefreshComplete(true);
+    } catch {
+      setConflictRefreshFailed(true);
+    } finally {
+      setConflictRefreshing(false);
+    }
+  };
   const approval = useMutation({
     mutationFn: () => {
       onPendingChange?.(true);
@@ -632,9 +671,21 @@ export function RepairScheduleForm({
       );
     },
     onSettled: () => onPendingChange?.(false),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['production'] });
-      queryClient.invalidateQueries({ queryKey: ['mrp'] });
+    onError: async (error) => {
+      if (!(error instanceof AxiosError) || error.response?.status !== 409) return;
+      setConflictMessage(
+        error.response.data?.message ?? 'The repair crew or schedule changed. Refreshing the current proposal…',
+      );
+      await refreshConflict();
+    },
+    onSuccess: (updated) => {
+      reconcileRealtimeMutationResponse(
+        queryClient,
+        { entityType: 'work_order', entityId: woId },
+        ['production', 'work-orders', 'detail', woId],
+        updated,
+        [['mrp']],
+      );
       toast.success('Repair schedule and crew approved. Start rework when workers are present.');
       onSaved();
     },
@@ -644,6 +695,8 @@ export function RepairScheduleForm({
     suggestion.isFetching ||
     suggestion.isError ||
     approval.isPending ||
+    conflictRefreshing ||
+    (approval.isError && approval.error instanceof AxiosError && approval.error.response?.status === 409 && !conflictRefreshComplete) ||
     !proposal?.scheduled_start ||
     !proposal.scheduled_end ||
     !proposal.recorder_employee_id ||
@@ -768,6 +821,21 @@ export function RepairScheduleForm({
             ? (approval.error.response?.data?.message ?? 'Approval failed. Refresh suggestion.')
             : 'Approval failed. Refresh suggestion.'}
         </p>
+      )}
+      {approval.isError && approval.error instanceof AxiosError && approval.error.response?.status === 409 && (
+        <div role="status" className="space-y-1 text-warning-fg">
+          {conflictMessage && <p>{conflictMessage}</p>}
+          {conflictRefreshing && <p>Refreshing current repair crew and proposal…</p>}
+          {conflictRefreshComplete && <p>Review the refreshed repair crew and proposal before retrying.</p>}
+          {conflictRefreshFailed && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span>The current repair proposal could not be refreshed.</span>
+              <Button type="button" variant="secondary" disabled={approval.isPending} onClick={() => void refreshConflict()}>
+                Refresh current proposal
+              </Button>
+            </div>
+          )}
+        </div>
       )}
       <div className="flex flex-wrap justify-end gap-2">
         <Button

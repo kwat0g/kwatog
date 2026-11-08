@@ -5,10 +5,12 @@ import { SkeletonForm } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { priceAgreementsApi } from '@/api/crm/priceAgreements';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { PriceAgreementForm } from './form';
 
 export default function EditPriceAgreementPage() {
  const { id } = useParams<{ id: string }>();
+ useRealtimeRecord('price_agreement', id);
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'price-agreements', 'detail', id],
  queryFn: () => priceAgreementsApi.show(id as string),

@@ -4,17 +4,20 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ncrsApi } from '@/api/quality/ncrs';
 import NcrDetailPage from './detail';
+import type { Ncr } from '@/types/quality';
 
 const permissionState = vi.hoisted(() => ({ canManageNcr: true }));
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ can: (permission: string) => permission !== 'quality.ncr.manage' || permissionState.canManageNcr }),
 }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeRecord: vi.fn() }));
 vi.mock('@/api/quality/ncrs', () => ({
   ncrsApi: {
     show: vi.fn(),
     options: vi.fn(),
     assignees: vi.fn(),
     setDisposition: vi.fn(),
+    cancel: vi.fn(),
   },
 }));
 vi.mock('@/api/client', () => ({
@@ -69,6 +72,76 @@ describe('incoming receipt review', () => {
       disposition: 'return_to_supplier', mrb_accepted_quantity: '98',
       sorting_evidence: expect.objectContaining({ performed_by: 'rosa-1' }),
     })));
+  });
+});
+
+describe('server-computed cancellation action', () => {
+  it('hides Cancel when the NCR response says cancellation is unavailable', async () => {
+    vi.mocked(ncrsApi.show).mockResolvedValue({
+      id: 'ncr-locked', ncr_number: 'NCR-LOCKED', status: 'open', severity: 'medium',
+      source: 'inspection_fail', affected_quantity: 10, disposition: null, actions: [],
+      available_actions: { can_cancel: false },
+    } as never);
+    vi.mocked(ncrsApi.options).mockResolvedValue({
+      sources: [], severities: [], statuses: [], actions: [], dispositions: [], default_disposition: '',
+    });
+    vi.mocked(ncrsApi.assignees).mockResolvedValue([]);
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/quality/ncrs/ncr-locked']}>
+          <Routes><Route path="/quality/ncrs/:id" element={<NcrDetailPage />} /></Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('NCR-LOCKED');
+    expect(screen.queryByRole('button', { name: /^Cancel$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('actor mutation reconciliation', () => {
+  it('renders the cancellation response immediately without waiting for realtime', async () => {
+    const openNcr = {
+      id: 'ncr-actor', ncr_number: 'NCR-ACTOR', status: 'open', severity: 'low',
+      source: 'inspection_fail', affected_quantity: 1, disposition: null, actions: [],
+      available_actions: { can_cancel: true },
+    } as unknown as Ncr;
+    const cancelledNcr = {
+      ...openNcr,
+      status: 'cancelled',
+      status_label: 'Cancelled',
+      available_actions: { can_cancel: false },
+    } as Ncr;
+    vi.mocked(ncrsApi.show)
+      .mockResolvedValueOnce(openNcr)
+      .mockImplementation(() => new Promise(() => {}));
+    vi.mocked(ncrsApi.options).mockResolvedValue({
+      sources: [], severities: [], statuses: [], actions: [], dispositions: [], default_disposition: '',
+    });
+    vi.mocked(ncrsApi.assignees).mockResolvedValue([]);
+    vi.mocked(ncrsApi.cancel).mockResolvedValue(cancelledNcr);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/quality/ncrs/ncr-actor']}>
+          <Routes><Route path="/quality/ncrs/:id" element={<NcrDetailPage />} /></Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText('NCR-ACTOR');
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reason' }), {
+      target: { value: 'Duplicate report confirmed' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel NCR$/ }));
+
+    await waitFor(() => expect(ncrsApi.cancel).toHaveBeenCalledWith('ncr-actor', 'Duplicate report confirmed'));
+    expect(queryClient.getQueryData(['quality', 'ncrs', 'ncr-actor'])).toEqual(cancelledNcr);
+    expect(screen.queryByRole('button', { name: /^Cancel$/ })).not.toBeInTheDocument();
+    queryClient.clear();
   });
 });
 

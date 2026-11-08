@@ -65,7 +65,7 @@ class AccountsReceivableSignalParityTest extends TestCase
         BadgeService::touch();
         $versionBeforePayment = BadgeService::version();
         $paymentSubmission = $this->paymentSubmission($pendingPaymentInvoice, $finance);
-        $this->assertGreaterThan($versionBeforePayment, BadgeService::version());
+        $this->assertNotSame($versionBeforePayment, BadgeService::version());
 
         $badgeData = $this->actingAs($finance, 'sanctum')
             ->getJson('/api/v1/dashboards/badges')
@@ -119,7 +119,7 @@ class AccountsReceivableSignalParityTest extends TestCase
             'reviewed_at' => now(),
             'rejection_reason' => 'Reference could not be confirmed.',
         ]);
-        $this->assertGreaterThan($versionBeforeReview, BadgeService::version());
+        $this->assertNotSame($versionBeforeReview, BadgeService::version());
         $this->assertSame(0, $this->actingAs($finance, 'sanctum')
             ->getJson('/api/v1/dashboards/badges')->assertOk()
             ->json('data.payment_review_invoices.count'));

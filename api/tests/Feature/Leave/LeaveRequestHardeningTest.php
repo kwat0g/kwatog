@@ -445,7 +445,10 @@ class LeaveRequestHardeningTest extends TestCase
         $request = $this->submit($employee, $this->vacation, ['start_date' => $date]);
         $this->actingAs($head)
             ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-dept")
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('data.status', LeaveRequestStatus::PendingHr->value)
+            ->assertJsonPath('data.available_actions', [])
+            ->assertJsonPath('data.permissions.approve', false);
 
         $response = $this->actingAs($hr)
             ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-hr");
@@ -711,5 +714,54 @@ class LeaveRequestHardeningTest extends TestCase
             ->assertJsonPath('data.code', $archived->code);
 
         $this->assertFalse($archived->fresh()->trashed());
+    }
+
+    public function test_leave_resource_returns_server_computed_actions_and_a_version(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $headEmployee = $this->employee($department->id);
+        $head = $this->user('department_head', $headEmployee);
+        $employee = $this->employee($department->id);
+        $owner = $this->user('employee', $employee);
+        $request = $this->submit($employee, $this->vacation);
+
+        $this->actingAs($head)
+            ->getJson("/api/v1/leaves/requests/{$request->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions', ['approve_dept', 'reject'])
+            ->assertJsonPath('data.permissions.approve', true)
+            ->assertJsonPath('data.permissions.cancel', false)
+            ->assertJsonPath('data.version', $request->fresh()->updated_at->format('Y-m-d\TH:i:s.uP'));
+
+        $this->actingAs($owner)
+            ->getJson("/api/v1/leaves/requests/{$request->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions', ['cancel'])
+            ->assertJsonPath('data.permissions.approve', false)
+            ->assertJsonPath('data.permissions.cancel', true);
+    }
+
+    public function test_replayed_leave_decisions_return_a_state_conflict(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $head = $this->user('department_head', $this->employee($department->id));
+        $request = $this->submit($this->employee($department->id), $this->vacation);
+
+        $this->actingAs($head)
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-dept")
+            ->assertOk();
+
+        $this->actingAs($head)
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-dept")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'leave_request_state_conflict');
+
+        $this->assertSame(LeaveRequestStatus::PendingHr, $request->fresh()->status);
+        $this->assertSame(1, DB::table('approval_records')
+            ->where('approvable_type', $request->getMorphClass())
+            ->where('approvable_id', $request->id)
+            ->where('step_order', 1)
+            ->where('action', 'approved')
+            ->count());
     }
 }

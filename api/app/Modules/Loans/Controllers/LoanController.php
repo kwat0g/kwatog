@@ -10,6 +10,7 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanPaymentType;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Loans\Exceptions\LoanStateConflictException;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Policies\LoanAccessPolicy;
 use App\Modules\Loans\Requests\ApproveLoanRequest;
@@ -85,40 +86,46 @@ class LoanController
         return new EmployeeLoanResource($this->service->show($loan));
     }
 
-    public function approve(ApproveLoanRequest $request, EmployeeLoan $loan): EmployeeLoanResource
+    public function approve(ApproveLoanRequest $request, EmployeeLoan $loan): EmployeeLoanResource|JsonResponse
     {
         try {
-            $loan = $this->service->approve($loan, $request->user(), $request->input('remarks'));
+            $loan = $this->service->approve($loan, $request->user(), $request->input('remarks'), $request->header('If-Match'));
+        } catch (LoanStateConflictException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
-        return new EmployeeLoanResource($loan);
+        return new EmployeeLoanResource($this->service->show($loan));
     }
 
-    public function reject(RejectLoanRequest $request, EmployeeLoan $loan): EmployeeLoanResource
+    public function reject(RejectLoanRequest $request, EmployeeLoan $loan): EmployeeLoanResource|JsonResponse
     {
         try {
-            $loan = $this->service->reject($loan, $request->user(), $request->input('reason'));
+            $loan = $this->service->reject($loan, $request->user(), $request->input('reason'), $request->header('If-Match'));
+        } catch (LoanStateConflictException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
-        return new EmployeeLoanResource($loan);
+        return new EmployeeLoanResource($this->service->show($loan));
     }
 
-    public function cancel(Request $request, EmployeeLoan $loan): EmployeeLoanResource
+    public function cancel(Request $request, EmployeeLoan $loan): EmployeeLoanResource|JsonResponse
     {
         try {
-            $loan = $this->service->cancel($loan, $request->user());
+            $loan = $this->service->cancel($loan, $request->user(), $request->header('If-Match'));
+        } catch (LoanStateConflictException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
-        return new EmployeeLoanResource($loan);
+        return new EmployeeLoanResource($this->service->show($loan));
     }
 
-    public function requestWriteOff(RequestLoanWriteOffRequest $request, EmployeeLoan $loan): EmployeeLoanResource
+    public function requestWriteOff(RequestLoanWriteOffRequest $request, EmployeeLoan $loan): EmployeeLoanResource|JsonResponse
     {
         try {
             $loan = $this->service->requestWriteOff(
@@ -126,23 +133,28 @@ class LoanController
                 $request->user(),
                 $request->validated('reason'),
                 $request->validated('evidence'),
+                $request->header('If-Match'),
             );
+        } catch (LoanStateConflictException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
-        return new EmployeeLoanResource($loan);
+        return new EmployeeLoanResource($this->service->show($loan));
     }
 
-    public function approveWriteOff(ApproveLoanWriteOffRequest $request, EmployeeLoan $loan): EmployeeLoanResource
+    public function approveWriteOff(ApproveLoanWriteOffRequest $request, EmployeeLoan $loan): EmployeeLoanResource|JsonResponse
     {
         try {
-            $loan = $this->service->approveWriteOff($loan, $request->user(), $request->validated('remarks'));
+            $loan = $this->service->approveWriteOff($loan, $request->user(), $request->validated('remarks'), $request->header('If-Match'));
+        } catch (LoanStateConflictException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
-        return new EmployeeLoanResource($loan);
+        return new EmployeeLoanResource($this->service->show($loan));
     }
 
     /** POST /loans/{loan}/payments — manual settlement outside payroll. */
@@ -164,7 +176,10 @@ class LoanController
                 paymentDate: $request->validated('payment_date'),
                 idempotencyKey: $request->validated('idempotency_key'),
                 actor: $user,
+                expectedVersion: $request->header('If-Match'),
             );
+        } catch (LoanStateConflictException $e) {
+            return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

@@ -40,5 +40,5 @@ export const bomsApi = {
  delete: (id: string) =>
   client.delete(`/mrp/boms/${id}`),
  restore: (id: string) =>
-  client.patch(`/mrp/boms/${id}/restore`),
+  client.patch<ApiSuccess<Bom>>(`/mrp/boms/${id}/restore`).then((r) => r.data.data),
 };

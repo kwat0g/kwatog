@@ -11,6 +11,7 @@ use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 /**
  * Server-side authorization for an overtime decision.
@@ -74,6 +75,89 @@ class OvertimeDecisionPolicy
     {
         return in_array($actor->role?->slug, ['system_admin', 'hr_officer'], true)
             || in_array('hr_officer', ApprovalDelegation::actsForRoles((int) $actor->id, now()), true);
+    }
+
+    /**
+     * Server-owned action snapshot for a single overtime request. Mutation
+     * services still repeat the authoritative state and scope checks under
+     * the request row lock.
+     *
+     * @return array{permissions: array<string, bool>, available_actions: array<string, bool>}
+     */
+    public function actionContext(OvertimeRequest $overtime, ?User $actor): array
+    {
+        return $this->actionContextsForRows(new EloquentCollection([$overtime]), $actor)[$overtime->getKey()];
+    }
+
+    /**
+     * Build the same server action snapshots for a page of list rows with a
+     * bounded set of permission/scope queries rather than one query per row.
+     *
+     * @param EloquentCollection<int, OvertimeRequest> $requests
+     * @return array<int, array{permissions: array<string, bool>, available_actions: array<string, bool>}>
+     */
+    public function actionContextsForRows(EloquentCollection $requests, ?User $actor): array
+    {
+        $requests->loadMissing('employee.user');
+        $contexts = [];
+        $empty = array_fill_keys(['approve', 'reject', 'cancel', 'restore'], false);
+
+        if ($actor === null) {
+            foreach ($requests as $request) {
+                $contexts[$request->getKey()] = ['permissions' => $empty, 'available_actions' => $empty];
+            }
+
+            return $contexts;
+        }
+
+        $hasDirectApproval = $actor->hasPermission('attendance.ot.approve');
+        $delegatorIds = $hasDirectApproval
+            ? []
+            : ApprovalDelegation::delegatorsForPermission($actor, 'attendance.ot.approve')->modelKeys();
+        $isAllRecordActor = $this->isAllRecordActor($actor);
+        $actorDepartmentId = $actor->employee_id
+            ? Employee::query()->whereKey($actor->employee_id)->value('department_id')
+            : null;
+
+        foreach ($requests as $request) {
+            $submitterUserId = $request->employee?->user?->id;
+            $isSelf = $submitterUserId !== null && (int) $submitterUserId === (int) $actor->id;
+            $hasApprovalAuthority = $hasDirectApproval
+                || ($delegatorIds !== [] && ! in_array((int) $submitterUserId, $delegatorIds, true));
+            $sameDepartment = $actorDepartmentId !== null
+                && $request->employee?->department_id !== null
+                && (int) $actorDepartmentId === (int) $request->employee->department_id;
+            $canDecide = ! $isSelf
+                && $hasApprovalAuthority
+                && ($isAllRecordActor || $sameDepartment);
+
+            // Match OvertimeController::cancel(): direct approver permission
+            // is required for department-wide cancellation; delegation alone
+            // grants approval but does not broaden cancellation authority.
+            $isOwner = (int) $actor->employee_id === (int) $request->employee_id;
+            $canCancel = $isAllRecordActor || $isOwner || ($hasDirectApproval && $sameDepartment);
+            $canRestore = $isOwner
+                && (int) $request->cancelled_by === (int) $actor->id
+                && $request->cancelled_at !== null;
+            $isPending = $request->status === OvertimeStatus::Pending;
+
+            $contexts[$request->getKey()] = [
+                'permissions' => [
+                    'approve' => $canDecide,
+                    'reject' => $canDecide,
+                    'cancel' => $canCancel,
+                    'restore' => $canRestore,
+                ],
+                'available_actions' => [
+                    'approve' => $isPending && $canDecide,
+                    'reject' => $isPending && $canDecide,
+                    'cancel' => $isPending && $canCancel,
+                    'restore' => $request->status === OvertimeStatus::Rejected && $canRestore,
+                ],
+            ];
+        }
+
+        return $contexts;
     }
 
     /**

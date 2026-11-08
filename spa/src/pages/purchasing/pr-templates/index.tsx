@@ -24,6 +24,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { PurchaseRequestTemplate } from '@/types/purchasing';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 const errMsg = (e: unknown, fallback: string) =>
  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
@@ -38,10 +39,12 @@ export default function PrTemplatesListPage() {
  const [templateChoice, setTemplateChoice] = useState<PurchaseRequestTemplate | null>(null);
  const [sourcingMethod, setSourcingMethod] = useState<'direct_po' | 'rfq' | ''>('');
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['purchasing', 'pr-templates', filters, { trashed: archiveToTrashed(scope) }],
+  const queryKey = ['purchasing', 'pr-templates', filters, { trashed: archiveToTrashed(scope) }] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => prTemplatesApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
 
  const deleteMutation = useMutation({

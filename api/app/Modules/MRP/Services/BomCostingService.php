@@ -7,6 +7,7 @@ namespace App\Modules\MRP\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\Money;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Services\PricingReviewService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
@@ -43,7 +44,7 @@ class BomCostingService
             }
             $this->invalidateForItems(Item::query()->where('code', Product::query()->whereKey($bom->product_id)->value('part_number'))->pluck('id')->all());
             $this->recalculateBom($bom, []);
-            app(\App\Modules\CRM\Services\PricingReviewService::class)->request([(int) $bom->product_id], 'bom_or_routing_changed');
+            app(PricingReviewService::class)->request([(int) $bom->product_id], 'bom_or_routing_changed');
 
             return $bom->fresh()->load(['product', 'items.item']);
         }, 3);
@@ -78,12 +79,17 @@ class BomCostingService
             }
             $products = [...$products, ...$boms->pluck('product_id')->all()];
             $ids = $boms->pluck('id')->all();
-            Bom::query()->active()->whereIn('id', $ids)->update(['costed_at' => null]);
+            // Model saves run the BOM observer so users looking at a cost
+            // snapshot refetch when a component change invalidates its cost.
+            Bom::query()->active()->whereIn('id', $ids)->orderBy('id')->get()
+                ->each(static function (Bom $bom): void {
+                    $bom->forceFill(['costed_at' => null])->save();
+                });
             $visited = [...$visited, ...$ids];
             $codes = Product::query()->whereIn('id', $boms->pluck('product_id'))->pluck('part_number');
             $itemIds = Item::query()->whereIn('code', $codes)->pluck('id')->all();
         }
-        app(\App\Modules\CRM\Services\PricingReviewService::class)->request($products, 'component_cost_or_conversion_changed');
+        app(PricingReviewService::class)->request($products, 'component_cost_or_conversion_changed');
     }
 
     /** @param list<int> $path */
@@ -279,6 +285,7 @@ class BomCostingService
 
         if ($routing === null) {
             $costs['warnings'][] = ['type' => 'missing_routing', 'item_code' => '', 'message' => 'Materials only: no active routing supplies labor, machine or overhead costs.'];
+
             return $costs;
         }
 

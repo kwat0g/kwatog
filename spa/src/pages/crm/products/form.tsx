@@ -124,7 +124,8 @@ export function ProductForm({ initial, mode }: Props) {
     onSuccess: (product) => {
       qc.invalidateQueries({ queryKey: ['crm', 'products'] });
       toast.success(mode === 'create' ? 'Product created.' : 'Product updated.');
-      navigate(`/crm/products/${product.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/crm/products/${product.id}`);
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.status === 422 && e.response.data.errors) {

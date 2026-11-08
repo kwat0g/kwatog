@@ -26,7 +26,11 @@ import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs } from '@/components/ui/Tabs';
 import { usePermission } from '@/hooks/usePermission';
+import { useFeature } from '@/hooks/useFeature';
+import { useRealtimeList, useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import type { CustomerPortalUser, InternalDeliverySchedule, SupplierPortalUser } from '@/types/b2b';
 
 type PortalStatus = SupplierPortalUser['status'];
@@ -75,6 +79,12 @@ const scheduleSourceFilter: FilterConfig[] = [
  * is where an operator sees and manages the two account sets side by side.
  */
 export default function PortalAccessPage() {
+ useRealtimeSignal(
+  'portal_access_changed',
+  'entity.b2b_portal_access.visible',
+  '.b2b.portal-access.changed',
+ );
+
  const [searchParams, setSearchParams] = useSearchParams();
  const [tab, setTab] = useState<'suppliers' | 'customers' | 'delivery-schedules'>(() => {
   const requested = searchParams.get('tab');
@@ -126,10 +136,12 @@ function SuppliersSection() {
  const [confirmAction, setConfirmAction] = useState<SupplierConfirmAction>(null);
  const [invite, setInvite] = useState({ vendor_id: '', name: '', email: '' });
 
- const list = useQuery({
-  queryKey: ['b2b', 'portal-access', 'suppliers', filters],
+  const supplierAccessQueryKey = ['b2b', 'portal-access', 'suppliers', filters] as const;
+  const list = useQuery({
+   queryKey: supplierAccessQueryKey,
   queryFn: () => portalAccessApi.listSuppliers(filters),
-  placeholderData: (previous) => previous,
+   placeholderData: (previous, previousQuery) =>
+     sameQueryExceptPage(previousQuery?.queryKey, supplierAccessQueryKey, 3) ? previous : undefined,
  });
  const vendors = useQuery({
   queryKey: ['accounting', 'vendors', 'portal-access-options'],
@@ -272,10 +284,12 @@ function CustomersSection() {
  const [confirmAction, setConfirmAction] = useState<CustomerConfirmAction>(null);
  const [invite, setInvite] = useState({ customer_id: '', name: '', email: '' });
 
- const list = useQuery({
-  queryKey: ['b2b', 'portal-access', 'customers', filters],
+  const customerAccessQueryKey = ['b2b', 'portal-access', 'customers', filters] as const;
+  const list = useQuery({
+   queryKey: customerAccessQueryKey,
   queryFn: () => portalAccessApi.listCustomers(filters),
-  placeholderData: (previous) => previous,
+   placeholderData: (previous, previousQuery) =>
+     sameQueryExceptPage(previousQuery?.queryKey, customerAccessQueryKey, 3) ? previous : undefined,
  });
  const customers = useQuery({
   queryKey: ['accounting', 'customers', 'portal-access-options'],
@@ -419,42 +433,74 @@ function DeliverySchedulesSection() {
  const queryClient = useQueryClient();
  const { can } = usePermission();
  const canManage = can('b2b.portal_access.manage');
+ const b2bPortalsEnabled = useFeature('b2b_portals');
+ const canViewSchedules = can('b2b.portal_access.view') && b2bPortalsEnabled;
+ useRealtimeList('delivery_schedule', canViewSchedules ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<ScheduleFilters>({ page: 1, per_page: 25 });
- const [selected, setSelected] = useState<InternalDeliverySchedule | null>(null);
+ const [selectedId, setSelectedId] = useState<string | null>(null);
  const [rejecting, setRejecting] = useState(false);
  const [reason, setReason] = useState('');
 
- const list = useQuery({
-  queryKey: ['b2b', 'portal-access', 'delivery-schedules', filters],
+  const deliveryScheduleQueryKey = ['b2b', 'portal-access', 'delivery-schedules', filters] as const;
+  const list = useQuery({
+   queryKey: deliveryScheduleQueryKey,
   queryFn: () => portalAccessApi.listDeliverySchedules(filters),
-  placeholderData: (previous) => previous,
+   placeholderData: (previous, previousQuery) =>
+     sameQueryExceptPage(previousQuery?.queryKey, deliveryScheduleQueryKey, 3) ? previous : undefined,
  });
 
+ const deliveryScheduleDetailQueryKey = ['b2b', 'portal-access', 'delivery-schedule', selectedId] as const;
+ const detail = useQuery({
+  queryKey: deliveryScheduleDetailQueryKey,
+  queryFn: () => {
+   if (!selectedId) throw new Error('A delivery schedule must be selected before it can be loaded.');
+   return portalAccessApi.getDeliverySchedule(selectedId);
+  },
+  enabled: selectedId !== null,
+ });
+ useRealtimeRecord('delivery_schedule', selectedId ?? undefined);
+ const selected = detail.data;
+
  const closeModal = () => {
-  setSelected(null);
+  setSelectedId(null);
   setRejecting(false);
   setReason('');
+ };
+
+ const installScheduleResponse = (schedule: InternalDeliverySchedule) => {
+  queryClient.setQueryData(['b2b', 'portal-access', 'delivery-schedule', schedule.id], schedule);
+  queryClient.setQueriesData<{ data: InternalDeliverySchedule[] }>({
+   queryKey: ['b2b', 'portal-access', 'delivery-schedules'],
+  }, (current) => current
+   ? { ...current, data: current.data.map((row) => row.id === schedule.id ? schedule : row) }
+   : current);
  };
 
  const acknowledgeMutation = useMutation({
   mutationFn: (id: string) => portalAccessApi.acknowledgeDeliverySchedule(id),
   onSuccess: (res) => {
+   installScheduleResponse(res.data);
    closeModal();
    queryClient.invalidateQueries({ queryKey: ['b2b', 'portal-access', 'delivery-schedules'] });
    toast.success(res.message ?? 'Delivery schedule acknowledged.');
   },
-  onError: (e: Error & { response?: { data?: { message?: string } } }) =>
-   toast.error(e.response?.data?.message ?? 'Action failed.'),
+  onError: (e: Error & { response?: { data?: { message?: string } } }) => {
+   void detail.refetch();
+   toast.error(e.response?.data?.message ?? 'Action failed.');
+  },
  });
  const rejectMutation = useMutation({
   mutationFn: (vars: { id: string; reason: string }) => portalAccessApi.rejectDeliverySchedule(vars.id, vars.reason),
   onSuccess: (res) => {
+   installScheduleResponse(res.data);
    closeModal();
    queryClient.invalidateQueries({ queryKey: ['b2b', 'portal-access', 'delivery-schedules'] });
    toast.success(res.message ?? 'Delivery schedule rejected.');
   },
-  onError: (e: Error & { response?: { data?: { message?: string } } }) =>
-   toast.error(e.response?.data?.message ?? 'Action failed.'),
+  onError: (e: Error & { response?: { data?: { message?: string } } }) => {
+   void detail.refetch();
+   toast.error(e.response?.data?.message ?? 'Action failed.');
+  },
  });
 
  const columns: Column<InternalDeliverySchedule>[] = [
@@ -483,15 +529,19 @@ function DeliverySchedulesSection() {
     columns={columns}
     data={list.data.data}
     meta={list.data.meta}
-    onRowClick={(row) => setSelected(row)}
+    onRowClick={(row) => setSelectedId(row.id)}
     onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
     onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
     tableKey="b2b-delivery-schedules"
    /></div>}
 
-   <Modal isOpen={!!selected} onClose={closeModal} size="lg" title="Delivery schedule">
-    {selected && (
+   <Modal isOpen={selectedId !== null} onClose={closeModal} size="lg" title="Delivery schedule">
+    {selectedId !== null && (
      <div className="space-y-4">
+      {detail.isFetching && detail.data && <p role="status" className="text-xs text-muted">Refreshing the latest schedule…</p>}
+      {detail.isLoading && !detail.data && <p role="status" className="text-sm text-muted">Loading schedule…</p>}
+      {detail.isError && <div role="alert" className="rounded-md border border-default p-3 text-sm text-muted">This schedule is unavailable or your access has changed. <Button variant="secondary" size="sm" onClick={() => { void detail.refetch(); }}>Retry</Button></div>}
+      {selected && !detail.isError && <>
       <div className="flex flex-wrap items-center gap-2">
        <span className="font-mono text-sm">{selected.month}</span>
        <Chip variant={chipVariantForStatus(selected.status)}>{selected.status_label ?? selected.status}</Chip>
@@ -524,7 +574,7 @@ function DeliverySchedulesSection() {
        </table>
       </div>
 
-      {canManage && selected.source !== 'supplier' && selected.status === 'submitted' && (
+      {canManage && !detail.isFetching && selected.source !== 'supplier' && selected.status === 'submitted' && (
        rejecting ? (
         <div className="space-y-2 border-t border-default pt-3">
          <Input
@@ -539,7 +589,7 @@ function DeliverySchedulesSection() {
            type="button"
            variant="danger"
            size="sm"
-           disabled={!reason.trim()}
+           disabled={!reason.trim() || detail.isFetching}
            loading={rejectMutation.isPending}
            onClick={() => rejectMutation.mutate({ id: selected.id, reason: reason.trim() })}
           >
@@ -555,6 +605,7 @@ function DeliverySchedulesSection() {
           size="sm"
           icon={<LuShieldCheck size={12} />}
           loading={acknowledgeMutation.isPending}
+          disabled={detail.isFetching}
           onClick={() => acknowledgeMutation.mutate(selected.id)}
          >
           Acknowledge
@@ -562,6 +613,7 @@ function DeliverySchedulesSection() {
         </div>
        )
       )}
+      </>}
      </div>
     )}
    </Modal>

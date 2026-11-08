@@ -22,6 +22,16 @@ class ChainDefinitionsTest extends TestCase
         $this->assertSame(['draft'], $completed);
     }
 
+    public function test_sales_order_preconfirmation_states_resolve_to_existing_draft_step(): void
+    {
+        foreach (['awaiting_confirmation', 'delivery_negotiation'] as $status) {
+            [$active, $completed] = ChainDefinitions::resolveStrict('sales_order', $status);
+
+            $this->assertSame('draft', $active);
+            $this->assertSame([], $completed);
+        }
+    }
+
     public function test_sales_order_in_production_completes_first_three_steps(): void
     {
         [$active, $completed] = ChainDefinitions::resolve('sales_order', 'in_production');
@@ -72,6 +82,16 @@ class ChainDefinitionsTest extends TestCase
 
         $this->assertSame('in_transit', $active);
         $this->assertSame(['scheduled', 'loading'], $completed);
+    }
+
+    public function test_delivery_return_branch_stays_at_the_last_outbound_checkpoint(): void
+    {
+        foreach (['return_pending', 'returned'] as $status) {
+            [$active, $completed] = ChainDefinitions::resolveStrict('delivery', $status);
+
+            $this->assertSame('in_transit', $active);
+            $this->assertSame(['scheduled', 'loading'], $completed);
+        }
     }
 
     public function test_actual_work_order_planned_status_resolves_to_draft(): void

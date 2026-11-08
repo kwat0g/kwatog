@@ -15,7 +15,6 @@ use App\Modules\MRP\Exceptions\IllegalStatusTransitionException;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
-use App\Modules\Production\Services\ProductionDashboardService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -64,7 +63,8 @@ class MachineService
 
     public function show(Machine $m): Machine
     {
-        return $m->load(['compatibleMolds:id,mold_code,name', 'asset:id,asset_code,name']);
+        return $m->loadCount('compatibleMolds')
+            ->load(['compatibleMolds:id,mold_code,name', 'asset:id,asset_code,name']);
     }
 
     public function create(array $data): Machine
@@ -73,7 +73,7 @@ class MachineService
             // fresh() so column defaults (status idle, machine_type, ...) are
             // present on the returned instance — create() alone leaves the
             // in-memory model without them.
-            return Machine::create($data)->fresh();
+            return $this->show(Machine::create($data)->fresh());
         });
     }
 
@@ -86,7 +86,7 @@ class MachineService
             }
             $m->update($data);
 
-            return $m->fresh();
+            return $this->show($m->fresh());
         });
     }
 
@@ -105,6 +105,18 @@ class MachineService
             }
 
             $machine->delete();
+        });
+    }
+
+    public function restore(Machine $m): Machine
+    {
+        return DB::transaction(function () use ($m): Machine {
+            $machine = Machine::query()->withTrashed()->lockForUpdate()->findOrFail($m->id);
+            if ($machine->trashed()) {
+                $machine->restore();
+            }
+
+            return $this->show($machine->fresh());
         });
     }
 
@@ -151,8 +163,6 @@ class MachineService
             return $changed;
         });
 
-        ProductionDashboardService::forgetCache();
-
-        return $changed;
+        return $this->show($changed);
     }
 }

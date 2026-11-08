@@ -1,0 +1,18 @@
+{
+  "console": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized) at https://nginx/api/v1/auth/user",
+    "Failed to load resource: net::ERR_NAME_NOT_RESOLVED at https://a.tile.openstreetmap.org/16/",
+    "Failed to load resource: net::ERR_NAME_NOT_RESOLVED at https://b.tile.openstreetmap.org/16/",
+    "Failed to load resource: net::ERR_NAME_NOT_RESOLVED at https://c.tile.openstreetmap.org/16/"
+  ],
+  "pageerror": [],
+  "requestfailed": [
+    "GET http://nginx/api/v1/purchasing/purchase-requests: net::ERR_ABORTED",
+    "GET http://nginx/api/v1/purchasing/purchase-requests/: net::ERR_ABORTED",
+    "GET https://nginx/api/v1/realtime/health: net::ERR_ABORTED",
+    "GET https://a.tile.openstreetmap.org/16/",
+    "GET https://b.tile.openstreetmap.org/16/",
+    "GET https://c.tile.openstreetmap.org/16/"
+  ],
+  "http5xx": []
+}

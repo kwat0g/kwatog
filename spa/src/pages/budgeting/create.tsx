@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { accountsApi } from '@/api/accounting/accounts';
 import { departmentsApi } from '@/api/hr/departments';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -48,17 +51,51 @@ export default function BudgetCreatePage() {
   const [lineItems, setLineItems] = useState<LineItemForm[]>([emptyLineItem()]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [hydrated, setHydrated] = useState(false);
+  const [formUpdatedElsewhere, setFormUpdatedElsewhere] = useState(false);
+  const [formVersion, setFormVersion] = useState<string>();
 
-  const yearsQuery = useQuery<FiscalYear[]>({ queryKey: ['budget-fiscal-years'], queryFn: () => budgetingApi.fiscalYears() });
-  const budgetQuery = useQuery<Budget>({ queryKey: ['budget', id], queryFn: () => budgetingApi.show(id!), enabled: editing });
+  const yearsQuery = useQuery<FiscalYear[]>({
+    queryKey: ['budget-fiscal-years'],
+    queryFn: () => budgetingApi.fiscalYears(),
+    staleTime: 300_000,
+    refetchOnWindowFocus: true,
+  });
+  const budgetQuery = useQuery<Budget>({
+    queryKey: ['budget', id],
+    queryFn: () => budgetingApi.show(id!),
+    enabled: editing,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
   const accountsQuery = useQuery({ queryKey: ['accounts', 'budget-options'], queryFn: () => accountsApi.list({ per_page: 200 }) });
   const departmentsQuery = useQuery({ queryKey: ['departments'], queryFn: () => departmentsApi.tree() });
-  const optionsQuery = useQuery({ queryKey: ['budgets', 'options'], queryFn: () => budgetingApi.options(), staleTime: 300_000 });
+  const optionsQuery = useQuery({
+    queryKey: ['budgets', 'options'],
+    queryFn: () => budgetingApi.options(),
+    staleTime: 300_000,
+    refetchOnWindowFocus: true,
+  });
   const fiscalYears = yearsQuery.data;
   const budget = budgetQuery.data;
   const accountPage = accountsQuery.data;
   const departments = departmentsQuery.data;
   const budgetOptions = optionsQuery.data;
+  const applyBudgetValues = useCallback((current: Budget) => {
+    setFiscalYearId(current.fiscal_year_id);
+    setDepartmentId(current.department_id ?? null);
+    setBudgetType(current.budget_type);
+    setName(current.name);
+    setLineItems((current.line_items ?? []).map((line) => ({
+      account_id: line.account_id ?? '',
+      ...Object.fromEntries(MONTHS.map((month) => [month.key, line[month.key] ?? '0.00'])),
+    })));
+    setFormVersion(current.updated_at);
+    setFormUpdatedElsewhere(false);
+    setHydrated(true);
+  }, []);
+  const markBudgetChanged = useCallback(() => setFormUpdatedElsewhere(true), []);
+  useRealtimeRecord('budget', editing ? id : undefined, [], markBudgetChanged);
   const requiredLookups = [yearsQuery, accountsQuery, optionsQuery];
   const lookupFailed = requiredLookups.some(query => query.isError);
   const lookupPending = requiredLookups.some(query => query.isFetching);
@@ -66,20 +103,12 @@ export default function BudgetCreatePage() {
   useEffect(() => {
     if (hydrated) return;
     if (budget) {
-      setFiscalYearId(budget.fiscal_year_id);
-      setDepartmentId(budget.department_id ?? null);
-      setBudgetType(budget.budget_type);
-      setName(budget.name);
-      setLineItems((budget.line_items ?? []).map((line) => ({
-        account_id: line.account_id ?? '',
-        ...Object.fromEntries(MONTHS.map((month) => [month.key, line[month.key] ?? '0.00'])),
-      })));
-      setHydrated(true);
+      applyBudgetValues(budget);
     } else if (!editing && fiscalYears && fiscalYears.length > 0) {
       setFiscalYearId(fiscalYears.find((fy) => fy.status === 'active')?.id ?? fiscalYears[0].id);
       setHydrated(true);
     }
-  }, [budget, editing, fiscalYears, hydrated]);
+  }, [applyBudgetValues, budget, editing, fiscalYears, hydrated]);
 
   const accounts = useMemo(() => {
     const desiredType = budgetType === 'capital' ? 'asset' : 'expense';
@@ -99,19 +128,35 @@ export default function BudgetCreatePage() {
     })),
   });
   const saveMutation = useMutation({
-    mutationFn: () => editing ? budgetingApi.update(id!, payload()) : budgetingApi.create(payload()),
+    mutationFn: () => editing
+      ? budgetingApi.update(id!, payload(), formVersion)
+      : budgetingApi.create(payload()),
     onSuccess: (saved) => {
       setFieldErrors({});
-      queryClient.invalidateQueries({ queryKey: ['budgets'] });
-      queryClient.invalidateQueries({ queryKey: ['budget-overview'] });
+      queryClient.setQueryData<Budget>(['budget', saved.id], (current) => ({ ...current, ...saved }));
+      void invalidateRealtimeChange(queryClient, { entityType: 'budget', entityId: saved.id });
       toast.success(editing ? 'Budget updated.' : 'Budget created.');
       navigate(`/budgeting/${saved.id}`);
     },
-    onError: (error) => reportMutationError(error, editing ? 'Failed to update budget.' : 'Failed to create budget.'),
+    onError: (error) => {
+      if (editing && isAxiosError(error) && error.response?.status === 409) {
+        setFormUpdatedElsewhere(true);
+        void budgetQuery.refetch();
+        toast.error('This budget changed while you were editing. Your entries are still here; review the latest version before saving.');
+        return;
+      }
+      reportMutationError(error, editing ? 'Failed to update budget.' : 'Failed to create budget.');
+    },
   });
+
+  const loadLatestBudget = async (): Promise<void> => {
+    const result = await budgetQuery.refetch();
+    if (result.data) applyBudgetValues(result.data);
+  };
 
   const submit = () => {
     if (lookupFailed || lookupPending || (editing && (budgetQuery.isError || budgetQuery.isFetching))) return;
+    if (editing && (!budget?.available_actions?.includes('edit') || formUpdatedElsewhere)) return;
     const next: Record<string, string> = {};
     if (!fiscalYearId) next.fiscal_year_id = 'Select a fiscal year.';
     if (!name.trim()) next.name = 'Enter a budget name.';
@@ -151,6 +196,14 @@ export default function BudgetCreatePage() {
       {editing && budgetQuery.isError && budget && <div role="alert" className="text-sm text-danger-fg">
         Budget could not be refreshed. <Button type="button" variant="secondary" size="sm" onClick={() => void budgetQuery.refetch()}>Retry budget</Button>
       </div>}
+      {editing && formUpdatedElsewhere && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning bg-warning-bg p-3 text-sm text-warning-fg">
+        <span>This budget changed elsewhere. Your entries are preserved. Load the latest version to review it before saving.</span>
+        <Button type="button" variant="secondary" size="sm" onClick={() => void loadLatestBudget()} disabled={budgetQuery.isFetching}>Load latest</Button>
+      </div>}
+      {editing && budget && !budget.available_actions?.includes('edit') && !formUpdatedElsewhere && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning bg-warning-bg p-3 text-sm text-warning-fg">
+        <span>This budget is no longer editable. Your entries remain on screen; return to the current record to review its status.</span>
+        <Button type="button" variant="secondary" size="sm" onClick={() => navigate(`/budgeting/${id}`)}>View budget</Button>
+      </div>}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="Budget Details"><div className="space-y-4">
           <Select searchable label="Fiscal Year" value={fiscalYearId} onChange={(event) => setFiscalYearId(event.target.value)} required error={fieldErrors.fiscal_year_id}><option value="">Select fiscal year...</option>{(fiscalYears ?? []).map((fy) => <option key={fy.id} value={fy.id}>FY {fy.year} ({fy.status_label ?? fy.status})</option>)}</Select>
@@ -174,7 +227,7 @@ export default function BudgetCreatePage() {
         </tbody></table></div>
       </Panel>
 
-      <div className="flex justify-end gap-3"><Button variant="secondary" onClick={() => navigate(editing ? `/budgeting/${id}` : '/budgeting')}>Cancel</Button><Button variant="primary" onClick={submit} loading={saveMutation.isPending} disabled={lookupFailed || lookupPending || (editing && (budgetQuery.isError || budgetQuery.isFetching)) || !fiscalYearId || !name.trim()}>{editing ? 'Save Draft' : 'Create Budget'}</Button></div>
+      <div className="flex justify-end gap-3"><Button variant="secondary" onClick={() => navigate(editing ? `/budgeting/${id}` : '/budgeting')}>Cancel</Button><Button variant="primary" onClick={submit} loading={saveMutation.isPending} disabled={lookupFailed || lookupPending || (editing && (budgetQuery.isError || budgetQuery.isFetching || formUpdatedElsewhere || !formVersion || !budget?.available_actions?.includes('edit'))) || !fiscalYearId || !name.trim()}>{editing ? 'Save Draft' : 'Create Budget'}</Button></div>
     </div>
   );
 }

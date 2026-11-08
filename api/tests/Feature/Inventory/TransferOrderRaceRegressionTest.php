@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
-use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\TransferOrderStatus;
 use App\Modules\Inventory\Events\StockMovementCompleted;
+use App\Modules\Inventory\Exceptions\TransferOrderStateConflictException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
@@ -35,9 +35,13 @@ class TransferOrderRaceRegressionTest extends TestCase
     use RefreshDatabase;
 
     private TransferOrderService $svc;
+
     private WarehouseLocation $fromLoc;
+
     private WarehouseLocation $toLoc;
+
     private Item $item;
+
     private User $user;
 
     protected function setUp(): void
@@ -47,24 +51,24 @@ class TransferOrderRaceRegressionTest extends TestCase
         // Auto-replenishment listener would try to create a PR — suppress it.
         Event::fake([StockMovementCompleted::class]);
 
-        $this->svc  = app(TransferOrderService::class);
+        $this->svc = app(TransferOrderService::class);
         $this->user = User::factory()->create(['is_active' => true]);
 
-        $warehouse  = Warehouse::factory()->create();
-        $rawZone    = WarehouseZone::factory()->create(['warehouse_id' => $warehouse->id, 'zone_type' => 'raw_materials']);
-        $fgZone     = WarehouseZone::factory()->create(['warehouse_id' => $warehouse->id, 'zone_type' => 'finished_goods']);
+        $warehouse = Warehouse::factory()->create();
+        $rawZone = WarehouseZone::factory()->create(['warehouse_id' => $warehouse->id, 'zone_type' => 'raw_materials']);
+        $fgZone = WarehouseZone::factory()->create(['warehouse_id' => $warehouse->id, 'zone_type' => 'finished_goods']);
 
         $this->fromLoc = WarehouseLocation::factory()->create(['zone_id' => $rawZone->id, 'is_active' => true]);
-        $this->toLoc   = WarehouseLocation::factory()->create(['zone_id' => $fgZone->id, 'is_active' => true]);
+        $this->toLoc = WarehouseLocation::factory()->create(['zone_id' => $fgZone->id, 'is_active' => true]);
 
         $this->item = Item::factory()->create(['is_active' => true]);
         StockLevel::create([
-            'item_id'           => $this->item->id,
-            'location_id'       => $this->fromLoc->id,
-            'quantity'          => '100.000',
+            'item_id' => $this->item->id,
+            'location_id' => $this->fromLoc->id,
+            'quantity' => '100.000',
             'reserved_quantity' => '0',
             'weighted_avg_cost' => '25.0000',
-            'lock_version'      => 0,
+            'lock_version' => 0,
         ]);
     }
 
@@ -72,10 +76,10 @@ class TransferOrderRaceRegressionTest extends TestCase
     {
         return $this->svc->create([
             'from_location_id' => $this->fromLoc->id,
-            'to_location_id'   => $this->toLoc->id,
-            'item_id'          => $this->item->id,
-            'quantity'         => '30',
-            'reason'           => 'Race regression ' . uniqid(),
+            'to_location_id' => $this->toLoc->id,
+            'item_id' => $this->item->id,
+            'quantity' => '30',
+            'reason' => 'Race regression '.uniqid(),
         ], $this->user);
     }
 
@@ -146,10 +150,77 @@ class TransferOrderRaceRegressionTest extends TestCase
         $checker = User::factory()->create(['is_active' => true]);
         $this->svc->execute($order->id, $checker);
 
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('not pending');
+        $this->expectException(TransferOrderStateConflictException::class);
+        $this->expectExceptionMessage('no longer pending');
 
         $this->svc->execute($order->id, $this->user);
+    }
+
+    public function test_stale_execute_and_cancel_endpoints_return_a_conflict(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $maker = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
+        $checker = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
+        $order = $this->svc->create([
+            'from_location_id' => $this->fromLoc->id,
+            'to_location_id' => $this->toLoc->id,
+            'item_id' => $this->item->id,
+            'quantity' => '30',
+            'reason' => 'Stale transfer action regression',
+        ], $maker);
+
+        $this->actingAs($checker)
+            ->postJson("/api/v1/inventory/transfer-orders/{$order->hash_id}/execute")
+            ->assertOk()
+            ->assertJsonPath('data.status', TransferOrderStatus::Transferred->value);
+
+        $this->actingAs($maker)
+            ->postJson("/api/v1/inventory/transfer-orders/{$order->hash_id}/execute")
+            ->assertConflict()
+            ->assertJsonPath('code', 'transfer_order_state_conflict')
+            ->assertJsonPath('errors.status.0', 'This transfer order is no longer pending. Refresh and review its current status.');
+
+        $this->actingAs($maker)
+            ->deleteJson("/api/v1/inventory/transfer-orders/{$order->hash_id}")
+            ->assertConflict()
+            ->assertJsonPath('code', 'transfer_order_state_conflict')
+            ->assertJsonPath('errors.status.0', 'This transfer order is no longer pending. Refresh and review its current status.');
+    }
+
+    public function test_transfer_order_exposes_actions_for_the_current_viewer_and_state(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $maker = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
+        $checker = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
+        $order = $this->svc->create([
+            'from_location_id' => $this->fromLoc->id,
+            'to_location_id' => $this->toLoc->id,
+            'item_id' => $this->item->id,
+            'quantity' => '30',
+            'reason' => 'Viewer-scoped action projection regression',
+        ], $maker);
+
+        $this->actingAs($maker)
+            ->getJson("/api/v1/inventory/transfer-orders/{$order->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.execute', false)
+            ->assertJsonPath('data.available_actions.cancel', true);
+
+        $this->actingAs($checker)
+            ->getJson("/api/v1/inventory/transfer-orders/{$order->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.execute', true)
+            ->assertJsonPath('data.available_actions.cancel', true);
+
+        $this->actingAs($checker)
+            ->postJson("/api/v1/inventory/transfer-orders/{$order->hash_id}/execute")
+            ->assertOk();
+
+        $this->actingAs($checker)
+            ->getJson("/api/v1/inventory/transfer-orders/{$order->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.execute', false)
+            ->assertJsonPath('data.available_actions.cancel', false);
     }
 
     public function test_cancel_of_pending_order_posts_no_movement(): void
@@ -169,8 +240,8 @@ class TransferOrderRaceRegressionTest extends TestCase
         $checker = User::factory()->create(['is_active' => true]);
         $this->svc->execute($order->id, $checker);
 
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('Can only cancel pending');
+        $this->expectException(TransferOrderStateConflictException::class);
+        $this->expectExceptionMessage('no longer pending');
 
         $this->svc->cancel($order->id);
     }
@@ -180,8 +251,8 @@ class TransferOrderRaceRegressionTest extends TestCase
         $order = $this->pendingOrder();
         $this->svc->cancel($order->id);
 
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('not pending');
+        $this->expectException(TransferOrderStateConflictException::class);
+        $this->expectExceptionMessage('no longer pending');
 
         $this->svc->execute($order->id, $this->user);
     }

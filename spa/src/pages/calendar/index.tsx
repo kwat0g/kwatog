@@ -12,6 +12,7 @@ import { ToggleChip } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { focusRingInset } from '@/lib/focus';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import type {
  CalendarEvent,
  CalendarLayer,
@@ -83,6 +84,7 @@ export default function CalendarPage() {
  const navigate = useNavigate();
  const [cursor, setCursor] = useState<Date>(() => startOfMonth(new Date()));
  const [activeLayers, setActiveLayers] = useState<CalendarLayer[]>([]);
+ useRealtimeList('leave_request', activeLayers.includes('leave') ? 'visible' : undefined);
  const [departmentId, setDepartmentId] = useState<string>('');
  const initializedLayers = useRef(false);
  const [selected, setSelected] = useState<CalendarEvent | null>(null);
@@ -125,7 +127,6 @@ export default function CalendarPage() {
  department_id: departmentId || undefined,
  }),
  enabled: !!layerOptions && initializedLayers.current,
- placeholderData: (prev) => prev,
  });
 
  const eventsByDay = useMemo(() => {

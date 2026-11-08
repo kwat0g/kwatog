@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Production;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\CapacityPlanningService;
@@ -83,6 +84,10 @@ class ProductionResourceReservationTest extends TestCase
         }
         $released = app(WorkOrderService::class)->releaseResources($wo->fresh(), 'Explicitly release equipment for the scheduled future work order.');
         $this->assertNotNull($released->production_released_at);
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => ChainStepAdvanced::class,
+            'status' => 'pending',
+        ]);
         $this->assertSame('Awaiting material delivery.', $released->pause_reason, 'Releasing resources must not overwrite the pause cause.');
         $this->assertDatabaseHas('activity_events', [
             'subject_id' => $wo->id,

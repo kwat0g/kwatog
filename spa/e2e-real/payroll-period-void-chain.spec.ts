@@ -146,6 +146,15 @@ test('payroll period void chain leaves a truthful terminal timeline and audit tr
   );
   const pages = [hrPage, approverPage, finalizerPage, adminPage, reviewerPage];
   const networks = pages.map((page) => captureNetwork(page));
+  const payrollChangeReceivers = new Set<Page>();
+  for (const page of [hrPage, finalizerPage]) {
+    page.on('websocket', (socket) => {
+      socket.on('framereceived', ({ payload }) => {
+        const frame = typeof payload === 'string' ? payload : payload.toString('utf8');
+        if (frame.includes('payroll.period.changed')) payrollChangeReceivers.add(page);
+      });
+    });
+  }
   let periodId: string | undefined;
 
   try {
@@ -229,12 +238,38 @@ test('payroll period void chain leaves a truthful terminal timeline and audit tr
 
     await approverPage.goto(`${baseUrl()}/payroll/periods/${periodId}`);
     await expect(approverPage.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+    await finalizerPage.goto(`${baseUrl()}/payroll/periods/${periodId}`);
+    await expect(finalizerPage.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+    await expect(finalizerPage.getByRole('button', { name: 'Finalize', exact: true })).toHaveCount(0);
+
+    // Both other users are already watching the period. Capture their real API
+    // catch-up responses before the Finance actor approves it; neither viewer
+    // reloads or depends on the actor receiving a websocket.
+    payrollChangeReceivers.clear();
+    const hrPeriodRefresh = hrPage.waitForResponse((response) =>
+      response.request().method() === 'GET'
+      && new URL(response.url()).pathname === `/api/v1/payroll-periods/${periodId}`,
+    );
+    const finalizerPeriodRefresh = finalizerPage.waitForResponse((response) =>
+      response.request().method() === 'GET'
+      && new URL(response.url()).pathname === `/api/v1/payroll-periods/${periodId}`,
+    );
+    const approvalStartedAt = Date.now();
     const approveResponse = approverPage.waitForResponse(
       (response) => response.url().endsWith(`/api/v1/payroll-periods/${periodId}/approve`),
     );
     await approverPage.getByRole('button', { name: 'Approve', exact: true }).click();
     await approverPage.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
     expect((await approveResponse).status()).toBe(200);
+    const [hrRefreshResponse, finalizerRefreshResponse] = await Promise.all([hrPeriodRefresh, finalizerPeriodRefresh]);
+    expect(hrRefreshResponse.status()).toBe(200);
+    expect(finalizerRefreshResponse.status()).toBe(200);
+    await expect(finalizerPage.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+    await expect(finalizerPage.getByRole('button', { name: 'Finalize', exact: true })).toBeVisible();
+    await expect(hrPage.getByText('Approved', { exact: true }).first()).toBeVisible();
+    expect(payrollChangeReceivers.has(hrPage), 'HR viewer must receive the payroll period signal').toBe(true);
+    expect(payrollChangeReceivers.has(finalizerPage), 'Finance viewer must receive the payroll period signal').toBe(true);
+    console.log(`[realtime] Payroll approve API response to HR/Finance refresh +${Date.now() - approvalStartedAt}ms; no viewer reload`);
     period = await readPeriod(approverPage, periodId!);
     expect(period.status).toBe('approved');
     expect(period.approver?.name).toBe('Ana Reyes');
@@ -262,7 +297,6 @@ test('payroll period void chain leaves a truthful terminal timeline and audit tr
     expect(period.bank_files).toHaveLength(0);
     expect((await auditTrail(adminPage, periodId!)).some((row) => row.action === 'payroll.period.finalize')).toBe(false);
 
-    await finalizerPage.goto(`${baseUrl()}/payroll/periods/${periodId}`);
     await expect(finalizerPage.getByRole('button', { name: 'Finalize', exact: true })).toBeVisible();
     const blockedFinalize = await finalizerPage.request.patch(
       `${baseUrl()}/api/v1/payroll-periods/${periodId}/finalize`,

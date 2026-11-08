@@ -37,7 +37,6 @@ export default function CustomerInvoiceDetailPage() {
     queryKey: ['portal', 'customer', 'invoice', id],
     queryFn: () => customerPortalApi.getInvoice(id!),
     enabled: !!id,
-    refetchInterval: (query) => query.state.data && !['paid', 'cancelled'].includes(query.state.data.status) && document.visibilityState === 'visible' ? 30_000 : false,
   });
 
   const downloadPdf = async () => {
@@ -105,6 +104,7 @@ export default function CustomerInvoiceDetailPage() {
             {invoice.sales_order?.payment_method && <p className="text-sm text-muted">
               Order {invoice.sales_order.so_number} payment method: <span className="font-medium text-primary">{{ cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer' }[invoice.sales_order.payment_method]}</span>.
             </p>}
+            {isOpen && !pendingPayment && invoice.sales_order?.payment_method !== 'bank_transfer' && <p role="status" className="rounded-md border border-default bg-subtle px-4 py-3 text-sm text-muted">Pay using the agreed method. Contact Ogami Finance or your sales representative to arrange cash or check payment. Finance updates your balance after recording receipt.</p>}
 
             {isOpen && !pendingPayment && invoice.can_submit_payment === false && invoice.payment_submission_blocked_reason?.startsWith('Bank transfer was not selected') && (
               <p role="status" className="rounded-md border border-warning bg-warning-bg px-4 py-3 text-sm text-warning-fg">

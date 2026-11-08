@@ -30,7 +30,12 @@ class CalibrationController
             $query->withStatus(CalibrationStatus::from($status));
         }
 
-        return CalibrationRecordResource::collection($query->paginate((int) ($validated['per_page'] ?? 25)));
+        return CalibrationRecordResource::collection($query->paginate((int) ($validated['per_page'] ?? 25)))
+            ->additional([
+                'permissions' => [
+                    'create' => $request->user()?->can('quality.calibration.manage') ?? false,
+                ],
+            ]);
     }
 
     public function store(StoreCalibrationRecordRequest $request): CalibrationRecordResource

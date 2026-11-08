@@ -23,6 +23,9 @@ import { usePermission } from '@/hooks/usePermission';
 import type { ProductRouting } from '@/types/production/routing';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 /** Superseded versions are kept forever, so the list needs to filter them. */
 const statusFilters: FilterConfig[] = [
@@ -43,18 +46,30 @@ export default function RoutingsListPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('production.routings.manage');
+ useRealtimeList(
+  'product_routing',
+  can('production.view') && can('production.routings.view') ? 'visible' : undefined,
+ );
  const [filters, setFilters] = useUrlFilters<RoutingListParams>({ page: 1, per_page: 25 });
  const isFiltered = Boolean(filters.search) || (filters.is_active ?? '') !== '';
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['production', 'routings', filters],
+  const queryKey = ['production', 'routings', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => routingsApi.list(filters),
- placeholderData: (prev) => prev });
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
 
  const duplicateMut = useMutation({
  mutationFn: (id: string) => routingsApi.duplicate(id),
  onSuccess: (routing) => {
- qc.invalidateQueries({ queryKey: ['production', 'routings'] });
+ qc.setQueryData(['production', 'routings', 'detail', routing.id], routing);
+ void invalidateRealtimeChange(
+ qc,
+ { entityType: 'product_routing', entityId: routing.id },
+ [],
+ [['production', 'routings', 'detail', routing.id]],
+ );
  toast.success(`Routing duplicated as v${routing.version}.`);
  navigate(`/production/routings/${routing.id}`);
  },

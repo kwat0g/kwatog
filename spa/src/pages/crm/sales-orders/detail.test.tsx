@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { AxiosError } from 'axios';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import type { SalesOrder, SalesOrderChainStep } from '@/types/crm';
 import SalesOrderDetailPage from './detail';
+
+const { canPermission } = vi.hoisted(() => ({ canPermission: vi.fn((_permission: string) => false) }));
 
 vi.mock('@/api/crm/salesOrders', () => ({
   salesOrdersApi: {
@@ -21,7 +24,7 @@ vi.mock('@/api/crm/salesOrders', () => ({
 }));
 vi.mock('@/api/accounting/invoices', () => ({ invoicesApi: { finalize: vi.fn() } }));
 vi.mock('@/hooks/useChainProgress', () => ({ useChainProgress: () => undefined }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: canPermission }) }));
 
 const order = (status_history: unknown[] = []): SalesOrder =>
   ({
@@ -53,7 +56,7 @@ function renderPage(value: SalesOrder, steps: SalesOrderChainStep[] = []) {
   vi.mocked(salesOrdersApi.show).mockResolvedValue(value);
   vi.mocked(salesOrdersApi.chain).mockResolvedValue(steps);
 
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/crm/sales-orders/so-1']}>
         <Routes>
@@ -62,10 +65,15 @@ function renderPage(value: SalesOrder, steps: SalesOrderChainStep[] = []) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+
+  return { ...view, queryClient };
 }
 
 describe('SalesOrderDetailPage activity', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    canPermission.mockReturnValue(false);
+  });
 
   const textContent = (value: string) => (_: string, element: Element | null) =>
     element?.textContent === value;
@@ -127,6 +135,112 @@ describe('SalesOrderDetailPage activity', () => {
   });
 });
 
+it('renders the confirmed API record immediately without refetching stale detail data', async () => {
+  const draft = {
+    ...order(),
+    status: 'draft',
+    status_label: 'Draft',
+    is_editable: true,
+    is_cancellable: true,
+    available_actions: { can_confirm: true },
+    item_count: 1,
+    capabilities: { awaiting_delivery_response: false },
+  } as SalesOrder;
+  const confirmed = {
+    ...draft,
+    status: 'confirmed',
+    status_label: 'Confirmed',
+    is_editable: false,
+    is_cancellable: false,
+    available_actions: { can_confirm: false },
+    updated_at: '2026-11-02T12:01:00.000000Z',
+  } as SalesOrder;
+  canPermission.mockImplementation((permission: string) => permission === 'crm.sales_orders.confirm');
+  const { queryClient } = renderPage(draft);
+  await screen.findByRole('button', { name: 'Confirm order' });
+  vi.mocked(salesOrdersApi.confirm).mockResolvedValue({
+    data: confirmed,
+    chain_result: {
+      so_number: confirmed.so_number,
+      planning_status: 'queued',
+      work_orders_created: 0,
+      auto_scheduled: 0,
+      needs_manual: 0,
+      shortages: 0,
+      prs_created: 0,
+      work_orders: [],
+      scheduling_conflicts: [],
+    },
+  });
+  const detailReadsBeforeConfirm = vi.mocked(salesOrdersApi.show).mock.calls.length;
+
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm & Start Chain' }));
+
+  await waitFor(() => expect(screen.getByText('Confirmed')).toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: 'Confirm order' })).not.toBeInTheDocument();
+  expect(salesOrdersApi.show).toHaveBeenCalledTimes(detailReadsBeforeConfirm);
+  expect(queryClient.getQueryData(['crm', 'sales-orders', 'detail', 'so-1'])).toMatchObject({ status: 'confirmed' });
+});
+
+it('refetches and closes the confirmation dialog when the order state has changed', async () => {
+  const draft = {
+    ...order(),
+    status: 'draft',
+    status_label: 'Draft',
+    is_editable: true,
+    is_cancellable: true,
+    available_actions: { can_confirm: true },
+    item_count: 1,
+    capabilities: { awaiting_delivery_response: false },
+  } as SalesOrder;
+  const confirmed = {
+    ...draft,
+    status: 'confirmed',
+    status_label: 'Confirmed',
+    available_actions: { can_confirm: false },
+  } as SalesOrder;
+  canPermission.mockImplementation((permission: string) => permission === 'crm.sales_orders.confirm');
+  renderPage(draft);
+  await screen.findByRole('button', { name: 'Confirm order' });
+  vi.mocked(salesOrdersApi.show).mockResolvedValue(confirmed);
+  vi.mocked(salesOrdersApi.confirm).mockRejectedValue(new AxiosError(
+    'This sales order is no longer awaiting confirmation.',
+    '409',
+    undefined,
+    undefined,
+    {
+      status: 409,
+      data: {
+        code: 'sales_order_state_conflict',
+        message: 'This sales order is no longer awaiting confirmation.',
+      },
+      statusText: 'Conflict',
+      headers: {},
+      config: {} as never,
+    },
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm & Start Chain' }));
+
+  await waitFor(() => expect(salesOrdersApi.show).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText('Confirmed')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Confirm order' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('leaves active order and chain freshness to the shared realtime hook', async () => {
+  const { queryClient } = renderPage({ ...order(), status: 'in_production', status_label: 'In Production' });
+  await waitFor(() => expect(salesOrdersApi.show).toHaveBeenCalled());
+  await waitFor(() => expect(salesOrdersApi.chain).toHaveBeenCalled());
+
+  const detailOptions = queryClient.getQueryCache().find({ queryKey: ['crm', 'sales-orders', 'detail', 'so-1'] })?.options as { refetchInterval?: unknown } | undefined;
+  const chainOptions = queryClient.getQueryCache().find({ queryKey: ['crm', 'sales-orders', 'chain', 'so-1'] })?.options as { refetchInterval?: unknown } | undefined;
+  expect(detailOptions?.refetchInterval).toBeUndefined();
+  expect(chainOptions?.refetchInterval).toBeUndefined();
+});
+
 it('shows required delivery date and pending proposal without commercial edit controls', async () => {
   renderPage({
     ...order(),
@@ -167,4 +281,35 @@ it('shows awaiting QC after production completes', async () => {
     { key: 'qc_outgoing', label: 'QC Outgoing', state: 'active', date: null },
   ]);
   expect(await screen.findByText('Awaiting QC')).toBeVisible();
+});
+
+it('does not render confirmation when the API denies the action', async () => {
+  canPermission.mockImplementation((permission: string) => permission === 'crm.sales_orders.confirm');
+  renderPage({
+    ...order(),
+    status: 'draft',
+    status_label: 'Draft',
+    available_actions: { can_confirm: false },
+  } as SalesOrder);
+
+  await screen.findByText('Draft');
+  expect(screen.queryByRole('button', { name: 'Confirm order' })).not.toBeInTheDocument();
+});
+
+it('does not render edit or cancel when the API denies those actions', async () => {
+  canPermission.mockImplementation((permission: string) =>
+    permission === 'crm.sales_orders.update' || permission === 'crm.sales_orders.cancel',
+  );
+  renderPage({
+    ...order(),
+    status: 'draft',
+    status_label: 'Draft',
+    is_editable: true,
+    is_cancellable: true,
+    available_actions: { can_confirm: false, can_edit: false, can_cancel: false },
+  } as SalesOrder);
+
+  await screen.findByText('Draft');
+  expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
 });

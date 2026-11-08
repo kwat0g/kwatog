@@ -9,6 +9,14 @@ return [
     // must start from live/imported business data rather than fabricated rows.
     'seed_demo_data' => (bool) env('SEED_DEMO_DATA', false),
     'seed_reference_data' => (bool) env('SEED_REFERENCE_DATA', false),
+    'e2e' => [
+        'enabled' => filter_var(env('E2E_ENV', false), FILTER_VALIDATE_BOOL),
+        'database' => env('E2E_DB_NAME', ''),
+        'compose_project' => env('E2E_COMPOSE_PROJECT', ''),
+        'control_token' => env('E2E_CONTROL_TOKEN', ''),
+        'account_domain' => env('E2E_ACCOUNT_DOMAIN', ''),
+        'account_password' => env('E2E_ACCOUNT_PASSWORD', ''),
+    ],
     'url' => env('APP_URL', 'http://localhost'),
     'frontend_url' => env('FRONTEND_URL', 'http://localhost'),
     'company_address' => env('COMPANY_ADDRESS', ''),

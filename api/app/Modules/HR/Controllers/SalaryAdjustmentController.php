@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Common\Services\ApprovalService;
+use App\Modules\HR\Enums\SalaryAdjustmentStatus;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\SalaryAdjustment;
-use App\Modules\HR\Enums\SalaryAdjustmentStatus;
 use App\Modules\HR\Requests\ActSalaryAdjustmentRequest;
 use App\Modules\HR\Requests\RequestSalaryAdjustmentRequest;
 use App\Modules\HR\Resources\SalaryAdjustmentResource;
 use App\Modules\HR\Services\SalaryAdjustmentService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
@@ -37,7 +37,7 @@ class SalaryAdjustmentController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = SalaryAdjustment::query()->with(['employee', 'requester']);
+        $query = SalaryAdjustment::query()->with(['employee', 'requester', 'approvalRecords']);
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -51,7 +51,7 @@ class SalaryAdjustmentController
     public function show(SalaryAdjustment $salaryAdjustment): array
     {
         return [
-            'data'  => new SalaryAdjustmentResource($salaryAdjustment->load(['employee', 'requester'])),
+            'data' => new SalaryAdjustmentResource($salaryAdjustment->load(['employee', 'requester', 'approvalRecords'])),
             'chain' => $this->approvals->chain($salaryAdjustment),
         ];
     }

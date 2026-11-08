@@ -17,6 +17,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { AssetCategory, DepreciationMethod } from '@/types/assets';
 import { SALVAGE_OVER_COST_MESSAGE, salvageExceedsCost } from './salvageBound';
 
@@ -106,9 +107,11 @@ export default function CreateAssetPage() {
       insured_value: data.insured_value || undefined,
     }),
     onSuccess: (asset) => {
-      qc.invalidateQueries({ queryKey: ['assets'] });
+      qc.setQueryData(['asset', asset.id], asset);
+      void invalidateRealtimeChange(qc, { entityType: 'asset', entityId: asset.id }, [], [['asset', asset.id]]);
       toast.success(`Asset ${asset.asset_code} created.`);
-      navigate(`/assets/${asset.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/assets/${asset.id}`);
     },
     onError: (error) => {
       applyServerValidationErrors(error, setError, 'Failed to create the asset.');

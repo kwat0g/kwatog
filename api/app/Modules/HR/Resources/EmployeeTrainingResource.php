@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use Illuminate\Support\Str;
 
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -12,6 +13,14 @@ class EmployeeTrainingResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $actor = $request->user();
+        $isOwner = $actor?->employee_id !== null
+            && (int) $actor->employee_id === (int) $this->employee_id;
+        $canManage = $actor?->hasPermission('hr.employees.trainings.manage') ?? false;
+        $availableActions = $canManage && $this->status === EmployeeTrainingStatus::Scheduled
+            ? ['complete', 'cancel']
+            : [];
+
         return [
             'id'               => $this->hash_id,
             'employee'         => $this->whenLoaded('employee', fn() => $this->employee ? [
@@ -39,6 +48,12 @@ class EmployeeTrainingResource extends JsonResource
             'last_alert_level' => $this->last_alert_level?->value,
             'last_alert_at'    => $this->last_alert_at?->toISOString(),
             'created_at'       => $this->created_at?->toISOString(),
+            'version'          => $this->updated_at?->format('Y-m-d\\TH:i:s.uP'),
+            'permissions'      => [
+                'view' => $isOwner || ($actor?->hasPermission('hr.employees.trainings.view') ?? false),
+                'manage' => $canManage,
+            ],
+            'available_actions' => $availableActions,
         ];
     }
 }

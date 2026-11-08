@@ -73,7 +73,6 @@ export default function DowntimeAnalyticsPage() {
  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: summaryRefetch } = useQuery({
  queryKey: ['downtime-analytics', 'summary', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.summary({ days, search: filters.search || undefined }),
- placeholderData: (prev) => prev,
  });
 
  const { data: trend, isLoading: trendLoading, isError: trendError, refetch: trendRefetch } = useQuery({
@@ -197,7 +196,7 @@ export default function DowntimeAnalyticsPage() {
  </div>
  }
  />
- <FilterBar onSearch={(search) => setFilters({ search })} searchPlaceholder="Search machine..." />
+ <FilterBar values={filters} onSearch={(search) => setFilters({ search })} searchPlaceholder="Search machine..." />
 
  {summaryError && (
  <div className="px-5 py-4">

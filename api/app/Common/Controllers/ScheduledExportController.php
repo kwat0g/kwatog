@@ -15,6 +15,7 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Series E (Task E2) — manage saved export schedules.
@@ -71,7 +72,7 @@ class ScheduledExportController
             $data['time_of_day']  ?? $defaultTime,
         );
 
-        $row = ScheduledExport::create([
+        $row = DB::transaction(fn () => ScheduledExport::create([
             'owner_id'     => $user->id,
             'name'         => $data['name'],
             'module'       => $data['module'],
@@ -85,7 +86,7 @@ class ScheduledExportController
             'recipients'   => $data['recipients'],
             'next_run_at'  => $next,
             'is_active'    => true,
-        ]);
+        ]));
 
         return (new ScheduledExportResource($row->load('owner:id,name,email')))
             ->response()
@@ -115,21 +116,21 @@ class ScheduledExportController
             );
         }
 
-        $scheduledExport->save();
+        DB::transaction(fn () => $scheduledExport->save());
         return new ScheduledExportResource($scheduledExport->fresh()->load('owner:id,name,email'));
     }
 
     public function destroy(ScheduledExport $scheduledExport, Request $request): JsonResponse
     {
         $this->authorizeRow($scheduledExport, $request);
-        $scheduledExport->delete();
+        DB::transaction(fn () => $scheduledExport->delete());
         return response()->json(null, 204);
     }
 
     public function restore(ScheduledExport $scheduledExport, Request $request): JsonResponse
     {
         $this->authorizeRow($scheduledExport, $request);
-        $scheduledExport->restore();
+        DB::transaction(fn () => $scheduledExport->restore());
         return response()->json(['message' => 'Scheduled export restored.']);
     }
 

@@ -42,6 +42,7 @@ export interface CreateShipmentData {
 }
 
 export interface UpdateShipmentMetaData {
+ expected_version?: string;
  carrier?: string;
  vessel?: string;
  container_number?: string;
@@ -66,8 +67,8 @@ export const shipmentsApi = {
  client.get<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}`).then((r) => r.data.data),
  create: (data: CreateShipmentData) =>
  client.post<ApiSuccess<Shipment>>('/supply-chain/shipments', data).then((r) => r.data.data),
- updateStatus: (id: string, status: ShipmentStatus, note?: string) =>
- client.patch<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}/status`, { status, note }).then((r) => r.data.data),
+ updateStatus: (id: string, status: ShipmentStatus, note?: string, expected_version?: string) =>
+ client.patch<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}/status`, { status, note, expected_version }).then((r) => r.data.data),
  updateMeta: (id: string, data: UpdateShipmentMetaData) =>
  client.patch<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}`, data).then((r) => r.data.data),
  calculateLandedCost: (id: string, allocation_method: LandedCostAllocationMethod) =>
@@ -262,8 +263,12 @@ export const vehiclesApi = {
   client.get<PaginatedResponse<Vehicle>>('/supply-chain/vehicles', { params }).then((r) => r.data),
  create: (data: VehicleData) =>
   client.post<ApiSuccess<Vehicle>>('/supply-chain/vehicles', data).then((r) => r.data.data),
- update: (id: string, data: Partial<VehicleData>) =>
+ update: (id: string, data: Partial<VehicleData> & { expected_version?: string | null }) =>
   client.patch<ApiSuccess<Vehicle>>(`/supply-chain/vehicles/${id}`, data).then((r) => r.data.data),
- destroy: (id: string) => client.delete(`/supply-chain/vehicles/${id}`),
- restore: (id: string) => client.patch(`/supply-chain/vehicles/${id}/restore`),
+ destroy: (id: string, expectedVersion?: string | null) => client.delete(`/supply-chain/vehicles/${id}`, {
+  data: expectedVersion ? { expected_version: expectedVersion } : undefined,
+ }),
+ restore: (id: string, expectedVersion?: string | null) => client.patch(`/supply-chain/vehicles/${id}/restore`,
+  expectedVersion ? { expected_version: expectedVersion } : {},
+ ),
 };

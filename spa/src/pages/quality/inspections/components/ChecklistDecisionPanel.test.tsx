@@ -2,8 +2,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import toast from 'react-hot-toast';
 import { inspectionsApi } from '@/api/quality/inspections';
+import { formDraftScopeFingerprint, formDraftStorageKey } from '@/lib/formDraftStorage';
 import type { Inspection } from '@/types/quality';
 import { ChecklistDecisionPanel } from './ChecklistDecisionPanel';
 
@@ -25,6 +27,7 @@ function panel(record = inspection) {
 }
 
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(inspectionsApi.recordBatchResult).mockResolvedValue({ ...inspection, status: 'passed', result_version: 1 }); });
+afterEach(() => vi.restoreAllMocks());
 
 it('submits one atomic request without numeric measurements or separate zero input', async () => {
   panel();
@@ -84,7 +87,11 @@ it('requires performance attestation before marking remaining checks passed', as
 });
 
 it('preserves local failure input after server rejection', async () => {
-  vi.mocked(inspectionsApi.recordBatchResult).mockRejectedValue({ response: { data: { message: 'The source changed.' } } });
+  const errorToast = vi.spyOn(toast, 'error');
+  vi.mocked(inspectionsApi.recordBatchResult).mockRejectedValue({ response: {
+    status: 409,
+    data: { code: 'inspection_state_conflict', message: 'This inspection changed. Reload before submitting.' },
+  } });
   panel();
   fireEvent.click(screen.getByRole('button', { name: 'FAIL Surface' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Problem for Surface' }), { target: { value: 'Required certificate missing.' } });
@@ -92,7 +99,7 @@ it('preserves local failure input after server rejection', async () => {
   for (const name of ['Color', 'Fit']) fireEvent.click(screen.getByRole('button', { name: `PASS ${name}` }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'I confirm all required checks on the planned sample were completed' }));
   fireEvent.click(screen.getByRole('button', { name: 'Submit inspection' }));
-  await screen.findByText('The source changed.');
+  await waitFor(() => expect(errorToast).toHaveBeenCalledWith('Inspection changed in another session. The latest saved version was loaded; your entries are retained for review.'));
   expect(screen.getByRole('textbox', { name: 'Problem for Surface' })).toHaveValue('Required certificate missing.');
 });
 
@@ -234,8 +241,18 @@ it('reports completion progress and warns on hard navigation while dirty', () =>
 });
 
 it('restores user-scoped recovery input but never restores coverage confirmation', () => {
-  useAuthStore.setState({ user: { id: 'recovery-user' } as NonNullable<ReturnType<typeof useAuthStore.getState>['user']> });
-  const key = 'ogami:formdraft:recovery-user:quality-inspection:qc-check:version:0';
+  const user = {
+    id: 'recovery-user', name: 'QC User', email: 'qc@example.test', is_active: true,
+    must_change_password: false, theme_mode: 'light' as const, sidebar_collapsed: false,
+    role: { id: 'quality-role', name: 'Quality Manager', slug: 'quality_manager' },
+    employee: null, permissions: ['quality.inspections.manage'], delegated_approvals: [], features: ['quality'],
+  };
+  useAuthStore.setState({ user });
+  const key = formDraftStorageKey(
+    user.id,
+    formDraftScopeFingerprint(user),
+    'quality-inspection:qc-check:version:0',
+  );
   localStorage.setItem(key, JSON.stringify({ ts: Date.now(), values: { draft: { 'check-0': { result: 'failed', problem: 'Crack.' } }, coverage: true, physical: true, defects: '1' } }));
   const view = panel();
   fireEvent.click(screen.getByRole('button', { name: 'Restore' }));

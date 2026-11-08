@@ -33,6 +33,7 @@ class WorkOrderResource extends JsonResource
         $scheduleStatus = $this->resource->relationLoaded('currentProductionSchedule') ? $this->scheduleStatus() : null;
         $handover = app(WorkOrderMaterialHandoverService::class)->summary($this->resource);
         $quality = $this->resource->relationLoaded('outputs') ? $this->qualitySummary() : null;
+        $availableActions = $this->availableActions($request);
 
         return [
             'id' => $this->hash_id,
@@ -40,6 +41,7 @@ class WorkOrderResource extends JsonResource
             'production_purpose' => $this->production_purpose,
             'stock_creation_request_key' => $this->stock_creation_request_key,
             'qc_workflow' => $this->resource->getAttribute('qc_workflow'),
+            'routing_execution_enabled' => (bool) config('production.routing_execution_enabled', true),
             'produced_quantity' => (int) $this->quantity_produced,
             'qc_accepted_quantity' => $quality['qc_accepted_quantity'] ?? null,
             'qc_defective_quantity' => $quality['qc_defective_quantity'] ?? null,
@@ -128,6 +130,7 @@ class WorkOrderResource extends JsonResource
             'actual_end' => optional($this->actual_end)->toIso8601String(),
             'status' => (string) $this->status?->value,
             'status_label' => $this->status?->label(),
+            'available_actions' => $availableActions,
             'rework_status' => $this->whenLoaded('activeReworks', function (): ?array {
                 if (in_array($this->status?->value, ['closed', 'cancelled'], true) || $this->activeReworks->isEmpty()) {
                     return null;
@@ -329,6 +332,37 @@ class WorkOrderResource extends JsonResource
             'message' => $message,
             'scheduled_start' => $slot->scheduled_start->toIso8601String(),
             'scheduled_end' => $slot->scheduled_end->toIso8601String(),
+        ];
+    }
+
+    /** @return array{confirm: bool, start: bool, pause: bool, resume: bool, complete: bool, close: bool, cancel: bool, record_output: bool} */
+    private function availableActions(Request $request): array
+    {
+        $user = $request->user();
+        $canLifecycle = $user?->hasPermission('production.work_orders.lifecycle') === true;
+        $canRecord = $user?->hasPermission('production.wo.record') === true;
+        $canCancelStock = $user?->hasPermission('production.wo.cancel_stock') === true;
+        $hasOutputs = $this->resource->relationLoaded('outputs')
+            ? $this->outputs->isNotEmpty()
+            : (bool) $this->resource->getAttribute('has_recorded_outputs');
+        $status = $this->status;
+
+        return [
+            'confirm' => $status === WorkOrderStatus::Planned
+                && $user?->hasPermission('production.wo.confirm') === true,
+            'start' => $status === WorkOrderStatus::Confirmed && $canLifecycle,
+            'pause' => $status === WorkOrderStatus::InProgress && $canLifecycle,
+            'resume' => $status === WorkOrderStatus::Paused && $canLifecycle,
+            'complete' => $status === WorkOrderStatus::InProgress && $canLifecycle,
+            'close' => $status === WorkOrderStatus::Completed && $canLifecycle,
+            'cancel' => in_array($status, [WorkOrderStatus::Planned, WorkOrderStatus::Confirmed], true)
+                && $this->production_purpose === 'stock'
+                && $this->actual_start === null
+                && $this->parent_wo_id === null
+                && (int) $this->quantity_produced === 0
+                && ! $hasOutputs
+                && ($canLifecycle || $canCancelStock),
+            'record_output' => $status === WorkOrderStatus::InProgress && $canRecord,
         ];
     }
 

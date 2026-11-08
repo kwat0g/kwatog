@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\SystemUserResolver;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
@@ -224,6 +225,10 @@ class SupplierInvoiceService
                 ]);
                 $bill->supplier_invoice_id = $invoice->id;
                 $bill->save();
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $bill->fresh(),
+                    (string) $bill->status?->value,
+                );
 
                 // Store the supplier's invoice file if provided.
                 if ($file) {
@@ -366,6 +371,10 @@ class SupplierInvoiceService
                 foreach ($bills as $bill) {
                     $bill->supplier_invoice_id = $invoice->id;
                     $bill->save();
+                    app(ChainBroadcaster::class)->broadcastFor(
+                        $bill->fresh(),
+                        (string) $bill->status?->value,
+                    );
                 }
 
                 if ($file) {

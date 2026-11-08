@@ -13,14 +13,16 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Events\InventoryStockChanged;
+use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Events\StockMovementGlPostingRequested;
-use App\Modules\Inventory\Listeners\PostStockMovementToGlOnRequested;
-use App\Modules\Inventory\Models\Item;
-use App\Modules\Inventory\Models\GoodsReceiptNote;
-use App\Modules\Inventory\Models\StockMovement;
-use App\Modules\Inventory\Models\StockLevel;
-use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
+use App\Modules\Inventory\Listeners\PostStockMovementToGlOnRequested;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -46,7 +48,7 @@ class MovementGlPostingTest extends TestCase
     {
         parent::setUp();
 
-        Event::fake([\App\Modules\Inventory\Events\StockMovementCompleted::class]);
+        Event::fake([StockMovementCompleted::class]);
 
         $this->seed(ChartOfAccountsSeeder::class);
         app(SettingsService::class)->set('modules.accounting', true, 'modules');
@@ -57,13 +59,34 @@ class MovementGlPostingTest extends TestCase
     }
 
     private StockMovementService $movements;
+
     private Item $item;
+
     private WarehouseLocation $location;
 
     /** @return array<string, int> code → account id */
     private function accountIds(): array
     {
         return Account::query()->pluck('id', 'code')->all();
+    }
+
+    /** @param list<string> $permissionSlugs */
+    private function userWithPermissions(array $permissionSlugs): User
+    {
+        $role = Role::query()->create([
+            'name' => 'Movement realtime test',
+            'slug' => 'movement_realtime_'.bin2hex(random_bytes(4)),
+            'is_system' => false,
+        ]);
+        foreach ($permissionSlugs as $slug) {
+            $permission = Permission::query()->firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $slug, 'module' => explode('.', $slug)[0]],
+            );
+            $role->permissions()->attach($permission);
+        }
+
+        return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }
 
     private function assertMovementPosted(StockMovement $movement, string $drCode, string $drAmount, string $crCode, string $crAmount): void
@@ -364,6 +387,12 @@ class MovementGlPostingTest extends TestCase
         ));
         app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '1200', 'accounting');
 
+        $this->assertSame(
+            0,
+            DB::table('event_outbox')->where('event_type', InventoryStockChanged::class)->count(),
+            'The original movement event is faked here, isolating the retry signal.',
+        );
+
         $role = Role::query()->create([
             'name' => 'GL Retry Test',
             'slug' => 'gl_retry_test_'.bin2hex(random_bytes(3)),
@@ -380,8 +409,70 @@ class MovementGlPostingTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/inventory/stock-movements/'.$movement->hash_id.'/retry-gl')
             ->assertOk()
-            ->assertJsonPath('data.gl_handoff.status', MovementGlHandoffStatus::Generated->value);
+            ->assertJsonPath('data.gl_handoff.status', MovementGlHandoffStatus::Generated->value)
+            ->assertJsonPath('data.version', 3);
 
         $this->assertNotNull($movement->fresh()->journal_entry_id);
+        $refresh = DB::table('event_outbox')->where('event_type', InventoryStockChanged::class)->first();
+        $this->assertNotNull($refresh, 'A GL retry must stage a peer movement and WorkOrder refresh.');
+        $payload = json_decode($refresh->payload, true, flags: JSON_THROW_ON_ERROR);
+        $event = app(OutboxEventCodec::class)->decode($refresh->event_type, $payload);
+        $this->assertInstanceOf(InventoryStockChanged::class, $event);
+        $wirePayload = $event->broadcastWith();
+        $this->assertSame('inventory_stock', $wirePayload['entity_type']);
+        $this->assertArrayNotHasKey('movement_id', $wirePayload);
+        $this->assertArrayNotHasKey('journal_entry_id', $wirePayload);
+    }
+
+    public function test_stock_movement_resource_projects_gl_retry_action_and_version_per_viewer(): void
+    {
+        app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '999999', 'accounting');
+        $movement = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '2.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+        app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '1200', 'accounting');
+        $actor = $this->userWithPermissions(['inventory.view', 'accounting.journal.post']);
+
+        $this->actingAs($actor, 'sanctum')
+            ->getJson('/api/v1/inventory/stock-movements?movement_id='.$movement->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.0.permissions.retry_gl', true)
+            ->assertJsonPath('data.0.available_actions', ['retry_gl'])
+            ->assertJsonPath('data.0.version', 2);
+    }
+
+    public function test_retry_gl_rejects_a_stale_action_after_the_movement_is_resolved(): void
+    {
+        app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '999999', 'accounting');
+        $movement = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '2.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+        app(SettingsService::class)->set('accounting.accounts.inventory_raw_material_code', '1200', 'accounting');
+        $actor = $this->userWithPermissions(['accounting.journal.post']);
+        $url = '/api/v1/inventory/stock-movements/'.$movement->hash_id.'/retry-gl';
+
+        $this->actingAs($actor, 'sanctum')
+            ->postJson($url)
+            ->assertOk()
+            ->assertJsonPath('data.gl_handoff.status', MovementGlHandoffStatus::Generated->value);
+
+        $this->postJson($url)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'stock_movement_state_conflict');
+
+        $this->assertSame(1, DB::table('journal_entries')
+            ->where('reference_type', 'stock_movement')
+            ->where('reference_id', $movement->id)
+            ->count());
     }
 }

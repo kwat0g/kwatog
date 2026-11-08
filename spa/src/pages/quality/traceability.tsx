@@ -30,8 +30,10 @@ import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDateTime } from '@/lib/formatDate';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 export default function TraceabilityPage() {
+  useRealtimeList('shipment_lot', 'visible');
   const [searchParams, setSearchParams] = useSearchParams();
   const submitted = searchParams.get('term') ?? '';
   const [term, setTerm] = useState(submitted);

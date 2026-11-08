@@ -8,7 +8,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { clampPercent } from '@/lib/progress';
-import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
+import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -20,6 +20,7 @@ import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPa
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { DonutBreakdown } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
+import { useInventoryStockRealtime } from '@/hooks/useInventoryStockRealtime';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { WAREHOUSE_KPIS } from '@/lib/dashboardKpis';
 
@@ -237,16 +238,15 @@ function zonePctClass(pct: number, warningPct?: number, criticalPct?: number): s
 
 export default function WarehouseDashboard() {
  const { can } = usePermission();
+ useInventoryStockRealtime(can('inventory.view'), can('dashboard.warehouse.view'));
  const q = useQuery({
  queryKey: ['dashboard', 'warehouse'],
  queryFn: () => dashboardsApi.warehouse<WarehouseDashboardData>(),
- refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
  <DashboardShell<WarehouseDashboardData>
- title="Warehouse Dashboard"
- subtitle="Live · refreshes every 60s"
+ title="Warehouse"
  query={q}
  refreshingQueryKey={['dashboard', 'warehouse']}
  header={<KpiStrip codes={WAREHOUSE_KPIS} compact />}

@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
+use App\Modules\Purchasing\Services\SupplierCatalogRealtimeService;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -59,11 +60,13 @@ class BackfillApprovedSuppliersCommand extends Command
 
             if ($live) {
                 $existing++;
+
                 continue;
             }
 
             if ($dryRun) {
                 $created++;
+
                 continue;
             }
 
@@ -79,6 +82,10 @@ class BackfillApprovedSuppliersCommand extends Command
                 // Lost a race to a concurrent writer; the live row now exists.
                 $existing++;
             }
+        }
+
+        if (! $dryRun && $created > 0) {
+            app(SupplierCatalogRealtimeService::class)->changed('created');
         }
 
         $this->info(sprintf(

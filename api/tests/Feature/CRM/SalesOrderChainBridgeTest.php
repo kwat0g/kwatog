@@ -326,8 +326,11 @@ class SalesOrderChainBridgeTest extends TestCase
         $response = $this->actingAs($user)
             ->postJson("/api/v1/crm/sales-orders/{$so->hash_id}/confirm");
 
-        $response->assertStatus(422);
-        $response->assertJsonFragment(['message' => 'Only unconfirmed sales orders can be confirmed.']);
+        $response->assertStatus(409)
+            ->assertJsonPath('code', 'sales_order_state_conflict');
+        $response->assertJsonFragment([
+            'message' => 'This sales order is no longer awaiting confirmation. Refresh and review its current status.',
+        ]);
     }
 
     public function test_confirm_endpoint_rejects_empty_so(): void

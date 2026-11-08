@@ -18,11 +18,11 @@ type User = { id: string; name: string; email: string; permissions: string[] };
 type SettingRow = { key: string; value: unknown };
 type WarehouseTree = {
   is_active: boolean;
-  zones: Array<{ id: string; locations: Array<{ id: string; is_active: boolean }> }>;
+  zones: Array<{ id: string; locations: Array<{ id: string; is_active: boolean; full_code: string }> }>;
 };
 type StockLevel = {
   item: { id: string };
-  location: { id: string };
+  location: { id: string; full_code: string };
   quantity: string;
   weighted_avg_cost: string;
   lock_version: number;
@@ -105,7 +105,7 @@ async function createPendingAdjustmentByUi(page: Page, itemCode: string, reason:
   await expect(reasonSelect.locator('option').first()).toBeAttached();
   await locationSelect.selectOption({ index: 1 });
   await page.locator('select[name="direction"]').selectOption('in');
-  await reasonSelect.selectOption({ index: 0 });
+  await reasonSelect.selectOption({ index: 1 });
   await page.locator('input[name="quantity"]').fill('1');
   await page.locator('input[name="unit_cost"]').fill('50');
   await page.locator('textarea[name="reason"]').fill(reason);
@@ -114,14 +114,14 @@ async function createPendingAdjustmentByUi(page: Page, itemCode: string, reason:
     new URL(response.url()).pathname === '/api/v1/inventory/stock-adjustments'
       && response.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Record adjustment', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Record this adjustment?' });
+  await page.getByRole('button', { name: 'Review adjustment', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Submit stock adjustment?' });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('button', { name: 'Record', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Submit adjustment', exact: true }).click();
   const response = await createResponsePromise;
   const body = (await response.json()) as { data: Adjustment };
   expect(response.status(), JSON.stringify(body)).toBe(201);
-  await expect(page).toHaveURL(/\/inventory\/stock-levels\?view=movements$/);
+  await expect(page).toHaveURL(/\/inventory\/stock-adjustments\?status=pending$/);
   expect(body.data.status).toBe('pending');
   return body.data;
 }
@@ -183,6 +183,23 @@ const tenThousandths = (value: string) => {
 
 const valueAtFourDecimals = (quantity: string, unitCost: string) =>
   milli(quantity) * tenThousandths(unitCost) / 1000n;
+
+const displayQuantity = (value: string) =>
+  new Intl.NumberFormat('en-PH', { maximumFractionDigits: 3 }).format(Number(value));
+
+const quantityFromMilli = (value: bigint) =>
+  `${value / 1000n}.${String(value % 1000n).padStart(3, '0')}`;
+
+async function openStockLevelList(page: Page, itemCode: string): Promise<void> {
+  await page.goto('/inventory/stock-levels');
+  await expect(page.getByRole('heading', { name: 'Stock levels' })).toBeVisible();
+  await expect(page.getByRole('status', { name: /Real-time updates: Live/ })).toBeVisible();
+  await page.getByPlaceholder('Search item…').fill(itemCode);
+}
+
+function stockLevelRow(page: Page, itemCode: string, locationCode: string) {
+  return page.getByRole('row').filter({ hasText: itemCode }).filter({ hasText: locationCode });
+}
 
 test('Finance approves a stock adjustment before stock and GL change', async ({ browser }) => {
   const finance = ROLES.find(({ slug }) => slug === 'finance_officer')!;
@@ -286,15 +303,15 @@ test('Finance approves a stock adjustment before stock and GL change', async ({ 
     await itemPicker.fill(`E2E-ADJ-${inventoryTag}`);
     const testItemOption = maker.getByRole('option', { name: new RegExp(`^E2E-ADJ-${inventoryTag} —`) });
     await expect(testItemOption).toBeVisible();
+    await testItemOption.click();
+    await maker.locator('select[name="direction"]').selectOption('in');
     await expect(locationSelect.locator('option').nth(1)).toBeAttached();
     await expect(reasonSelect.locator('option').first()).toBeAttached();
-    await testItemOption.click();
     const testItemId = await itemSelect.inputValue();
     expect(testItemId).toBeTruthy();
     await expect(locationSelect.locator(`option[value="${inactiveLocation!.id}"]`)).toHaveCount(0);
     await locationSelect.selectOption({ index: 1 });
-    await maker.locator('select[name="direction"]').selectOption('in');
-    await reasonSelect.selectOption({ index: 0 });
+    await reasonSelect.selectOption({ index: 1 });
     await maker.locator('input[name="quantity"]').fill('1');
     await maker.locator('input[name="unit_cost"]').fill('50');
     await maker.locator('textarea[name="reason"]').fill(reason);
@@ -302,6 +319,10 @@ test('Finance approves a stock adjustment before stock and GL change', async ({ 
     const itemId = await itemSelect.inputValue();
     const locationId = await locationSelect.inputValue();
     const beforeLevel = (await readLevels(maker, itemId)).find((level) => level.location.id === locationId);
+    const selectedLocation = warehouses
+      .flatMap((warehouse) => warehouse.zones.flatMap((zone) => zone.locations))
+      .find((location) => location.id === locationId);
+    expect(selectedLocation, 'selected stock location is present in the authorized warehouse tree').toBeTruthy();
     const beforeMovements = await readMovements(maker, itemId);
 
     const inactiveReason = `E2E inactive location ${randomUUID()}`;
@@ -335,14 +356,14 @@ test('Finance approves a stock adjustment before stock and GL change', async ({ 
       new URL(response.url()).pathname === '/api/v1/inventory/stock-adjustments'
       && response.request().method() === 'POST',
     );
-    await maker.getByRole('button', { name: 'Record adjustment', exact: true }).click();
-    const createDialog = maker.getByRole('dialog', { name: 'Record this adjustment?' });
+    await maker.getByRole('button', { name: 'Review adjustment', exact: true }).click();
+    const createDialog = maker.getByRole('dialog', { name: 'Submit stock adjustment?' });
     await expect(createDialog).toBeVisible();
-    await createDialog.getByRole('button', { name: 'Record', exact: true }).click();
+    await createDialog.getByRole('button', { name: 'Submit adjustment', exact: true }).click();
     const createResponse = await createResponsePromise;
     const createdBody = (await createResponse.json()) as { data: Adjustment };
     expect(createResponse.status()).toBe(201);
-    await expect(maker).toHaveURL(/\/inventory\/stock-levels\?view=movements$/);
+    await expect(maker).toHaveURL(/\/inventory\/stock-adjustments\?status=pending$/);
 
     const adjustmentId = createdBody.data.id;
     expect(createdBody.data).toMatchObject({
@@ -451,15 +472,62 @@ test('Finance approves a stock adjustment before stock and GL change', async ({ 
       .toHaveLength(0);
     expect((await auditTrail(auditor, adjustmentId)).map(({ action }) => action)).toEqual(['created']);
 
+    // Keep different-role warehouse and system-admin sessions on this item
+    // while Finance commits the approval. A Live socket disables the fallback
+    // timer, so the changed rows must come from the stock-change signal.
+    const itemCode = `E2E-ADJ-${inventoryTag}`;
+    const makerStock = await maker.context().newPage();
+    const adminStock = await auditor.context().newPage();
+    await openStockLevelList(makerStock, itemCode);
+    await openStockLevelList(adminStock, itemCode);
+    const makerStockRow = stockLevelRow(makerStock, itemCode, selectedLocation!.full_code);
+    const adminStockRow = stockLevelRow(adminStock, itemCode, selectedLocation!.full_code);
+    if (beforeLevel) {
+      await expect(makerStockRow).toHaveCount(1);
+      await expect(adminStockRow).toHaveCount(1);
+      await expect(makerStockRow.getByRole('cell').nth(2)).toContainText(displayQuantity(beforeLevel.quantity));
+      await expect(adminStockRow.getByRole('cell').nth(2)).toContainText(displayQuantity(beforeLevel.quantity));
+    } else {
+      await expect(makerStockRow).toHaveCount(0);
+      await expect(adminStockRow).toHaveCount(0);
+    }
+
     const approveResponsePromise = checker.waitForResponse((response) =>
       new URL(response.url()).pathname === `/api/v1/inventory/stock-adjustments/${adjustmentId}/approve`
       && response.request().method() === 'PATCH',
     );
+    const makerStockRefetch = makerStock.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/v1/inventory/stock-levels'
+        && response.request().method() === 'GET',
+      { timeout: 5_000 },
+    ).then((response) => ({ response, receivedAt: Date.now() }));
+    const adminStockRefetch = adminStock.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/v1/inventory/stock-levels'
+        && response.request().method() === 'GET',
+      { timeout: 5_000 },
+    ).then((response) => ({ response, receivedAt: Date.now() }));
     await row.getByRole('button', { name: 'Approve', exact: true }).click();
     const approveDialog = checker.getByRole('dialog', { name: 'Approve adjustment?' });
     await expect(approveDialog).toBeVisible();
     await approveDialog.getByRole('button', { name: 'Approve', exact: true }).click();
-    expect((await approveResponsePromise).status()).toBe(200);
+    const approveResponse = await approveResponsePromise;
+    expect(approveResponse.status()).toBe(200);
+    const approveBody = (await approveResponse.json()) as { data: Adjustment };
+    const apiResponseAt = Date.now();
+    const expectedVisibleQuantity = displayQuantity(quantityFromMilli(milli(beforeQuantity) + 1000n));
+    const [makerRefetch, adminRefetch] = await Promise.all([makerStockRefetch, adminStockRefetch]);
+    await Promise.all([
+      expect(makerStockRow.getByRole('cell').nth(2)).toContainText(expectedVisibleQuantity, { timeout: 5_000 }),
+      expect(adminStockRow.getByRole('cell').nth(2)).toContainText(expectedVisibleQuantity, { timeout: 5_000 }),
+    ]);
+    const bothVisibleAt = Date.now();
+    const approximateCommitAt = Date.parse(approveBody.data.approved_at ?? '');
+    const commitToBothVisible = Number.isFinite(approximateCommitAt) ? bothVisibleAt - approximateCommitAt : null;
+    console.info(
+      `[realtime-e2e] commit_approx_to_two_role_list_render=${commitToBothVisible ?? 'unknown'}ms; `
+      + `api_response_to_both_render=${bothVisibleAt - apiResponseAt}ms; `
+      + `api_response_to_refetches=${Math.max(makerRefetch.receivedAt, adminRefetch.receivedAt) - apiResponseAt}ms`,
+    );
 
     const approvedRows = await readAdjustments(checker, 'approved', reason);
     expect(approvedRows).toHaveLength(1);

@@ -79,6 +79,60 @@ class MaintenanceWindowConflictTest extends TestCase
         app(MaintenanceWindowService::class)->confirm($this->order($machine, $actor), now()->addHour(), now()->addHours(2), $actor);
     }
 
+    public function test_confirming_a_maintenance_window_refreshes_other_assigned_work_order_readiness(): void
+    {
+        [$actor, $workOrder, $machine, $mold] = $this->resources();
+        $workOrder->forceFill([
+            'status' => 'confirmed',
+            'machine_id' => $machine->id,
+            'mold_id' => $mold->id,
+        ])->save();
+        DB::table('event_outbox')->delete();
+
+        app(MaintenanceWindowService::class)->confirm(
+            $this->order($machine, $actor),
+            now()->addHour(),
+            now()->addHours(2),
+            $actor,
+        );
+
+        $message = DB::table('event_outbox')
+            ->where('event_type', 'App\\Modules\\Production\\Events\\AssignedWorkOrderChanged')
+            ->first();
+
+        $this->assertNotNull($message, 'A newly reserved machine must refresh readiness for other assigned work orders.');
+        $payload = json_decode((string) $message->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($workOrder->hash_id, $payload['workOrderHashId']);
+    }
+
+    public function test_releasing_a_maintenance_window_refreshes_other_assigned_work_order_readiness(): void
+    {
+        [$actor, $workOrder, $machine, $mold] = $this->resources();
+        $workOrder->forceFill([
+            'status' => 'confirmed',
+            'machine_id' => $machine->id,
+            'mold_id' => $mold->id,
+        ])->save();
+        $maintenanceOrder = $this->order($machine, $actor);
+        app(MaintenanceWindowService::class)->confirm(
+            $maintenanceOrder,
+            now()->addHour(),
+            now()->addHours(2),
+            $actor,
+        );
+        DB::table('event_outbox')->delete();
+
+        app(MaintenanceWindowService::class)->release($maintenanceOrder);
+
+        $message = DB::table('event_outbox')
+            ->where('event_type', 'App\\Modules\\Production\\Events\\AssignedWorkOrderChanged')
+            ->first();
+
+        $this->assertNotNull($message, 'Releasing a machine reservation must refresh readiness for other assigned work orders.');
+        $payload = json_decode((string) $message->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($workOrder->hash_id, $payload['workOrderHashId']);
+    }
+
     public function test_confirmed_machine_and_mold_windows_block_production_and_adjacent_slots_remain_valid(): void
     {
         [$actor, $wo, $machine, $mold] = $this->resources();

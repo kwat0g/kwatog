@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Task A3 — Auto-create the next payroll period and queue computation.
+ * Task A3 — Auto-create the next payroll period and queue it after the cutoff ends.
  *
  * Schedule:
  *  - 14th 23:00          → create second-half period (16th–end of month)
@@ -45,6 +45,46 @@ class AutoPayrollPeriodService
         $target = $now->copy()->addMonthNoOverflow();
 
         return $this->createForFirstHalfOfMonth($target->year, $target->month);
+    }
+
+    /**
+     * Queue auto-created draft periods once their cutoff has fully elapsed.
+     * The daily reconciliation command calls this after creating any missing
+     * period for the active half-month window.
+     *
+     * @return array{staged: int, failures: int}
+     */
+    public function stageDueAutoPeriods(?Carbon $now = null): array
+    {
+        $today = ($now ?? Carbon::now())->startOfDay()->toDateString();
+        $duePeriods = PayrollPeriod::query()
+            ->where('is_auto_created', true)
+            ->where('is_thirteenth_month', false)
+            ->where('status', PayrollPeriodStatus::Draft->value)
+            ->whereDate('period_end', '<', $today)
+            ->orderBy('period_end')
+            ->get();
+
+        $staged = 0;
+        $failures = 0;
+        foreach ($duePeriods as $period) {
+            try {
+                $this->periods->claimForComputeAndStage($period);
+                $staged++;
+            } catch (\Throwable $e) {
+                if ($period->fresh()?->status !== PayrollPeriodStatus::Draft) {
+                    continue;
+                }
+
+                Log::warning('AutoPayrollPeriodService: ended period could not be computed', [
+                    'period_id' => $period->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $failures++;
+            }
+        }
+
+        return ['staged' => $staged, 'failures' => $failures];
     }
 
     public function createForSecondHalfOfMonth(int $year, int $month): ?PayrollPeriod
@@ -124,14 +164,19 @@ class AutoPayrollPeriodService
             return null;
         }
 
-        // Claim and stage the durable compute request together. ProcessPayrollJob
-        // refuses to touch a period that is not already Processing (it verifies
-        // it owns a claim rather than making one), so a Draft period must never
-        // produce a compute request.
+        // Keep upcoming periods in Draft. Payroll must wait until every date in
+        // the cutoff has passed so the run does not freeze an incomplete DTR.
+        // The daily reconciler stages the durable compute request after that.
+        // The queued ProcessPayrollJob refuses to touch a period that is not
+        // already Processing (it verifies it owns the claim), so Draft periods
+        // must never produce compute requests.
         //
-        // Claiming can legitimately fail (e.g. the scope matches nobody), so a
-        // failure is logged and the period is left at Draft for HR to handle by
-        // hand rather than throwing out of a scheduled command.
+        // Claiming can legitimately fail, so the failure is logged and the
+        // period stays Draft for the next daily reconciliation attempt.
+        if (! $this->periods->hasPeriodEnded($period)) {
+            return $period;
+        }
+
         try {
             $claimed = $this->periods->claimForComputeAndStage($period);
         } catch (\Throwable $e) {

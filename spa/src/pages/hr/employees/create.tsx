@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import type { ApiValidationError } from '@/types';
 import type { Employee } from '@/types/hr';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 const cleanup = (d: EmployeeFormValues): CreateEmployeeData => {
  const out: Record<string, unknown> = { ...d };
@@ -59,10 +60,13 @@ export default function CreateEmployeePage() {
  return employeesApi.create(payload);
  },
  onSuccess: (employee) => {
- qc.invalidateQueries({ queryKey: ['hr', 'employees'] });
- if (fromApplication) {
- qc.invalidateQueries({ queryKey: ['recruitment-application', fromApplication] });
- }
+ reconcileRealtimeMutationResponse(
+   qc,
+   { entityType: 'employee', entityId: employee.id },
+   ['hr', 'employee', employee.id],
+   employee,
+   fromApplication ? [['recruitment-application', fromApplication]] : [],
+ );
  toast.success(`Employee ${employee.employee_no} created.`);
  navigate(`/hr/employees/${employee.id}`);
  },

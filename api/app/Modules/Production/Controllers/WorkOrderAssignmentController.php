@@ -6,6 +6,7 @@ namespace App\Modules\Production\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\MRP\Services\CapacityPlanningService;
+use App\Modules\Production\Exceptions\WorkOrderAssignmentConflictException;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Requests\ApplyWorkOrderAssignmentRequest;
@@ -198,7 +199,7 @@ class WorkOrderAssignmentController
             }
             $slot = $this->crews->schedule($wo, $data['rework_ncr_id'] ?? null);
             if (! $slot || $slot->id !== $data['schedule_id'] || ! $slot->updated_at->equalTo(Carbon::parse($data['schedule_updated_at']))) {
-                throw new BusinessRuleException('The schedule changed. Refresh and review the proposal before applying.');
+                throw new WorkOrderAssignmentConflictException('The schedule changed. Refresh and review the proposal before applying.');
             }
             $machine = $slot->machine()->lockForUpdate()->firstOrFail();
             $mold = $slot->mold()->lockForUpdate()->firstOrFail();
@@ -207,7 +208,7 @@ class WorkOrderAssignmentController
             $employees = $this->crews->eligibleWorkers($wo, $slot->scheduled_start, $slot->scheduled_end, $data['rework_ncr_id'] ?? null);
             foreach ($data['employee_ids'] as $id) {
                 if (! $employees->contains('id', $id)) {
-                    throw new BusinessRuleException('A selected worker no longer has full HR shift coverage or has leave or conflicting work. Refresh the suggestion.');
+                    throw new WorkOrderAssignmentConflictException('A selected worker no longer has full HR shift coverage or has leave or conflicting work. Refresh the suggestion.');
                 }
             }
             if (array_key_exists('preferred_production_date', $data)) {
@@ -224,7 +225,7 @@ class WorkOrderAssignmentController
             $this->crews->assign($wo, $data, $request->user());
             $locked = ProductionSchedule::query()->lockForUpdate()->findOrFail($slot->id);
             if (! $locked->updated_at->equalTo(Carbon::parse($data['schedule_updated_at']))) {
-                throw new BusinessRuleException('The schedule changed. Refresh the proposal.');
+                throw new WorkOrderAssignmentConflictException('The schedule changed. Refresh the proposal.');
             }
             if ($wo->status->value === 'planned') {
                 app(WorkOrderService::class)->confirm($wo, $machine->id, $mold->id);

@@ -339,6 +339,9 @@ class StockMovementService
 
             // Record the stock-ledger event atomically. Publication waits for
             // commit, so reorder listeners never observe rolled-back stock.
+            // Cache generations rotate from this source transaction as well;
+            // the outbox worker may not run before the actor's next API read.
+            app(PublishInventoryStockChange::class)->invalidateSourceCaches();
             app(OutboxService::class)->record(new StockMovementCompleted($movement));
 
             // F-05 — post the movement's GL entry atomically inside the same
@@ -1149,6 +1152,8 @@ class StockMovementService
             $level->reserved_quantity = bcadd((string) $level->reserved_quantity, $quantity, 3);
             $level->lock_version++;
             $level->save();
+
+            app(StockReservationRealtimeService::class)->stage($itemId, $locationId, 'reserved');
         });
     }
 
@@ -1170,6 +1175,8 @@ class StockMovementService
             $level->reserved_quantity = $rem;
             $level->lock_version++;
             $level->save();
+
+            app(StockReservationRealtimeService::class)->stage($itemId, $locationId, 'released');
         });
     }
 

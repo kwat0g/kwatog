@@ -48,7 +48,7 @@ export function StockOutPanel({
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
   queryKey: ['forecasting', 'stock-out', horizonDays],
   queryFn: () => forecastingApi.stockOut({ horizon_days: horizonDays }),
-  // Manual refresh only — consulted, not monitored (poll contract in api/dashboards).
+  // Cached between visits, but forecast change events invalidate this query family.
   staleTime: 60_000,
   });
 

@@ -92,6 +92,96 @@ class StockAdjustmentQueueTest extends TestCase
         $this->assertSame('pending', $response->json('data.0.status'));
     }
 
+    public function test_resource_projects_server_computed_available_actions_for_viewer_and_state(): void
+    {
+        $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
+        $finance = $this->userWith('finance_officer', ['inventory.adjust.approve']);
+        $pending = $this->pendingAdjustment($warehouse);
+
+        $this->actingAs($finance)
+            ->getJson('/api/v1/inventory/stock-adjustments?status=pending')
+            ->assertOk()
+            ->assertJsonPath('data.0.available_actions.approve', true)
+            ->assertJsonPath('data.0.available_actions.reject', true)
+            ->assertJsonPath('data.0.available_actions.withdraw', false);
+
+        $this->actingAs($warehouse)
+            ->getJson('/api/v1/inventory/stock-adjustments?status=pending')
+            ->assertOk()
+            ->assertJsonPath('data.0.available_actions.approve', false)
+            ->assertJsonPath('data.0.available_actions.reject', false)
+            ->assertJsonPath('data.0.available_actions.withdraw', true);
+
+        $this->actingAs($finance)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$pending->hash_id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.available_actions.approve', false)
+            ->assertJsonPath('data.available_actions.reject', false)
+            ->assertJsonPath('data.available_actions.withdraw', false);
+    }
+
+    public function test_stale_approval_returns_a_conflict_after_another_checker_wins(): void
+    {
+        $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
+        $firstChecker = $this->userWith('finance_officer', ['inventory.adjust.approve']);
+        $secondChecker = $this->userWith('finance_officer', ['inventory.adjust.approve']);
+        $pending = $this->pendingAdjustment($warehouse);
+
+        $this->actingAs($firstChecker)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$pending->hash_id}/approve")
+            ->assertOk();
+
+        $this->actingAs($secondChecker)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$pending->hash_id}/approve")
+            ->assertConflict()
+            ->assertJsonPath('code', 'stock_adjustment_state_conflict')
+            ->assertJsonPath('errors.status.0', 'Adjustment is already approved. Refresh and review its current status.');
+    }
+
+    public function test_stale_reject_and_withdraw_actions_return_conflicts(): void
+    {
+        $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
+        $firstChecker = $this->userWith('finance_officer', ['inventory.adjust.approve']);
+        $secondChecker = $this->userWith('finance_officer', ['inventory.adjust.approve']);
+
+        $approved = $this->pendingAdjustment($warehouse);
+        $this->actingAs($firstChecker)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$approved->hash_id}/approve")
+            ->assertOk();
+
+        $this->actingAs($secondChecker)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$approved->hash_id}/reject", ['reason' => 'No longer pending'])
+            ->assertConflict()
+            ->assertJsonPath('code', 'stock_adjustment_state_conflict')
+            ->assertJsonPath('errors.status.0', 'Adjustment is no longer pending. Refresh and review its current status.');
+
+        $withdrawn = $this->pendingAdjustment($warehouse);
+        $this->actingAs($warehouse)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$withdrawn->hash_id}/withdraw")
+            ->assertOk();
+
+        $this->actingAs($warehouse)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$withdrawn->hash_id}/withdraw")
+            ->assertConflict()
+            ->assertJsonPath('code', 'stock_adjustment_state_conflict')
+            ->assertJsonPath('errors.status.0', 'Adjustment is no longer pending. Refresh and review its current status.');
+    }
+
+    public function test_pending_adjustment_stages_one_refresh_event_for_list_viewers(): void
+    {
+        $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
+        $adjustment = $this->pendingAdjustment($warehouse);
+
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', 'App\\Modules\\Inventory\\Events\\StockAdjustmentChanged')
+            ->count());
+        $this->assertDatabaseHas('stock_adjustments', [
+            'id' => $adjustment->id,
+            'status' => 'pending',
+        ]);
+    }
+
     public function test_approval_notice_links_to_exact_adjustment_and_id_filter_returns_only_that_row(): void
     {
         $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);

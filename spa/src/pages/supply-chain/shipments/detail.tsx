@@ -1,5 +1,5 @@
 /** Supply Chain — Shipment detail page with status advancement and document management. */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -29,7 +29,10 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { usePermission } from '@/hooks/usePermission';
-import type { ContainerSize, ContainerType, LandedCostAllocationMethod, ShipmentContainer, ShipmentContainerData, ShipmentDocumentType, ShipmentStatus } from '@/types/supplyChain';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { PaginatedResponse } from '@/types';
+import type { ContainerSize, ContainerType, LandedCostAllocationMethod, Shipment, ShipmentContainer, ShipmentContainerData, ShipmentDocumentType, ShipmentStatus } from '@/types/supplyChain';
 import { shipmentStatusVariant } from '@/lib/statusVariants';
 import { formatDateIso, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
@@ -71,6 +74,8 @@ export default function ShipmentDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const shipmentQueryKey = ['supply-chain', 'shipments', id] as const;
+  const containerQueryKey = ['supply-chain', 'shipments', id, 'containers', 'with-archived'] as const;
 
   const fileInput = useRef<HTMLInputElement | null>(null);
   const [docType, setDocType] = useState<ShipmentDocumentType>('bill_of_lading');
@@ -80,6 +85,7 @@ export default function ShipmentDetailPage() {
   const [pendingStatus, setPendingStatus] = useState<ShipmentStatus | null>(null);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
   const [restoreDocId, setRestoreDocId] = useState<string | null>(null);
+  const [remoteChangesWhileEditing, setRemoteChangesWhileEditing] = useState(false);
   const [containerEditorOpen, setContainerEditorOpen] = useState(false);
   const [editingContainerId, setEditingContainerId] = useState<string | null>(null);
   const [containerDraft, setContainerDraft] = useState<ContainerDraft>(newContainerDraft);
@@ -87,12 +93,24 @@ export default function ShipmentDetailPage() {
   const [archiveContainerTarget, setArchiveContainerTarget] = useState<ShipmentContainer | null>(null);
   const [editingLandedCosts, setEditingLandedCosts] = useState(false);
   const [allocationMethod, setAllocationMethod] = useState<LandedCostAllocationMethod>('by_value');
+  const editingRef = useRef(false);
+  editingRef.current = editingLandedCosts
+    || containerEditorOpen
+    || statusNoteOpen
+    || deleteDocId !== null
+    || restoreDocId !== null
+    || archiveContainerTarget !== null
+    || docNotes.length > 0
+    || docType !== 'bill_of_lading';
+  const onRemoteShipmentChange = useCallback(() => {
+    if (editingRef.current) setRemoteChangesWhileEditing(true);
+  }, []);
+  useRealtimeRecord('shipment', id || undefined, [], onRemoteShipmentChange);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['supply-chain', 'shipments', id],
     queryFn: () => shipmentsApi.show(id),
     enabled: Boolean(id),
-    placeholderData: (prev) => prev,
   });
   const {
     data: shipmentOptions,
@@ -105,7 +123,7 @@ export default function ShipmentDetailPage() {
     staleTime: 300_000,
   });
   const { data: containerPage, isLoading: containersLoading, isError: containersError, refetch: refetchContainers } = useQuery({
-    queryKey: ['supply-chain', 'shipments', id, 'containers', 'with-archived'],
+    queryKey: containerQueryKey,
     queryFn: () => shipmentContainersApi.list(id, { per_page: 100, trashed: 'with' }),
     enabled: Boolean(id),
   });
@@ -118,25 +136,42 @@ export default function ShipmentDetailPage() {
 
   const advance = useMutation({
     mutationFn: ({ status, note }: { status: ShipmentStatus; note?: string }) =>
-      shipmentsApi.updateStatus(id, status, note),
-    onSuccess: () => {
+      shipmentsApi.updateStatus(id, status, note, data?.version ?? undefined),
+    onSuccess: (freshShipment) => {
+      qc.setQueryData(shipmentQueryKey, freshShipment);
       toast.success('Status updated');
       setStatusNoteOpen(false);
       setStatusNote('');
       setPendingStatus(null);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
+      setRemoteChangesWhileEditing(false);
+      void invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
     },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to update status'),
+    onError: (e: AxiosError<{ message?: string }>) => {
+      if (e.response?.status === 409) {
+        setRemoteChangesWhileEditing(true);
+        void refetch();
+        toast.error(e.response.data?.message ?? 'Shipment changed. The latest state is being loaded.');
+        return;
+      }
+      toast.error(e.response?.data?.message ?? 'Failed to update status');
+    },
   });
 
   const uploadDoc = useMutation({
     mutationFn: (file: File) =>
       shipmentsApi.uploadDocument(id, file, docType, docNotes || undefined),
-    onSuccess: () => {
+    onSuccess: (document) => {
+      qc.setQueryData<Shipment>(shipmentQueryKey, (current) => current ? {
+        ...current,
+        documents: [
+          ...(current.documents ?? []).filter((existing) => existing.document_type !== document.document_type),
+          document,
+        ],
+      } : current);
       toast.success('Document uploaded');
       setDocNotes('');
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
+      setRemoteChangesWhileEditing(false);
+      void invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Upload failed'),
@@ -147,7 +182,7 @@ export default function ShipmentDetailPage() {
     onSuccess: () => {
       toast.success('Document archived');
       setDeleteDocId(null);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
+      void invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to archive document'),
@@ -158,7 +193,7 @@ export default function ShipmentDetailPage() {
     onSuccess: () => {
       toast.success('Document restored');
       setRestoreDocId(null);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
+      void invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to restore document'),
@@ -167,19 +202,44 @@ export default function ShipmentDetailPage() {
   const saveContainer = useMutation({
     mutationFn: ({ containerId, data: values }: { containerId: string | null; data: ShipmentContainerData }) =>
       containerId
-        ? shipmentContainersApi.update(containerId, values)
+        ? shipmentContainersApi.update(containerId, {
+          ...values,
+          expected_version: containerPage?.data.find((container) => container.id === containerId)?.updated_at,
+          expected_shipment_version: data?.version ?? undefined,
+        })
         : shipmentContainersApi.create(id, values),
-    onSuccess: (_container, variables) => {
+    onSuccess: (container, variables) => {
+      qc.setQueryData(shipmentQueryKey, (current: Shipment | undefined) => current ? {
+        ...current,
+        container_number: current.container_number ?? container.container_number,
+      } : current);
+      qc.setQueryData<PaginatedResponse<ShipmentContainer>>(containerQueryKey, (current) => {
+        if (!current) return current;
+        const exists = current.data.some((item) => item.id === container.id);
+
+        return {
+          ...current,
+          data: exists
+            ? current.data.map((item) => item.id === container.id ? container : item)
+            : [...current.data, container],
+          meta: exists ? current.meta : { ...current.meta, total: current.meta.total + 1 },
+        };
+      });
       toast.success(variables.containerId ? 'Container updated' : 'Container added');
       setContainerEditorOpen(false);
       setEditingContainerId(null);
       setContainerDraft(newContainerDraft());
       setContainerErrors({});
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id, 'containers'] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments'] });
+      setRemoteChangesWhileEditing(false);
+      void invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+      if (e.response?.status === 409) {
+        setRemoteChangesWhileEditing(true);
+        void refetchContainers();
+        toast.error(e.response.data?.message ?? 'Container changed. Review the latest shipment before saving.');
+        return;
+      }
       const errors = e.response?.data?.errors ?? {};
       setContainerErrors(Object.fromEntries(Object.entries(errors).map(([field, messages]) => [field, messages[0]])));
       toast.error(e.response?.data?.message ?? 'Failed to save container');
@@ -191,9 +251,7 @@ export default function ShipmentDetailPage() {
     onSuccess: () => {
       toast.success('Container archived');
       setArchiveContainerTarget(null);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id, 'containers'] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments'] });
+      void invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to archive container'),
@@ -203,23 +261,31 @@ export default function ShipmentDetailPage() {
     mutationFn: shipmentContainersApi.restore,
     onSuccess: () => {
       toast.success('Container restored');
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id, 'containers'] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments'] });
+      void invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to restore container'),
   });
 
   const saveLandedCosts = useMutation({
-    mutationFn: (values: LandedCostDraft) => shipmentsApi.updateMeta(id, values),
-    onSuccess: async () => {
+    mutationFn: (values: LandedCostDraft) => shipmentsApi.updateMeta(id, {
+      ...values,
+      expected_version: data?.version ?? undefined,
+    }),
+    onSuccess: async (freshShipment) => {
+      qc.setQueryData(shipmentQueryKey, freshShipment);
       setEditingLandedCosts(false);
-      await qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
-      await qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments'] });
+      setRemoteChangesWhileEditing(false);
+      await invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
       toast.success('Landed costs saved and allocations recalculated');
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+      if (e.response?.status === 409) {
+        setRemoteChangesWhileEditing(true);
+        void refetch();
+        toast.error(e.response.data?.message ?? 'Shipment changed. The latest state is being loaded.');
+        return;
+      }
       const validationMessage = Object.values(e.response?.data?.errors ?? {}).flat()[0];
       toast.error(validationMessage ?? e.response?.data?.message ?? 'Failed to save landed costs');
     },
@@ -227,8 +293,9 @@ export default function ShipmentDetailPage() {
 
   const calculateLandedCost = useMutation({
     mutationFn: (method: LandedCostAllocationMethod) => shipmentsApi.calculateLandedCost(id, method),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments', id] });
+    onSuccess: async (freshShipment) => {
+      qc.setQueryData(shipmentQueryKey, freshShipment);
+      await invalidateRealtimeChange(qc, { entityType: 'shipment', entityId: id });
       toast.success('Landed costs calculated');
     },
     onError: (e: AxiosError<{ message?: string }>) =>
@@ -254,19 +321,21 @@ export default function ShipmentDetailPage() {
     );
   }
 
-  const nextStatus =
-    statusOptions.find((option) => option.value === data.status)?.next_status ?? null;
+  const nextStatus = data.available_actions?.status_transitions?.[0] ?? null;
   const statusOrder = statusOptions
     .filter((option) => !option.is_terminal || option.value === 'received')
     .map((option) => option.value);
-  const canManage = can('supply_chain.shipments.manage');
+  const canManage = data.permissions?.manage === true;
+  const canManageDocuments = data.available_actions?.can_manage_documents === true;
+  const canManageContainers = data.available_actions?.can_manage_containers === true;
+  const canEditLandedCosts = data.available_actions?.can_edit_landed_costs === true;
   const landedCostsFrozen = ['accepted', 'partial_accepted'].includes(data.goods_receipt_note?.status ?? '');
   const documents = data.documents ?? [];
   const activeDocuments = documents.filter((document) => !document.deleted_at);
-  const canRestoreDocuments = canManage && !['cleared', 'received', 'cancelled'].includes(data.status);
-  const canArchiveDocuments = canManage && !['customs', 'cleared', 'received', 'cancelled'].includes(data.status);
+  const canRestoreDocuments = canManageDocuments;
+  const canArchiveDocuments = canManageDocuments && data.status !== 'customs';
   const currentStep = statusOrder.indexOf(data.status);
-  const canEditContainers = canManage && !['cleared', 'received', 'cancelled'].includes(data.status);
+  const canEditContainers = canManageContainers;
   const activeContainerCount = containers.filter((container) => !container.deleted_at).length;
   const missingClearanceDocuments = [
     'bill_of_lading', 'commercial_invoice', 'packing_list', 'import_entry', 'boc_release',
@@ -324,6 +393,20 @@ export default function ShipmentDetailPage() {
     saveContainer.mutate({ containerId: editingContainerId, data: dataToSave });
   };
 
+  const discardLocalEditsAndReload = async () => {
+    setEditingLandedCosts(false);
+    setContainerEditorOpen(false);
+    setStatusNoteOpen(false);
+    setStatusNote('');
+    setPendingStatus(null);
+    setContainerDraft(newContainerDraft());
+    setContainerErrors({});
+    setDocNotes('');
+    setDocType('bill_of_lading');
+    setRemoteChangesWhileEditing(false);
+    await Promise.all([refetch(), refetchContainers()]);
+  };
+
   return (
     <div>
       <PageHeader
@@ -339,13 +422,13 @@ export default function ShipmentDetailPage() {
         backTo="/supply-chain/shipments"
         backLabel="Shipments"
         actions={
-          nextStatus && canManage ? (
+          nextStatus ? (
             <Button
               variant="primary"
               size="sm"
               icon={<LuArrowRight size={14} />}
               loading={advance.isPending}
-              disabled={advance.isPending || clearanceBlockers.length > 0}
+              disabled={advance.isPending || remoteChangesWhileEditing || clearanceBlockers.length > 0}
               onClick={() => {
                 setPendingStatus(nextStatus);
                 setStatusNoteOpen(true);
@@ -356,6 +439,15 @@ export default function ShipmentDetailPage() {
           ) : undefined
         }
       />
+
+      {remoteChangesWhileEditing && (
+        <div role="status" className="mx-5 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+          <span>Shipment changed elsewhere. Your unsaved entries are preserved and actions are paused until you review the latest state.</span>
+          <Button variant="secondary" size="sm" onClick={() => void discardLocalEditsAndReload()}>
+            Discard edits and reload latest
+          </Button>
+        </div>
+      )}
 
       {shipmentOptionsLoading && !shipmentOptions && (
         <p id="shipment-options-unavailable" role="status" className="mx-5 mt-3 text-sm text-muted">
@@ -494,7 +586,7 @@ export default function ShipmentDetailPage() {
           <Panel
             title="Landed costs"
             meta={data.landed_cost_total !== null ? formatPeso(data.landed_cost_total) : undefined}
-            actions={canManage && !landedCostsFrozen && (
+            actions={canEditLandedCosts && (
               editingLandedCosts ? (
                 <Button variant="ghost" size="sm" onClick={() => setEditingLandedCosts(false)}>
                   Cancel edit
@@ -524,7 +616,7 @@ export default function ShipmentDetailPage() {
                     />
                   ))}
                 </div>
-                <Button type="submit" variant="primary" loading={saveLandedCosts.isPending}>
+                <Button type="submit" variant="primary" loading={saveLandedCosts.isPending} disabled={remoteChangesWhileEditing}>
                   Save landed costs
                 </Button>
               </form>
@@ -545,13 +637,13 @@ export default function ShipmentDetailPage() {
               </p>
             )}
 
-            {canManage && (
+            {canEditLandedCosts && (
               <div className="mt-4 border-t border-subtle pt-3">
                 <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                   <Select
                     label="Allocation method"
                     value={allocationMethod}
-                    disabled={!shipmentOptions || landedCostsFrozen || calculateLandedCost.isPending}
+                    disabled={!shipmentOptions || !canEditLandedCosts || calculateLandedCost.isPending}
                     onChange={(event) => setAllocationMethod(event.target.value as LandedCostAllocationMethod)}
                   >
                     {(shipmentOptions?.allocation_methods ?? []).map((option) => (
@@ -561,7 +653,7 @@ export default function ShipmentDetailPage() {
                   <Button
                     variant="secondary"
                     loading={calculateLandedCost.isPending}
-                    disabled={!shipmentOptions || landedCostsFrozen || calculateLandedCost.isPending || saveLandedCosts.isPending}
+                    disabled={!shipmentOptions || !canEditLandedCosts || calculateLandedCost.isPending || saveLandedCosts.isPending}
                     onClick={() => calculateLandedCost.mutate(allocationMethod)}
                   >
                     Calculate landed costs
@@ -825,7 +917,7 @@ export default function ShipmentDetailPage() {
               </ul>
             )}
 
-            {canManage && !['cleared', 'received', 'cancelled'].includes(data.status) && (
+            {canManageDocuments && (
               <div className="border-t border-subtle pt-3">
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <Select
@@ -854,7 +946,7 @@ export default function ShipmentDetailPage() {
                     type="file"
                     accept="application/pdf,image/*,.xlsx,.csv"
                     className="hidden"
-                    disabled={uploadDoc.isPending || !shipmentOptions}
+                    disabled={uploadDoc.isPending || remoteChangesWhileEditing || !shipmentOptions}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) uploadDoc.mutate(file);
@@ -981,6 +1073,7 @@ export default function ShipmentDetailPage() {
               variant="primary"
               icon={<LuArrowRight size={14} />}
               loading={advance.isPending}
+              disabled={remoteChangesWhileEditing}
               onClick={() => {
                 if (pendingStatus) {
                   advance.mutate({ status: pendingStatus, note: statusNote.trim() || undefined });
@@ -1120,7 +1213,7 @@ export default function ShipmentDetailPage() {
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" loading={saveContainer.isPending} disabled={saveContainer.isPending}>
+            <Button type="submit" variant="primary" loading={saveContainer.isPending} disabled={saveContainer.isPending || remoteChangesWhileEditing}>
               Save container
             </Button>
           </div>

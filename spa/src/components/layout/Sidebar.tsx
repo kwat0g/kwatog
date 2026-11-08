@@ -29,11 +29,9 @@ import {
   LuLandmark,
   LuTag,
   LuClipboardList,
-  LuGitFork,
   LuListTree,
   LuCpu,
   LuBadgeCheck,
-  LuRoute,
   LuX,
   LuMonitor,
   LuKeyRound,
@@ -76,8 +74,6 @@ import type { BadgeSeverity } from '@/api/badges';
 
 export interface NavItem {
   to: string;
-  /** Destination with the badge's actionable filter already applied. */
-  badgeTo?: string;
   label: string;
   icon: IconType;
   /** Keep the most urgent cross-module destinations visible above module taxonomy. */
@@ -129,7 +125,6 @@ function badgeDestination(path: string, key: string): string {
   const filters: Record<string, string> = {
     purchase_requests: 'signal=awaiting_my_approval',
     overdue_purchase_orders: 'signal=receipt_overdue',
-    purchase_order_actions: 'signal=action',
     supplier_listings_pending: 'status=pending',
     vehicles_maintenance: 'status=maintenance',
     pending_budgets: 'signal=awaiting_my_approval',
@@ -373,13 +368,6 @@ export const SECTIONS: NavSection[] = [
         feature: 'production',
         permission: 'production.schedule.view',
       },
-      {
-        to: '/production/routings',
-        label: 'Production Routings',
-        icon: LuRoute,
-        feature: 'production',
-        permission: 'production.routings.view',
-      },
     ],
   },
   {
@@ -497,15 +485,6 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'pending_grn',
       },
       {
-        to: '/inventory/mrb',
-        label: 'MRB / Quarantine',
-        description: 'Nonconforming material on hold',
-        icon: LuTriangleAlert,
-        feature: 'inventory',
-        permission: 'inventory.mrb.view',
-        badgeKey: 'mrb_holds',
-      },
-      {
         to: '/inventory/material-issues',
         label: 'Material Issues',
         icon: IssuanceIcon,
@@ -555,15 +534,6 @@ export const SECTIONS: NavSection[] = [
   {
     label: 'Supply Chain',
     items: [
-      {
-        to: '/supply-chain/shipments',
-        label: 'Inbound Shipments',
-        description: 'Track shipments in transit and customs',
-        icon: LuTruck,
-        feature: 'supply_chain',
-        anyPermissions: ['supply_chain.view', 'supply_chain.shipments.view'],
-        badgeKey: 'shipments',
-      },
       {
         to: '/supply-chain/deliveries',
         label: 'Outbound Deliveries',
@@ -623,21 +593,6 @@ export const SECTIONS: NavSection[] = [
         permission: 'quality.ncr.view',
         badgeKeys: ['overdue_ncrs', 'effectiveness_due', 'ncrs'],
       },
-      {
-        to: '/quality/calibration',
-        label: 'Calibration Register',
-        icon: LuRuler,
-        feature: 'quality',
-        permission: 'quality.calibration.view',
-        badgeKeys: ['calibration_overdue', 'calibration_due'],
-      },
-      {
-        to: '/quality/traceability',
-        label: 'Lot Traceability',
-        icon: LuGitFork,
-        feature: 'quality',
-        permission: 'quality.inspections.view',
-      },
     ],
   },
   {
@@ -650,14 +605,6 @@ export const SECTIONS: NavSection[] = [
         feature: 'budgeting',
         anyPermissions: ['budgeting.view', 'budgeting.approve'],
         badgeKey: 'pending_budgets',
-      },
-      {
-        to: '/budgeting/transfers',
-        label: 'Budget Transfers',
-        icon: LuArrowLeftRight,
-        feature: 'budgeting',
-        anyPermissions: ['budgeting.view', 'budgeting.approve'],
-        badgeKey: 'pending_transfers',
       },
       {
         to: '/accounting/invoices',
@@ -711,22 +658,6 @@ export const SECTIONS: NavSection[] = [
         permission: 'hr.recruitment.view',
       },
       {
-        to: '/hr/trainings',
-        label: 'Training Programs',
-        icon: LuBadgeCheck,
-        feature: 'hr',
-        permission: 'hr.trainings.view',
-      },
-      {
-        to: '/hr/employee-trainings',
-        label: 'Employee Training Records',
-        icon: LuBadgeCheck,
-        feature: 'hr',
-        permission: 'hr.employees.trainings.view',
-        badgeKey: 'training_expiry',
-        badgeKeys: ['training_expiry', 'training_upcoming'],
-      },
-      {
         to: '/hr/loans',
         label: 'Employee Loans',
         icon: LuWallet,
@@ -734,16 +665,7 @@ export const SECTIONS: NavSection[] = [
         permission: 'loans.view',
       },
       {
-        to: '/hr/separations',
-        label: 'Separation Clearance',
-        icon: LuListChecks,
-        feature: 'hr',
-        permission: 'hr.separation.view',
-        badgeKey: 'clearance_pending',
-      },
-      {
         to: '/hr/profile-update-requests',
-        badgeTo: '/hr/profile-update-requests?signal=awaiting_my_action',
         label: 'Bank Account Changes',
         icon: LuLandmark,
         feature: 'hr',
@@ -883,14 +805,6 @@ export const SECTIONS: NavSection[] = [
         icon: LuMonitor,
         permission: 'admin.settings.manage',
         badgeKey: 'active_sessions',
-      },
-      // W1.2 — the shared-component catalogue. Not a business destination, but a
-      // reviewer's page nobody would find if it were URL-only.
-      {
-        to: '/admin/component-gallery',
-        label: 'Component Gallery',
-        icon: LuLayers,
-        permission: 'admin.settings.manage',
       },
       {
         to: '/accounting/portal-access',
@@ -1281,11 +1195,10 @@ export const Sidebar = memo(function Sidebar({ permissions, delegatedApprovals, 
           to: badgeDestination(item.to, key),
         }];
       }).sort((left, right) => BADGE_SEVERITY_PRIORITY[right.severity] - BADGE_SEVERITY_PRIORITY[left.severity]);
-      const target = signals[0]?.to ?? item.to;
       return (
         <li key={item.to}>
           <NavLink
-            item={target === item.to ? item : { ...item, to: target }}
+            item={item}
             active={isActive(item.to)}
             collapsed={compact}
             badgeOverride={entry?.count}
@@ -1529,10 +1442,10 @@ const NavLink = memo(function NavLink({
   const Icon = item.icon;
   const activeSignals = badgeSignals?.filter((signal) => signal.count > 0) ?? [];
   const primarySignal = activeSignals[0];
+  const hasSignalMenu = activeSignals.length > 0;
   const badgeValue = primarySignal?.count ?? badgeOverride ?? item.badge;
   const badgeTone = primarySignal?.severity ?? badgeVariant ?? 'accent';
   const primaryDescription = primarySignal?.description ?? badgeDescription ?? item.label;
-  const hasMultipleSignals = activeSignals.length > 1;
   const hasBadge = badgeValue != null && badgeValue > 0;
   const signalSummary = activeSignals
     .map((signal) => `${signal.count} ${signal.description}`)
@@ -1559,7 +1472,7 @@ const NavLink = memo(function NavLink({
   };
 
   useEffect(() => {
-    if (!signalsOpen || !hasMultipleSignals) return;
+    if (!signalsOpen || !hasSignalMenu) return;
 
     const updatePosition = () => {
       const trigger = signalButtonRef.current?.getBoundingClientRect();
@@ -1607,7 +1520,7 @@ const NavLink = memo(function NavLink({
       document.removeEventListener('pointerdown', closeOnOutsideClick);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [collapsed, hasMultipleSignals, signalsOpen]);
+  }, [collapsed, hasSignalMenu, signalsOpen]);
 
   useEffect(() => {
     if (active && linkRef.current) {
@@ -1621,7 +1534,7 @@ const NavLink = memo(function NavLink({
   const link = (
     <Link
       ref={linkRef}
-      to={item.badgeTo ?? item.to}
+      to={item.to}
       aria-label={collapsed ? collapsedLabel : undefined}
       title={collapsed ? collapsedLabel : item.description}
       aria-current={active ? 'page' : undefined}
@@ -1631,7 +1544,7 @@ const NavLink = memo(function NavLink({
         active
           ? 'text-primary font-medium bg-accent/10'
           : 'text-secondary hover:bg-elevated hover:text-primary',
-        hasMultipleSignals ? 'min-w-0 flex-1' : collapsed ? 'mx-1' : 'mx-2',
+        hasSignalMenu ? 'min-w-0 flex-1' : collapsed ? 'mx-1' : 'mx-2',
         collapsed ? 'justify-center px-0 py-2' : 'px-3',
       )}
     >
@@ -1642,7 +1555,7 @@ const NavLink = memo(function NavLink({
         size={collapsed ? 20 : 16}
         className={cn('shrink-0', active ? 'text-accent' : 'text-muted')}
       />
-      {collapsed && hasBadge && !hasMultipleSignals && (
+      {collapsed && hasBadge && !hasSignalMenu && (
         <span aria-hidden className="absolute -top-1 right-0 z-10">
           <Badge variant={badgeTone} className="ring-2 ring-canvas">
             {badgeValue > 99 ? '99+' : badgeValue}
@@ -1654,7 +1567,7 @@ const NavLink = memo(function NavLink({
           <span title={item.label} className="min-w-0 flex-1 truncate">
             {item.label}
           </span>
-          {hasBadge && !hasMultipleSignals ? (
+          {hasBadge && !hasSignalMenu ? (
             <span className="ml-auto shrink-0">
               <Tooltip content={`${primaryDescription} · ${badgeValue}`} side="top">
                 <Badge
@@ -1675,7 +1588,7 @@ const NavLink = memo(function NavLink({
     <Tooltip content={collapsedLabel} side="right">{link}</Tooltip>
   ) : link;
 
-  if (!hasMultipleSignals || !hasBadge) return linkWithTooltip;
+  if (!hasSignalMenu || !hasBadge) return linkWithTooltip;
 
   return (
     <div className={cn('relative flex items-center', collapsed ? 'mx-1' : 'mx-2')}>
@@ -1712,7 +1625,9 @@ const NavLink = memo(function NavLink({
       >
         <Badge variant={badgeTone} className={collapsed ? 'ring-2 ring-canvas' : undefined}>
           {badgeValue > 99 ? '99+' : badgeValue}
-          <span aria-hidden className="ml-0.5 text-[9px] opacity-80">+{activeSignals.length - 1}</span>
+          {activeSignals.length > 1 && (
+            <span aria-hidden className="ml-0.5 text-[9px] opacity-80">+{activeSignals.length - 1}</span>
+          )}
         </Badge>
       </button>
       {signalsOpen && createPortal(

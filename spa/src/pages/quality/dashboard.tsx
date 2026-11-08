@@ -22,8 +22,13 @@ import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { focusRingInset } from '@/lib/focus';
 import { formatDateIso } from '@/lib/formatDate';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 export default function QualityDashboardPage() {
+  const { can } = usePermission();
+  useRealtimeList('inspection', can('quality.inspections.view') ? 'visible' : undefined);
+  useRealtimeList('ncr', can('quality.ncr.view') ? 'visible' : undefined);
   const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
   const pareto = useQuery({
     queryKey: ['quality', 'pareto', 'default-window'],

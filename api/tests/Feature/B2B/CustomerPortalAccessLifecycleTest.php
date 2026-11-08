@@ -8,11 +8,13 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Events\PortalAccountAccessRevoked;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Services\PortalInvitationService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -181,6 +183,9 @@ class CustomerPortalAccessLifecycleTest extends TestCase
             'model_type' => CustomerPortalUser::class,
             'model_id' => $user->id,
         ]);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PortalAccountAccessRevoked::class)
+            ->count());
     }
 
     public function test_portal_account_resources_do_not_expose_login_strike_details(): void
@@ -334,6 +339,9 @@ class CustomerPortalAccessLifecycleTest extends TestCase
         $fresh = $user->fresh();
         $this->assertNotSame($oldHash, $fresh->password);
         $this->assertTrue((bool) $fresh->must_change_password);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PortalAccountAccessRevoked::class)
+            ->count());
     }
 
     public function test_the_customer_list_never_returns_a_password_or_temporary_credential(): void

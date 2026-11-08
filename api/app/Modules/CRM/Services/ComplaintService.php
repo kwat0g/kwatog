@@ -20,6 +20,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
+use App\Modules\Dashboard\Observers\DashboardCacheInvalidationObserver;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\Quality\Enums\NcrSeverity;
@@ -31,6 +32,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
  * Sprint 7 — Task 68. Customer complaints lifecycle.
@@ -184,9 +186,14 @@ class ComplaintService
         return $complaint;
     }
 
-    public function update8DReport(CustomerComplaint $c, array $data): Complaint8DReport
+    public function update8DReport(
+        CustomerComplaint $c,
+        array $data,
+        ?string $expectedVersion = null,
+        bool $checkVersion = false,
+    ): Complaint8DReport
     {
-        return DB::transaction(function () use ($c, $data): Complaint8DReport {
+        return DB::transaction(function () use ($c, $data, $expectedVersion, $checkVersion): Complaint8DReport {
             // Lock the parent first so update and finalize use one order and a
             // stale route-bound report cannot race a finalized write.
             $lockedComplaint = CustomerComplaint::query()
@@ -196,6 +203,11 @@ class ComplaintService
                 ->where('complaint_id', $lockedComplaint->id)
                 ->lockForUpdate()
                 ->first();
+
+            $currentVersion = $report?->version;
+            if ($checkVersion && ! hash_equals($currentVersion ?? '', $expectedVersion ?? '')) {
+                throw new ConflictHttpException('This 8D report changed after you loaded it. Reload the latest report before saving.');
+            }
 
             if (! $report) {
                 $report = Complaint8DReport::create(['complaint_id' => $lockedComplaint->id]);
@@ -327,11 +339,24 @@ class ComplaintService
 
     public function markNcrHandoffManual(int $complaintId, ?string $message = null): void
     {
-        CustomerComplaint::query()->whereKey($complaintId)->update([
-            'ncr_handoff_status' => ComplaintNcrHandoffStatus::ManualRequired,
-            'ncr_handoff_message' => $message ?: 'NCR creation requires manual action.',
-            'ncr_handoff_at' => now(),
-        ]);
+        DB::transaction(function () use ($complaintId, $message): void {
+            $updated = CustomerComplaint::query()->whereKey($complaintId)->update([
+                'ncr_handoff_status' => ComplaintNcrHandoffStatus::ManualRequired,
+                'ncr_handoff_message' => $message ?: 'NCR creation requires manual action.',
+                'ncr_handoff_at' => now(),
+            ]);
+
+            if ($updated > 0) {
+                $complaint = CustomerComplaint::query()->find($complaintId);
+                if ($complaint) {
+                    // This query-builder write bypasses model observers. Retire
+                    // dashboard generations and stage aggregate refreshes before
+                    // the complaint-specific event is queued after commit.
+                    app(DashboardCacheInvalidationObserver::class)->invalidateSource($complaint);
+                    app(CustomerComplaintRealtimeService::class)->stageForRecord($complaint, 'status_changed');
+                }
+            }
+        });
     }
 
     private function ensureNcrHandoffReady(CustomerComplaint $complaint): void

@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Services\RolePermissionCacheGeneration;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -156,7 +157,10 @@ class NotificationValidationTest extends TestCase
         $roles = Role::query()->orderBy('slug')->get();
         $cacheKeys = [];
         foreach ($roles as $role) {
-            $cacheKey = "auth:role_perms:{$role->id}";
+            $cacheKey = app(RolePermissionCacheGeneration::class)->keyFor(
+                (int) $role->id,
+                (int) $role->permissions_version,
+            );
             $permissions = $role->permissions()
                 ->where('permissions.slug', '!=', 'notifications.preferences.manage')
                 ->pluck('permissions.slug', 'permissions.id')

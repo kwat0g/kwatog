@@ -23,6 +23,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { productsApi } from '@/api/crm/products';
 import { forecastingApi } from '@/api/forecasting';
 import { usePermission } from '@/hooks/usePermission';
+import { useDemandForecastRealtime } from '@/hooks/useDemandForecastRealtime';
+import { scheduleRealtimeListInvalidation } from '@/lib/realtime/invalidationMap';
 import type { ComputedForecastMethod, DemandForecast } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -68,6 +70,7 @@ export default function DemandForecastingPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const canManage = can('forecasting.manage');
+  useDemandForecastRealtime();
   const [productId, setProductId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
   const [method, setMethod] = useState<ComputedForecastMethod | ''>('');
@@ -170,6 +173,7 @@ export default function DemandForecastingPage() {
         lookback_months: lookback,
       }),
     onSuccess: (res) => {
+      qc.setQueryData(['forecasting/list', productId, customerId], res.data);
       const skipped = res.skipped_manual ?? [];
       if (skipped.length > 0) {
         const periods = skipped.map((p) => `${MONTH_NAMES[p.month - 1]} ${p.year}`).join(', ');
@@ -179,7 +183,7 @@ export default function DemandForecastingPage() {
       } else {
         toast.success(res.message ?? 'Forecasts recomputed.');
       }
-      qc.invalidateQueries({ queryKey: ['forecasting/list'] });
+      scheduleRealtimeListInvalidation(qc, 'demand_forecast');
     },
   });
 
@@ -216,10 +220,20 @@ export default function DemandForecastingPage() {
       });
     },
     onSuccess: (res) => {
+      qc.setQueryData<DemandForecast[]>(['forecasting/list', productId, customerId], (current = []) => {
+        const index = current.findIndex((row) => row.id === res.data.id);
+        if (index < 0) {
+          return [...current, res.data].sort((left, right) =>
+            left.forecast_year - right.forecast_year || left.forecast_month - right.forecast_month,
+          );
+        }
+
+        return current.map((row, rowIndex) => (rowIndex === index ? res.data : row));
+      });
       toast.success(res.message ?? 'Manual forecast saved.');
       setManualOpen(false);
       setManualRow(null);
-      qc.invalidateQueries({ queryKey: ['forecasting/list'] });
+      scheduleRealtimeListInvalidation(qc, 'demand_forecast');
     },
   });
 

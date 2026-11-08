@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
@@ -35,8 +36,12 @@ class PurchasingDashboardService
 
     public function purchasing(User $user): array
     {
-        return Cache::remember("dashboard:purchasing:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+
+        $generation = DashboardCacheGeneration::current('dashboard:purchasing');
+        return FailOpenCache::remember(Cache::store(), "dashboard:purchasing:v4:{$generation}:{$user->id}:{$cacheScope}", self::CACHE_TTL, function () use ($user) {
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => $this->gate->kpis($user, [
                     ['purchasing.view', fn () => $this->kpi('PRs Pending Action', (string) $this->safeCount('purchase_requests', fn ($q) => $q->where('status', 'pending')), 'count')],
                     ['purchasing.view', fn () => $this->kpi('Open POs', (string) $this->safeCount('purchase_orders', fn ($q) => $q->whereIn('status', PurchaseOrderStatus::open())), 'count')],
@@ -65,7 +70,7 @@ class PurchasingDashboardService
                     'supplier_risk'        => ['forecasting.view',                        fn () => $this->forecastingService->supplierRisk()],
                 ]),
             ];
-        });
+        }, 'dashboard.purchasing');
     }
 
     /**

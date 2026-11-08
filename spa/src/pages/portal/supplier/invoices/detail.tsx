@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useOutletContext, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuFileDown } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { billStatusVariant, supplierInvoiceStatusVariant } from '@/lib/statusVariants';
+import type { SupplierPortalUser } from '@/types/b2b';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -29,9 +30,11 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export default function SupplierInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const portalUser = useOutletContext<SupplierPortalUser | undefined>();
+  const vendorHashId = portalUser?.vendor?.id;
 
   const { data: invoice, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'supplier', 'invoice', id],
+    queryKey: ['portal', 'supplier', 'invoice', vendorHashId, id],
     queryFn: () => supplierPortalApi.getInvoice(id!),
     enabled: !!id,
   });

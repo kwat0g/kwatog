@@ -10,6 +10,7 @@ use App\Common\Support\TrashedFilter;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\VehicleStatus;
 use App\Modules\SupplyChain\Enums\VehicleType;
+use App\Modules\SupplyChain\Exceptions\VehicleStateConflictException;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Vehicle;
 use App\Modules\SupplyChain\Resources\VehicleResource;
@@ -33,7 +34,14 @@ class VehicleController
     {
         $request->validate(['per_page' => ['sometimes', 'integer', 'min:1']]);
 
-        $q = Vehicle::query()->with('asset:id,asset_code,name');
+        $q = Vehicle::query()
+            ->with('asset:id,asset_code,name')
+            ->withExists(['deliveries as has_active_delivery' => fn ($deliveries) => $deliveries->whereIn('status', [
+                DeliveryStatus::Scheduled->value,
+                DeliveryStatus::Loading->value,
+                DeliveryStatus::InTransit->value,
+                DeliveryStatus::ReturnPending->value,
+            ])]);
         TrashedFilter::apply($q, $request->query());
         if ($request->filled('status')) {
             $q->where('status', $request->query('status'));
@@ -43,7 +51,7 @@ class VehicleController
             $q->where(fn ($b) => $b->where('plate_number', SearchOperator::like(), $term)->orWhere('name', SearchOperator::like(), $term));
         }
 
-        return VehicleResource::collection($q->orderBy('name')->paginate(min((int) $request->query('per_page', 50), 100)));
+        return VehicleResource::collection($q->orderByDesc('created_at')->orderByDesc('id')->paginate(min((int) $request->query('per_page', 50), 100)));
     }
 
     public function store(Request $request): VehicleResource
@@ -64,7 +72,7 @@ class VehicleController
         return new VehicleResource(DB::transaction(static fn (): Vehicle => Vehicle::create($data)));
     }
 
-    public function update(Request $request, Vehicle $vehicle): VehicleResource
+    public function update(Request $request, Vehicle $vehicle): VehicleResource|JsonResponse
     {
         $data = $request->validate([
             'plate_number' => ['nullable', 'string', 'max:20', Rule::unique('vehicles', 'plate_number')->ignore($vehicle->id)],
@@ -73,26 +81,85 @@ class VehicleController
             'capacity_kg' => ['nullable', 'numeric', 'min:0', 'max:99999999.99', 'decimal:0,2'],
             'status' => ['nullable', Rule::enum(VehicleStatus::class)],
             'notes' => ['nullable', 'string', 'max:500'],
+            'expected_version' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
-        $updated = DB::transaction(function () use ($vehicle, $data): Vehicle {
-            $locked = Vehicle::query()->lockForUpdate()->find($vehicle->id);
-            if (! $locked) {
-                throw new BusinessRuleException('Vehicle not found.');
-            }
+        $expectedVersion = $data['expected_version'] ?? null;
+        unset($data['expected_version']);
 
-            $identityChanged = array_filter(['plate_number', 'name'], fn (string $field): bool => array_key_exists($field, $data) && $data[$field] !== $locked->{$field}
-            ) !== [];
-            if ($identityChanged && Delivery::withTrashed()->where('vehicle_id', $locked->id)->exists()) {
-                throw new BusinessRuleException(
-                    'Vehicle identity cannot be changed after it has been assigned to a delivery.'
-                );
-            }
-            if (($data['status'] ?? null) === VehicleStatus::InUse->value
-                && $locked->status !== VehicleStatus::InUse->value) {
-                throw new BusinessRuleException('Vehicle status is managed by delivery dispatch.');
-            }
+        try {
+            $updated = DB::transaction(function () use ($vehicle, $data, $expectedVersion): Vehicle {
+                $locked = Vehicle::query()->lockForUpdate()->find($vehicle->id);
+                if (! $locked) {
+                    throw new BusinessRuleException('Vehicle not found.');
+                }
+                $this->assertCurrentVersion($locked, $expectedVersion);
 
-            if (array_key_exists('status', $data) && $data['status'] !== $locked->status) {
+                $identityChanged = array_filter(['plate_number', 'name'], fn (string $field): bool => array_key_exists($field, $data) && $data[$field] !== $locked->{$field}
+                ) !== [];
+                if ($identityChanged && Delivery::withTrashed()->where('vehicle_id', $locked->id)->exists()) {
+                    throw new BusinessRuleException(
+                        'Vehicle identity cannot be changed after it has been assigned to a delivery.'
+                    );
+                }
+                if (($data['status'] ?? null) === VehicleStatus::InUse->value
+                    && $locked->status !== VehicleStatus::InUse->value) {
+                    throw new BusinessRuleException('Vehicle status is managed by delivery dispatch.');
+                }
+
+                if (array_key_exists('status', $data) && $data['status'] !== $locked->status) {
+                    $hasActiveDelivery = Delivery::query()
+                        ->where('vehicle_id', $locked->id)
+                        ->whereIn('status', [
+                            DeliveryStatus::Scheduled->value,
+                            DeliveryStatus::Loading->value,
+                            DeliveryStatus::InTransit->value,
+                            DeliveryStatus::ReturnPending->value,
+                        ])
+                        ->exists();
+                    if ($hasActiveDelivery) {
+                        if ($expectedVersion !== null) {
+                            throw new VehicleStateConflictException('Vehicle assignment changed since you opened it. Refresh before changing its status.');
+                        }
+                        throw new BusinessRuleException(
+                            'Vehicle status cannot be changed while it has an active delivery assignment.'
+                        );
+                    }
+                }
+
+                $locked->update($data);
+                $locked->setAttribute('has_active_delivery', Delivery::query()
+                    ->where('vehicle_id', $locked->id)
+                    ->whereIn('status', [
+                        DeliveryStatus::Scheduled->value,
+                        DeliveryStatus::Loading->value,
+                        DeliveryStatus::InTransit->value,
+                        DeliveryStatus::ReturnPending->value,
+                    ])
+                    ->exists());
+
+                return $locked;
+            });
+        } catch (VehicleStateConflictException $exception) {
+            return $this->conflictResponse($exception);
+        }
+
+        return new VehicleResource($updated);
+    }
+
+    public function destroy(Request $request, Vehicle $vehicle): JsonResponse
+    {
+        $data = $request->validate([
+            'expected_version' => ['sometimes', 'nullable', 'string', 'max:64'],
+        ]);
+
+        try {
+            DB::transaction(function () use ($vehicle, $data): void {
+                $locked = Vehicle::query()->lockForUpdate()->find($vehicle->id);
+                if (! $locked) {
+                    throw new BusinessRuleException('Vehicle not found.');
+                }
+                $this->assertCurrentVersion($locked, $data['expected_version'] ?? null);
+
                 $hasActiveDelivery = Delivery::query()
                     ->where('vehicle_id', $locked->id)
                     ->whereIn('status', [
@@ -103,62 +170,60 @@ class VehicleController
                     ])
                     ->exists();
                 if ($hasActiveDelivery) {
+                    if (($data['expected_version'] ?? null) !== null) {
+                        throw new VehicleStateConflictException('Vehicle assignment changed since you opened it. Refresh before archiving it.');
+                    }
                     throw new BusinessRuleException(
-                        'Vehicle status cannot be changed while it has an active delivery assignment.'
+                        'Vehicle cannot be archived while it has a scheduled or active delivery assignment.'
                     );
                 }
-            }
+                if ($locked->asset_id !== null) {
+                    throw new BusinessRuleException('Disassociate this asset before archiving the vehicle.');
+                }
 
-            $locked->update($data);
-
-            return $locked;
-        });
-
-        return new VehicleResource($updated);
-    }
-
-    public function destroy(Vehicle $vehicle): JsonResponse
-    {
-        DB::transaction(function () use ($vehicle): void {
-            $locked = Vehicle::query()->lockForUpdate()->find($vehicle->id);
-            if (! $locked) {
-                throw new BusinessRuleException('Vehicle not found.');
-            }
-
-            $hasActiveDelivery = Delivery::query()
-                ->where('vehicle_id', $locked->id)
-                ->whereIn('status', [
-                    DeliveryStatus::Scheduled->value,
-                    DeliveryStatus::Loading->value,
-                    DeliveryStatus::InTransit->value,
-                        DeliveryStatus::ReturnPending->value,
-                ])
-                ->exists();
-            if ($hasActiveDelivery) {
-                throw new BusinessRuleException(
-                    'Vehicle cannot be archived while it has a scheduled or active delivery assignment.'
-                );
-            }
-            if ($locked->asset_id !== null) {
-                throw new BusinessRuleException('Disassociate this asset before archiving the vehicle.');
-            }
-
-            $locked->delete();
-        });
+                $locked->delete();
+            });
+        } catch (VehicleStateConflictException $exception) {
+            return $this->conflictResponse($exception);
+        }
 
         return response()->json([], 204);
     }
 
-    public function restore(Vehicle $vehicle): JsonResponse
+    public function restore(Request $request, Vehicle $vehicle): JsonResponse
     {
-        DB::transaction(function () use ($vehicle): void {
-            $locked = Vehicle::withTrashed()->lockForUpdate()->find($vehicle->id);
-            if (! $locked) {
-                throw new BusinessRuleException('Vehicle not found.');
-            }
-            $locked->restore();
-        });
+        $data = $request->validate([
+            'expected_version' => ['sometimes', 'nullable', 'string', 'max:64'],
+        ]);
+
+        try {
+            DB::transaction(function () use ($vehicle, $data): void {
+                $locked = Vehicle::withTrashed()->lockForUpdate()->find($vehicle->id);
+                if (! $locked) {
+                    throw new BusinessRuleException('Vehicle not found.');
+                }
+                $this->assertCurrentVersion($locked, $data['expected_version'] ?? null);
+                $locked->restore();
+            });
+        } catch (VehicleStateConflictException $exception) {
+            return $this->conflictResponse($exception);
+        }
 
         return response()->json(['message' => 'Vehicle restored.']);
+    }
+
+    private function assertCurrentVersion(Vehicle $vehicle, ?string $expectedVersion): void
+    {
+        if ($expectedVersion !== null && $expectedVersion !== $vehicle->updated_at?->toISOString()) {
+            throw new VehicleStateConflictException('Vehicle changed since you opened it. Refresh before applying this action.');
+        }
+    }
+
+    private function conflictResponse(VehicleStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'code' => $exception->errorCode(),
+        ], 409);
     }
 }

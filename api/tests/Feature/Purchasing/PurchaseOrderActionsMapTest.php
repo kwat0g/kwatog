@@ -98,6 +98,24 @@ class PurchaseOrderActionsMapTest extends TestCase
         $this->assertTrue($actions['can_reject']);
     }
 
+    public function test_purchase_order_creator_receives_server_short_close_action(): void
+    {
+        $svc = app(PurchaseOrderService::class);
+        $buyer = $this->makeUser('purchasing_officer');
+        $vendor = Vendor::factory()->create(['created_by' => null]);
+
+        $po = $this->makePo($svc, $buyer, $vendor);
+        $po->forceFill(['status' => PurchaseOrderStatus::PartiallyReceived])->save();
+
+        $actions = $this->actingAs($buyer, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id)
+            ->assertOk()
+            ->json('data.actions');
+
+        $this->assertTrue($buyer->hasPermission('purchasing.po.create'));
+        $this->assertTrue($actions['can_short_close']);
+    }
+
     public function test_step1_vice_president_cannot_approve_future_step(): void
     {
         $svc = app(PurchaseOrderService::class);

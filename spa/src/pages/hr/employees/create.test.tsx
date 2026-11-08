@@ -51,8 +51,17 @@ describe('create employee flow', () => {
   });
 
   it('sends the selected shift with employee creation as one request', async () => {
+    const createdEmployee = {
+      id: 'employee-1',
+      employee_no: 'OGM-2026-0001',
+      status: 'active',
+      available_actions: { can_edit: true },
+    } as unknown as Employee;
+    vi.mocked(employeesApi.create).mockResolvedValue(createdEmployee);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider client={queryClient}>
         <MemoryRouter>
           <CreateEmployeePage />
         </MemoryRouter>
@@ -68,6 +77,9 @@ describe('create employee flow', () => {
       }),
     );
     expect(shiftsApi.assignEmployee).not.toHaveBeenCalled();
+    await waitFor(() => expect(queryClient.getQueryData(['hr', 'employee', 'employee-1']))
+      .toEqual(createdEmployee));
+    queryClient.clear();
   });
 
   it('passes posting employment type into the applicant conversion form', async () => {

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Events\GoodsReceiptNoteChanged;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
@@ -77,10 +79,42 @@ final class ShipmentGrnHandoffTest extends TestCase
         [$shipment, $po] = $this->shipmentWithReceivablePo();
         $expected = app(GrnService::class)->createDraftForPo($po, null);
 
+        DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteChanged::class)
+            ->get()
+            ->filter(static function ($row) use ($expected): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['grnHashId'] ?? null) === (string) $expected->hash_id;
+            })
+            ->each(static fn ($row) => DB::table('event_outbox')->where('id', $row->id)->delete());
+        DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->filter(static function ($row) use ($po): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $po->hash_id;
+            })
+            ->each(static fn ($row) => DB::table('event_outbox')->where('id', $row->id)->delete());
+
         app(ShipmentService::class)->updateStatus($shipment, ShipmentStatus::Received);
 
         $this->assertSame($expected?->id, GoodsReceiptNote::query()->where('shipment_id', $shipment->id)->value('id'));
         $this->assertSame(1, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => GoodsReceiptNoteChanged::class,
+        ]);
+        $this->assertNotNull(DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->first(static function ($row) use ($po): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $po->hash_id;
+            }), 'Linking the shipment must refresh the embedded PO receipt projection.');
     }
 
     public function test_second_shipment_cannot_steal_open_draft_grn_from_first_shipment(): void

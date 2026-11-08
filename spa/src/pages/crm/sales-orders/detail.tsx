@@ -26,11 +26,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso, formatInt, formatDecimal } from '@/lib/formatNumber';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { ChainResultModal, ChainErrorPanel } from './chain-result';
-import type { SoChainResult } from '@/types/crm';
+import type { SalesOrder, SoChainResult } from '@/types/crm';
 import { salesOrderStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { invalidateRealtimeChange, reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 export default function SalesOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -58,27 +59,37 @@ export default function SalesOrderDetailPage() {
     queryKey: ['crm', 'sales-orders', 'detail', id],
     queryFn: () => salesOrdersApi.show(id!),
     enabled: !!id,
-    refetchInterval: (query) =>
-      query.state.data && !['closed', 'cancelled'].includes(query.state.data.status)
-        ? 10_000
-        : false,
   });
+  const orderDetailKey = ['crm', 'sales-orders', 'detail', id] as const;
+  const refreshSalesOrder = (fresh?: SalesOrder) => {
+    const orderId = id ?? fresh?.id;
+    if (!orderId) return;
+    if (fresh) {
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'sales_order', entityId: orderId },
+        orderDetailKey,
+        fresh,
+      );
+      return;
+    }
+    void invalidateRealtimeChange(
+      qc,
+      { entityType: 'sales_order', entityId: orderId },
+      [],
+    );
+  };
   const chain = useQuery({
     queryKey: ['crm', 'sales-orders', 'chain', id],
     queryFn: () => salesOrdersApi.chain(id!),
     enabled: !!id,
-    refetchInterval: data && !['closed', 'cancelled'].includes(data.status) ? 10_000 : false,
   });
   const mrpFailed = chain.data?.some((step) => step.key === 'mrp_planned' && step.state === 'rejected') ?? false;
 
   const retryMrp = useMutation({
     mutationFn: () => mrpRunsApi.retrySalesOrder(id!),
     onSuccess: (run) => {
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
-      qc.invalidateQueries({ queryKey: ['mrp', 'runs', 'latest'] });
-      qc.invalidateQueries({ queryKey: ['mrp', 'runs', 'history'] });
-      qc.invalidateQueries({ queryKey: ['mrp', 'plans'] });
+      refreshSalesOrder();
       const error = run.summary.per_sales_order?.find((row) => row.error)?.error ?? run.error_message;
       if (run.status === 'completed') {
         toast.success('MRP retry completed for this order.');
@@ -105,7 +116,7 @@ export default function SalesOrderDetailPage() {
         notes: deliveryProposalReason.trim(),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
+      refreshSalesOrder();
       setDeliveryProposalOpen(false);
       setDeliveryProposalDate('');
       setDeliveryProposalReason('');
@@ -118,9 +129,7 @@ export default function SalesOrderDetailPage() {
   const confirm = useMutation({
     mutationFn: () => salesOrdersApi.confirm(id!),
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
+      refreshSalesOrder(result.data);
       setConfirmOpen(false);
       setConfirmError(null);
       setChainResult(result.chain_result);
@@ -136,6 +145,13 @@ export default function SalesOrderDetailPage() {
       e: AxiosError<{ message?: string; errors?: Record<string, string[]>; code?: string }>,
     ) => {
       const msg = e.response?.data?.message ?? 'Failed to confirm sales order.';
+      if (e.response?.status === 409 && e.response.data?.code === 'sales_order_state_conflict') {
+        refreshSalesOrder();
+        setConfirmOpen(false);
+        setConfirmError(null);
+        toast.error(msg);
+        return;
+      }
       const errors = e.response?.data?.errors;
       setConfirmError({ message: msg, errors, code: e.response?.data?.code });
       toast.error(msg);
@@ -145,9 +161,7 @@ export default function SalesOrderDetailPage() {
   const cancel = useMutation({
     mutationFn: (reason?: string) => salesOrdersApi.cancel(id!, reason),
     onSuccess: (so) => {
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
+      refreshSalesOrder(so);
       toast.success(`Sales order ${so.so_number} cancelled.`);
       setCancelOpen(false);
       setCancelReason('');
@@ -163,9 +177,7 @@ export default function SalesOrderDetailPage() {
         ? salesOrdersApi.acceptResponse(responseId, notes || undefined)
         : salesOrdersApi.rejectResponse(responseId, notes),
     onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
+      refreshSalesOrder();
       setCancellationResolution(null);
       setCancellationResolutionNotes('');
       toast.success(variables.decision === 'accept' ? 'Sales order cancelled.' : 'Cancellation request declined.');
@@ -176,11 +188,12 @@ export default function SalesOrderDetailPage() {
 
   const finalizeInvoice = useMutation({
     mutationFn: (invoiceId: string) => invoicesApi.finalize(invoiceId),
-    onSuccess: () => {
+    onSuccess: (_, invoiceId) => {
       toast.success('Draft invoice finalized to AR + GL.');
       setFinalizeInvoiceId(null);
-      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
-      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+      if (id) {
+        void invalidateRealtimeChange(qc, { entityType: 'invoice', entityId: invoiceId });
+      }
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
@@ -229,12 +242,9 @@ export default function SalesOrderDetailPage() {
           : 'Awaiting QC'
       : data.status_label;
 
-  const canEdit = data.is_editable && can('crm.sales_orders.update');
-  const canConfirm =
-    ['draft', 'awaiting_confirmation', 'delivery_negotiation'].includes(data.status) &&
-    !data.capabilities?.awaiting_delivery_response &&
-    can('crm.sales_orders.confirm');
-  const canCancel = data.is_cancellable && can('crm.sales_orders.cancel');
+  const canEdit = data.available_actions?.can_edit === true;
+  const canConfirm = data.available_actions?.can_confirm === true;
+  const canCancel = data.available_actions?.can_cancel === true;
   const activityItems = (data.status_history ?? []).map((event) => ({
     dot:
       event.status === 'cancelled'

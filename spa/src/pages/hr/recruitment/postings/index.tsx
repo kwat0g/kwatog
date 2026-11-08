@@ -17,7 +17,9 @@ import { formatDate } from '@/lib/formatDate';
 import type { JobPosting, JobPostingStatus } from '@/types/recruitment';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 'info'> = {
  draft: 'neutral',
  open: 'success',
@@ -39,6 +41,7 @@ interface PostingFilters {
 export default function PostingsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
+ useRealtimeList('job_posting', can('hr.recruitment.view') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<PostingFilters>({
  page: 1, per_page: 25, sort: 'created_at', direction: 'desc', status: '', trashed: 'active',
  });
@@ -47,13 +50,15 @@ export default function PostingsListPage() {
   ? filters.trashed
   : 'active';
 
+ const queryKey = ['recruitment-postings', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['recruitment-postings', filters],
+ queryKey,
  queryFn: () =>
  recruitmentApi
  .listPostings({ ...filters, status: statusFilter || undefined, trashed: archiveToTrashed(scope) })
  .then((r) => r.data),
- placeholderData: (prev) => prev,
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined,
  });
  const { data: recruitmentOptions } = useQuery({
  queryKey: ['recruitment', 'options'],

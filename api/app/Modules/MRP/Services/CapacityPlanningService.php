@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
-use App\Modules\Maintenance\Models\MaintenanceWindow;
-
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Attendance\Models\EmployeeShiftAssignment;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Maintenance\Models\MaintenanceWindow;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Machine;
@@ -19,6 +18,7 @@ use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderCrew;
 use App\Modules\Production\Services\ProductionResourceService;
+use App\Modules\Production\Services\ProductionScheduleRealtimeService;
 use App\Modules\Production\Services\WoOperationService;
 use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Production\Services\WorkOrderReworkService;
@@ -245,6 +245,7 @@ class CapacityPlanningService
 
             $dependencyReadyAt = []; // [parent_work_order_id => latest child end]
             $dependencyFailed = []; // [work_order_id => true]
+            $workerReservations = [];
             $scheduled = [];
             $conflicts = [];
 
@@ -295,12 +296,19 @@ class CapacityPlanningService
                     $blockedWindowsByMachine,
                     $dependencyReadyAt,
                     $optionsByWorkOrder[(int) $wo->id] ?? [],
+                    $workerReservations,
                 );
                 if ($placement['ok']) {
                     // Supersede any existing pending schedule for this WO.
-                    ProductionSchedule::where('work_order_id', $wo->id)
+                    $previousSchedules = ProductionSchedule::where('work_order_id', $wo->id)
                         ->where('status', ProductionScheduleStatus::Pending->value)->where('reserves_capacity', true)
-                        ->update(['status' => ProductionScheduleStatus::Superseded->value, 'reserves_capacity' => false]);
+                        ->lockForUpdate()->get();
+                    foreach ($previousSchedules as $previousSchedule) {
+                        $previousSchedule->update([
+                            'status' => ProductionScheduleStatus::Superseded->value,
+                            'reserves_capacity' => false,
+                        ]);
+                    }
 
                     // The old pending row was kept in the blocked-window index
                     // while this WO was being placed. Remove it only after a
@@ -318,6 +326,12 @@ class CapacityPlanningService
                         'is_confirmed' => false,
                     ]);
                     $this->addScheduleWindow($blockedWindowsByMachine, $row);
+                    foreach ($placement['worker_ids'] ?? [] as $employeeId) {
+                        $workerReservations[(int) $employeeId][] = [
+                            'start' => $row->scheduled_start->copy(),
+                            'end' => $row->scheduled_end->copy(),
+                        ];
+                    }
                     $wo->update(['scheduling_diagnostic' => null]);
                     app(WoOperationService::class)->refreshPendingSchedule($wo);
                     $scheduled[] = $this->scheduleSummary($row, $wo);
@@ -497,6 +511,84 @@ class CapacityPlanningService
             app(WorkOrderAssignmentService::class)->assertScheduledCrew($wo, $row);
             ProductionSchedule::query()->lockForUpdate()->findOrFail($row->id);
             $row->update(['machine_id' => $machine->id, 'mold_id' => $mold->id, 'scheduled_end' => $row->scheduled_end]);
+            app(WoOperationService::class)->refreshPendingSchedule($wo);
+
+            return $row->fresh();
+        });
+    }
+
+    public function move(int $scheduleId, Carbon $requestedStart, Carbon $expectedUpdatedAt): ProductionSchedule
+    {
+        return DB::transaction(function () use ($scheduleId, $requestedStart, $expectedUpdatedAt) {
+            $workOrderId = ProductionSchedule::query()->whereKey($scheduleId)->value('work_order_id');
+            if (! $workOrderId) {
+                throw new BusinessRuleException('Schedule not found. Refresh the calendar and try again.');
+            }
+            $wo = WorkOrder::query()->lockForUpdate()->find($workOrderId);
+            if (! $wo) {
+                throw new BusinessRuleException('Work order for schedule not found.');
+            }
+            $initial = ProductionSchedule::query()->findOrFail($scheduleId);
+            if ((int) $initial->work_order_id !== (int) $wo->id) {
+                throw new BusinessRuleException('Schedule changed. Refresh the calendar and try again.');
+            }
+
+            $machine = Machine::query()->lockForUpdate()->find($initial->machine_id);
+            $mold = Mold::query()->lockForUpdate()->find($initial->mold_id);
+            if (! $machine || ! $mold) {
+                throw new BusinessRuleException('Schedule equipment is unavailable. Refresh the calendar and review this work order.');
+            }
+
+            $crews = app(WorkOrderAssignmentService::class);
+            $crews->productionEmployees()->orderBy('id')->lockForUpdate()->get();
+            $row = ProductionSchedule::query()->lockForUpdate()->findOrFail($scheduleId);
+            if ((int) $row->machine_id !== (int) $machine->id || (int) $row->mold_id !== (int) $mold->id) {
+                throw new BusinessRuleException('Schedule equipment changed. Refresh the calendar and review the latest assignment.');
+            }
+            if ($row->status !== ProductionScheduleStatus::Pending || ! $row->reserves_capacity
+                || $wo->status !== WorkOrderStatus::Planned) {
+                throw new BusinessRuleException('Only pending proposals for planned work orders can be moved from the schedule calendar.');
+            }
+            if (! $row->updated_at->equalTo($expectedUpdatedAt)) {
+                throw new BusinessRuleException('This proposal changed after you opened it. Refresh the calendar and review the latest schedule.');
+            }
+            $start = $requestedStart->copy()->timezone(config('app.timezone'));
+            if ($start->lt(now())) {
+                throw new BusinessRuleException('Choose a start time that has not passed.');
+            }
+            if ($start->gt(now()->addDays(90))) {
+                throw new BusinessRuleException('Choose a start time within the next 90 days.');
+            }
+            $durationMinutes = max(1, (int) $row->scheduled_start->diffInMinutes($row->scheduled_end, true));
+            $end = $start->copy()->addMinutes($durationMinutes);
+            $this->assertDependencyWindowAvailable($wo, $start, $end, $crews);
+            $row->scheduled_start = $start;
+            $row->scheduled_end = $end;
+
+            $resources = app(ProductionResourceService::class);
+            $resources->assertReservation($wo, $machine, $mold, $start, $end, $row->id);
+            $this->assertScheduleWindowIsValid($row);
+            $this->assertScheduleWindowAvailable($row, (int) $machine->id);
+            $this->assertMoldWindowAvailable($row, (int) $mold->id);
+
+            $workerReservations = $this->pendingWorkerReservations($row, $crews);
+            $eligibleWorkers = $crews->eligibleWorkers($wo, $start, $end);
+            $availableWorkers = $eligibleWorkers->reject(fn (Employee $employee): bool => $this->workerReservationOverlaps(
+                (int) $employee->id,
+                $start,
+                $end,
+                $workerReservations,
+            ));
+            if ($availableWorkers->count() < max(1, (int) $wo->minimum_workers)) {
+                throw new BusinessRuleException('Not enough eligible workers cover this time. Choose a shift with sufficient worker coverage.');
+            }
+            $crew = $crews->currentCrew($wo);
+            if ($crew && ! $crew->members->every(fn ($member) => $availableWorkers->contains('id', $member->employee_id))) {
+                throw new BusinessRuleException('An assigned worker is reserved for another work order at this time. Choose a different slot or review the crews.');
+            }
+            $crews->assertScheduledCrew($wo, $row, lock: false);
+
+            $row->save();
             app(WoOperationService::class)->refreshPendingSchedule($wo);
 
             return $row->fresh();
@@ -917,6 +1009,99 @@ class CapacityPlanningService
         return array_values($dates);
     }
 
+    /** Whether this employee is already held by an earlier proposal in the current run. */
+    private function workerReservationOverlaps(int $employeeId, Carbon $start, Carbon $end, array $workerReservations): bool
+    {
+        foreach ($workerReservations[$employeeId] ?? [] as $window) {
+            if ($start->lt($window['end']) && $window['start']->lt($end)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Reserve minimum staffing for existing proposals while a user moves one slot. */
+    private function pendingWorkerReservations(ProductionSchedule $except, WorkOrderAssignmentService $crews): array
+    {
+        $slots = ProductionSchedule::query()
+            ->where('id', '!=', $except->id)
+            ->where('status', ProductionScheduleStatus::Pending->value)
+            ->where('reserves_capacity', true)
+            ->where('scheduled_end', '>', now())
+            ->with('workOrder')
+            ->orderBy('scheduled_start')
+            ->orderBy('priority_order')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (ProductionSchedule $slot): bool => $slot->workOrder?->status === WorkOrderStatus::Planned)
+            ->values();
+        $reservations = [];
+
+        foreach ($slots as $slot) {
+            $crew = $crews->currentCrew($slot->workOrder);
+            if (! $crew) {
+                continue;
+            }
+            foreach ($crew->members as $member) {
+                $reservations[(int) $member->employee_id][] = [
+                    'start' => $slot->scheduled_start,
+                    'end' => $slot->scheduled_end,
+                ];
+            }
+        }
+
+        foreach ($slots as $slot) {
+            $crew = $crews->currentCrew($slot->workOrder);
+            if ($crew && $crew->members->isNotEmpty()) {
+                continue;
+            }
+            $available = $crews->eligibleWorkers($slot->workOrder, $slot->scheduled_start, $slot->scheduled_end)
+                ->reject(fn (Employee $employee): bool => $this->workerReservationOverlaps(
+                    (int) $employee->id,
+                    $slot->scheduled_start,
+                    $slot->scheduled_end,
+                    $reservations,
+                ));
+            $minimumWorkers = max(1, (int) $slot->workOrder->minimum_workers);
+            if ($available->count() < $minimumWorkers) {
+                throw new BusinessRuleException('Another pending proposal no longer has enough worker coverage. Re-run the scheduler before moving this work order.');
+            }
+            foreach ($available->take($minimumWorkers) as $employee) {
+                $reservations[(int) $employee->id][] = [
+                    'start' => $slot->scheduled_start,
+                    'end' => $slot->scheduled_end,
+                ];
+            }
+        }
+
+        return $reservations;
+    }
+
+    private function assertDependencyWindowAvailable(WorkOrder $wo, Carbon $start, Carbon $end, WorkOrderAssignmentService $crews): void
+    {
+        if ($wo->parent_wo_id) {
+            $parent = WorkOrder::query()->find($wo->parent_wo_id);
+            $parentSlot = $parent ? $crews->schedule($parent) : null;
+            if ($parentSlot && $parentSlot->scheduled_start->lt($end)) {
+                throw new BusinessRuleException('This change would push the subassembly past parent work order '.$parent->wo_number.'. Choose a time that finishes before its slot.');
+            }
+        }
+
+        foreach ($wo->children()->get() as $child) {
+            if ($child->status === WorkOrderStatus::Cancelled || (int) $child->quantity_good >= (int) $child->quantity_target) {
+                continue;
+            }
+            $childSlot = $crews->schedule($child);
+            if (! $childSlot) {
+                throw new BusinessRuleException('Required subassembly '.$child->wo_number.' has no active schedule. Re-run the scheduler before moving this work order.');
+            }
+            if ($childSlot->scheduled_end->gt($start)) {
+                throw new BusinessRuleException('This change would start before required subassembly '.$child->wo_number.' finishes. Choose a later time.');
+            }
+        }
+    }
+
     /**
      * Try to place one WO. Returns ['ok'=>bool, ...] with placement details
      * or reasons array.
@@ -937,6 +1122,7 @@ class CapacityPlanningService
         array &$blockedWindowsByMachine,
         array $dependencyReadyAt,
         array $options = [],
+        array $workerReservations = [],
     ): array {
         $ncrId = $options['rework_ncr_id'] ?? null;
         $resources = app(ProductionResourceService::class);
@@ -1047,10 +1233,24 @@ class CapacityPlanningService
                         $proposed = $this->nextFreeSlot($candidate, $durationMinutes, array_merge($machineWindows, $moldWindows), (int) $wo->id, $dailyCapacityMinutes, $deadline, $machineWindows);
                         $windowKey = $proposed['start']->toDateTimeString().'|'.$proposed['end']->toDateTimeString();
                         $eligible = $eligibleByWindow[$windowKey] ??= $crewService->eligibleWorkers($wo, $proposed['start'], $proposed['end'], $ncrId);
-                        if ($eligible->count() < max(1, (int) ($options['minimum_workers'] ?? $wo->minimum_workers))
-                            || (! $ncrId && $crew && ! $crew->members->every(fn ($member) => $eligible->contains('id', $member->employee_id)))) {
+                        $available = $eligible->reject(fn (Employee $employee): bool => $this->workerReservationOverlaps(
+                            (int) $employee->id,
+                            $proposed['start'],
+                            $proposed['end'],
+                            $workerReservations,
+                        ))->values();
+                        $minimumWorkers = max(1, (int) ($options['minimum_workers'] ?? $wo->minimum_workers));
+                        $fixedWorkerIds = ! $ncrId && $crew
+                            ? $crew->members->pluck('employee_id')->map(fn ($id): int => (int) $id)->values()->all()
+                            : [];
+                        $fixedCrewUnavailable = $fixedWorkerIds !== []
+                            && array_diff($fixedWorkerIds, $available->pluck('id')->map(fn ($id): int => (int) $id)->all()) !== [];
+                        if ($available->count() < $minimumWorkers || $fixedCrewUnavailable) {
                             continue;
                         }
+                        $selectedWorkerIds = $fixedWorkerIds !== []
+                            ? $fixedWorkerIds
+                            : $available->take($minimumWorkers)->pluck('id')->map(fn ($id): int => (int) $id)->all();
                         if ($ncrId && $crewService->suggest($wo, new ProductionSchedule(['scheduled_start' => $proposed['start'], 'scheduled_end' => $proposed['end']]), $ncrId, $options)['blockers'] !== []) {
                             continue;
                         }
@@ -1058,7 +1258,7 @@ class CapacityPlanningService
                             $crewService->assertScheduledCrew($wo, new ProductionSchedule(['scheduled_start' => $proposed['start'], 'scheduled_end' => $proposed['end']]), $ncrId);
                         }
                         app(ProductionResourceService::class)->assertReservation($wo, $machine, $mold, $proposed['start'], $proposed['end'], ncrId: $ncrId, allowLate: $ncrId !== null);
-                        $slot = $proposed;
+                        $slot = $proposed + ['worker_ids' => $selectedWorkerIds];
                         break;
                     }
                     if (! $slot) {
@@ -1075,7 +1275,8 @@ class CapacityPlanningService
                 if ($bestKey === null || $key < $bestKey) {
                     $bestKey = $key;
                     $best = ['ok' => true, 'machine_id' => $machine->id, 'mold_id' => $mold->id,
-                        'start' => $slot['start']->toDateTimeString(), 'end' => $slot['end']->toDateTimeString()];
+                    'start' => $slot['start']->toDateTimeString(), 'end' => $slot['end']->toDateTimeString(),
+                    'worker_ids' => $slot['worker_ids']];
                 }
             }
         }
@@ -1283,6 +1484,8 @@ class CapacityPlanningService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+            $schedule = ProductionSchedule::query()->findOrFail($row['id']);
+            app(ProductionScheduleRealtimeService::class)->stage($schedule, 'updated');
             app(WoOperationService::class)->refreshPendingSchedule(WorkOrder::findOrFail($row['work_order_id']));
         }
     }

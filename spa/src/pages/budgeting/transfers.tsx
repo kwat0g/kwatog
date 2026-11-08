@@ -19,12 +19,13 @@ import { LuPlus, LuCircleCheck, LuCircleX } from '@/lib/icons';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { reportMutationError } from '@/lib/formErrors';
 import toast from 'react-hot-toast';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { BudgetTransfer } from '@/types/budgeting';
 
 export default function BudgetTransferListPage() {
-  const { can, canApprove } = usePermission();
+  const { can } = usePermission();
   const canViewAll = can('budgeting.view');
   const canManage = can('budgeting.manage');
-  const canApproveTransfer = canApprove('budgeting.approve');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFromUrl = searchParams.get('status') ?? '';
@@ -46,14 +47,25 @@ export default function BudgetTransferListPage() {
   });
   const { data, isLoading, isError } = listQuery;
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['budget-transfers'] });
+  const reconcileDecision = (updated: BudgetTransfer) => {
+    const currentKey = ['budget-transfers', status, actionable, page, perPage] as const;
+    queryClient.setQueryData<{ data: BudgetTransfer[] }>(currentKey, (current) => {
+      if (!current) return current;
+      const shouldRemove = actionable || status === 'pending' || (status !== '' && status !== updated.status);
+      return {
+        ...current,
+        data: shouldRemove
+          ? current.data.filter((transfer) => transfer.id !== updated.id)
+          : current.data.map((transfer) => transfer.id === updated.id ? updated : transfer),
+      };
+    });
+    void invalidateRealtimeChange(queryClient, { entityType: 'budget_transfer', entityId: updated.id });
   };
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => budgetingApi.approveTransfer(id),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      reconcileDecision(updated);
       toast.success('Transfer approved and applied.');
     },
     onError: (error) => reportMutationError(error, 'Could not approve the transfer.'),
@@ -61,8 +73,8 @@ export default function BudgetTransferListPage() {
 
   const rejectMutation = useMutation({
     mutationFn: (id: string) => budgetingApi.rejectTransfer(id),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      reconcileDecision(updated);
       toast.success('Transfer rejected; nothing moved.');
       setRejectId(null);
     },
@@ -154,16 +166,16 @@ export default function BudgetTransferListPage() {
                       <Td align="right">
                         {transfer.status === 'pending' ? (
                           <div className="flex justify-end gap-1.5">
-                            {canApproveTransfer && transfer.can_approve === true ? (
+                            {transfer.available_actions?.approve === true ? (
                               <Button size="xs" variant="primary" onClick={() => approveMutation.mutate(transfer.id)} loading={approveMutation.isPending}>
                                 <LuCircleCheck size={13} /> Approve
                               </Button>
                             ) : (
                               <span className="text-xs text-muted">
-                                {canApproveTransfer ? 'Approval requires a different role.' : 'Awaiting an eligible approver.'}
+                                {transfer.can_approve === false ? 'Approval requires a different role.' : 'Awaiting an eligible approver.'}
                               </span>
                             )}
-                            {canApproveTransfer && (
+                            {transfer.available_actions?.reject === true && (
                               <Button size="xs" variant="secondary" onClick={() => setRejectId(transfer.id)}>
                                 <LuCircleX size={13} /> Reject
                               </Button>

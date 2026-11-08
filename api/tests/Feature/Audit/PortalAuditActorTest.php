@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Audit;
 
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
 use App\Common\Services\SystemUserResolver;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
@@ -13,6 +14,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -88,5 +90,27 @@ class PortalAuditActorTest extends TestCase
 
         $this->assertSame($resolver->id(), $audit->user_id);
         $this->assertSame('user', $audit->actor_type);
+    }
+
+    public function test_system_user_cache_is_identity_scoped_and_expires(): void
+    {
+        $settings = app(SettingsService::class);
+        $email = 'service-account-'.uniqid().'@t.test';
+        $settings->set('system_user.email', $email, 'system_user');
+        $settings->set('system_user.name', 'Scoped service account', 'system_user');
+
+        $oldUser = User::factory()->create();
+        Cache::forever(SystemUserResolver::CACHE_KEY, $oldUser->id);
+
+        $resolvedId = app(SystemUserResolver::class)->id();
+
+        $this->assertNotSame($oldUser->id, $resolvedId);
+        $this->assertDatabaseHas('users', ['id' => $resolvedId, 'email' => $email]);
+        $scopedKey = SystemUserResolver::CACHE_KEY.':'.hash('sha256', strtolower($email));
+        $this->assertTrue(Cache::has($scopedKey));
+        $this->assertFalse(Cache::has(SystemUserResolver::CACHE_KEY));
+
+        $this->travel(2)->days();
+        $this->assertFalse(Cache::has($scopedKey));
     }
 }

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, type Page, type Request, type Response } from '@playwright/test';
 
 /**
@@ -153,6 +154,26 @@ export const ROLES: Array<{ slug: string; email: string; password: string }> = [
   { slug: 'employee', email: 'employee@ogami.test', password: 'password' },
 ];
 
+type E2EAccountManifest = { accounts?: Array<{ actor?: unknown; realm?: unknown; email?: unknown }> };
+let isolatedActorEmails: Promise<Map<string, string>> | undefined;
+
+async function resolveIsolatedActorEmail(email: string): Promise<string> {
+  const manifestPath = process.env.E2E_ACCOUNT_MANIFEST;
+  if (!manifestPath) return email;
+
+  isolatedActorEmails ??= readFile(manifestPath, 'utf8').then((source) => {
+    const manifest = JSON.parse(source) as E2EAccountManifest;
+    const entries = Array.isArray(manifest.accounts) ? manifest.accounts : [];
+    return new Map(entries
+      .filter((entry): entry is { actor: string; realm: string; email: string } =>
+        typeof entry.actor === 'string' && entry.realm === 'internal' && typeof entry.email === 'string')
+      .map((entry) => [entry.actor, entry.email]));
+  });
+
+  const actor = ROLES.find((role) => role.email === email)?.slug;
+  return actor ? (await isolatedActorEmails).get(actor) ?? email : email;
+}
+
 export interface NetworkCapture {
   errors: string[];
   failedRequests: Array<{ url: string; method: string; status: number }>;
@@ -255,6 +276,10 @@ export async function loginAs(
   password: string,
 ): Promise<void> {
   const base = baseUrl();
+  const effectiveEmail = await resolveIsolatedActorEmail(email);
+  // The isolated account seeder replaces demo passwords with one private,
+  // generated credential. Older journeys still pass the legacy literal.
+  const effectivePassword = process.env.E2E_ACCOUNT_PASSWORD || password;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     await page.request.get(`${base}/sanctum/csrf-cookie`, { headers: statefulHeaders() });
     const cookies = await page.context().cookies();
@@ -263,14 +288,14 @@ export async function loginAs(
     if (xsrf) postHeaders['X-XSRF-TOKEN'] = decodeURIComponent(xsrf.value);
     const res = await page.request.post(`${base}/api/v1/auth/sign-in`, {
       headers: postHeaders,
-      data: { email, password },
+      data: { email: effectiveEmail, password: effectivePassword },
     });
     if (res.status() === 429 || res.status() === 423) {
       const retryAfter = Number(res.headers()['retry-after'] ?? 15);
       await sleep((Number.isFinite(retryAfter) ? retryAfter : 15) * 1000 + 500);
       continue;
     }
-    expect(res.ok(), `sign-in failed for ${email}: ${res.status()} ${await res.text()}`).toBe(true);
+    expect(res.ok(), `sign-in failed for ${effectiveEmail}: ${res.status()} ${await res.text()}`).toBe(true);
     return;
   }
   throw new Error(`sign-in rate-limited for ${email} after 8 attempts`);

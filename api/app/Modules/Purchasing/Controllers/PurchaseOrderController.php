@@ -4,24 +4,25 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
-use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
-use App\Modules\SupplyChain\Enums\Incoterm;
+use App\Modules\Purchasing\Exceptions\PurchaseOrderStateConflictException;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Requests\CancelPurchaseOrderRequest;
+use App\Modules\Purchasing\Requests\RejectPurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\ShortClosePurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\StorePurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\UpdatePurchaseOrderRequest;
-use App\Modules\Purchasing\Requests\RejectPurchaseOrderRequest;
 use App\Modules\Purchasing\Resources\PurchaseOrderResource;
 use App\Modules\Purchasing\Services\PurchaseOrderPdfService;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
-use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
+use App\Modules\SupplyChain\Enums\Incoterm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\Response;
-use App\Common\Exceptions\BusinessRuleException;
 
 class PurchaseOrderController
 {
@@ -31,6 +32,15 @@ class PurchaseOrderController
         private readonly SettingsService $settings,
         private readonly PurchaseOrderAccessPolicy $access,
     ) {}
+
+    private function stateConflict(PurchaseOrderStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -55,6 +65,7 @@ class PurchaseOrderController
     public function show(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         abort_unless($this->access->canView($request->user(), $purchaseOrder), 403, 'You do not have permission to view this purchase order.');
+
         return new PurchaseOrderResource($this->service->show($purchaseOrder));
     }
 
@@ -68,20 +79,29 @@ class PurchaseOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return (new PurchaseOrderResource($po))->response()->setStatusCode(201);
     }
 
     public function update(UpdatePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->update($purchaseOrder, $request->validated(), $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->update($purchaseOrder, $request->validated(), $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($po);
     }
 
     public function destroy(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
-        try { $this->service->delete($purchaseOrder, $request->user()); }
-        catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+        try {
+            $this->service->delete($purchaseOrder, $request->user());
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         return response()->json(null, 204);
     }
 
@@ -92,69 +112,111 @@ class PurchaseOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json(['message' => 'Purchase order restored.']);
     }
 
-    public function submit(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function submit(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource|JsonResponse
     {
-        try { $po = $this->service->submit($purchaseOrder, $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->submit($purchaseOrder, $request->user());
+        } catch (PurchaseOrderStateConflictException $e) {
+            return $this->stateConflict($e);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function acknowledgeBudget(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->acknowledgeBudget($purchaseOrder, $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->acknowledgeBudget($purchaseOrder, $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function approve(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function approve(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource|JsonResponse
     {
-        try { $po = $this->service->approve($purchaseOrder, $request->user(), $request->input('remarks')); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->approve($purchaseOrder, $request->user(), $request->input('remarks'));
+        } catch (PurchaseOrderStateConflictException $e) {
+            return $this->stateConflict($e);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function reject(RejectPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function reject(RejectPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource|JsonResponse
     {
         $reason = $request->validated()['reason'];
-        try { $po = $this->service->reject($purchaseOrder, $request->user(), $reason); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->reject($purchaseOrder, $request->user(), $reason);
+        } catch (PurchaseOrderStateConflictException $e) {
+            return $this->stateConflict($e);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function send(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->markAsSent($purchaseOrder, null, $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->markAsSent($purchaseOrder, null, $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
-    public function cancel(CancelPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function cancel(CancelPurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource|JsonResponse
     {
-        try { $po = $this->service->cancel($purchaseOrder, $request->validated()['reason'], $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->cancel($purchaseOrder, $request->validated()['reason'], $request->user());
+        } catch (PurchaseOrderStateConflictException $e) {
+            return $this->stateConflict($e);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function close(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->close($purchaseOrder, $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->close($purchaseOrder, $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function shortClose(ShortClosePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->shortClose($purchaseOrder, $request->validated()['reason'], $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $po = $this->service->shortClose($purchaseOrder, $request->validated()['reason'], $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseOrderResource($this->service->show($po));
     }
 
     public function pdf(Request $request, PurchaseOrder $purchaseOrder): Response
     {
         abort_unless($this->access->canView($request->user(), $purchaseOrder), 403, 'You do not have permission to view this purchase order.');
+
         return $this->pdf->render($purchaseOrder);
     }
 }

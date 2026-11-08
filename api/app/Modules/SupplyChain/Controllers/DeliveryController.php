@@ -12,7 +12,6 @@ use App\Modules\SupplyChain\Requests\ShipmentPlanRequest;
 use App\Modules\SupplyChain\Requests\AmendDeliveryAttemptRequest;
 use App\Modules\SupplyChain\Requests\ReserveDeliveryStockRequest;
 use App\Modules\SupplyChain\Requests\RetryDeliveryCostRequest;
-use App\Modules\SupplyChain\Services\DeliveryStockReservationService;
 use App\Modules\SupplyChain\Services\DeliveryCostRecognitionService;
 use App\Modules\SupplyChain\Requests\CreateDeliveryRequest;
 use App\Modules\SupplyChain\Requests\DeliveryInspectionOptionsRequest;
@@ -36,7 +35,6 @@ class DeliveryController
     public function __construct(
         private readonly DeliveryService $service,
         private readonly DeliveryAttemptOutcomeService $attemptOutcomes,
-        private readonly DeliveryStockReservationService $reservations,
         private readonly DeliveryCostRecognitionService $costs,
         private readonly DeliveryReceiptService $receipts,
     ) {}
@@ -237,8 +235,11 @@ class DeliveryController
 
     public function reserveStock(ReserveDeliveryStockRequest $request, Delivery $delivery): DeliveryResource
     {
-        $this->reservations->reserveForDelivery($delivery, $request->user(), $request->validated('request_key'), true);
-        return new DeliveryResource($this->service->show($delivery));
+        return new DeliveryResource($this->service->reserveStock(
+            $delivery,
+            $request->user(),
+            $request->validated('request_key'),
+        ));
     }
 
     public function retryCost(RetryDeliveryCostRequest $request, Delivery $delivery): DeliveryResource

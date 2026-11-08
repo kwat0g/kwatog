@@ -6,9 +6,11 @@ import { SkeletonForm } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PriceAgreementForm } from './form';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 export default function PricingOfferPage() {
   const { id } = useParams();
+  useRealtimeRecord('price_request', id);
   const query = useQuery({
     queryKey: ['pricing-requests', id],
     queryFn: () => pricingRequestsApi.show(id!),
@@ -29,10 +31,20 @@ export default function PricingOfferPage() {
           action={<Button onClick={() => query.refetch()}>Retry</Button>}
         />
       )}
+      {query.data && !query.data.available_actions?.can_propose && (
+        <EmptyState
+          icon="alert-circle"
+          title="This pricing request is no longer open for a proposal"
+          description="Return to the pricing request list and review its current status."
+          action={<Button onClick={() => query.refetch()}>Refresh request</Button>}
+        />
+      )}
       {query.data && (
+        query.data.available_actions?.can_propose &&
         <PriceAgreementForm
           mode="create"
           negotiationId={query.data.id}
+          expectedVersion={query.data.version}
           initial={{
             product: query.data.product,
             customer: query.data.customer,

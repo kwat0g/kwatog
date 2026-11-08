@@ -20,7 +20,6 @@ export default function ApAgingPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'statements', 'ap-aging', asOf],
     queryFn: () => statementsApi.apAging({ as_of: asOf }),
-    placeholderData: (prev) => prev,
   });
 
   return (

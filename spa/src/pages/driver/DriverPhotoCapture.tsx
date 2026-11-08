@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
 import { LuCamera, LuImage, LuTriangleAlert } from '@/lib/icons';
 import { driverApi } from '@/api/driver';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
@@ -66,8 +67,15 @@ export default function DriverPhotoCapture() {
  if (!file || !id) throw new Error('no file');
  return driverApi.uploadReceipt(id, file);
  },
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['driver'] });
+ onSuccess: (updated) => {
+  if (!id) return;
+  const detailKey = ['driver', 'delivery', id] as const;
+  reconcileRealtimeMutationResponse(
+   qc,
+   { entityType: 'delivery', entityId: id },
+   detailKey,
+   updated,
+  );
  toast.success(data?.status === 'in_transit' ? 'Delivery recorded. Waiting for customer confirmation.' : 'Receipt uploaded.');
  if (id) navigate(`/driver/${id}`);
  },

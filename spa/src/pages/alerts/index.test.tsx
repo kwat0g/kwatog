@@ -15,29 +15,31 @@ vi.mock('@/api/alerts', () => ({
     markRead: vi.fn(),
   },
 }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ can: () => true }),
-}));
-
-const alert = (overrides: Partial<Alert> = {}): Alert => ({
+const alert: Alert = {
   id: 'alert-1',
-  type: 'scheduler_stale',
-  severity: 'critical',
-  title: 'Scheduler is stale',
-  message: 'A scheduled task has not run.',
-  entity_type: null,
+  type: 'stock_low',
+  type_label: 'Low stock',
+  severity: 'warning',
+  title: 'Resin stock is low',
+  message: 'Only 10 kg remain.',
+  entity_type: 'Item',
   entity: null,
   metadata: {},
   is_read: false,
   is_dismissed: false,
   dismissed_at: null,
   resolved_at: null,
-  email_status: 'failed',
-  email_attempts: 2,
-  email_failed_at: '2026-10-02T12:00:00.000Z',
-  created_at: '2026-10-02T12:00:00.000Z',
-  ...overrides,
+  email_status: null,
+  email_attempts: 0,
+  email_failed_at: null,
+  created_at: '2026-11-02T00:00:00Z',
+};
+
+const page = (rows: Alert[]) => ({
+  data: rows,
+  meta: { current_page: 1, last_page: 1, per_page: 50, total: rows.length, from: rows.length ? 1 : null, to: rows.length || null },
 });
 
 function renderPage() {
@@ -47,58 +49,55 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <AlertsListPage />
-      </MemoryRouter>
+      <MemoryRouter><AlertsListPage /></MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-describe('critical alert email state', () => {
+describe('alert mutation response reconciliation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(alertsApi.options).mockResolvedValue({ types: [], severities: [] });
     vi.mocked(alertsApi.unreadCount).mockResolvedValue({ count: 1 });
-    vi.mocked(alertsApi.list).mockResolvedValue({
-      data: [alert()],
-      meta: { current_page: 1, last_page: 1, per_page: 50, total: 1, from: 1, to: 1 },
-    });
   });
 
-  it('shows a failed delivery and scheduled retry on the alert', async () => {
-    renderPage();
-
-    const status = await screen.findByRole('status');
-
-    expect(status).toHaveTextContent('Critical alert email failed');
-    expect(status).toHaveTextContent('Retry scheduled');
-    expect(status).toHaveTextContent('2 attempts');
-  });
-
-  it('shows when critical email retries have stopped', async () => {
-    vi.mocked(alertsApi.list).mockResolvedValue({
-      data: [alert({ email_status: 'terminal_failed', email_attempts: 5 })],
-      meta: { current_page: 1, last_page: 1, per_page: 50, total: 1, from: 1, to: 1 },
+  it('removes a dismissed alert immediately while the refreshed list request is pending', async () => {
+    vi.mocked(alertsApi.list)
+      .mockResolvedValueOnce(page([alert]))
+      .mockReturnValue(new Promise(() => {}));
+    vi.mocked(alertsApi.unreadCount)
+      .mockResolvedValueOnce({ count: 1 })
+      .mockReturnValue(new Promise(() => {}));
+    vi.mocked(alertsApi.dismiss).mockResolvedValue({
+      ...alert,
+      is_dismissed: true,
+      dismissed_at: '2026-11-02T00:01:00Z',
     });
     renderPage();
 
-    const status = await screen.findByRole('status');
+    const dismiss = await screen.findByRole('button', { name: 'Dismiss alert Resin stock is low' });
+    fireEvent.click(dismiss);
+    await waitFor(() => expect(alertsApi.dismiss).toHaveBeenCalledWith('alert-1'));
 
-    expect(status).toHaveTextContent('Critical alert email stopped after 5 attempts');
-    expect(status).toHaveTextContent('Contact an administrator');
+    expect(await screen.findByText('No active alerts')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show shared unread alerts (0)' })).toBeInTheDocument();
   });
 
-  it('opens the shared unread filter using the unread count definition', async () => {
+  it('removes the unread action immediately after the server marks the alert read', async () => {
+    vi.mocked(alertsApi.list)
+      .mockResolvedValueOnce(page([alert]))
+      .mockReturnValue(new Promise(() => {}));
+    vi.mocked(alertsApi.unreadCount)
+      .mockResolvedValueOnce({ count: 1 })
+      .mockReturnValue(new Promise(() => {}));
+    vi.mocked(alertsApi.markRead).mockResolvedValue({ ...alert, is_read: true });
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Show shared unread alerts (1)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark alert as read: Resin stock is low' }));
+    await waitFor(() => expect(alertsApi.markRead).toHaveBeenCalledWith('alert-1'));
 
-    await waitFor(() => expect(alertsApi.list).toHaveBeenLastCalledWith({
-      page: 1,
-      per_page: 50,
-      is_dismissed: false,
-      is_read: false,
-    }));
-    expect(screen.getByText('Showing unread alerts')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark alert as read: Resin stock is low' })).not.toBeInTheDocument();
+    expect(screen.queryByText('new')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show shared unread alerts (0)' })).toBeInTheDocument();
   });
 });

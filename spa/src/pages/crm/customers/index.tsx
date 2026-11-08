@@ -14,15 +14,18 @@ import { formatPeso } from '@/lib/formatNumber';
 import type { Customer } from '@/types/accounting';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 export default function CrmCustomersListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  const [filters, setFilters] = useUrlFilters<CustomerListParams>({ page: 1, per_page: 25 });
 
+ const queryKey = ['crm', 'customers', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['crm', 'customers', filters],
+ queryKey,
  queryFn: () => crmCustomersApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
 
  const columns: Column<Customer>[] = [
  {

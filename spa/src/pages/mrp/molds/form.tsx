@@ -21,6 +21,7 @@ import { productsApi } from '@/api/crm/products';
 import type { Mold, CreateMoldData, UpdateMoldData } from '@/types/mrp';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 const intField = (max: number, msg: string) =>
@@ -128,9 +129,11 @@ export function MoldForm({ initial, mode }: Props) {
         : moldsApi.update(initial!.id, payload);
     },
     onSuccess: (mold) => {
-      qc.invalidateQueries({ queryKey: ['mrp', 'molds'] });
+      qc.setQueryData(['mrp', 'molds', 'detail', mold.id], mold);
+      void invalidateRealtimeChange(qc, { entityType: 'mold', entityId: mold.id });
       toast.success(mode === 'create' ? 'Mold created.' : 'Mold updated.');
-      navigate(`/mrp/molds/${mold.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/mrp/molds/${mold.id}`);
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.status === 422 && e.response.data.errors) {

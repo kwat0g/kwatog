@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
@@ -44,7 +45,16 @@ class HrDashboardService
          * page. `payroll.periods.view` is the payroll-run read (hr_officer,
          * finance_officer, admin) and is what the payroll.upcoming widget uses.
          */
-        return Cache::remember("dashboard:hr:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+        $localNow = Carbon::now('Asia/Manila');
+        $today = $localNow->toDateString();
+        $nextTransitionAt = $localNow->copy()->addDay()->startOfDay()->toIso8601String();
+
+        // Keep the shared generation for existing HR data invalidators and
+        // include the family marker so holiday changes can retire HR panels
+        // without flushing every dashboard snapshot.
+        $generation = DashboardCacheGeneration::current('dashboard:hr');
+        return FailOpenCache::remember(Cache::store(), "dashboard:hr:v5:{$generation}:{$user->id}:{$cacheScope}:d{$today}", self::CACHE_TTL, function () use ($user, $nextTransitionAt) {
             $panels = $this->gate->panels($user, [
                 // Configured windows, not data.
                 'probation_horizon_days' => [null,                fn () => $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0)],
@@ -73,6 +83,7 @@ class HrDashboardService
             ]);
 
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => $this->gate->kpis($user, [
                     ['hr.employees.view', fn () => $this->kpi('Active Headcount', (string) $this->safeCount('employees', fn ($q) => $q->where('status', 'active')), 'count')],
                     ['leave.view', fn () => $this->kpi('On Leave Today', (string) $this->safeCount('leave_requests', fn ($q) => $q
@@ -83,8 +94,9 @@ class HrDashboardService
                         ->whereIn('status', ['pending', 'in_progress', 'completed'])), 'count')],
                 ]),
                 'panels' => $panels,
+                'next_transition_at' => $nextTransitionAt,
             ];
-        });
+        }, 'dashboard.hr');
     }
 
     /**
@@ -130,9 +142,15 @@ class HrDashboardService
     public function employee(User $user): array
     {
         if (! $user->employee_id) {
-            return ['kpis' => [], 'panels' => ['notice' => 'No linked employee profile.']];
+            return ['generated_at' => now()->toIso8601String(), 'kpis' => [], 'panels' => ['notice' => 'No linked employee profile.']];
         }
-        return Cache::remember("dashboard:employee:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+
+        // This dashboard also contains the next holiday panel. Keep global
+        // invalidation compatibility while allowing holiday writes to retire
+        // only employee snapshots.
+        $generation = DashboardCacheGeneration::current('dashboard:employee');
+        return FailOpenCache::remember(Cache::store(), "dashboard:employee:v4:{$generation}:{$user->id}:{$cacheScope}", self::CACHE_TTL, function () use ($user) {
             $myAttendance = $this->safeCount('attendances', fn ($q) => $q
                 ->where('employee_id', $user->employee_id)
                 ->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()]));
@@ -144,6 +162,7 @@ class HrDashboardService
                 ->whereIn('status', ['pending_dept', 'pending_hr', 'pending']));
 
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => [
                     $this->kpi('Attendance · Month',   (string) $myAttendance, 'days'),
                     $this->kpi('Leave Days Remaining', $myLeaveRem,            'days'),
@@ -154,7 +173,7 @@ class HrDashboardService
                     'next_holiday'   => $this->nextHoliday(),
                 ],
             ];
-        });
+        }, 'dashboard.hr');
     }
 
     /* ─── Task D4 — HR Officer helper methods ─── */

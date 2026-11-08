@@ -7,7 +7,9 @@ namespace Tests\Feature\Inventory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Common\Services\SettingsService;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
+use App\Modules\Inventory\Events\ItemCostReviewChanged;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCostReview;
@@ -37,6 +39,7 @@ class ItemCostReviewTest extends TestCase
         $finance = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
         $financeReviewer = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
         $review = app(ItemCostReviewService::class)->capture($line, '12.0000');
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ItemCostReviewChanged::class)->count());
         $this->assertSame('10.0000', $item->fresh()->standard_cost);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $finance->id,
@@ -52,12 +55,18 @@ class ItemCostReviewTest extends TestCase
         $this->actingAs($warehouse)->putJson('/api/v1/inventory/items/'.$item->hash_id, ['standard_cost' => '12.0000'])->assertForbidden();
         $this->actingAs($warehouse)->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Review'])->assertForbidden();
         $this->actingAs($finance)->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Approved receipt cost basis'])->assertOk()->assertJsonPath('data.status', 'approved');
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ItemCostReviewChanged::class)->count());
+        $decisionPayload = json_decode((string) DB::table('event_outbox')
+            ->where('event_type', ItemCostReviewChanged::class)
+            ->value('payload'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('status_changed', $decisionPayload['action']);
         $this->assertSame('12.0000', $item->fresh()->standard_cost);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $finance->id, 'type' => 'approval.completed']);
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $financeReviewer->id, 'type' => 'approval.completed']);
         $outcomeNotice = DB::table('notifications')->where('notifiable_id', $financeReviewer->id)->where('type', 'approval.completed')->firstOrFail();
         $this->assertSame('/crm/price-agreements/cost-reviews?review='.$review->hash_id, json_decode($outcomeNotice->data, true)['link_to']);
         $this->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Repeat'])->assertOk();
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ItemCostReviewChanged::class)->count());
         $staleLine = $grn->items()->create(['purchase_order_item_id' => $line->purchase_order_item_id, 'location_id' => $line->location_id, 'item_id' => $item->id, 'quantity_received' => '5', 'quantity_accepted' => '5', 'unit_cost' => '14.0000']);
         $staleReview = app(ItemCostReviewService::class)->capture($staleLine, '14.0000');
         $this->actingAs($financeReviewer)->getJson('/api/v1/inventory/cost-reviews?review='.$review->hash_id)
@@ -98,6 +107,19 @@ class ItemCostReviewTest extends TestCase
         app(PricingReviewService::class)->receiptCostChanged(new GoodsReceiptNoteAccepted($grn));
 
         $review = ItemCostReview::where('grn_item_id', $line->id)->firstOrFail();
+        $refresh = DB::table('event_outbox')
+            ->where('event_type', ItemCostReviewChanged::class)
+            ->firstOrFail();
+        $payload = json_decode((string) $refresh->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(['entityHashId', 'action', 'version', 'actorHashId', 'eventId'], array_keys($payload));
+        $this->assertSame($review->hash_id, $payload['entityHashId']);
+        $this->assertSame('created', $payload['action']);
+        $event = app(OutboxEventCodec::class)->decode($refresh->event_type, $payload);
+        $broadcastPayload = $event->broadcastWith();
+        $this->assertSame('item_cost_review', $broadcastPayload['entity_type']);
+        $this->assertSame($review->hash_id, $broadcastPayload['entity_id']);
+        $this->assertArrayNotHasKey('proposed_cost', $broadcastPayload);
+        $this->assertArrayNotHasKey('previous_cost', $broadcastPayload);
         $notice = DB::table('notifications')->where('notifiable_id', $finance->id)->where('type', 'inventory.receipt_cost_changed')->firstOrFail();
         $this->assertSame(1, DB::table('notifications')->where('type', 'inventory.receipt_cost_changed')->count());
         $this->assertSame('/crm/price-agreements/cost-reviews?review='.$review->hash_id, json_decode($notice->data, true)['link_to']);

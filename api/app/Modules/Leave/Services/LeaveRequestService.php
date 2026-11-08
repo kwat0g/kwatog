@@ -26,6 +26,7 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Modules\Leave\Exceptions\LeaveRequestStateConflictException;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
@@ -371,7 +372,7 @@ class LeaveRequestService
             $req = $this->lockRequest($req);
             $this->assertDepartmentDecisionScope($req, $approver);
             if ($req->status !== LeaveRequestStatus::PendingDept) {
-                throw new BusinessRuleException('Only requests pending department head approval can be approved here.');
+                throw new LeaveRequestStateConflictException('This request is no longer pending department head approval. Reload and review the latest status.');
             }
             $this->approvals->approve($req, $approver, $remarks);
 
@@ -394,7 +395,7 @@ class LeaveRequestService
         return DB::transaction(function () use ($req, $approver, $remarks) {
             $req = $this->lockRequest($req);
             if ($req->status !== LeaveRequestStatus::PendingHr) {
-                throw new BusinessRuleException('Only requests pending HR approval can be approved here.');
+                throw new LeaveRequestStateConflictException('This request is no longer pending HR approval. Reload and review the latest status.');
             }
             $this->approvals->approve($req, $approver, $remarks);
 
@@ -487,7 +488,7 @@ class LeaveRequestService
         return DB::transaction(function () use ($req, $approver, $reason) {
             $req = $this->lockRequest($req);
             if (! in_array($req->status, [LeaveRequestStatus::PendingDept, LeaveRequestStatus::PendingHr], true)) {
-                throw new BusinessRuleException('Only pending requests can be rejected.');
+                throw new LeaveRequestStateConflictException('This request is no longer pending. Reload and review the latest status.');
             }
             $stagePermission = $req->status === LeaveRequestStatus::PendingDept
                 ? 'leave.approve_dept'
@@ -523,7 +524,7 @@ class LeaveRequestService
                 throw new ForbiddenActionException('You may only cancel your own leave requests.');
             }
             if (in_array($req->status, [LeaveRequestStatus::Cancelled, LeaveRequestStatus::Rejected], true)) {
-                throw new BusinessRuleException('Already finalized.');
+                throw new LeaveRequestStateConflictException('This request is already finalized. Reload and review the latest status.');
             }
             $wasApproved = $req->status === LeaveRequestStatus::Approved;
             $wasPending = in_array($req->status, [LeaveRequestStatus::PendingDept, LeaveRequestStatus::PendingHr], true);

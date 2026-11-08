@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Support\Money;
 use App\Common\Traits\HasApprovalWorkflow;
 use App\Common\Traits\HasAuditLog;
@@ -163,6 +164,11 @@ class PurchaseRequest extends Model
             ];
             $locked->forceFill($attributes)->save();
             $this->forceFill($attributes);
+            app(ChainBroadcaster::class)->broadcastFor(
+                $locked,
+                $locked->status?->value ?? PurchaseRequestStatus::Approved->value,
+                action: 'updated',
+            );
 
             return true;
         });
@@ -190,6 +196,13 @@ class PurchaseRequest extends Model
                 'po_conversion_note' => $note,
                 'po_conversion_at' => $changed ? now() : $locked->po_conversion_at,
             ])->save();
+            if ($changed) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $locked,
+                    $locked->status?->value ?? PurchaseRequestStatus::Approved->value,
+                    action: 'updated',
+                );
+            }
 
             return $changed;
         });
@@ -197,10 +210,26 @@ class PurchaseRequest extends Model
 
     public function markPoConversionConverted(): void
     {
-        $this->forceFill([
-            'po_conversion_status' => PurchaseRequestConversionStatus::Converted,
-            'po_conversion_note' => null,
-            'po_conversion_at' => now(),
-        ])->save();
+        DB::transaction(function (): void {
+            $locked = static::query()->lockForUpdate()->find($this->getKey());
+            if (! $locked) {
+                return;
+            }
+            $locked->forceFill([
+                'po_conversion_status' => PurchaseRequestConversionStatus::Converted,
+                'po_conversion_note' => null,
+                'po_conversion_at' => now(),
+            ]);
+            $changed = $locked->isDirty(['po_conversion_status', 'po_conversion_note']);
+            $locked->save();
+            $this->forceFill($locked->only(['po_conversion_status', 'po_conversion_note', 'po_conversion_at']));
+            if ($changed) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $locked,
+                    $locked->status?->value ?? PurchaseRequestStatus::Approved->value,
+                    action: 'updated',
+                );
+            }
+        });
     }
 }

@@ -52,6 +52,8 @@ export interface SelfServiceLoan {
  remaining_repayment_months?: number;
  status: string;
  status_label?: string;
+ available_actions?: { can_withdraw?: boolean };
+ version?: string | null;
  created_at: string | null;
 }
 
@@ -124,6 +126,7 @@ export type OvertimeStatus = 'pending' | 'approved' | 'rejected';
 
 export interface SelfServiceOvertimeRequest {
  id: string;
+ version?: number;
  date: string | null;
  hours_requested: string;
  reason: string | null;
@@ -132,8 +135,16 @@ export interface SelfServiceOvertimeRequest {
  rejection_reason: string | null;
  cancelled_at: string | null;
  can_restore: boolean;
+ permissions?: { cancel?: boolean; restore?: boolean };
+ available_actions?: { cancel?: boolean; restore?: boolean };
  approver: string | null;
  created_at: string | null;
+ updated_at?: string | null;
+}
+
+export interface SelfServiceOvertimeMutationResponse {
+ message: string;
+ data: SelfServiceOvertimeRequest;
 }
 
 export interface SelfServiceOvertimeResponse {

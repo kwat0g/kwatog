@@ -17,6 +17,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { ContributionAgency, GovernmentTable } from '@/types/payroll';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 const AGENCY_HELP: Record<string, string> = {
  sss: 'Flat peso amounts per bracket. EE = employee share, ER = employer share.',
@@ -26,6 +27,7 @@ const AGENCY_HELP: Record<string, string> = {
 };
 
 export default function AdminGovTablesPage() {
+ useRealtimeList('government_table', 'visible');
  const [active, setActive] = useState<ContributionAgency | ''>('');
  const { data: options } = useQuery({
  queryKey: ['gov-tables', 'options'],
@@ -69,11 +71,17 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
  queryFn: () => govTablesApi.list(agency),
  });
 
+ const applyServerBracket = (updated: GovernmentTable) => {
+  qc.setQueryData<GovernmentTable[]>(['gov-tables', agency], (rows) =>
+   rows?.map((row) => row.id === updated.id ? updated : row),
+  );
+ };
+
  const deactivate = useMutation({
  mutationFn: (id: string) => govTablesApi.deactivate(id),
- onSuccess: () => {
+ onSuccess: (updated) => {
+ applyServerBracket(updated);
  toast.success('Bracket deactivated.');
- qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
  setConfirmDeactivate(null);
  },
  onError: (error) => reportMutationError(error, 'Failed to deactivate bracket.'),
@@ -81,9 +89,9 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
 
  const activate = useMutation({
  mutationFn: (id: string) => govTablesApi.activate(id),
- onSuccess: () => {
+ onSuccess: (updated) => {
+ applyServerBracket(updated);
  toast.success('Bracket activated.');
- qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
  setConfirmActivate(null);
  },
  onError: (error) => reportMutationError(error, 'Failed to activate bracket.'),
@@ -203,9 +211,11 @@ function EditBracketModal({
 
  const mutation = useMutation({
  mutationFn: (payload: UpdateGovTableData) => govTablesApi.update(bracket!.id, payload),
- onSuccess: () => {
+ onSuccess: (updated) => {
+  qc.setQueryData<GovernmentTable[]>(['gov-tables', agency], (rows) =>
+   rows?.map((row) => row.id === updated.id ? updated : row),
+  );
  toast.success('Bracket updated.');
- qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
  onClose();
  },
  onError: (error) => reportMutationError(error, 'Failed to update bracket.'),

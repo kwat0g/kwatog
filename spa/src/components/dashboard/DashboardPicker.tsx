@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { LuArrowDown, LuArrowUp, LuLayoutGrid, LuPlus, LuSave, LuX } from '@/lib/icons';
-import { dashboardLayoutApi, type DashboardLayoutItem, type DashboardWidgetMeta, type SavedLayoutWidget } from '@/api/dashboard-layout';
+import {
+  dashboardLayoutApi,
+  dashboardLayoutQueryKeys,
+  mergeDashboardLayoutSnapshot,
+  type DashboardLayoutItem,
+  type DashboardLayoutSnapshot,
+  type DashboardWidgetMeta,
+  type SavedLayoutWidget,
+} from '@/api/dashboard-layout';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Chip } from '@/components/ui/Chip';
+import { useAuthStore } from '@/stores/authStore';
+import { realtimeIdentityKey } from '@/lib/realtime/identity';
+import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
 
 interface DashboardPickerProps {
   layout: DashboardLayoutItem[];
@@ -104,38 +115,47 @@ function draftFromMeta(widget: DashboardWidgetMeta): DraftWidget {
 
 export function DashboardPicker({ layout, layoutVersion }: DashboardPickerProps) {
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+  const dashboardIdentity = realtimeIdentityKey(user);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState<DraftWidget[]>(() => draftFromLayout(layout));
+  const [draftVersion, setDraftVersion] = useState(layoutVersion);
+  const layoutChangedElsewhere = open && draftVersion !== layoutVersion;
 
   const catalog = useQuery({
-    queryKey: ['dashboard', 'widgets'],
+    queryKey: dashboardLayoutQueryKeys.widgets(dashboardIdentity),
     queryFn: () => dashboardLayoutApi.widgets(),
     enabled: open,
     staleTime: 5 * 60_000,
   });
 
   const save = useMutation({
-    mutationFn: (widgets: SavedLayoutWidget[]) => dashboardLayoutApi.save(widgets, layoutVersion),
-    onSuccess: () => {
+    mutationFn: ({ widgets, version }: { widgets: SavedLayoutWidget[]; version: string }) =>
+      dashboardLayoutApi.save(widgets, version),
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData<DashboardLayoutSnapshot>(
+        dashboardLayoutQueryKeys.layout(dashboardIdentity, true),
+        (current) => mergeDashboardLayoutSnapshot(current, snapshot),
+      );
       toast.success('Dashboard layout saved.');
       setOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard', 'widget-data'] });
+      void invalidateRealtimeSignal(
+        queryClient,
+        'dashboard_layout_changed',
+        [],
+        [dashboardLayoutQueryKeys.layout(dashboardIdentity, true)],
+      );
     },
     onError: (error: { response?: { status?: number } }) => {
+      if (error.response?.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
+      }
       toast.error(error.response?.status === 409
-        ? 'This layout changed elsewhere. Reload the dashboard before saving again.'
+        ? 'Dashboard layout changed elsewhere. Your draft is kept; close and reopen to review the latest layout.'
         : 'Could not save the dashboard layout.');
     },
   });
-
-  useEffect(() => {
-    if (open) {
-      setDraft(draftFromLayout(layout));
-      setSearch('');
-    }
-  }, [open, layout]);
 
   const activeKeys = useMemo(() => new Set(draft.map((widget) => widget.key)), [draft]);
   const available = useMemo(() => {
@@ -164,7 +184,12 @@ export function DashboardPicker({ layout, layoutVersion }: DashboardPickerProps)
         variant="secondary"
         size="sm"
         icon={<LuLayoutGrid size={14} />}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setDraft(draftFromLayout(layout));
+          setDraftVersion(layoutVersion);
+          setSearch('');
+          setOpen(true);
+        }}
         aria-label="Customize dashboard"
       >
         Customize
@@ -172,6 +197,11 @@ export function DashboardPicker({ layout, layoutVersion }: DashboardPickerProps)
 
       <Modal isOpen={open} onClose={() => setOpen(false)} title="Customize dashboard" size="xl">
         <div className="space-y-5">
+          {layoutChangedElsewhere && (
+            <div role="alert" className="rounded-md border border-warning bg-warning-bg p-3 text-sm text-warning-fg">
+              Dashboard layout changed in another tab. Your edits are kept. Close and reopen this editor to review the latest layout before saving.
+            </div>
+          )}
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-sm text-primary">Keep the work you monitor most often within reach.</p>
@@ -283,7 +313,13 @@ export function DashboardPicker({ layout, layoutVersion }: DashboardPickerProps)
 
         <ModalFooter>
           <Button variant="secondary" onClick={() => setOpen(false)} disabled={save.isPending}>Cancel</Button>
-          <Button variant="primary" icon={<LuSave size={14} />} onClick={() => save.mutate(pack(draft))} loading={save.isPending}>
+          <Button
+            variant="primary"
+            icon={<LuSave size={14} />}
+            onClick={() => save.mutate({ widgets: pack(draft), version: draftVersion })}
+            loading={save.isPending}
+            disabled={layoutChangedElsewhere}
+          >
             Save layout
           </Button>
         </ModalFooter>

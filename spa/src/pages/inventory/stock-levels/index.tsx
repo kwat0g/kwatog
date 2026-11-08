@@ -11,12 +11,15 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatPeso, formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { StockMovementsTab } from '@/pages/inventory/movements';
 import type { StockLevel } from '@/types/inventory';
 import { ReservationsTab } from './ReservationsTab';
+import { useInventoryStockRealtime } from '@/hooks/useInventoryStockRealtime';
 
 export default function StockLevelsPage() {
+  useInventoryStockRealtime();
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const itemFilter = search.get('item_id') ?? '';
@@ -39,11 +42,13 @@ export default function StockLevelsPage() {
   };
   const [filters, setFilters] = useUrlFilters<Record<string, unknown>>({ page: 1, per_page: 50 });
 
+  const queryKey = ['inventory', 'stock-levels', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'stock-levels', filters],
+    queryKey,
     queryFn: () => stockLevelsApi.list(filters),
     enabled: view === 'levels',
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
   const { data: itemOptions } = useQuery({
     queryKey: ['inventory', 'items', 'options'],

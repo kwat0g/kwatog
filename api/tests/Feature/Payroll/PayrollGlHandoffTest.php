@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
+use App\Common\Jobs\DispatchOutboxMessage;
+use App\Common\Models\OutboxMessage;
 use App\Common\Services\ChainBottleneckService;
 use App\Common\Services\OutboxDispatcher;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
-use App\Common\Models\OutboxMessage;
-use App\Common\Jobs\DispatchOutboxMessage;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
@@ -27,8 +27,8 @@ use Database\Seeders\PayrollChartAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -280,6 +280,32 @@ class PayrollGlHandoffTest extends TestCase
             'event_type' => PayrollGlPostingRequested::class,
         ]);
         $this->assertSame(PayrollGlHandoffStatus::Pending, $period->fresh()->gl_handoff_status);
+    }
+
+    public function test_retry_route_rejects_a_stale_retry_when_handoff_is_already_pending(): void
+    {
+        Event::fake([PayrollGlPostingRequested::class]);
+        $period = $this->makePeriod(PayrollPeriodStatus::Finalized, true);
+        $period->markGlManualRequired('Initial configuration failure.');
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->valueOrFail('id'),
+        ]);
+        $url = '/api/v1/payroll-periods/'.$period->hash_id.'/retry-gl';
+
+        $this->actingAs($actor, 'sanctum')
+            ->postJson($url)
+            ->assertAccepted()
+            ->assertJsonPath('data.gl_handoff_status', PayrollGlHandoffStatus::Pending->value)
+            ->assertJsonPath('data.available_actions.retry_gl', false);
+
+        $this->postJson($url)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'payroll_period_state_conflict');
+
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PayrollGlPostingRequested::class)
+            ->where('dedupe_key', 'like', 'payroll-gl-retry:'.$period->id.':%')
+            ->count());
     }
 
     public function test_stale_finalization_model_cannot_bypass_authoritative_status_lock(): void

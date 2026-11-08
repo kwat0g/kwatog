@@ -40,7 +40,7 @@ class ShiftService
         return DB::transaction(function () use ($data) {
             $this->assertDistinctTimes($data['start_time'] ?? null, $data['end_time'] ?? null);
             if ($data['is_default'] ?? false) {
-                Shift::query()->where('is_default', true)->update(['is_default' => false]);
+                $this->clearOtherDefaults();
                 $data['is_active'] = true;
             }
 
@@ -60,7 +60,7 @@ class ShiftService
             );
 
             if (($data['is_default'] ?? null) === true) {
-                Shift::query()->whereKeyNot($locked->getKey())->where('is_default', true)->update(['is_default' => false]);
+                $this->clearOtherDefaults((int) $locked->getKey());
                 $data['is_active'] = true;
             }
 
@@ -162,6 +162,29 @@ class ShiftService
     {
         if (substr((string) $start, 0, 5) === substr((string) $end, 0, 5)) {
             throw new BusinessRuleException('End time cannot be the same as start time.');
+        }
+    }
+
+    /** Keep query-builder default changes visible to remote shift and assignment viewers. */
+    private function clearOtherDefaults(?int $exceptId = null): void
+    {
+        $query = Shift::query()->where('is_default', true);
+        if ($exceptId !== null) {
+            $query->whereKeyNot($exceptId);
+        }
+
+        $ids = $query->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+        if ($ids === []) {
+            return;
+        }
+
+        Shift::query()->whereIn('id', $ids)->update([
+            'is_default' => false,
+            'updated_at' => now(),
+        ]);
+
+        foreach (Shift::withTrashed()->whereIn('id', $ids)->get() as $shift) {
+            app(ShiftRealtimeService::class)->stage($shift, 'updated');
         }
     }
 }

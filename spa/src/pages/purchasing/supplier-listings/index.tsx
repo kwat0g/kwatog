@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { supplierListingsApi } from '@/api/purchasing/supplier-listings';
+import { supplierListingsApi, type SupplierListingBulkResult } from '@/api/purchasing/supplier-listings';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type BulkAction, type Column } from '@/components/ui/DataTable';
@@ -13,10 +13,133 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
+import { invalidateRealtimeChange, invalidateRealtimeChanges, type RealtimeChangeRef } from '@/lib/realtime/invalidationMap';
+import type { PaginatedResponse } from '@/types';
 import type { SupplierItemListing, SupplierListingStatus } from '@/types/purchasing';
+
+const supplierListingQueryPrefix = ['purchasing', 'supplier-listings'] as const;
+
+function reconcileSupplierListingLists(
+  queryClient: QueryClient,
+  updated: SupplierItemListing,
+): void {
+  for (const [queryKey, cached] of queryClient.getQueriesData<PaginatedResponse<SupplierItemListing>>({
+    queryKey: supplierListingQueryPrefix,
+  })) {
+    if (!cached || !cached.data.some((listing) => listing.id === updated.id)) continue;
+
+    const filters = queryKey[2] && typeof queryKey[2] === 'object'
+      ? queryKey[2] as Partial<ReviewFilters>
+      : undefined;
+    const remove = !!filters?.status && filters.status !== updated.status;
+    const data = remove
+      ? cached.data.filter((listing) => listing.id !== updated.id)
+      : cached.data.map((listing) => listing.id === updated.id ? updated : listing);
+
+    if (!remove) {
+      queryClient.setQueryData<PaginatedResponse<SupplierItemListing>>(queryKey, { ...cached, data });
+      continue;
+    }
+
+    const total = Math.max(0, cached.meta.total - 1);
+    const pageStart = (cached.meta.current_page - 1) * cached.meta.per_page + 1;
+    queryClient.setQueryData<PaginatedResponse<SupplierItemListing>>(queryKey, {
+      ...cached,
+      data,
+      meta: {
+        ...cached.meta,
+        total,
+        last_page: Math.max(1, Math.ceil(total / Math.max(1, cached.meta.per_page))),
+        from: total === 0 || pageStart > total ? null : pageStart,
+        to: data.length === 0 ? null : Math.min(total, cached.meta.current_page * cached.meta.per_page),
+      },
+    });
+  }
+}
+
+type SupplierListingBulkStatusUpdate = {
+  id: string;
+  status: Extract<SupplierListingStatus, 'approved' | 'rejected'>;
+};
+
+function successfulBulkStatusUpdates(results: SupplierListingBulkResult[]): SupplierListingBulkStatusUpdate[] {
+  return results.flatMap((result) => result.status === 'approved' || result.status === 'rejected'
+    ? [{ id: result.id, status: result.status }]
+    : []);
+}
+
+function reconcileBulkSupplierListingStatuses(
+  queryClient: QueryClient,
+  updates: SupplierListingBulkStatusUpdate[],
+  rejectionReason?: string,
+): void {
+  const statusById = new Map(updates.map((update) => [update.id, update.status]));
+  if (statusById.size === 0) return;
+
+  for (const [queryKey, cached] of queryClient.getQueriesData<PaginatedResponse<SupplierItemListing>>({
+    queryKey: supplierListingQueryPrefix,
+  })) {
+    if (!cached) continue;
+
+    const filters = queryKey[2] && typeof queryKey[2] === 'object'
+      ? queryKey[2] as Partial<ReviewFilters>
+      : undefined;
+    let changed = 0;
+    let removed = 0;
+    const data = cached.data.flatMap((listing) => {
+      const status = statusById.get(listing.id);
+      if (!status) return [listing];
+
+      changed += 1;
+      if (filters?.status && filters.status !== status) {
+        removed += 1;
+        return [];
+      }
+
+      return [{
+        ...listing,
+        status,
+        ...(status === 'rejected' && rejectionReason !== undefined ? { rejection_reason: rejectionReason } : {}),
+        available_actions: { approve: false, reject: false },
+      }];
+    });
+    if (changed === 0) continue;
+
+    if (removed === 0) {
+      queryClient.setQueryData<PaginatedResponse<SupplierItemListing>>(queryKey, { ...cached, data });
+      continue;
+    }
+
+    const total = Math.max(0, cached.meta.total - removed);
+    const pageStart = (cached.meta.current_page - 1) * cached.meta.per_page + 1;
+    queryClient.setQueryData<PaginatedResponse<SupplierItemListing>>(queryKey, {
+      ...cached,
+      data,
+      meta: {
+        ...cached.meta,
+        total,
+        last_page: Math.max(1, Math.ceil(total / Math.max(1, cached.meta.per_page))),
+        from: total === 0 || pageStart > total ? null : pageStart,
+        to: data.length === 0 ? null : Math.min(total, cached.meta.current_page * cached.meta.per_page),
+      },
+    });
+  }
+}
+
+function supplierListingChange(id: string): RealtimeChangeRef {
+  return { entityType: 'supplier_listing', entityId: id };
+}
+
+function invalidateSupplierListingIds(queryClient: QueryClient, ids: string[]): void {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length > 0) void invalidateRealtimeChanges(queryClient, uniqueIds.map(supplierListingChange));
+}
 
 const statusVariant: Record<SupplierListingStatus, 'warning' | 'success' | 'danger' | 'neutral'> = {
   pending: 'warning',
@@ -39,37 +162,58 @@ export default function SupplierListingsReviewPage() {
   const { canApprove } = usePermission();
   const canReview = canApprove('purchasing.supplier_listings.review');
   const [filters, setFilters] = useUrlFilters<ReviewFilters>({ id: '', search: '', status: '', page: 1, per_page: 25 });
-  const [rejecting, setRejecting] = useState<SupplierItemListing | null>(null);
-  const [bulkRejectRows, setBulkRejectRows] = useState<SupplierItemListing[]>([]);
+  const [bulkRejectIds, setBulkRejectIds] = useState<string[]>([]);
   const [reason, setReason] = useState('');
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['purchasing', 'supplier-listings', filters],
-    queryFn: () => supplierListingsApi.list({ ...filters, status: filters.status || undefined }),
-    placeholderData: (prev) => prev,
-  });
+  useRealtimeList('supplier_listing', 'visible');
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['purchasing', 'supplier-listings'] });
+  const queryKey = [...supplierListingQueryPrefix, filters] as const;
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
+    queryKey,
+    queryFn: () => supplierListingsApi.list({ ...filters, status: filters.status || undefined }),
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
+  });
+  const rejectActionTarget = useQueryRecordTarget(data?.data, { isFetching, isError });
+  const rejecting = rejectActionTarget.target;
+  const bulkRejectRows = bulkRejectIds
+    .map((id) => data?.data.find((listing) => listing.id === id) ?? null)
+    .filter((listing): listing is SupplierItemListing => listing !== null);
+  const canConfirmBulkReject = bulkRejectIds.length > 0 &&
+    !isFetching && !isError &&
+    bulkRejectRows.length === bulkRejectIds.length &&
+    bulkRejectRows.every((listing) => listing.available_actions?.reject === true);
+
+  const refreshListing = (updated: SupplierItemListing) => {
+    reconcileSupplierListingLists(qc, updated);
+    void invalidateRealtimeChange(qc, supplierListingChange(updated.id));
+  };
 
   const approve = useMutation({
     mutationFn: (listing: SupplierItemListing) => supplierListingsApi.approve(listing.id),
-    onSuccess: (_, listing) => {
-      invalidate();
+    onSuccess: (updated, listing) => {
+      refreshListing(updated);
       toast.success(`Approved listing for ${listing.item?.code ?? 'item'}. The offer is now live.`);
     },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to approve.'),
+    onError: (e: AxiosError<{ message?: string }>, listing) => {
+      invalidateSupplierListingIds(qc, [listing.id]);
+      toast.error(e.response?.data?.message ?? 'Failed to approve.');
+    },
   });
 
   const reject = useMutation({
     mutationFn: ({ listing, reason }: { listing: SupplierItemListing; reason: string }) =>
       supplierListingsApi.reject(listing.id, reason),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshListing(updated);
       toast.success('Listing rejected. The supplier will see your reason.');
-      setRejecting(null);
+      rejectActionTarget.close();
       setReason('');
     },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to reject.'),
+    onError: (e: AxiosError<{ message?: string }>, variables) => {
+      invalidateSupplierListingIds(qc, [variables.listing.id]);
+      toast.error(e.response?.data?.message ?? 'Failed to reject.');
+    },
   });
 
   const bulkApprove = useMutation({
@@ -78,8 +222,9 @@ export default function SupplierListingsReviewPage() {
       selected: rows.length,
     }),
     // A partial batch may still have committed rows, so refetch regardless.
-    onSettled: () => invalidate(),
+    onSettled: (_result, _error, rows) => invalidateSupplierListingIds(qc, rows.map((row) => row.id)),
     onSuccess: ({ results, selected }) => {
+      reconcileBulkSupplierListingStatuses(qc, successfulBulkStatusUpdates(results));
       const approved = results.filter((r) => r.status === 'approved').length;
       const skipped = results.filter((r) => r.status !== 'approved');
       if (skipped.length > 0) {
@@ -100,9 +245,10 @@ export default function SupplierListingsReviewPage() {
       results: await supplierListingsApi.bulkReject(rows.map((r) => r.id), reason),
       selected: rows.length,
     }),
-    onSettled: () => invalidate(),
-    onSuccess: ({ results, selected }) => {
-      setBulkRejectRows([]);
+    onSettled: (_result, _error, variables) => invalidateSupplierListingIds(qc, variables.rows.map((row) => row.id)),
+    onSuccess: ({ results, selected }, variables) => {
+      reconcileBulkSupplierListingStatuses(qc, successfulBulkStatusUpdates(results), variables.reason);
+      setBulkRejectIds([]);
       setReason('');
       const rejected = results.filter((r) => r.status === 'rejected').length;
       const skipped = results.filter((r) => r.status !== 'rejected');
@@ -119,14 +265,18 @@ export default function SupplierListingsReviewPage() {
     onError: (e) => reportMutationError(e, 'Bulk rejection failed.'),
   });
 
-  const pendingSelected = (rows: SupplierItemListing[]) => rows.filter((r) => r.status === 'pending');
+  const pendingSelected = (rows: SupplierItemListing[], action: 'approve' | 'reject') => rows.filter((r) =>
+    r.available_actions?.[action] === true,
+  );
 
   const bulkActions: BulkAction<SupplierItemListing>[] = [
     {
       label: 'Approve selected',
       variant: 'primary',
+      disabled: isFetching || isError || bulkApprove.isPending || bulkReject.isPending,
       onClick: (rows) => {
-        const pending = pendingSelected(rows);
+        if (isFetching || isError) return;
+        const pending = pendingSelected(rows, 'approve');
         if (pending.length === 0) {
           toast.error('Select at least one pending listing to approve.');
           return;
@@ -137,13 +287,15 @@ export default function SupplierListingsReviewPage() {
     {
       label: 'Reject selected',
       variant: 'danger',
+      disabled: isFetching || isError || bulkApprove.isPending || bulkReject.isPending,
       onClick: (rows) => {
-        const pending = pendingSelected(rows);
+        if (isFetching || isError) return;
+        const pending = pendingSelected(rows, 'reject');
         if (pending.length === 0) {
           toast.error('Select at least one pending listing to reject.');
           return;
         }
-        setBulkRejectRows(pending);
+        setBulkRejectIds(pending.map((row) => row.id));
         setReason('');
       },
     },
@@ -175,28 +327,37 @@ export default function SupplierListingsReviewPage() {
     { key: 'status', header: 'Status', cell: (r) => (
       <Chip variant={statusVariant[r.status]}>{statusLabel[r.status]}</Chip>
     ) },
-    ...(canReview ? [{
+    ...(canReview || data?.data.some((row) => row.available_actions?.approve || row.available_actions?.reject) ? [{
       key: 'actions',
       header: '',
       align: 'right' as const,
-      cell: (r: SupplierItemListing) => r.status === 'pending' ? (
+      cell: (r: SupplierItemListing) => {
+        const canApproveRow = r.available_actions?.approve === true;
+        const canRejectRow = r.available_actions?.reject === true;
+        if (!canApproveRow && !canRejectRow) return null;
+
+        return (
         <div className="flex gap-1.5 justify-end">
-          <Button type="button" variant="primary" size="xs" onClick={() => approve.mutate(r)} disabled={approve.isPending}>
+          {canApproveRow && <Button type="button" variant="primary" size="xs" onClick={() => {
+            const current = data?.data.find((listing) => listing.id === r.id);
+            if (!isFetching && !isError && current?.available_actions?.approve) approve.mutate(current);
+          }} disabled={isFetching || isError || approve.isPending || reject.isPending}>
             Approve
-          </Button>
-          <Button type="button" variant="danger" size="xs" onClick={() => { setRejecting(r); setReason(''); }}>
+          </Button>}
+          {canRejectRow && <Button type="button" variant="danger" size="xs" onClick={() => { rejectActionTarget.open(r); setReason(''); }} disabled={isFetching || isError || approve.isPending || reject.isPending}>
             Reject
-          </Button>
+          </Button>}
         </div>
-      ) : null,
+        );
+      },
     }] : []),
   ];
 
-  const rejectModalOpen = !!rejecting || bulkRejectRows.length > 0;
+  const rejectModalOpen = rejectActionTarget.targetId !== null || bulkRejectIds.length > 0;
 
   const closeRejectModal = () => {
-    setRejecting(null);
-    setBulkRejectRows([]);
+    rejectActionTarget.close();
+    setBulkRejectIds([]);
     setReason('');
   };
 
@@ -256,18 +417,32 @@ export default function SupplierListingsReviewPage() {
       <Modal
         isOpen={rejectModalOpen}
         onClose={closeRejectModal}
-        title={bulkRejectRows.length > 0 ? `Reject ${bulkRejectRows.length} listing(s)` : 'Reject listing'}
+        title={bulkRejectIds.length > 0 ? `Reject ${bulkRejectIds.length} listing(s)` : 'Reject listing'}
         size="sm"
       >
         {rejectModalOpen && (
           <>
             <div className="py-2 space-y-3">
-              {bulkRejectRows.length > 0 ? (
-                <p className="text-sm text-secondary">
-                  Rejecting <span className="font-mono font-medium text-primary">{bulkRejectRows.length}</span> selected
-                  listing(s). Every supplier will see the same reason.
-                </p>
-              ) : rejecting && (
+              {bulkRejectIds.length > 0 ? (
+                isFetching ? (
+                  <p role="status" className="text-sm text-muted">Checking the latest status of the selected listings…</p>
+                ) : isError ? (
+                  <p role="alert" className="text-sm text-danger-fg">The selected listings could not be checked. Refresh before rejecting.</p>
+                ) : !canConfirmBulkReject ? (
+                  <p role="alert" className="text-sm text-warning-fg">One or more selected listings are no longer available for rejection. Close this dialog and select the current pending listings.</p>
+                ) : (
+                  <p className="text-sm text-secondary">
+                    Rejecting <span className="font-mono font-medium text-primary">{bulkRejectIds.length}</span> selected
+                    listing(s). Every supplier will see the same reason.
+                  </p>
+                )
+              ) : rejectActionTarget.isChecking ? (
+                <p role="status" className="text-sm text-muted">Checking the latest listing status…</p>
+              ) : rejectActionTarget.isUnverified ? (
+                <p role="alert" className="text-sm text-danger-fg">The listing status could not be checked. Refresh before rejecting.</p>
+              ) : !rejecting || rejecting.available_actions?.reject !== true ? (
+                <p role="alert" className="text-sm text-warning-fg">This listing is no longer available for rejection. Your reason is kept.</p>
+              ) : (
                 <p className="text-sm text-secondary">
                   Rejecting the offer for <span className="font-mono font-medium text-primary">{rejecting.item?.code}</span> from{' '}
                   <span className="font-medium text-primary">{rejecting.vendor?.name}</span>. They will see your reason.
@@ -286,16 +461,18 @@ export default function SupplierListingsReviewPage() {
               <Button
                 variant="danger"
                 onClick={() => {
-                  if (bulkRejectRows.length > 0) {
+                  if (bulkRejectIds.length > 0 && canConfirmBulkReject) {
                     bulkReject.mutate({ rows: bulkRejectRows, reason });
-                  } else if (rejecting) {
+                  } else if (rejecting && rejectActionTarget.isFresh && rejecting.available_actions?.reject === true) {
                     reject.mutate({ listing: rejecting, reason });
                   }
                 }}
-                disabled={!reason.trim() || reject.isPending || bulkReject.isPending}
+                disabled={!reason.trim() || reject.isPending || bulkReject.isPending ||
+                  (bulkRejectIds.length > 0 ? !canConfirmBulkReject :
+                    !rejectActionTarget.isFresh || !rejecting || rejecting.available_actions?.reject !== true)}
                 loading={reject.isPending || bulkReject.isPending}
               >
-                {bulkRejectRows.length > 0 ? 'Reject selected' : 'Reject listing'}
+                {bulkRejectIds.length > 0 ? 'Reject selected' : 'Reject listing'}
               </Button>
             </ModalFooter>
           </>

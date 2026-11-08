@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -141,9 +142,15 @@ export default function InvoiceFormPage() {
  : invoicesApi.create(data);
  },
  onSuccess: (inv) => {
- qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+ reconcileRealtimeMutationResponse(
+  qc,
+  { entityType: 'invoice', entityId: inv.id },
+  ['accounting', 'invoices', inv.id],
+  inv,
+ );
  toast.success(isEditing ? 'Draft invoice updated.' : 'Draft invoice saved.');
- navigate(`/accounting/invoices/${inv.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/accounting/invoices/${inv.id}`);
  },
  onError: (e) => {
    applyServerValidationErrors(e, setError, isEditing ? 'Failed to update the invoice.' : 'Failed to create the invoice.');

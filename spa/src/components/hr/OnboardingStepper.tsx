@@ -4,6 +4,7 @@ import { Panel, SkeletonBlock } from '@/components/ui';
 import { Button } from '@/components/ui/Button';
 import { onboardingApi } from '@/api/hr/onboarding';
 import { cn } from '@/lib/cn';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import type { EmployeeOnboarding, OnboardingStep } from '@/types/hr';
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
  */
 export function OnboardingStepper({ employeeId, bare = false }: Props) {
  const queryClient = useQueryClient();
+ useRealtimeRecord('employee_onboarding', employeeId);
  const queryKey = ['employee-onboarding', employeeId] as const;
  const { data, isLoading, isError, refetch, isFetching } = useQuery<EmployeeOnboarding>({
  queryKey,

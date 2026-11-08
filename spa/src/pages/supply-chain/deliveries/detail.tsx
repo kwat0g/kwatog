@@ -39,6 +39,9 @@ import { focusRingInset } from '@/lib/focus';
 import { deliveryStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import { cn } from '@/lib/cn';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { invalidateRealtimeChange, reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
+import type { Invoice } from '@/types/accounting';
+import type { Delivery } from '@/types/supplyChain';
 import { DeliveryAttemptPanel } from './DeliveryAttemptPanel';
 import { TruckReturnReceiptPanel } from './TruckReturnReceiptPanel';
 import { DeliveryStockCostPanel } from './DeliveryStockCostPanel';
@@ -49,6 +52,7 @@ export default function DeliveryDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const deliveryDetailKey = ['supply-chain', 'deliveries', id] as const;
 
   const [cancelDeliveryOpen, setCancelDeliveryOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -61,11 +65,41 @@ export default function DeliveryDetailPage() {
   const [shipmentPlanOpen, setShipmentPlanOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['supply-chain', 'deliveries', id],
+    queryKey: deliveryDetailKey,
     queryFn: () => deliveriesApi.show(id),
     enabled: Boolean(id),
-    placeholderData: (prev) => prev,
   });
+  const reconcileDeliveryResponse = (updatedDelivery: Delivery) => {
+    reconcileRealtimeMutationResponse(
+      qc,
+      { entityType: 'delivery', entityId: updatedDelivery.id },
+      deliveryDetailKey,
+      updatedDelivery,
+    );
+  };
+  const reconcileInvoiceResponse = (updatedInvoice: Invoice) => {
+    const hasLinkedInvoice = qc.getQueryData<Delivery>(deliveryDetailKey)?.invoice?.id === updatedInvoice.id;
+    if (hasLinkedInvoice) {
+      qc.setQueryData<Delivery>(deliveryDetailKey, (current) => current?.invoice?.id === updatedInvoice.id
+        ? {
+            ...current,
+            invoice: {
+              ...current.invoice,
+              invoice_number: updatedInvoice.invoice_number ?? current.invoice.invoice_number,
+              total_amount: updatedInvoice.total_amount,
+              status: updatedInvoice.status,
+              status_label: updatedInvoice.status_label ?? current.invoice.status_label,
+            },
+          }
+        : current);
+    }
+    void invalidateRealtimeChange(
+      qc,
+      { entityType: 'invoice', entityId: updatedInvoice.id },
+      [],
+      hasLinkedInvoice ? [deliveryDetailKey] : [],
+    );
+  };
 
   const { data: proofOptions, isError: proofOptionsError, refetch: refetchProofOptions } = useQuery({
     queryKey: ['supply-chain', 'deliveries', 'proof-options'],
@@ -83,14 +117,14 @@ export default function DeliveryDetailPage() {
   );
 
   // Series C — Task C4. Real-time chain progress.
-  useChainProgress('delivery', id, ['supply-chain', 'deliveries', id]);
+  useChainProgress('delivery', id, deliveryDetailKey);
 
   const advance = useMutation({
     mutationFn: (next: DeliveryStatus) => deliveriesApi.updateStatus(id, next),
-    onSuccess: (_delivery, next) => {
+    onSuccess: (updatedDelivery, next) => {
       toast.success(next === 'cancelled' ? 'Delivery cancelled' : 'Status updated');
       setCancelDeliveryOpen(false);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      reconcileDeliveryResponse(updatedDelivery);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed'),
@@ -101,7 +135,7 @@ export default function DeliveryDetailPage() {
     onSuccess: () => {
       toast.success('Proof archived');
       setDeleteProofId(null);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      void invalidateRealtimeChange(qc, { entityType: 'delivery', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to archive proof'),
@@ -112,7 +146,7 @@ export default function DeliveryDetailPage() {
     onSuccess: () => {
       toast.success('Proof restored');
       setRestoreProofId(null);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      void invalidateRealtimeChange(qc, { entityType: 'delivery', entityId: id });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to restore proof'),
@@ -134,7 +168,7 @@ export default function DeliveryDetailPage() {
             : 'Delivery confirmed',
       );
       setConfirmModalOpen(false);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      reconcileDeliveryResponse(d);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to confirm'),
@@ -142,11 +176,10 @@ export default function DeliveryDetailPage() {
 
   const finalizeInvoice = useMutation({
     mutationFn: (invoiceId: string) => invoicesApi.finalize(invoiceId),
-    onSuccess: () => {
+    onSuccess: (updatedInvoice) => {
       toast.success('Draft invoice finalized to AR + GL.');
       setFinalizeInvoiceId(null);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+      reconcileInvoiceResponse(updatedInvoice);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
@@ -154,9 +187,9 @@ export default function DeliveryDetailPage() {
 
   const retryCoc = useMutation({
     mutationFn: () => deliveriesApi.retryCoc(id),
-    onSuccess: () => {
+    onSuccess: (updatedDelivery) => {
       toast.success('Certificate of Conformance handoff retried.');
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      reconcileDeliveryResponse(updatedDelivery);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to retry CoC handoff.'),
@@ -164,10 +197,9 @@ export default function DeliveryDetailPage() {
 
   const retryInvoice = useMutation({
     mutationFn: () => deliveriesApi.retryInvoice(id),
-    onSuccess: () => {
+    onSuccess: (updatedDelivery) => {
       toast.success('Customer invoice handoff retried.');
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+      reconcileDeliveryResponse(updatedDelivery);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed to retry invoice handoff.'),
@@ -196,7 +228,7 @@ export default function DeliveryDetailPage() {
   const activeProofs = proofs.filter((proof) => !proof.deleted_at && ['photo', 'signed_dr', 'customer_po_confirmation'].includes(proof.proof_type));
   const hasProof = activeProofs.length > 0;
   const hasAnyProof = proofs.length > 0;
-  const canConfirm = data.status === 'delivered' && data.can_confirm !== false && !data.billing_hold && can('supply_chain.deliveries.confirm');
+  const canConfirm = data.available_actions?.confirm === true;
   const assigned = Boolean(data.vehicle && data.driver);
   const stockReady = data.stock_reservation_status === 'reserved';
   const nextInstruction = data.status === 'scheduled'

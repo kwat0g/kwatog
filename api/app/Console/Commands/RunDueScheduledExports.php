@@ -13,10 +13,12 @@ use App\Common\Services\Export\ExportRunner;
 use App\Common\Services\Export\ScheduledExportArtifactService;
 use App\Common\Services\Export\SpreadsheetExportService;
 use App\Common\Services\SettingsService;
+use App\Common\Services\ScheduledExportRealtimeService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -89,7 +91,19 @@ class RunDueScheduledExports extends Command
                     $this->releaseAfterFailure($row, $token, $e);
                 }
                 if ($e instanceof ValidationException) {
-                    $row->update(['is_active' => false]);
+                    DB::transaction(function () use ($row, $token): void {
+                        $updated = ScheduledExport::query()->whereKey($row->getKey())->update([
+                            'is_active' => false,
+                            'updated_at' => now(),
+                        ]);
+                        if ($updated === 1) {
+                            app(ScheduledExportRealtimeService::class)->stageById(
+                                (int) $row->getKey(),
+                                'status_changed',
+                                "scheduled-export-run:{$row->getKey()}:".($token ?? (string) Str::uuid()).':disabled',
+                            );
+                        }
+                    });
                 }
                 $this->emailFailures->notify(
                     $row->owner,
@@ -116,23 +130,34 @@ class RunDueScheduledExports extends Command
 
     private function claim(ScheduledExport $row, Carbon $scanAt, string $token): bool
     {
-        $claimed = ScheduledExport::query()
-            ->whereKey($row->getKey())
-            ->where('is_active', true)
-            ->where('next_run_at', '<=', $scanAt)
-            ->where(function ($query) use ($scanAt): void {
-                $query->whereNull('processing_until')
-                    ->orWhere('processing_until', '<=', $scanAt);
-            })
-            ->update([
-                'processing_token' => $token,
-                'processing_started_at' => $scanAt,
-                'processing_until' => $scanAt->copy()->addMinutes(self::LEASE_MINUTES),
-                'last_attempt_at' => $scanAt,
-                'last_error' => null,
-            ]);
+        return DB::transaction(function () use ($row, $scanAt, $token): bool {
+            $claimed = ScheduledExport::query()
+                ->whereKey($row->getKey())
+                ->where('is_active', true)
+                ->where('next_run_at', '<=', $scanAt)
+                ->where(function ($query) use ($scanAt): void {
+                    $query->whereNull('processing_until')
+                        ->orWhere('processing_until', '<=', $scanAt);
+                })
+                ->update([
+                    'processing_token' => $token,
+                    'processing_started_at' => $scanAt,
+                    'processing_until' => $scanAt->copy()->addMinutes(self::LEASE_MINUTES),
+                    'last_attempt_at' => $scanAt,
+                    'last_error' => null,
+                    'updated_at' => $scanAt,
+                ]);
 
-        return $claimed === 1;
+            if ($claimed === 1) {
+                app(ScheduledExportRealtimeService::class)->stageById(
+                    (int) $row->getKey(),
+                    'updated',
+                    "scheduled-export-run:{$row->getKey()}:{$token}:claimed",
+                );
+            }
+
+            return $claimed === 1;
+        });
     }
 
     private function runOne(ScheduledExport $row, string $token, Carbon $runAt): void
@@ -198,17 +223,30 @@ class RunDueScheduledExports extends Command
             (string) ($row->time_of_day ?? $this->settings->requiredString('exports.default_time_of_day')),
         );
 
-        $updated = ScheduledExport::query()
-            ->whereKey($row->getKey())
-            ->where('processing_token', $token)
-            ->update([
-                'last_run_at' => $runAt,
-                'next_run_at' => $nextRunAt,
-                'last_error' => null,
-                'processing_token' => null,
-                'processing_started_at' => null,
-                'processing_until' => null,
-            ]);
+        $updated = DB::transaction(function () use ($row, $token, $runAt, $nextRunAt): int {
+            $updated = ScheduledExport::query()
+                ->whereKey($row->getKey())
+                ->where('processing_token', $token)
+                ->update([
+                    'last_run_at' => $runAt,
+                    'next_run_at' => $nextRunAt,
+                    'last_error' => null,
+                    'processing_token' => null,
+                    'processing_started_at' => null,
+                    'processing_until' => null,
+                    'updated_at' => now(),
+                ]);
+
+            if ($updated === 1) {
+                app(ScheduledExportRealtimeService::class)->stageById(
+                    (int) $row->getKey(),
+                    'updated',
+                    "scheduled-export-run:{$row->getKey()}:{$token}:completed",
+                );
+            }
+
+            return $updated;
+        });
 
         if ($updated !== 1) {
             throw new \RuntimeException('Scheduled export lease was lost before completion was recorded.');
@@ -217,14 +255,25 @@ class RunDueScheduledExports extends Command
 
     private function releaseAfterFailure(ScheduledExport $row, string $token, \Throwable $exception): void
     {
-        ScheduledExport::query()
-            ->whereKey($row->getKey())
-            ->where('processing_token', $token)
-            ->update([
-                'last_error' => Str::limit($exception->getMessage(), 2000),
-                'processing_token' => null,
-                'processing_started_at' => null,
-                'processing_until' => null,
-            ]);
+        DB::transaction(function () use ($row, $token, $exception): void {
+            $updated = ScheduledExport::query()
+                ->whereKey($row->getKey())
+                ->where('processing_token', $token)
+                ->update([
+                    'last_error' => Str::limit($exception->getMessage(), 2000),
+                    'processing_token' => null,
+                    'processing_started_at' => null,
+                    'processing_until' => null,
+                    'updated_at' => now(),
+                ]);
+
+            if ($updated === 1) {
+                app(ScheduledExportRealtimeService::class)->stageById(
+                    (int) $row->getKey(),
+                    'updated',
+                    "scheduled-export-run:{$row->getKey()}:{$token}:failed",
+                );
+            }
+        });
     }
 }

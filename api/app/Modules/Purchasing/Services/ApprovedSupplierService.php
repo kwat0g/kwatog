@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\DB;
 
 class ApprovedSupplierService
 {
+    public function __construct(private readonly SupplierCatalogRealtimeService $realtime) {}
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = ApprovedSupplier::query()->with(['item:id,code,name', 'vendor:id,name']);
@@ -114,7 +116,10 @@ class ApprovedSupplierService
                 $this->setPreferred($row);
             }
 
-            return $row->fresh();
+            $fresh = $row->fresh();
+            $this->realtime->changed($row->wasRecentlyCreated ? 'created' : 'updated');
+
+            return $fresh;
         });
     }
 
@@ -131,13 +136,19 @@ class ApprovedSupplierService
                 $row->update(['is_preferred' => false]);
             }
 
-            return $row->fresh();
+            $fresh = $row->fresh();
+            $this->realtime->changed('updated');
+
+            return $fresh;
         });
     }
 
     public function delete(ApprovedSupplier $row): void
     {
-        $row->delete();
+        DB::transaction(function () use ($row): void {
+            $row->delete();
+            $this->realtime->changed('deleted');
+        });
     }
 
     public function restore(ApprovedSupplier $row): ApprovedSupplier
@@ -156,6 +167,7 @@ class ApprovedSupplierService
             }
 
             $row->restore();
+            $this->realtime->changed('restored');
 
             return $row->fresh(['item', 'vendor']);
         });

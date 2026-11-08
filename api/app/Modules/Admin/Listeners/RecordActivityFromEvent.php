@@ -93,7 +93,7 @@ class RecordActivityFromEvent
 
         // Broadcast-only UI refreshes and high-frequency progress ticks are
         // not durable business milestones and would drown the feed.
-        if (in_array($short, ['BadgesChanged', 'PayrollProgressEvent'], true)) {
+        if (in_array($short, ['ActivityFeedChanged', 'BadgesChanged', 'PayrollProgressEvent'], true)) {
             return null;
         }
 

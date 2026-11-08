@@ -8,9 +8,11 @@ use App\Common\Services\Import\MasterDataImportService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Events\SupplierCatalogChanged;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -70,6 +72,9 @@ class ApprovedSupplierImportTest extends TestCase
         $this->assertSame(ApprovedSupplier::QUALIFICATION_APPROVED, $row->qualification_status);
         $this->assertSame(5, $row->lead_time_days);
         $this->assertSame('100.50', (string) $row->last_price);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->count());
     }
 
     public function test_qualification_defaults_to_approved_when_omitted(): void
@@ -122,5 +127,11 @@ class ApprovedSupplierImportTest extends TestCase
         $this->assertNull(
             ApprovedSupplier::query()->where('item_id', $item->id)->where('vendor_id', $vendor->id)->first(),
         );
+        $actions = DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->get(['payload'])
+            ->map(fn ($event): string => json_decode((string) $event->payload, true, 512, JSON_THROW_ON_ERROR)['action'])
+            ->all();
+        $this->assertSame(['created', 'deleted'], $actions);
     }
 }

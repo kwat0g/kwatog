@@ -124,7 +124,6 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
     queryKey: ['chains', 'so-search', debouncedSearch],
     queryFn: ({ signal }) =>
       salesOrdersApi.list({ search: debouncedSearch || undefined, per_page: 8 }, signal),
-    placeholderData: (prev) => prev,
     enabled: canTrackSalesOrders,
   });
 

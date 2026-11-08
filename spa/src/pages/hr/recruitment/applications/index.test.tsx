@@ -15,11 +15,15 @@ const application: JobApplication = {
   first_name: 'Jamie', last_name: 'Reyes', full_name: 'Jamie Reyes',
   email: 'jamie@example.test', phone: '09000000000', cover_letter: null,
   stage: 'screening', stage_label: 'Screening', rejected_at_stage: null, rejection_reason: null,
+  version: '2026-10-10T01:00:00.000000+00:00',
+  permissions: { view: true, manage_applications: true, hire: true },
+  available_actions: ['advance', 'reject', 'add_note'],
   applied_at: '2026-10-10T01:00:00Z', created_at: '2026-10-10T01:00:00Z', updated_at: '2026-10-10T01:00:00Z',
   job_posting: {
     id: 'posting-1', posting_number: 'JP-2026-001', title: 'Production Planner', description: '',
     requirements: '', employment_type: 'regular', salary_range_min: null, salary_range_max: null,
     show_salary: false, status: 'open', slots: 1, posted_at: null, closes_at: null,
+    version: '2026-10-10T01:00:00.000000+00:00', permissions: { view: true, manage: true }, available_actions: ['edit', 'close'],
     created_at: '', updated_at: '',
   },
 };

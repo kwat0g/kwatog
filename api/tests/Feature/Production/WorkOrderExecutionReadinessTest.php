@@ -143,6 +143,18 @@ class WorkOrderExecutionReadinessTest extends TestCase
         $this->assertSame($before, $this->snapshot());
     }
 
+    public function test_execution_readiness_returns_the_next_server_clock_boundary(): void
+    {
+        $slot = $this->wo->schedules()->firstOrFail();
+        $scheduledStart = now()->addHour();
+        $slot->update(['scheduled_start' => $scheduledStart, 'scheduled_end' => $scheduledStart->copy()->addHour()]);
+
+        $response = $this->getJson('/api/v1/production/work-orders/'.$this->wo->hash_id.'/execution-readiness')
+            ->assertOk();
+
+        $this->assertSame($scheduledStart->toIso8601String(), $response->json('data.next_refresh_at'));
+    }
+
     public function test_future_schedule_still_revalidates_duration_and_crew_before_waiting(): void
     {
         $slot = $this->wo->schedules()->firstOrFail();

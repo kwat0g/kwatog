@@ -20,7 +20,7 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
   const query = useQuery({
   queryKey: ['forecasting', 'accuracy', 'summary', year],
   queryFn: () => forecastingApi.accuracySummary(year),
-  // Manual refresh only — consulted, not monitored (poll contract in api/dashboards).
+  // Cached between visits, but forecast change events invalidate this query family.
   staleTime: 5 * 60_000,
   });
   const policyQuery = useQuery({

@@ -12,6 +12,7 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -43,7 +44,7 @@ final class PurchaseRequestAccessPolicy
      * @param  Builder<PurchaseRequest>  $query
      * @return Builder<PurchaseRequest>
      */
-    public function visibleTo(Builder $query, ?User $user): Builder
+    public function visibleTo(Builder $query, ?User $user, ?array $approvalRoleSlugs = null): Builder
     {
         if ($user === null) {
             return $query->whereRaw('1 = 0');
@@ -54,7 +55,7 @@ final class PurchaseRequestAccessPolicy
         }
 
         $departmentId = $this->departmentId($user);
-        $stepRoles = $this->plantWideStepRoles($user);
+        $stepRoles = $this->plantWideStepRoles($user, $approvalRoleSlugs);
 
         return $query->where(function (Builder $scope) use ($user, $departmentId, $stepRoles): void {
             $scope->where('requested_by', $user->id);
@@ -82,11 +83,11 @@ final class PurchaseRequestAccessPolicy
      * @param  Builder<PurchaseRequest>  $query
      * @return Builder<PurchaseRequest>
      */
-    public function awaitingMyApproval(Builder $query, User $user): Builder
+    public function awaitingMyApproval(Builder $query, User $user, ?array $approvalRoleSlugs = null): Builder
     {
         return $query->whereIn(
             'purchase_requests.id',
-            $this->pendingApprovalsFor($user)->select('purchase_requests.id'),
+            $this->pendingApprovalsFor($user, $approvalRoleSlugs)->select('purchase_requests.id'),
         );
     }
 
@@ -114,7 +115,13 @@ final class PurchaseRequestAccessPolicy
     public function canManageDraft(User $user, PurchaseRequest $pr): bool
     {
         return $pr->status === PurchaseRequestStatus::Draft
-            && $this->canView($user, $pr)
+            && $this->canManageRequest($user, $pr);
+    }
+
+    /** Check row ownership/scope without conflating it with the current state. */
+    public function canManageRequest(User $user, PurchaseRequest $pr): bool
+    {
+        return $this->canView($user, $pr)
             && ($this->isGlobal($user) || (int) $pr->requested_by === (int) $user->id);
     }
 
@@ -218,13 +225,13 @@ final class PurchaseRequestAccessPolicy
     }
 
     /** @return Builder<PurchaseRequest> */
-    public function pendingApprovalsFor(User $user): Builder
+    public function pendingApprovalsFor(User $user, ?array $approvalRoleSlugs = null): Builder
     {
-        $roleSlugs = $this->approvalRoleSlugs($user);
+        $roleSlugs = $approvalRoleSlugs ?? $this->approvalRoleSlugs($user);
         $query = PurchaseRequest::query()
             ->where('status', PurchaseRequestStatus::Pending->value)
             ->where('requested_by', '<>', $user->id);
-        $this->visibleTo($query, $user);
+        $this->visibleTo($query, $user, $roleSlugs);
 
         if (! $user->hasPermission('purchasing.view')
             || ! $user->hasPermission('purchasing.pr.approve')
@@ -255,21 +262,78 @@ final class PurchaseRequestAccessPolicy
             'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $pr),
             // canConvert() is the permission gate the convert endpoint uses and
             // is deliberately replay-tolerant: re-posting an already-converted
-            // PR returns its existing POs. The *button* must be stricter — once
-            // any live PO exists (including rows created before the manual
-            // create path marked its source PR converted) the affordance clears
-            // so the operator cannot fire a second conversion.
-            // An RFQ hand-back is the one case where a live PO (the award's)
-            // must not hide the button: the remainder is converted from here.
-            'can_convert' => $this->canConvert($user, $pr)
-                && $pr->status === PurchaseRequestStatus::Approved
-                && (! $this->hasLivePurchaseOrders($pr) || $pr->rfqHandedBack())
-                && ! $pr->hasActiveRfq(),
+            // PR returns its existing POs. Hide the action once any live PO
+            // exists unless the PR is partial (its remaining lines still need
+            // conversion) or an RFQ hand-back has remaining lines to convert.
+            'can_convert' => $this->canConvertAction($user, $pr),
             'can_start_rfq' => $this->canStartRfq($user, $pr),
             'can_set_sourcing_method' => $this->canSetSourcingMethod($user, $pr, PurchaseRequestSourcingMethod::DirectPo)
                 || $this->canSetSourcingMethod($user, $pr, PurchaseRequestSourcingMethod::Rfq),
             'can_print' => $this->canView($user, $pr),
         ];
+    }
+
+    /**
+     * The list only needs the Convert to PO control. Keep the other
+     * delegation/approval checks off the paginated path.
+     *
+     * @return array{can_approve: bool, can_convert: bool}
+     */
+    public function listActionsFor(User $user, PurchaseRequest $pr): array
+    {
+        // PurchaseRequestService::list() has already applied visibleTo(), so
+        // repeat no per-row chain/delegation scope query while projecting rows.
+        return [
+            'can_approve' => $user->hasPermission('purchasing.pr.approve')
+                && $pr->status === PurchaseRequestStatus::Pending
+                && (int) $pr->requested_by !== (int) $user->id
+                && $this->projectedExists($pr, 'has_actionable_approval'),
+            'can_convert' => $this->canConvertAction($user, $pr, rowIsAuthorized: true),
+        ];
+    }
+
+    private function canConvertAction(User $user, PurchaseRequest $pr, bool $rowIsAuthorized = false): bool
+    {
+        $hasActiveRfq = $this->hasActiveRfq($pr);
+        $rfqHandedBack = $pr->sourcing_method === PurchaseRequestSourcingMethod::Rfq
+            && $this->hasHandedBackRfq($pr)
+            && ! $hasActiveRfq;
+        $canConvertBySource = $pr->sourcing_method === PurchaseRequestSourcingMethod::DirectPo
+            || $rfqHandedBack;
+        $hasPartialDirectConversion = $pr->sourcing_method === PurchaseRequestSourcingMethod::DirectPo
+            && $pr->po_conversion_status === PurchaseRequestConversionStatus::Partial;
+
+        return $user->hasPermission('purchasing.po.create')
+            && ($rowIsAuthorized || $this->canView($user, $pr))
+            && $canConvertBySource
+            && $pr->status === PurchaseRequestStatus::Approved
+            && (! $this->hasLivePurchaseOrders($pr) || $rfqHandedBack || $hasPartialDirectConversion)
+            && ! $hasActiveRfq;
+    }
+
+    private function hasActiveRfq(PurchaseRequest $pr): bool
+    {
+        if ($pr->hasAttribute('has_active_rfq')) {
+            return $this->projectedExists($pr, 'has_active_rfq');
+        }
+
+        return $pr->hasActiveRfq();
+    }
+
+    private function hasHandedBackRfq(PurchaseRequest $pr): bool
+    {
+        if ($pr->hasAttribute('has_handed_back_rfq')) {
+            return $this->projectedExists($pr, 'has_handed_back_rfq');
+        }
+
+        return $pr->rfqs()
+            ->whereIn('status', [RfqStatus::Awarded->value, RfqStatus::Cancelled->value])
+            ->exists();
+    }
+
+    private function projectedExists(PurchaseRequest $pr, string $attribute): bool
+    {
+        return in_array($pr->getAttribute($attribute), [true, 1, '1', 't', 'true'], true);
     }
 
     /**
@@ -279,6 +343,10 @@ final class PurchaseRequestAccessPolicy
      */
     private function hasLivePurchaseOrders(PurchaseRequest $pr): bool
     {
+        if ($pr->hasAttribute('has_live_purchase_order')) {
+            return $this->projectedExists($pr, 'has_live_purchase_order');
+        }
+
         $orders = $pr->relationLoaded('purchaseOrders')
             ? $pr->purchaseOrders
             : $pr->purchaseOrders()->get();
@@ -374,10 +442,10 @@ final class PurchaseRequestAccessPolicy
      *
      * @return list<string>
      */
-    private function plantWideStepRoles(User $user): array
+    private function plantWideStepRoles(User $user, ?array $approvalRoleSlugs = null): array
     {
         return array_values(array_filter(
-            $this->approvalRoleSlugs($user),
+            $approvalRoleSlugs ?? $this->approvalRoleSlugs($user),
             static fn (string $slug): bool => $slug !== self::DEPARTMENTAL_STEP_ROLE,
         ));
     }

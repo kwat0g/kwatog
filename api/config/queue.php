@@ -29,6 +29,27 @@ return [
             'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 5),
             'after_commit' => false,
         ],
+        // Outbox fan-out and realtime pings use this alias to the same
+        // persistent queue Redis DB and prefix, but block for at most one
+        // second. The outbox and broadcast jobs stay on distinct queue names.
+        'redis_broadcasts' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_BROADCAST_CONNECTION', 'broadcasts'),
+            'queue' => 'broadcasts',
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 3900),
+            'block_for' => (int) env('REDIS_BROADCAST_BLOCK_FOR', 1),
+            'after_commit' => false,
+        ],
+        // One-time migration lane for messages queued before broadcasts moved
+        // to their own Redis DB. Run it manually until the legacy queue drains.
+        'redis_broadcasts_legacy' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'broadcasts',
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 3900),
+            'block_for' => (int) env('REDIS_BROADCAST_BLOCK_FOR', 1),
+            'after_commit' => false,
+        ],
         'redis_dss' => [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),

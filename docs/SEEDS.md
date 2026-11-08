@@ -333,18 +333,91 @@ are demo records — the gate-level detail is illustrative, not a real address.
 | PKG-001 | Standard Poly Bag | packaging | pcs | 0.50 |
 | PKG-002 | Shipping Box (50 pcs) | packaging | pcs | 15.00 |
 
-## 17. DEMO VENDORS (8)
+## 17. DEMO VENDORS (10)
 
-| Name | Country | Materials Supplied |
+| Name | Country | Materials / services |
 |---|---|---|
-| Ogami Co., Ltd. | Japan | Resin A, Resin D, Metal Inserts |
-| Taiwan Plastics Corp. | Taiwan | Resin B, Resin C |
-| China Chemical Supply | China | Colorants |
-| Phil Metals Inc. | Philippines | Metal Cores |
-| Cavite Packaging Solutions | Philippines | Poly Bags, Boxes |
-| Meralco | Philippines | Electricity |
-| Cavite Water District | Philippines | Water |
-| ABC Tooling Services | Philippines | External mold repair |
+| Megaplast Industries Corp. | Philippines | ABS resin |
+| Asia Pacific Polymers, Inc. | Philippines | PP, PA, and POM resin |
+| Tooling Pro Manufacturing | Philippines | Tooling and heater bands |
+| Pacific Logistics Solutions | Philippines | Logistics |
+| Nippon Mold Steel Phils. | Philippines | Mold steel |
+| Sumitomo Resin Trading Corp. | Philippines | Resin trading |
+| Denso Auto Components Asia | Philippines | Automotive components |
+| Cavite Precision Tools & Dies | Philippines | Metal inserts and hydraulic filters |
+| Manila Industrial Packaging | Philippines | Poly bags and shipping boxes |
+| Oriental Chemical Corp. | Philippines | Colorants |
+
+## 18. THESIS DEMO EXTENSION
+
+`ThesisDemoSeeder` runs last in the opt-in demo seed path. It is also safe to
+run by itself after ordinary demo setup:
+
+```sh
+cd api && php artisan db:seed --class=ThesisDemoSeeder
+```
+
+The selling prices below are fictional thesis-demo examples, not OGAMI price
+guidance. Base and minimum prices are only filled when both product fields are
+empty; customer price agreements remain separate.
+
+| Product | Base selling price (₱) | Minimum selling price (₱) |
+|---|---:|---:|
+| WB-001 | 23.00 | 20.50 |
+| WB-002 | 30.50 | 27.00 |
+| PC-001 | 35.00 | 31.00 |
+| PC-002 | 35.50 | 31.50 |
+| RC-001 | 47.50 | 42.00 |
+| BB-001 | 27.50 | 24.00 |
+| BU-001 | 26.50 | 23.00 |
+| RC-002 | 70.00 | 61.50 |
+
+The existing `ManufacturedProductInventorySeeder` maps the eight products to
+inventory item identities before the full demo's stock setup. The ordinary
+demo seeder assigns its deterministic stock levels. If the focused thesis
+fixture runs alone and a finished good has no stock level or movement, it adds
+the fallback opening balance below; existing balances are preserved.
+
+| Product | Fallback opening stock | Location |
+|---|---:|---|
+| WB-001 | 1,200 pcs | Main Warehouse, Zone C, C-01 |
+| WB-002 | 800 pcs | Main Warehouse, Zone C, C-02 |
+| PC-001 | 600 pcs | Main Warehouse, Zone C, C-03 |
+| PC-002 | 600 pcs | Main Warehouse, Zone C, C-04 |
+| RC-001 | 400 pcs | Main Warehouse, Zone C, C-05 |
+| BB-001 | 900 pcs | Main Warehouse, Zone C, C-06 |
+| BU-001 | 1,000 pcs | Main Warehouse, Zone C, C-07 |
+| RC-002 | 300 pcs | Main Warehouse, Zone C, C-08 |
+
+Every raw material and packaging item has a preferred, approved supplier link.
+The seeded source map is Megaplast for RM-001; Asia Pacific Polymers for
+RM-002 through RM-004; Oriental Chemical for RM-010 through RM-012; Cavite
+Precision Tools & Dies for RM-050 through RM-052; and Manila Industrial
+Packaging for PKG-001 and PKG-002. Supplier quotes remain empty unless one is
+entered through purchasing; purchase estimates can use each item's standard
+cost.
+
+| Spare part | Item code | Standard cost (₱) | Opening stock | Location |
+|---|---|---:|---:|---|
+| Hydraulic Oil Filter — Injection Molder | SP-HYD-001 | 1,850.00 | 12 pcs | Main Warehouse, Zone D, D-01 |
+| Barrel Heater Band 220V — Injection Molder | SP-HTR-001 | 1,200.00 | 8 pcs | Main Warehouse, Zone D, D-02 |
+
+The fixture creates an opening stock movement for each new spare-part balance.
+Technicians issue parts through the normal maintenance work-order flow, which
+records the actual stock movement and consumption cost.
+
+`ThesisItemQualityPlanSeeder` creates an incoming QC plan for each existing,
+non-deleted inventory item that lacks an effective default plan. It creates no
+item records, preserves effective plans and future revisions, and uses the
+existing resin/general quality templates. Run it alone on an already-seeded
+local demo database with:
+
+```sh
+cd api && php artisan db:seed --class=ThesisItemQualityPlanSeeder
+```
+
+These are fictional baseline checks for the demo. QC should confirm approved
+item-specific drawings, certificates, and limits before using them operationally.
 
 ---
 

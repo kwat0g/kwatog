@@ -6,6 +6,7 @@ namespace App\Modules\SupplyChain\Controllers;
 
 use App\Modules\SupplyChain\Enums\ContainerSize;
 use App\Modules\SupplyChain\Enums\ContainerType;
+use App\Modules\SupplyChain\Exceptions\ShipmentStateConflictException;
 use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Resources\ContainerResource;
@@ -73,7 +74,7 @@ class ContainerController
         return new ContainerResource($this->service->show($container));
     }
 
-    public function update(Request $request, Container $container): ContainerResource
+    public function update(Request $request, Container $container): ContainerResource|JsonResponse
     {
         $data = $request->validate([
             'container_number' => ['nullable', 'string', 'max:50'],
@@ -84,9 +85,24 @@ class ContainerController
             'net_weight_kg' => self::weightRules(),
             'volume_cbm' => self::volumeRules(),
             'notes' => ['nullable', 'string', 'max:1000'],
+            'expected_version' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'expected_shipment_version' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
+        $expectedVersion = $data['expected_version'] ?? null;
+        $expectedShipmentVersion = $data['expected_shipment_version'] ?? null;
+        unset($data['expected_version']);
+        unset($data['expected_shipment_version']);
 
-        return new ContainerResource($this->service->update($container, $data));
+        try {
+            return new ContainerResource($this->service->update(
+                $container,
+                $data,
+                $expectedVersion,
+                $expectedShipmentVersion,
+            ));
+        } catch (ShipmentStateConflictException $exception) {
+            return response()->json(['message' => $exception->getMessage(), 'code' => $exception->errorCode()], 409);
+        }
     }
 
     public function destroy(Container $container): JsonResponse

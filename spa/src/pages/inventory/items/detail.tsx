@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LuPencil, LuShieldCheck } from '@/lib/icons';
 import { itemsApi } from '@/api/inventory/items';
@@ -11,6 +12,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { ItemUomConversions } from './uom-conversions';
 
@@ -24,11 +26,12 @@ export default function ItemDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can } = usePermission();
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['inventory', 'items', id],
     queryFn: () => itemsApi.show(id),
     enabled: !!id,
   });
+  useRealtimeRecord('item', id || undefined);
   const { data: itemOptions } = useQuery({
     queryKey: ['inventory', 'items', 'options'],
     queryFn: itemsApi.options,
@@ -42,18 +45,27 @@ export default function ItemDetailPage() {
   )?.label;
 
   if (isLoading) return <SkeletonTable rows={6} columns={4} />;
-  if (isError || !data)
+  if (isError || !data) {
+    const status = isAxiosError(error) ? error.response?.status : undefined;
+    const unavailable = status === 403 || status === 404;
+
     return (
       <EmptyState
         icon="alert-circle"
-        title="Failed to load item"
+        title={unavailable ? 'Item unavailable' : 'Failed to load item'}
+        description={status === 403
+          ? 'You no longer have access to this item.'
+          : status === 404
+            ? 'This item was removed or is no longer available.'
+            : undefined}
         action={
-          <Button variant="secondary" onClick={() => refetch()}>
-            Retry
+          <Button variant="secondary" onClick={() => unavailable ? navigate('/inventory/items') : refetch()}>
+            {unavailable ? 'Back to items' : 'Retry'}
           </Button>
         }
       />
     );
+  }
 
   return (
     <PageShell variant="grid">

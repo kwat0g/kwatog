@@ -1,6 +1,7 @@
 import { client } from './client';
 import type { PaginatedResponse } from '@/types';
 import type {
+ ApplicationStage,
  JobPosting,
  JobApplication,
  ApplicationInterview,
@@ -25,14 +26,17 @@ export const recruitmentApi = {
  client.get<{ data: JobPosting }>(`${BASE}/postings/${id}`, { params }),
  createPosting: (data: CreateJobPostingData) =>
  client.post<{ data: JobPosting }>(`${BASE}/postings`, data),
- updatePosting: (id: string, data: CreateJobPostingData) =>
- client.put<{ data: JobPosting }>(`${BASE}/postings/${id}`, data),
-  deletePosting: (id: string) =>
-  client.delete(`${BASE}/postings/${id}`),
-  restorePosting: (id: string) =>
-  client.patch(`${BASE}/postings/${id}/restore`),
- changePostingStatus: (id: string, status: string) =>
- client.patch<{ data: JobPosting }>(`${BASE}/postings/${id}/status`, { status }),
+ updatePosting: (id: string, data: CreateJobPostingData, expectedVersion?: string | null) =>
+ client.put<{ data: JobPosting }>(`${BASE}/postings/${id}`, expectedVersion ? { ...data, expected_version: expectedVersion } : data),
+ deletePosting: (id: string, expectedVersion?: string | null) =>
+ client.delete(`${BASE}/postings/${id}`, { data: expectedVersion ? { expected_version: expectedVersion } : undefined }),
+ restorePosting: (id: string, expectedVersion?: string | null) =>
+ client.patch(`${BASE}/postings/${id}/restore`, expectedVersion ? { expected_version: expectedVersion } : {}),
+ changePostingStatus: (id: string, status: string, expectedVersion?: string | null) =>
+ client.patch<{ data: JobPosting }>(`${BASE}/postings/${id}/status`, {
+  status,
+  ...(expectedVersion ? { expected_version: expectedVersion } : {}),
+ }),
 
  listApplications: (params?: Record<string, unknown>) =>
  client.get<PaginatedResponse<JobApplication>>(`${BASE}/applications`, { params }),
@@ -40,6 +44,7 @@ export const recruitmentApi = {
  client.get<{ data: JobApplication }>(`${BASE}/applications/${id}`),
  changeStage: (id: string, data: {
  action: 'advance' | 'reject';
+  expected_stage?: ApplicationStage;
  rejection_reason?: string;
  interview?: { scheduled_at: string; location?: string; interviewer_name: string };
  }) =>

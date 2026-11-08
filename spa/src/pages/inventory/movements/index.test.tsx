@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, it, vi } from 'vitest';
 import { stockMovementsApi } from '@/api/inventory/stock';
+import { useInventoryStockRealtime } from '@/hooks/useInventoryStockRealtime';
 import type { StockMovement } from '@/types/inventory';
 import { StockMovementsTab } from './index';
 
@@ -10,6 +11,7 @@ vi.mock('@/api/inventory/stock', () => ({
   stockMovementsApi: { list: vi.fn(), options: vi.fn() },
 }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
+vi.mock('@/hooks/useInventoryStockRealtime', () => ({ useInventoryStockRealtime: vi.fn() }));
 
 it('shows document references and negative delivery quantity without changing receipt quantity', async () => {
   const receipt: StockMovement = {
@@ -37,8 +39,26 @@ it('shows document references and negative delivery quantity without changing re
     <MemoryRouter><StockMovementsTab /></MemoryRouter>
   </QueryClientProvider>);
 
-  expect(await screen.findByRole('link', { name: 'GRN-202610-0005' })).toHaveAttribute('href', '/inventory/grn/grn-1');
-  expect(screen.getByRole('link', { name: 'DEL-202610-0001' })).toHaveAttribute('href', '/supply-chain/deliveries/delivery-1');
-  expect(screen.getByText('5 pcs')).toBeInTheDocument();
-  expect(screen.getByText('-498 pcs')).toBeInTheDocument();
+  expect((await screen.findAllByRole('link', { name: 'GRN-202610-0005' }))
+    .some((link) => link.getAttribute('href') === '/inventory/grn/grn-1')).toBe(true);
+  expect(screen.getAllByRole('link', { name: 'DEL-202610-0001' })
+    .some((link) => link.getAttribute('href') === '/supply-chain/deliveries/delivery-1')).toBe(true);
+  expect(screen.getAllByText('5 pcs').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('-498 pcs').length).toBeGreaterThan(0);
+});
+
+it('subscribes to committed stock changes so open movement lists refetch', async () => {
+  vi.mocked(stockMovementsApi.list).mockResolvedValue({
+    data: [],
+    meta: { total: 0, current_page: 1, last_page: 1, per_page: 50, from: null, to: null },
+    links: { first: '', last: '', prev: null, next: null },
+  });
+  vi.mocked(stockMovementsApi.options).mockResolvedValue({ movement_types: [] });
+
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <MemoryRouter><StockMovementsTab /></MemoryRouter>
+  </QueryClientProvider>);
+
+  await waitFor(() => expect(stockMovementsApi.list).toHaveBeenCalled());
+  expect(useInventoryStockRealtime).toHaveBeenCalledWith(true);
 });

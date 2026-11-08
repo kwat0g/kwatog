@@ -1,7 +1,7 @@
 # ─── Ogami ERP — Production PHP image ─────────────────────────────────────
 # Multi-stage:
 #   1. composer-deps → installs vendor/ with --no-dev
-#   2. runtime       → PHP 8.3-FPM, opcache enabled, copies vendor/ + source
+#   2. runtime       → pinned PHP 8.3-FPM, opcache enabled, copies vendor/ + source
 #                       (read-only; no host volume mount in prod)
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -10,7 +10,7 @@ FROM composer:2 AS deps
 WORKDIR /app
 COPY api/composer.json api/composer.lock ./
 # --ignore-platform-reqs: the composer base image lacks ext-gd/intl/etc; those
-# extensions are present in the php:8.3-fpm runtime stage below, so platform
+# extensions are present in the pinned PHP-FPM runtime stage below, so platform
 # checks here are spurious. Deps are resolved against the committed lock file.
 RUN composer install \
         --no-dev \
@@ -22,7 +22,8 @@ RUN composer install \
         --ignore-platform-reqs
 
 # Stage 2: Runtime
-FROM php:8.3-fpm-alpine
+# Keep the PHP patch and Alpine minor explicit; update this with Dockerfile.
+FROM php:8.3.36-fpm-alpine3.24
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -78,6 +79,18 @@ RUN { \
         echo 'log_errors=On'; \
         echo 'error_log=/var/log/php_errors.log'; \
     } > /usr/local/etc/php/conf.d/zz-prod.ini
+
+# The upstream five-worker limit saturated under a small multi-role burst. The
+# dynamic pool can scale to eight while retaining a small idle footprint on the
+# target VPS; production operators can lower the ceiling for tighter RAM plans.
+RUN sed -i \
+        -e 's/^pm.max_children = 5$/pm.max_children = 8/' \
+        -e 's/^pm.min_spare_servers = 1$/pm.min_spare_servers = 2/' \
+        -e 's/^pm.max_spare_servers = 3$/pm.max_spare_servers = 4/' \
+        /usr/local/etc/php-fpm.d/www.conf \
+    && grep -q '^pm.max_children = 8$' /usr/local/etc/php-fpm.d/www.conf \
+    && grep -q '^pm.min_spare_servers = 2$' /usr/local/etc/php-fpm.d/www.conf \
+    && grep -q '^pm.max_spare_servers = 4$' /usr/local/etc/php-fpm.d/www.conf
 
 # Copy app source (api/) and pre-built vendor dir.
 COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini

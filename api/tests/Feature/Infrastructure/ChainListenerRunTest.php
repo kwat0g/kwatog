@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Infrastructure;
 
 use App\Common\Models\ChainListenerRun;
+use App\Common\Events\ChainListenerRunsChanged;
 use App\Common\Services\ChainListenerRunService;
+use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\OutboxService;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
@@ -23,6 +25,32 @@ use Tests\TestCase;
 class ChainListenerRunTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_queue_lifecycle_persists_a_content_free_list_refresh_signal(): void
+    {
+        $outboxId = (string) \Illuminate\Support\Str::uuid();
+        $jobUuid = (string) \Illuminate\Support\Str::uuid();
+        $job = Mockery::mock(\Illuminate\Contracts\Queue\Job::class);
+        $job->shouldReceive('payload')->andReturn([
+            'outbox_id' => $outboxId,
+            'outbox_event_type' => PurchaseOrderApproved::class,
+            'uuid' => $jobUuid,
+            'displayName' => NotifyOnPurchaseOrderApproved::class,
+        ]);
+        $job->shouldReceive('attempts')->andReturn(1);
+
+        app(ChainListenerRunService::class)->markProcessing(new JobProcessing('redis', $job));
+
+        $message = DB::table('event_outbox')
+            ->where('event_type', ChainListenerRunsChanged::class)
+            ->first();
+        $this->assertNotNull($message);
+
+        $event = app(OutboxEventCodec::class)->decode($message->event_type, json_decode($message->payload, true, 512, JSON_THROW_ON_ERROR));
+        $this->assertSame('chain_listener_run', $event->broadcastWith()['entity_type']);
+        $this->assertSame('created', $event->broadcastWith()['action']);
+        $this->assertArrayNotHasKey('last_error', $event->broadcastWith());
+    }
 
     public function test_sync_queued_listener_is_correlated_to_its_outbox_message(): void
     {

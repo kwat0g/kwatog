@@ -13,16 +13,19 @@ use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class PortalAccessService
 {
-    public function __construct(private readonly PortalInvitationService $invitations) {}
+    public function __construct(
+        private readonly PortalInvitationService $invitations,
+        private readonly PortalAccessRealtimeService $realtime,
+    ) {}
 
     /**
-     * @param array{search?: string, status?: string, vendor_id?: string, per_page?: int} $filters
+     * @param  array{search?: string, status?: string, vendor_id?: string, per_page?: int}  $filters
      */
     public function suppliers(array $filters): LengthAwarePaginator
     {
@@ -52,7 +55,7 @@ class PortalAccessService
      * Customer counterpart of suppliers() — the customer portal accounts are
      * administrable from the same Portal Access screen as suppliers.
      *
-     * @param array{search?: string, status?: string, customer_id?: string, per_page?: int} $filters
+     * @param  array{search?: string, status?: string, customer_id?: string, per_page?: int}  $filters
      */
     public function customers(array $filters): LengthAwarePaginator
     {
@@ -152,6 +155,7 @@ class PortalAccessService
             $user->forceFill(['is_active' => false, 'locked_until' => null])->save();
             $user->tokens()->delete();
             $this->record($user, 'portal_user.disabled', $old, ['is_active' => false], $actor, $request);
+            $this->realtime->revoked($user);
 
             return $user->load('vendor:id,name,is_active');
         });
@@ -169,8 +173,9 @@ class PortalAccessService
             $user->forceFill(['is_active' => false, 'locked_until' => null])->save();
             $user->tokens()->delete();
             $this->record($user, 'portal_user.disabled', $old, ['is_active' => false], $actor, $request);
+            $this->realtime->revoked($user);
 
-        return $user->load('customer:id,name,is_active');
+            return $user->load('customer:id,name,is_active');
         });
     }
 
@@ -251,6 +256,7 @@ class PortalAccessService
             $user = SupplierPortalUser::withTrashed()->lockForUpdate()->findOrFail($portalUser->getKey());
             $count = $user->tokens()->count();
             $user->tokens()->delete();
+            $this->realtime->revoked($user);
             $this->record($user, 'portal_tokens.revoke', ['token_count' => $count], ['token_count' => 0], $actor, $request);
 
             return $user->load('vendor:id,name,is_active');
@@ -266,6 +272,7 @@ class PortalAccessService
             $user = CustomerPortalUser::withTrashed()->lockForUpdate()->findOrFail($portalUser->getKey());
             $count = $user->tokens()->count();
             $user->tokens()->delete();
+            $this->realtime->revoked($user);
             $this->record($user, 'portal_tokens.revoke', ['token_count' => $count], ['token_count' => 0], $actor, $request);
 
             return $user->load('customer:id,name,is_active');
@@ -341,9 +348,9 @@ class PortalAccessService
     }
 
     /**
-     * @param SupplierPortalUser|CustomerPortalUser $user
-     * @param array<string, mixed>|null $oldValues
-     * @param array<string, mixed>|null $newValues
+     * @param  SupplierPortalUser|CustomerPortalUser  $user
+     * @param  array<string, mixed>|null  $oldValues
+     * @param  array<string, mixed>|null  $newValues
      */
     private function record(
         Model $user,
@@ -367,5 +374,7 @@ class PortalAccessService
             'correlation_id' => $request->attributes->get('request_id') ?? $request->header('X-Request-ID'),
             'created_at' => now(),
         ]);
+
+        $this->realtime->changed();
     }
 }

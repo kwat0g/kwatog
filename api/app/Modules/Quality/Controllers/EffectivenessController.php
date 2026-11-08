@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\Quality\Enums\EffectivenessStatus;
-use App\Modules\Quality\Enums\NcrActionType;
-use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Exceptions\NcrActionStateConflictException;
 use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Resources\NcrActionResource;
 use App\Modules\Quality\Services\EffectivenessService;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
 
 /**
@@ -25,21 +25,29 @@ class EffectivenessController
     /**
      * Record an effectiveness verdict for a corrective/preventive action.
      */
-    public function verify(Request $request, NonConformanceReport $ncr, NcrAction $action): NcrActionResource
+    public function verify(Request $request, NonConformanceReport $ncr, NcrAction $action): NcrActionResource|JsonResponse
     {
         abort_unless($action->ncr_id === $ncr->id, 404);
 
         $data = $request->validate([
             'effectiveness_status' => ['required', Rule::in(EffectivenessStatus::values())],
-            'notes'                => ['required', 'string', 'max:2000'],
+            'notes' => ['required', 'string', 'max:2000'],
         ]);
 
-        $updated = $this->service->verifyAction(
-            $action,
-            $request->user(),
-            EffectivenessStatus::from($data['effectiveness_status']),
-            $data['notes'],
-        );
+        try {
+            $updated = $this->service->verifyAction(
+                $action,
+                $request->user(),
+                EffectivenessStatus::from($data['effectiveness_status']),
+                $data['notes'],
+            );
+        } catch (NcrActionStateConflictException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+                'code' => $exception->errorCode(),
+            ], 409);
+        }
 
         return new NcrActionResource($updated);
     }

@@ -11,12 +11,14 @@ import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { PermissionOverrides } from './_components/PermissionOverrides';
 import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { reportMutationError } from '@/lib/formErrors';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 type ProfileDraft = { name: string; email: string };
 
 /** U2 — Admin > User detail page. */
 export default function AdminUserDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
+ useRealtimeRecord('admin_user', id || undefined);
  const queryClient = useQueryClient();
  const [confirm, setConfirm] = useState<null | 'reset' | 'deactivate' | 'unlock'>(null);
  const [roleDialogOpen, setRoleDialogOpen] = useState(false);

@@ -1157,6 +1157,9 @@ draft → processing → computed → approved → finalized → disbursed
 1. Create payroll period (semi-monthly: 1st-15th or 16th-end)
    - Or wait for cron `payroll:auto-create-period` (runs on 14th and last day of month)
 2. Compute payroll (`POST .../compute`):
+   - Available the day after the cutoff ends; the detail page shows the date.
+     Automatic periods stay Draft until this date, then the daily reconciler
+     stages their compute request.
    - **Pulls automatically:** DTR records, approved OT, approved leaves, active loan amortizations
    - **Calculates gross pay:** basic salary + OT premium + night diff + holiday premium
    - **Deducts (1st period only):** SSS, PhilHealth, Pag-IBIG contributions
@@ -1764,6 +1767,7 @@ twice.
 | 06:00 daily | `mrp:run-daily` | MRP for all active SOs |
 | Every 15 min | `alerts:run` | System alerts |
 | 14th + last day 23:00 | `payroll:auto-create-period` | Auto-create payroll period |
+| Daily @ 23:30 | `payroll:reconcile-auto-periods` | Create missed active periods and queue ended auto-created cutoffs |
 | Every 6 hours | `approvals:run-escalations` | Escalate stale approvals |
 | Daily | `purchasing:recompute-supplier-performance` | Supplier scoring |
 | 02:00 daily | `maintenance:generate-preventive` | Generate preventive MWOs |

@@ -34,7 +34,11 @@ class TrainingController
 
     public function update(UpdateTrainingRequest $request, Training $training): TrainingResource
     {
-        return new TrainingResource($this->service->update($training, $request->validated()));
+        return new TrainingResource($this->service->update(
+            $training,
+            $request->validated(),
+            $request->header('If-Match'),
+        ));
     }
 
     public function destroy(Training $training): JsonResponse

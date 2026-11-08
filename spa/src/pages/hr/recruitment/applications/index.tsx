@@ -14,6 +14,9 @@ import { formatDate } from '@/lib/formatDate';
 import type { JobApplication, ApplicationStage } from '@/types/recruitment';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
  new: 'neutral',
  screening: 'info',
@@ -35,18 +38,23 @@ interface AppFilters {
 
 export default function ApplicationsListPage() {
  const navigate = useNavigate();
+ const { can } = usePermission();
+ useRealtimeList('job_application', can('hr.recruitment.view') ? 'visible' : undefined);
+ useRealtimeList('job_posting', can('hr.recruitment.view') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<AppFilters>({
  page: 1, per_page: 25, sort: 'applied_at', direction: 'desc', stage: '',
  });
  const stageFilter = filters.stage ?? '';
 
+ const queryKey = ['recruitment-applications', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['recruitment-applications', filters],
+ queryKey,
  queryFn: () =>
  recruitmentApi
  .listApplications({ ...filters, stage: stageFilter || undefined })
  .then((r) => r.data),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined,
  });
  const { data: recruitmentOptions } = useQuery({
  queryKey: ['recruitment', 'options'],

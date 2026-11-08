@@ -23,10 +23,12 @@ import {
 } from '@/lib/icons';
 import {
   settingsApi,
+  type CacheGroup,
   type SettingRow,
   type SettingValue,
   type SystemInfo,
 } from '@/api/admin/settings';
+import { AdminSystemHealthPanel } from '@/components/admin/AdminSystemHealthPanel';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -41,6 +43,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
+import { isRealtimeCacheGroup, scheduleCacheGroupInvalidation } from '@/lib/realtime/invalidationMap';
 
 const MODULE_LABELS: Record<string, string> = {
   hr: 'Human Resources',
@@ -205,6 +208,7 @@ export default function SettingsPage() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<CategoryTab>('all');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [cacheGroupToClear, setCacheGroupToClear] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'settings'],
@@ -214,6 +218,20 @@ export default function SettingsPage() {
   const { data: sysInfo } = useQuery({
     queryKey: ['admin', 'system-info'],
     queryFn: settingsApi.systemInfo,
+  });
+
+  const systemHealthQuery = useQuery({
+    queryKey: ['admin', 'system-health'],
+    queryFn: settingsApi.systemHealth,
+    enabled: activeTab === 'all' || activeTab === 'system',
+    refetchInterval: activeTab === 'all' || activeTab === 'system' ? 30_000 : false,
+    refetchIntervalInBackground: false,
+  });
+
+  const cacheGroupsQuery = useQuery({
+    queryKey: ['admin', 'cache-groups'],
+    queryFn: settingsApi.cacheGroups,
+    enabled: activeTab === 'all' || activeTab === 'system',
   });
 
   const update = useMutation({
@@ -227,6 +245,25 @@ export default function SettingsPage() {
       }
     },
     onError: (error) => reportMutationError(error, 'Could not save the setting.'),
+  });
+
+  const clearCacheGroup = useMutation({
+    mutationFn: settingsApi.clearCacheGroup,
+    onSuccess: ({ group, invalidation }) => {
+      const label = cacheGroupsQuery.data?.[group]?.label ?? group;
+      if (isRealtimeCacheGroup(group)) {
+        scheduleCacheGroupInvalidation(queryClient, group);
+      }
+      if (invalidation === 'generation_rotation_failed') {
+        toast.error(`${label} cache generation did not rotate. Active screens were asked to refetch; old cached snapshots may remain until TTL expiry. Check server logs.`);
+      } else if (invalidation === 'generation_rotation_requested') {
+        toast.success(`${label} cache rotation was recorded and is waiting for the outer transaction to commit.`);
+      } else {
+        toast.success(`${label} cache generation rotated; active screens will refresh.`);
+      }
+      setCacheGroupToClear(null);
+    },
+    onError: (error) => reportMutationError(error, 'Could not record cache invalidation.'),
   });
 
   const groups = useMemo(() => {
@@ -388,10 +425,38 @@ export default function SettingsPage() {
         )}
 
         {/* System Info Panel */}
-        {(activeTab === 'all' || activeTab === 'system') && sysInfo && (
-          <SystemInfoPanel info={sysInfo} />
+        {(activeTab === 'all' || activeTab === 'system') && (
+          <>
+            {sysInfo && <SystemInfoPanel info={sysInfo} />}
+            <AdminSystemHealthPanel
+              health={systemHealthQuery.data}
+              isLoading={systemHealthQuery.isLoading}
+              isError={systemHealthQuery.isError}
+              onRetry={() => void systemHealthQuery.refetch()}
+            />
+            <CacheOperationsPanel
+              groups={cacheGroupsQuery.data}
+              loading={cacheGroupsQuery.isLoading}
+              pendingGroup={clearCacheGroup.isPending ? clearCacheGroup.variables : undefined}
+              onClear={(group) => setCacheGroupToClear(group)}
+            />
+          </>
         )}
       </div>
+      {cacheGroupToClear && cacheGroupsQuery.data?.[cacheGroupToClear] && (
+        <ConfirmDialog
+          isOpen
+          title={`Rotate ${cacheGroupsQuery.data[cacheGroupToClear].label}?`}
+          description="This records the request and rotates the server-side cache generation after the audit record commits. Active screens with access to the affected data receive a refresh signal and refetch through their own API permissions. Existing entries expire by TTL; no business data or unrelated cache families are deleted."
+          confirmLabel="Rotate cache generation"
+          variant="warning"
+          pending={clearCacheGroup.isPending}
+          onClose={() => setCacheGroupToClear(null)}
+          onConfirm={() => {
+            clearCacheGroup.mutate(cacheGroupToClear);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -768,6 +833,75 @@ function SystemInfoPanel({ info }: { info: SystemInfo }) {
           value={formatDateTime(info.server_time)}
         />
       </div>
+    </Panel>
+  );
+}
+
+function CacheOperationsPanel({
+  groups,
+  loading,
+  pendingGroup,
+  onClear,
+}: {
+  groups?: Record<string, CacheGroup>;
+  loading: boolean;
+  pendingGroup?: string;
+  onClear: (group: string) => void;
+}) {
+  return (
+    <Panel
+      title={
+        <div className="flex items-center gap-2 text-base">
+          <span className="text-accent">
+            <LuDatabase size={16} />
+          </span>
+          <span>Cache Operations</span>
+        </div>
+      }
+    >
+      <p className="mb-4 max-w-3xl text-xs leading-relaxed text-muted">
+        Request rotation of a registered server-side cache generation when an operator needs a fresh
+        snapshot. Each action is permission-gated and written to the audit log. Old versioned entries
+        expire by TTL.
+      </p>
+      {loading && <p className="py-3 text-xs text-muted">Loading supported cache groups…</p>}
+      {!loading && !groups && (
+        <p className="py-3 text-xs text-warning-fg" role="status">
+          Cache operations are unavailable. Refresh this page and try again.
+        </p>
+      )}
+      {groups && Object.entries(groups).length === 0 && (
+        <p className="py-3 text-xs text-muted">No cache groups are registered for manual invalidation.</p>
+      )}
+      {groups && Object.entries(groups).length > 0 && (
+        <div className="divide-y divide-subtle">
+          {Object.entries(groups).map(([id, group]) => (
+            <div
+              key={id}
+              className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-primary">{group.label}</div>
+                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted">
+                  {group.description}
+                </p>
+                <div className="mt-1 text-2xs font-mono text-muted">
+                  Families: {group.families.join(', ')}
+                </div>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={Boolean(pendingGroup)}
+                loading={pendingGroup === id}
+                onClick={() => onClear(id)}
+              >
+                Rotate cache
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }

@@ -10,10 +10,15 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { LuCamera } from '@/lib/icons';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { Delivery } from '@/types/supplyChain';
 
 export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; onClose: () => void }) {
   const qc = useQueryClient();
+  const { can } = usePermission();
+  useRealtimeList('vehicle', can('supply_chain.view') ? 'visible' : undefined);
   const photoInput = useRef<HTMLInputElement>(null);
   const [scheduledDate, setScheduledDate] = useState(delivery.scheduled_date?.slice(0, 10) ?? '');
   const [expectedDate, setExpectedDate] = useState(delivery.expected_delivery_date?.slice(0, 10) ?? '');
@@ -58,9 +63,12 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
     }),
     onSuccess: (updated, dispatch) => {
       qc.setQueryData(['supply-chain', 'deliveries', delivery.id], updated);
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'vehicles'] });
-      qc.invalidateQueries({ queryKey: ['driver'] });
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'delivery', entityId: delivery.id },
+        [['supply-chain', 'vehicles']],
+        [['supply-chain', 'deliveries', delivery.id]],
+      );
       toast.success(dispatch ? 'Shipment dispatched' : 'Shipment plan saved');
       onClose();
     },

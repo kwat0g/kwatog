@@ -1,5 +1,6 @@
 /** Sprint 8 — Task 74 + Sprint P5. Self-service payslips, web table layout. */
 import { useState } from 'react';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { useQuery } from '@tanstack/react-query';
 import { LuCircleCheck, LuClock } from '@/lib/icons';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -81,10 +82,12 @@ export default function SelfServicePayslipsPage() {
  const [filters, setFilters] = useState<PayrollListParams>({
  page: 1, per_page: 25, sort: 'created_at', direction: 'desc',
  });
+ const queryKey = ['my-payslips', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['my-payslips', filters],
+ queryKey,
  queryFn: () => selfServiceApi.payslips(filters),
- placeholderData: (prev) => prev,
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined,
  });
 
  return (

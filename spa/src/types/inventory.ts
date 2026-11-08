@@ -176,6 +176,9 @@ export interface StockLevel {
 }
 
 export interface StockMovement {
+  version?: number;
+  permissions?: { retry_gl: boolean };
+  available_actions?: Array<'retry_gl'>;
   handover?: MaterialHandover | null;
   handover_remaining_quantity?: string | null;
   id: string;
@@ -309,6 +312,11 @@ export interface StockAdjustment {
   can_approve: boolean;
   can_reject: boolean;
   can_withdraw: boolean;
+  available_actions?: {
+    approve: boolean;
+    reject: boolean;
+    withdraw: boolean;
+  };
   created_at: string;
 }
 
@@ -354,6 +362,25 @@ export interface GrnItem {
 
 export interface GoodsReceiptNote {
   id: string;
+  updated_at: string | null;
+  version: string | null;
+  permissions: {
+    view: boolean;
+    receive: boolean;
+    manage_incoming_qc: boolean;
+    post_journal: boolean;
+    report_problem: boolean;
+  };
+  available_actions: Array<
+    | 'finalize'
+    | 'accept'
+    | 'reject'
+    | 'retry_incoming_qc'
+    | 'retry_gl'
+    | 'reject_remainder'
+    | 'report_problem'
+    | 'report_shortage'
+  >;
   supplier_shipment?: {
     id: string;
     tracking_number: string | null;
@@ -484,6 +511,7 @@ export interface MaterialIssueSlip {
   issuer: { id: string; name: string } | null;
   items?: MaterialIssueSlipItem[];
   created_at: string;
+  updated_at?: string | null;
 }
 
 // REC-08 — Material Review Board (MRB) / quarantine workflow.
@@ -554,6 +582,7 @@ export interface MrbRecord {
   released_at: string | null;
   notes: string | null;
   created_at: string | null;
+  updated_at?: string | null;
 }
 
 export interface CreateMrbData {

@@ -46,6 +46,7 @@ class MobileMaintenanceTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Machine $machine;
 
     protected function setUp(): void
@@ -308,6 +309,25 @@ class MobileMaintenanceTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('status');
+    }
+
+    public function test_repeating_completion_reports_a_stale_state_conflict(): void
+    {
+        $wo = $this->createMwo(MaintenanceWorkOrderStatus::InProgress);
+        MaintenanceLog::create([
+            'work_order_id' => $wo->id,
+            'description' => 'Passing completion record',
+            'finding' => 'Inspection passed',
+            'action_taken' => 'Checked machine',
+            'result' => 'passed',
+            'logged_by' => $this->admin->id,
+        ]);
+        $url = "/api/v1/maintenance/work-orders/{$wo->hash_id}/complete";
+
+        $this->actingAs($this->admin)->patchJson($url)->assertOk();
+        $this->actingAs($this->admin)->patchJson($url)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'maintenance_work_order_state_conflict');
     }
 
     // ─── Condition readings (service-level — routes hidden 2026-08-08) ─

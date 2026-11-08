@@ -1,6 +1,7 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import toast from 'react-hot-toast';
 import { queryClient } from '@/lib/queryClient';
+import { clearAuthSessionDrafts, publishAuthSessionSignal } from '@/lib/authSessionSync';
 import { useErrorLogStore } from '@/stores/errorLogStore';
 
 interface LaravelDebugError {
@@ -78,6 +79,8 @@ const TOAST_ID = {
  locked: 'http-423',
  server: 'http-5xx',
 } as const;
+
+let sessionRevocationSignalSent = false;
 
 /**
  * Which failures the interceptor reports itself rather than leaving to the page.
@@ -193,7 +196,10 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  if (requestConfig && !requestConfig._sessionRetried) {
  requestConfig._sessionRetried = true;
  try {
- if (await sessionProbe.check()) return retryClient.request(requestConfig);
+ if (await sessionProbe.check()) {
+ sessionRevocationSignalSent = false;
+ return retryClient.request(requestConfig);
+ }
  } catch {
  markReported(error);
  toast.error('Could not verify your session. Wait a moment and retry.', { id: 'session-check' });
@@ -201,9 +207,16 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  }
  }
  if (typeof window !== 'undefined' && window.location.pathname !== '/sign-in' && window.location.pathname !== '/login') {
+ if (!sessionRevocationSignalSent) {
+ sessionRevocationSignalSent = true;
+ publishAuthSessionSignal('all', 'changed');
+ }
  // Defense in depth: the hard navigation below normally wipes
  // in-memory state, but clearing the query cache here guarantees no
  // stale cross-user data survives (e.g. a future soft-nav refactor).
+         // Invalidate the draft-autosave lifecycle before the navigation
+         // unmounts forms, so their cleanup cannot re-save cleared user data.
+         clearAuthSessionDrafts();
  queryClient.clear();
   window.location.href = '/sign-in';
  }

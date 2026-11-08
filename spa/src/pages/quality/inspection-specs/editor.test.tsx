@@ -98,6 +98,8 @@ vi.mock('@/hooks/usePermission', () => ({
  usePermission: vi.fn(),
 }));
 
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeRecord: vi.fn() }));
+
 function renderEditor(): HTMLElement {
  const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },

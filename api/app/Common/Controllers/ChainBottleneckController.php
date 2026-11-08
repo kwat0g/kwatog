@@ -141,6 +141,7 @@ class ChainBottleneckController
                 'total' => $totalCount,
                 'groups' => $groups,
                 'automation' => $this->service->automationSummary(),
+                'generated_at' => now()->toISOString(),
             ],
         ]);
     }

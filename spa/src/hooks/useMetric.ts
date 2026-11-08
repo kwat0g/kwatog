@@ -1,28 +1,20 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { metricsApi, type MetricQueryParams } from '@/api/metrics';
-import { isStaleTimestamp } from '@/api/dashboard-layout';
 import type { MetricEnvelope, MetricRefresh, MetricValue } from '@/types/analytics';
 
 /**
- * Poll cadence per metric `refresh` bucket.
- *
- * `live` uses 60s — the same interval the role dashboards and the production
- * dashboard already poll on, so a metric panel adds no new request rate.
- * `monthly` is `false` on purpose: those metrics come from `kpi_snapshots`,
- * which `kpi:compute-monthly` rewrites once on the 2nd, so polling one every
- * 60s would refetch a value that cannot have changed. The cadence is a function
- * of the query's own last payload (the API hands back `meta.refresh`), not a
- * fixed guess made before the first response.
+ * Stale-indicator threshold per metric refresh bucket. Queries refresh from
+ * their source events through the shared invalidation map; RealtimeProvider
+ * owns visibility-aware catch-up when delivery is degraded. These thresholds
+ * only update the stale label and never send network requests.
  */
-const REFRESH_INTERVAL_MS: Record<MetricRefresh, number | false> = {
-  live: 60_000,
-  hourly: 5 * 60_000,
-  daily: 15 * 60_000,
+const STALE_AFTER_MS: Record<MetricRefresh, number | false> = {
+  live: 2 * 60_000,
+  hourly: 10 * 60_000,
+  daily: 30 * 60_000,
   monthly: false,
 };
-
-/** Two missed polls without a successful refetch reads stale, not current. */
-const STALE_AFTER_MULTIPLIER = 2;
 
 export interface UseMetricOptions extends MetricQueryParams {
   /** Skip the request entirely (permission unknown, widget collapsed, ...). */
@@ -33,7 +25,7 @@ export interface UseMetricResult<TValue> {
   envelope: MetricEnvelope<TValue> | undefined;
   isLoading: boolean;
   isError: boolean;
-  /** `meta.generated_at` is older than a full poll window — show the badge. */
+  /** The active query has not received fresh data within its event-freshness window. */
   isStale: boolean;
   refetch: () => void;
 }
@@ -57,29 +49,32 @@ export function useMetric<TValue = MetricValue>(
     queryKey: ['dashboard', 'metric', code, period, from ?? null, to ?? null, machine_id ?? null],
     queryFn: () => metricsApi.get<TValue>(code, { period, from, to, machine_id }),
     enabled: enabled && code !== '',
-    refetchInterval: (query) => {
-      const payload = query.state.data as MetricEnvelope<TValue> | undefined;
-      const value = payload ? REFRESH_INTERVAL_MS[payload.meta.refresh] : 60_000;
-
-      return value;
-    },
-    placeholderData: (prev) => prev,
   });
 
   const envelope = query.data;
-  const intervalMs = envelope ? REFRESH_INTERVAL_MS[envelope.meta.refresh] : 60_000;
+  const staleAfterMs = envelope ? STALE_AFTER_MS[envelope.meta.refresh] : false;
+  const [freshnessNow, setFreshnessNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (query.dataUpdatedAt <= 0 || staleAfterMs === false) return;
+
+    const delay = query.dataUpdatedAt + staleAfterMs - Date.now();
+    if (delay <= 0) {
+      setFreshnessNow(Date.now());
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setFreshnessNow(Date.now()), delay);
+    return () => window.clearTimeout(timeout);
+  }, [query.dataUpdatedAt, staleAfterMs]);
 
   return {
     envelope,
     isLoading: query.isLoading,
     isError: query.isError,
-    isStale:
-      intervalMs !== false &&
-      isStaleTimestamp(
-        new Date(query.dataUpdatedAt).toISOString(),
-        intervalMs * STALE_AFTER_MULTIPLIER,
-      ) &&
-      query.dataUpdatedAt > 0,
+    isStale: staleAfterMs !== false
+      && query.dataUpdatedAt > 0
+      && freshnessNow >= query.dataUpdatedAt + staleAfterMs,
     refetch: () => {
       void query.refetch();
     },

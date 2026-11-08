@@ -23,6 +23,7 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
+use App\Modules\Inventory\Exceptions\GrnStateConflictException;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
@@ -587,13 +588,13 @@ class GrnService
     public function finalizeDraft(GoodsReceiptNote $grn, array $items, User $by, ?string $supplierShipmentId = null): GoodsReceiptNote
     {
         if ($grn->status !== GrnStatus::Draft) {
-            throw new BusinessRuleException('Only draft GRNs can be finalized.');
+            throw new GrnStateConflictException('This GRN is no longer a draft. Refresh and review its current status.');
         }
 
         return DB::transaction(function () use ($grn, $items, $by, $supplierShipmentId) {
             $lockedGrn = GoodsReceiptNote::query()->whereKey($grn->id)->lockForUpdate()->firstOrFail();
             if ($lockedGrn->status !== GrnStatus::Draft) {
-                throw new BusinessRuleException('Only draft GRNs can be finalized.');
+                throw new GrnStateConflictException('This GRN is no longer a draft. Refresh and review its current status.');
             }
             $po = PurchaseOrder::query()
                 ->whereKey($lockedGrn->purchase_order_id)
@@ -725,8 +726,8 @@ class GrnService
                 ->lockForUpdate()
                 ->firstOrFail();
             if ($locked->status !== GrnStatus::PendingQc) {
-                throw new BusinessRuleException(
-                    'Only pending_qc GRNs can retry the incoming Quality handoff.'
+                throw new GrnStateConflictException(
+                    'This GRN is no longer pending QC. Refresh and review its current status.'
                 );
             }
 
@@ -750,42 +751,40 @@ class GrnService
 
     public function markIncomingQcHandoffGenerated(int $grnId): void
     {
-        GoodsReceiptNote::query()->whereKey($grnId)->update([
-            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::Generated->value,
-            'incoming_qc_handoff_message' => null,
-            'incoming_qc_handoff_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->updateIncomingQcHandoff($grnId, IncomingQcHandoffStatus::Generated, null);
     }
 
     public function markIncomingQcHandoffNotRequired(int $grnId): void
     {
-        GoodsReceiptNote::query()->whereKey($grnId)->update([
-            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotRequired->value,
-            'incoming_qc_handoff_message' => null,
-            'incoming_qc_handoff_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->updateIncomingQcHandoff($grnId, IncomingQcHandoffStatus::NotRequired, null);
     }
 
     public function markIncomingQcHandoffManual(int $grnId, ?string $message = null): void
     {
-        GoodsReceiptNote::query()->whereKey($grnId)->update([
-            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::ManualRequired->value,
-            'incoming_qc_handoff_message' => $message ?: 'Incoming QC trigger requires manual action.',
-            'incoming_qc_handoff_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->updateIncomingQcHandoff(
+            $grnId,
+            IncomingQcHandoffStatus::ManualRequired,
+            $message ?: 'Incoming QC trigger requires manual action.',
+        );
     }
 
     public function markIncomingQcHandoffPending(int $grnId, ?string $message = null): void
     {
-        GoodsReceiptNote::query()->whereKey($grnId)->update([
-            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted->value,
+        $this->updateIncomingQcHandoff($grnId, IncomingQcHandoffStatus::NotStarted, $message);
+    }
+
+    private function updateIncomingQcHandoff(int $grnId, IncomingQcHandoffStatus $status, ?string $message): void
+    {
+        $grn = GoodsReceiptNote::query()->find($grnId);
+        if ($grn === null) {
+            return;
+        }
+
+        $grn->forceFill([
+            'incoming_qc_handoff_status' => $status,
             'incoming_qc_handoff_message' => $message,
             'incoming_qc_handoff_at' => now(),
-            'updated_at' => now(),
-        ]);
+        ])->save();
     }
 
     /** Accept the entire GRN — moves stock for every line at full quantity_received. */
@@ -797,7 +796,7 @@ class GrnService
                 ->lockForUpdate()
                 ->firstOrFail();
             if ($lockedGrn->status !== GrnStatus::PendingQc) {
-                throw new BusinessRuleException('Only pending_qc GRNs can be accepted.');
+                throw new GrnStateConflictException('This GRN is no longer pending QC. Refresh and review its current status.');
             }
             $this->assertQcGate($lockedGrn);
 
@@ -861,10 +860,10 @@ class GrnService
                 ->lockForUpdate()
                 ->firstOrFail();
             if (! in_array($lockedGrn->status, [GrnStatus::PendingQc, GrnStatus::PartialAccepted], true)) {
-                throw new BusinessRuleException('Only pending_qc or partial_accepted GRNs can be accepted.');
+                throw new GrnStateConflictException('This GRN is no longer open for acceptance. Refresh and review its current status.');
             }
             if ($lockedGrn->remainder_rejected_at !== null) {
-                throw new BusinessRuleException('The remainder of this GRN was rejected; it can no longer be accepted.');
+                throw new GrnStateConflictException('The remainder of this GRN was rejected. Refresh and review its current status.');
             }
             $this->assertQcGate($lockedGrn, $itemAcceptedMap);
 
@@ -953,7 +952,7 @@ class GrnService
                 ->lockForUpdate()
                 ->firstOrFail();
             if ($lockedGrn->status !== GrnStatus::PendingQc) {
-                throw new BusinessRuleException('Only pending_qc GRNs can be rejected.');
+                throw new GrnStateConflictException('This GRN is no longer pending QC. Refresh and review its current status.');
             }
             $lockedGrn->loadMissing('qcInspection');
             if ($lockedGrn->qcInspection && ! in_array(
@@ -1001,11 +1000,11 @@ class GrnService
                 ->firstOrFail();
 
             if ($lockedGrn->status !== GrnStatus::PartialAccepted) {
-                throw new BusinessRuleException('Only partial_accepted GRNs can have their remainder rejected.');
+                throw new GrnStateConflictException('This GRN is no longer open for remainder rejection. Refresh and review its current status.');
             }
 
             if ($lockedGrn->remainder_rejected_at !== null) {
-                throw new BusinessRuleException('The remainder of this GRN was already rejected.');
+                throw new GrnStateConflictException('The remainder of this GRN was already rejected. Refresh and review its current status.');
             }
 
             $po = PurchaseOrder::query()
@@ -1042,7 +1041,7 @@ class GrnService
             }
 
             if (! $hadRemainder) {
-                throw new BusinessRuleException('Nothing left to reject on this GRN.');
+                throw new GrnStateConflictException('There is no remainder left to reject. Refresh and review the current quantities.');
             }
 
             $lockedGrn->forceFill([
@@ -1966,9 +1965,8 @@ class GrnService
                             'notes' => $qcData['remarks'] ?? null,
                         ], $inspector);
 
-                        // The InspectionService::create() already back-links
-                        // qc_inspection_id onto the GRN via DB::table update,
-                        // so we reload to pick up the change.
+                        // InspectionService links the header through an
+                        // observed Eloquent update; reload the resulting link.
                         $grn->refresh();
                     } catch (RuntimeException) {
                         // A received raw item may have no CRM-product spec. Keep
@@ -2584,17 +2582,26 @@ class GrnService
             ? $po->status->value
             : (string) $po->status;
 
-        if ($currentStatus !== $previousStatus) {
-            $fresh = $po->fresh();
-            if ($fresh) {
-                app(ChainBroadcaster::class)->broadcastFor(
-                    $fresh,
-                    $fresh->status instanceof PurchaseOrderStatus
-                        ? $fresh->status->value
-                        : (string) $fresh->status,
-                    $by,
-                );
-            }
+        $fresh = $po->fresh();
+        if ($fresh === null) {
+            return;
         }
+
+        $broadcaster = app(ChainBroadcaster::class);
+        if ($currentStatus !== $previousStatus) {
+            $broadcaster->broadcastFor(
+                $fresh,
+                $fresh->status instanceof PurchaseOrderStatus
+                    ? $fresh->status->value
+                    : (string) $fresh->status,
+                $by,
+            );
+
+            return;
+        }
+
+        // Receipt and acceptance quantities are embedded in the PO resource.
+        // Refresh those fields even when its high-level status does not move.
+        $broadcaster->refreshPurchaseOrder($fresh);
     }
 }

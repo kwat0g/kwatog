@@ -8,6 +8,10 @@ use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\Alert;
+use App\Modules\Dashboard\Events\BadgesChanged;
+use App\Modules\Dashboard\Services\BadgeService;
+use App\Modules\Dashboard\Services\DashboardCacheGeneration;
+use App\Modules\Dashboard\Services\AdminDashboardRealtimeService;
 use App\Common\Notifications\CriticalAlertEmail;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -229,10 +233,27 @@ class AlertEngineService
     {
         $cutoff = now()->subMonths(max(1, $months));
 
-        return Alert::query()
-            ->whereNotNull('resolved_at')
-            ->where('resolved_at', '<', $cutoff)
-            ->delete();
+        return DB::transaction(function () use ($cutoff): int {
+            $deleted = Alert::query()
+                ->whereNotNull('resolved_at')
+                ->where('resolved_at', '<', $cutoff)
+                ->delete();
+
+            if ($deleted > 0) {
+                // Keep the source delete, cache generations, and durable refresh
+                // signals in one transaction. Retire all snapshots before the
+                // outbox callbacks make a fast broadcast worker eligible.
+                DashboardCacheGeneration::touch('dashboard:admin');
+                BadgeService::touch();
+                app(AdminDashboardRealtimeService::class)->stage();
+                app(OutboxService::class)->record(
+                    new BadgesChanged(),
+                    'alerts-pruned:'.Str::uuid(),
+                );
+            }
+
+            return $deleted;
+        });
     }
 
     /**
@@ -781,7 +802,22 @@ class AlertEngineService
             $query->whereNotIn('condition_key', $observed);
         }
 
-        $query->update(['resolved_at' => now(), 'updated_at' => now()]);
+        DB::transaction(function () use ($query, $check): void {
+            if ($query->update(['resolved_at' => now(), 'updated_at' => now()]) < 1) {
+                return;
+            }
+
+            // This bulk update bypasses Eloquent observers. Rotate all affected
+            // snapshots before registering queue-dispatch callbacks so an event
+            // consumer cannot refetch pre-invalidation cached dashboard data.
+            DashboardCacheGeneration::touch('dashboard:admin');
+            BadgeService::touch();
+            app(AdminDashboardRealtimeService::class)->stage();
+            app(OutboxService::class)->record(
+                new BadgesChanged(),
+                'alerts-resolved:'.$check.':'.Str::uuid(),
+            );
+        });
     }
 
     private function isConditionConflict(QueryException $e): bool
@@ -830,25 +866,23 @@ class AlertEngineService
             }
 
             app(NotificationService::class)->sendLaravelNotification($emailUsers, new CriticalAlertEmail($claimed));
-            Alert::query()->whereKey($claimed->getKey())->update([
+            $this->updateCriticalEmailDeliveryState($claimed, [
                 'email_status' => 'sent',
                 'notified_email_at' => now(),
                 'email_next_attempt_at' => null,
                 'email_failed_at' => null,
                 'email_last_error' => null,
-                'updated_at' => now(),
             ]);
         } catch (\Throwable $e) {
             $attempts = (int) $claimed->email_attempts;
             $terminal = $attempts >= self::MAX_CRITICAL_EMAIL_ATTEMPTS;
             $error = Str::limit($e->getMessage(), 1000, '');
 
-            Alert::query()->whereKey($claimed->getKey())->update([
+            $this->updateCriticalEmailDeliveryState($claimed, [
                 'email_status' => $terminal ? 'terminal_failed' : 'failed',
                 'email_failed_at' => now(),
                 'email_next_attempt_at' => $terminal ? null : now()->addMinutes($this->emailBackoffMinutes($attempts)),
                 'email_last_error' => $error,
-                'updated_at' => now(),
             ]);
 
             try {
@@ -876,6 +910,27 @@ class AlertEngineService
                 'terminal' => $terminal,
             ]);
         }
+    }
+
+    /**
+     * Persist a visible email-delivery state and retire alert/dashboard snapshots
+     * before publishing the shared content-free refresh signal.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function updateCriticalEmailDeliveryState(Alert $alert, array $attributes): void
+    {
+        DB::transaction(function () use ($alert, $attributes): void {
+            $updated = Alert::query()->whereKey($alert->getKey())->update([
+                ...$attributes,
+                'updated_at' => now(),
+            ]);
+            if ($updated < 1) {
+                return;
+            }
+
+            $this->stageCriticalEmailStatusRefresh($alert);
+        });
     }
 
     private function claimCriticalEmail(int|string $alertId): ?Alert
@@ -907,9 +962,22 @@ class AlertEngineService
                 'email_last_attempt_at' => $now,
                 'email_next_attempt_at' => null,
             ])->save();
+            $this->stageCriticalEmailStatusRefresh($alert);
 
             return $alert->fresh();
         });
+    }
+
+    private function stageCriticalEmailStatusRefresh(Alert $alert): void
+    {
+        // Alert observers intentionally ignore email bookkeeping changes. The
+        // list does render failed/retrying delivery status, so retire its cache
+        // snapshots and queue one content-free refresh for each committed step.
+        BadgeService::touch();
+        app(OutboxService::class)->record(
+            new BadgesChanged,
+            'critical-alert-email:'.$alert->getKey().':'.Str::uuid(),
+        );
     }
 
     private function emailBackoffMinutes(int $attempt): int

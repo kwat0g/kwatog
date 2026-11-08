@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
+use App\Modules\Dashboard\Events\BadgesChanged;
+use App\Modules\Dashboard\Services\BadgeService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Support\DemandBasis;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * T1.4 — Recomputes items.safety_stock from recent issue history.
@@ -45,6 +49,7 @@ class SafetyStockRecomputeService
         $opts = $this->loadOpts();
         $evaluated = 0;
         $updated   = 0;
+        $thresholdChanged = false;
         $skipped   = 0;
         $failed    = 0;
 
@@ -63,10 +68,12 @@ class SafetyStockRecomputeService
                     $skipped++;
                     continue;
                 }
+                $itemThresholdChanged = bccomp((string) $newSs, (string) $item->safety_stock, 3) !== 0;
                 $item->forceFill([
                     'safety_stock'               => $newSs,
                     'safety_stock_recomputed_at' => now(),
                 ])->saveQuietly();
+                $thresholdChanged = $thresholdChanged || $itemThresholdChanged;
                 $updated++;
             } catch (\Throwable $e) {
                 $failed++;
@@ -75,6 +82,25 @@ class SafetyStockRecomputeService
                     'error'   => $e->getMessage(),
                 ]);
             }
+        }
+
+        // This batch intentionally uses saveQuietly() to avoid one outbox
+        // message per item. One content-free catalog ping refreshes open item
+        // lists/details after the complete sweep.
+        if ($updated > 0) {
+            app(ItemRealtimeService::class)->stageCatalog('updated');
+        }
+
+        // saveQuietly() intentionally bypasses Eloquent observers. If a
+        // threshold changed, retire the independent inventory-summary and
+        // badge/dashboard generations and publish one post-write refresh ping.
+        if ($thresholdChanged) {
+            app(InventoryDashboardCache::class)->invalidateAfterCommit();
+            BadgeService::touch();
+            app(OutboxService::class)->record(
+                new BadgesChanged(),
+                'badges:safety-stock-recompute:'.Str::uuid(),
+            );
         }
 
         return compact('evaluated', 'updated', 'skipped', 'failed');

@@ -7,6 +7,7 @@ namespace Tests\Feature\HR;
 use App\Common\Models\ActivityEvent;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Modules\Attendance\Models\EmployeeShiftAssignment;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -73,6 +74,17 @@ class OnboardingTest extends TestCase
             'basic_monthly_salary' => '20000.00',
             'effective_date' => '2025-01-01',
         ]);
+    }
+
+    public function test_default_shift_assignment_persists_the_default_working_days(): void
+    {
+        $employee = app(EmployeeService::class)->create($this->basePayload());
+
+        $assignment = EmployeeShiftAssignment::query()
+            ->where('employee_id', $employee->id)
+            ->firstOrFail();
+
+        $this->assertSame([1, 2, 3, 4, 5, 6], $assignment->working_days);
     }
 
     public function test_recompute_marks_account_provisioned_after_user_created(): void

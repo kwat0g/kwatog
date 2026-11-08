@@ -1,5 +1,5 @@
 import { formatDateTime } from '@/lib/formatDate';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuPlay, LuRefreshCw, LuSearch } from '@/lib/icons';
@@ -10,7 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
-import { Panel } from '@/components/ui/Panel';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -23,12 +23,15 @@ import {
   scheduleDate,
   scheduleDateKey,
   scheduleTime,
+  productionInputDateTime,
+  productionInputIso,
 } from '@/components/production/scheduleDates';
 import { useDebounce } from '@/hooks/useDebounce';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { localIsoDate } from '@/lib/formatDate';
 import { formatQuantity } from '@/lib/formatNumber';
-import type { GanttBar, GanttRow, SchedulerConflict } from '@/types/mrp';
+import type { GanttBar, GanttRow, GanttSnapshot, SchedulerConflict } from '@/types/mrp';
 
 type ScheduleEntry = GanttBar & {
   machine_code: string;
@@ -46,6 +49,7 @@ export default function ProductionSchedulePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { can } = usePermission();
+  useRealtimeList('production_schedule', 'visible');
   const canRun = can('mrp.schedule');
   const [view, setView] = useState<'timeline' | 'list'>('timeline');
   const [zoom, setZoom] = useState<'Day' | 'Week' | 'Month'>('Week');
@@ -56,6 +60,9 @@ export default function ProductionSchedulePage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [runReview, setRunReview] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<GanttBar | null>(null);
+  const [scheduledStartInput, setScheduledStartInput] = useState('');
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<SchedulerConflict[]>([]);
   const [outcomeKind, setOutcomeKind] = useState('success');
   const [operationError, setOperationError] = useState<string | null>(null);
@@ -86,7 +93,6 @@ export default function ProductionSchedulePage() {
     queryKey: ['mrp', 'scheduler', 'snapshot', from, to],
     queryFn: () => schedulerApi.snapshot(from, offsetScheduleDate(to, 1)),
     enabled: !dateError,
-    refetchInterval: 60_000,
   });
   const timezone = snapshot.data?.timezone ?? 'Asia/Manila';
   const rows = useMemo(
@@ -153,13 +159,72 @@ export default function ProductionSchedulePage() {
         errorMessage(error, 'Scheduler could not finish. Refresh schedules before trying again.'),
       ),
   });
-  const busy = run.isPending;
+  const move = useMutation({
+    mutationFn: (input: { scheduleId: string; scheduledStart: string; expectedUpdatedAt: string }) =>
+      schedulerApi.move(input.scheduleId, input.scheduledStart, input.expectedUpdatedAt),
+    onSuccess: (moved, input) => {
+      queryClient.setQueryData<GanttSnapshot>(
+        ['mrp', 'scheduler', 'snapshot', from, to],
+        (current) => {
+          if (!current) return current;
+          const startTime = Date.parse(moved.scheduled_start);
+          const fromTime = Date.parse(current.from);
+          const toTime = Date.parse(current.to);
+          let found = false;
+          const rows = current.rows.map((row) => {
+            let rowChanged = false;
+            const bars = row.bars.flatMap((bar) => {
+              if (bar.id !== input.scheduleId) return [bar];
+              found = true;
+              rowChanged = true;
+              if (Number.isFinite(fromTime) && Number.isFinite(toTime)
+                && (startTime < fromTime || startTime >= toTime)) return [];
+              return [{
+                ...bar,
+                start: moved.scheduled_start,
+                end: moved.scheduled_end,
+                updated_at: moved.updated_at,
+              }];
+            });
+            return rowChanged ? { ...row, bars } : row;
+          });
+          return found ? { ...current, rows } : current;
+        },
+      );
+      setEditingSchedule(null);
+      setScheduledStartInput('');
+      setMoveError(null);
+      setOperationError(null);
+      setOutcomeKind('success');
+      setOutcome(`Schedule moved to ${scheduleDate(input.scheduledStart, timezone)} at ${scheduleTime(input.scheduledStart, timezone)}.`);
+      queryClient.invalidateQueries({ queryKey: ['mrp', 'scheduler', 'snapshot'] });
+    },
+    onError: (error) => setMoveError(errorMessage(error, 'Schedule could not be moved. Refresh and try again.')),
+  });
+  const busy = run.isPending || move.isPending;
   const resetFilters = () => {
     setMachine('');
     setStatus('');
     setSearch('');
   };
   const showError = operationError && !runReview;
+  const beginMove = (bar: GanttBar) => {
+    setOperationError(null);
+    setMoveError(null);
+    setEditingSchedule(bar);
+    setScheduledStartInput(productionInputDateTime(bar.start));
+  };
+  const moveEndPreview = useMemo(() => {
+    if (!editingSchedule || !scheduledStartInput) return null;
+    try {
+      const startMs = Date.parse(productionInputIso(scheduledStartInput));
+      const durationMs = Date.parse(editingSchedule.end) - Date.parse(editingSchedule.start);
+      if (!Number.isFinite(startMs) || !Number.isFinite(durationMs) || durationMs <= 0) return null;
+      return new Date(startMs + durationMs).toISOString();
+    } catch {
+      return null;
+    }
+  }, [editingSchedule, scheduledStartInput]);
 
   const columns: Column<ScheduleEntry>[] = [
     {
@@ -262,10 +327,23 @@ export default function ProductionSchedulePage() {
         );
       })() : <span className="text-secondary">Readiness unavailable</span>,
     },
+    {
+      key: 'actions', header: 'Actions', width: 110, minWidth: 100, maxWidth: 140,
+      cell: (bar) => canRun && bar.status === 'pending' && bar.wo_status === 'planned'
+        && bar.reserves_capacity !== false && bar.updated_at ? (
+        <Button
+          size="sm"
+          onClick={() => beginMove(bar)}
+          disabled={busy}
+        >
+          Move
+        </Button>
+      ) : <span className="text-secondary">—</span>,
+    },
   ];
 
   return (
-    <PageShell viewport className="flex flex-col gap-4 max-md:overflow-y-auto">
+    <PageShell viewport className="flex flex-col gap-3 max-md:overflow-y-auto [@media(max-height:850px)]:overflow-y-auto">
       <PageHeader
         inset={false}
         title="Production schedule"
@@ -381,33 +459,36 @@ export default function ProductionSchedulePage() {
         </p>
       )}
       {displayedConflicts.length > 0 && (
-        <Panel
-          className="shrink-0"
-          bodyClassName="max-h-36 overflow-y-auto"
-          title="Work orders needing scheduling review"
-          meta={`${displayedConflicts.length} conflicts`}
-        >
-          <div className="space-y-3">
-            {displayedConflicts.map((conflict) => (
-              <div key={conflict.work_order_id} className="text-sm">
-                <Link
-                  className="inline-flex min-h-11 items-center font-mono text-link hover:underline"
-                  to={`/production/work-orders/${conflict.work_order_id}`}
-                >
-                  {conflict.wo_number}
-                </Link>
-                <p className="text-muted">
-                  {[...new Set(conflict.reasons)].map((reason) => reason.replaceAll('_', ' ')).join('; ')}
-                  {conflict.checked_at && (
-                    <span className="block text-caption">
-                      Last checked: {formatDateTime(conflict.checked_at)}
-                    </span>
-                  )}
-                </p>
-              </div>
-            ))}
+        <details className="shrink-0 overflow-hidden rounded-md border border-default bg-canvas">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-primary sm:px-5 sm:py-4">
+            Work orders needing scheduling review{' '}
+            <Chip variant="warning" className="ml-1">
+              {displayedConflicts.length} conflicts
+            </Chip>
+          </summary>
+          <div className="max-h-36 overflow-y-auto border-t border-default p-4 sm:p-5">
+            <div className="space-y-3">
+              {displayedConflicts.map((conflict) => (
+                <div key={conflict.work_order_id} className="text-sm">
+                  <Link
+                    className="inline-flex min-h-11 items-center font-mono text-link hover:underline"
+                    to={`/production/work-orders/${conflict.work_order_id}`}
+                  >
+                    {conflict.wo_number}
+                  </Link>
+                  <p className="text-muted">
+                    {[...new Set(conflict.reasons)].map((reason) => reason.replaceAll('_', ' ')).join('; ')}
+                    {conflict.checked_at && (
+                      <span className="block text-caption">
+                        Last checked: {formatDateTime(conflict.checked_at)}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
-        </Panel>
+        </details>
       )}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-caption text-muted">
         <span className="tabular-nums">
@@ -420,7 +501,7 @@ export default function ProductionSchedulePage() {
           </Button>
         )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col max-md:flex-none">
+      <div className="flex min-h-96 flex-1 flex-col max-md:flex-none">
         <Tabs
           className="shrink-0"
           label="Schedule views"
@@ -445,7 +526,9 @@ export default function ProductionSchedulePage() {
               <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-default bg-canvas max-md:h-auto max-md:min-h-0">
                 <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-default px-4 py-3">
                   <p className="text-sm text-secondary">
-                    One row per WO. Open a work order to review workers and confirm its schedule.
+                    {canRun
+                      ? 'Earliest slot needs machine, mold, and shift coverage. Use the pencil to move a pending WO.'
+                      : 'Earliest slot needs machine, mold, and shift coverage.'}
                   </p>
                   <SegmentedControl
                     label="Timeline zoom"
@@ -467,6 +550,7 @@ export default function ProductionSchedulePage() {
                   timezone={timezone}
                   viewMode={zoom}
                   onBarClick={(id) => navigate(`/production/work-orders/${id}`)}
+                  onBarEdit={canRun && !busy ? beginMove : undefined}
                 />
               </div>
             ) : entries.length ? (
@@ -523,6 +607,65 @@ export default function ProductionSchedulePage() {
           </div>
         }
       />
+      <Modal
+        isOpen={editingSchedule !== null}
+        onClose={() => {
+          if (!move.isPending) {
+            setEditingSchedule(null);
+            setMoveError(null);
+          }
+        }}
+        title={`Adjust ${editingSchedule?.wo_number ?? 'work order'} schedule`}
+        size="md"
+        closeOnOverlayClick={!move.isPending}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event: FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            if (!editingSchedule?.updated_at || !scheduledStartInput) return;
+            try {
+              move.mutate({
+                scheduleId: editingSchedule.id,
+                scheduledStart: productionInputIso(scheduledStartInput),
+                expectedUpdatedAt: editingSchedule.updated_at,
+              });
+            } catch {
+              setMoveError('Enter a valid date and time.');
+            }
+          }}
+        >
+          <p className="text-sm text-secondary">
+            The slot keeps its current duration. Machine, mold, deadline, maintenance, and worker-shift conflicts are checked before saving.
+          </p>
+          <Input
+            label="New start time (Asia/Manila)"
+            type="datetime-local"
+            value={scheduledStartInput}
+            min={productionInputDateTime(new Date().toISOString())}
+            step={60}
+            required
+            onChange={(event) => setScheduledStartInput(event.target.value)}
+          />
+          {moveEndPreview && (
+            <p className="text-caption text-muted">
+              Expected finish: {scheduleDate(moveEndPreview, timezone)} · {scheduleTime(moveEndPreview, timezone)}
+            </p>
+          )}
+          {moveError && <p role="alert" className="text-sm text-danger-fg">{moveError}</p>}
+          <ModalFooter>
+            <Button type="button" variant="secondary" disabled={move.isPending} onClick={() => {
+              setEditingSchedule(null);
+              setMoveError(null);
+            }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" loading={move.isPending} disabled={!editingSchedule?.updated_at || !scheduledStartInput}>
+              Save schedule
+            </Button>
+          </ModalFooter>
+        </form>
+      </Modal>
     </PageShell>
   );
 }

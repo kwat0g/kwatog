@@ -50,14 +50,14 @@ class EmployeeDocumentService
         $this->assertEmployeeVisible($employee, $actor);
         // Keep the private file while the row is soft-deleted so restore remains
         // reversible. Permanent purge belongs to a separate retention job.
-        $document->delete();
+        DB::transaction(fn () => $document->delete());
     }
 
     public function restore(Employee $employee, EmployeeDocument $document, User $actor): void
     {
         $this->assertDocumentBelongsToEmployee($employee, $document);
         $this->assertEmployeeVisible($employee, $actor);
-        $document->restore();
+        DB::transaction(fn () => $document->restore());
     }
 
     public function download(EmployeeDocument $document, User $actor): ?string

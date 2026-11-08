@@ -8,7 +8,6 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { Th, Td, tableCls, trCls } from '@/components/ui/table-cells';
 import { client } from '@/api/client';
-import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { DashSection, DashTail, PanelEmphasis } from '@/components/dashboard/hierarchy';
 import {
@@ -89,6 +88,7 @@ interface PlantManagerData {
 export default function PlantManagerDashboard() {
   const { can } = usePermission();
 
+
   const [range, setRange] = useState<DashboardRange>('week');
 
   const q = useQuery({
@@ -97,14 +97,12 @@ export default function PlantManagerDashboard() {
       client
         .get<ApiSuccess<PlantManagerData>>('/dashboards/plant-manager', { params: { range } })
         .then((r) => r.data.data),
-    refetchInterval: DASHBOARD_REFRESH_MS,
-    placeholderData: (prev) => prev,
   });
 
   return (
     <DashboardShell<PlantManagerData>
-      title="Plant Manager Dashboard"
-      subtitle="Production, quality, and financial overview."
+      title="Plant Manager"
+      subtitle="Production, quality, and finance."
       query={q}
       refreshingQueryKey={['dashboard', 'plant-manager', range]}
       actions={<PeriodControl value={range} onChange={setRange} />}

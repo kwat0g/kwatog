@@ -49,6 +49,10 @@ class RecommendationResource extends JsonResource
             'type' => $this->type,
             'severity' => $this->severity,
             'status' => $this->status,
+            // This resource is returned only after RecommendationService has
+            // authorized the user's detector, audience and record scope.
+            'permissions' => ['view' => true, 'act' => true],
+            'available_actions' => $this->availableActions(),
             'owner_role_slugs' => is_array($this->owner_role_slugs) && array_is_list($this->owner_role_slugs)
                 ? array_values(array_filter($this->owner_role_slugs, 'is_string'))
                 : null,
@@ -80,6 +84,27 @@ class RecommendationResource extends JsonResource
             'events_count' => $this->whenCounted('events'),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
+            'version' => (int) $this->version,
+        ];
+    }
+
+    /** @return array{accept: bool, dismiss: bool, snooze: bool, execute: bool, start_follow_up: bool, record_outcome: bool} */
+    private function availableActions(): array
+    {
+        $status = (string) $this->status;
+        $active = in_array($status, ['open', 'in_progress', 'snoozed'], true)
+            && ! ($this->expires_at !== null && $this->expires_at->lte(now()));
+        $dueSnooze = $status === 'snoozed'
+            && $this->snoozed_until !== null
+            && $this->snoozed_until->lte(now());
+
+        return [
+            'accept' => $active && (in_array($status, ['open', 'in_progress'], true) || $dueSnooze),
+            'dismiss' => $active,
+            'snooze' => $active && in_array($status, ['open', 'in_progress'], true),
+            'execute' => $status === 'accepted',
+            'start_follow_up' => $active && in_array($status, ['open', 'snoozed'], true),
+            'record_outcome' => in_array($status, ['accepted', 'executed', 'dismissed'], true),
         ];
     }
 

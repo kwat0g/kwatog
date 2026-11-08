@@ -34,6 +34,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
     volumes:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]
@@ -57,6 +61,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      redis-cache:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -122,9 +128,24 @@ services:
     # Phase 4 — AOF persistence so a Redis crash doesn't wipe sessions,
     # cache (incl. permission/role keys), or queued jobs. Snapshots still
     # run by default; appendonly is the bounded-loss layer on top.
-    command: redis-server --appendonly yes --appendfsync everysec
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "${REDIS_QUEUE_MAXMEMORY:-256mb}", "--maxmemory-policy", "noeviction"]
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [ogami-net]
+
+  # Cache entries are disposable and may be evicted under memory pressure.
+  # Keep them on a separate bounded Redis process so LRU can never drop queue
+  # payloads or reservations from the durable noeviction instance above.
+  redis-cache:
+    image: redis:7-alpine
+    container_name: ogami-redis-cache
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "${REDIS_CACHE_MAXMEMORY:-96mb}", "--maxmemory-policy", "volatile-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

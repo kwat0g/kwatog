@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Resources;
 
+use App\Modules\Auth\Models\User;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,11 +18,16 @@ class PurchaseOrderResponseResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $viewer = $request->user();
+
         return [
             'id'                     => $this->hash_id,
             'purchase_order_id'      => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder->hash_id),
             'type'                   => $this->response_type?->value ?? (string) $this->response_type,
             'status'                 => $this->status?->value ?? (string) $this->status,
+            'available_actions'      => $viewer instanceof User
+                ? app(PurchaseOrderAccessPolicy::class)->responseActionsFor($viewer, $this->resource)
+                : ['accept' => false, 'reject' => false],
             'proposed_delivery_date' => optional($this->proposed_delivery_date)->toDateString(),
             'notes'                  => $this->notes,
             'responded_at'           => optional($this->responded_at)->toIso8601String(),

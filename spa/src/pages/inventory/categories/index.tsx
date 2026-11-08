@@ -105,7 +105,6 @@ export function ItemCategoriesManager() {
  const tree = useQuery({
   queryKey: ['inventory', 'categories', 'tree', { trashed: archiveToTrashed(scope), search: filters.search }],
   queryFn: () => itemCategoriesApi.tree({ trashed: archiveToTrashed(scope) }),
-  placeholderData: (prev) => prev,
  });
  const flatList = useQuery({
   queryKey: ['inventory', 'categories'],
@@ -224,6 +223,7 @@ export function ItemCategoriesManager() {
   <div>
   <div className="pb-3">
    <FilterBar
+    savedViewsEnabled={false}
     onSearch={(search) => setFilters((f) => ({ ...f, search }))}
     searchPlaceholder="Search category..."
    />

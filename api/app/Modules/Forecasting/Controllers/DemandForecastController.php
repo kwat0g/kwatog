@@ -12,6 +12,7 @@ use App\Modules\Forecasting\Models\DemandForecast;
 use App\Modules\Forecasting\Enums\DemandSource;
 use App\Modules\Forecasting\Resources\DemandForecastResource;
 use App\Modules\Forecasting\Services\ForecastingService;
+use App\Modules\Forecasting\Services\DemandForecastRealtimeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -175,24 +176,37 @@ class DemandForecastController extends Controller
         $start = Carbon::now()->startOfMonth()->addMonthNoOverflow();
         $written = [];
         $skippedManual = [];
-        for ($i = 0; $i < $horizon; $i++) {
-            $cursor = $start->copy()->addMonthsNoOverflow($i);
-            $f = $this->service->compute(
-                $productId,
-                $customerId,
-                $cursor->year,
-                $cursor->month,
-                $data['method'],
-                $lookback,
-                $request->user(),
-                $overwriteManual
-            );
-            if ($f === null) {
-                $skippedManual[] = ['year' => $cursor->year, 'month' => $cursor->month];
-                continue;
+        DemandForecastRealtimeService::coalesceBatch(function () use (
+            $horizon,
+            $start,
+            $productId,
+            $customerId,
+            $data,
+            $lookback,
+            $request,
+            $overwriteManual,
+            &$written,
+            &$skippedManual,
+        ): void {
+            for ($i = 0; $i < $horizon; $i++) {
+                $cursor = $start->copy()->addMonthsNoOverflow($i);
+                $f = $this->service->compute(
+                    $productId,
+                    $customerId,
+                    $cursor->year,
+                    $cursor->month,
+                    $data['method'],
+                    $lookback,
+                    $request->user(),
+                    $overwriteManual
+                );
+                if ($f === null) {
+                    $skippedManual[] = ['year' => $cursor->year, 'month' => $cursor->month];
+                    continue;
+                }
+                $written[] = $f;
             }
-            $written[] = $f;
-        }
+        });
 
         $models = collect($written)->map(fn ($f) => $f->load(['product', 'customer']));
 

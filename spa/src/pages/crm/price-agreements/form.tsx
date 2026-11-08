@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { pricingRequestsApi } from '@/api/crm/pricingRequests';
+import { priceAgreementsApi } from '@/api/crm/priceAgreements';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { productsApi } from '@/api/crm/products';
@@ -20,6 +21,8 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { PriceRequest } from '@/types/pricing';
 
 const amount = z
   .string()
@@ -87,14 +90,20 @@ type FormValues = z.infer<typeof schema>;
 interface Props {
   initial?: Partial<PriceAgreement>;
   negotiationId?: string;
+  expectedVersion?: number;
   mode: 'create' | 'edit';
 }
 
-export function PriceAgreementForm({ initial, negotiationId }: Props) {
+export function PriceAgreementForm({ initial, negotiationId, expectedVersion, mode }: Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [productSearch, setProductSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
+  const originalVersion = useRef(expectedVersion);
+  const [recordChanged, setRecordChanged] = useState(false);
+  useEffect(() => {
+    if (expectedVersion !== undefined && originalVersion.current !== expectedVersion) setRecordChanged(true);
+  }, [expectedVersion]);
 
   const {
     data: productsData,
@@ -139,6 +148,7 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
   const {
     register,
     control,
+    setValue,
     handleSubmit,
     setError,
     watch,
@@ -148,10 +158,25 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
   const pricingMethod = watch('pricing_method');
   const productId = watch('product_id');
   const customerId = watch('customer_id');
+  const customerField = register('customer_id');
   const price = watch('price');
   const effectiveFrom = watch('effective_from');
   const effectiveTo = watch('effective_to');
   const tiers = watch('tiers') ?? [];
+  const filtersActiveAgreements = mode === 'create' && !negotiationId;
+  const {
+    data: customerAgreements,
+    isLoading: activeAgreementsLoading,
+    isFetching: activeAgreementsFetching,
+    isError: activeAgreementsError,
+    refetch: retryActiveAgreements,
+  } = useQuery({
+    queryKey: ['crm', 'price-agreements', 'customer-lookup', customerId],
+    queryFn: () => priceAgreementsApi.forCustomer(customerId),
+    enabled: filtersActiveAgreements && !!customerId,
+  });
+  const activeAgreementsPending =
+    filtersActiveAgreements && (activeAgreementsLoading || activeAgreementsFetching);
   const { data: selectedProduct, isError: selectedProductError } = useQuery({
     queryKey: ['crm', 'products', 'detail', productId],
     queryFn: () => productsApi.show(productId),
@@ -166,7 +191,24 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
 
   const products = productsData?.data ?? [];
   const customers = customersData?.data ?? [];
-  const productAlreadyListed = products.some((product) => product.id === productId);
+  const activeAgreementProductIds = new Set(
+    (customerAgreements ?? [])
+      .filter((agreement) => agreement.is_currently_active)
+      .map((agreement) => agreement.product?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const activeAgreementsReady =
+    !filtersActiveAgreements ||
+    (!!customerId && !activeAgreementsPending && !activeAgreementsError);
+  const availableProducts = filtersActiveAgreements
+    ? activeAgreementsReady
+      ? products.filter((product) => !activeAgreementProductIds.has(product.id))
+      : []
+    : products;
+  const productAlreadyListed = availableProducts.some((product) => product.id === productId);
+  const canShowSelectedProduct =
+    !filtersActiveAgreements ||
+    (activeAgreementsReady && !activeAgreementProductIds.has(productId));
   const { data: selectedCustomerDetails } = useQuery({
     queryKey: ['crm', 'customers', 'detail', customerId],
     queryFn: () => crmCustomersApi.show(customerId),
@@ -200,6 +242,7 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
             notes: values.notes,
             pricing_method: values.pricing_method,
             tiers: payload.tiers ?? null,
+            version: expectedVersion ?? 0,
           })
         : pricingRequestsApi.create({
             ...payload,
@@ -208,15 +251,23 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
             tiers: payload.tiers ?? null,
           });
     },
-    onSuccess: () => {
+    onSuccess: (updated: PriceRequest) => {
       qc.invalidateQueries({ queryKey: ['crm', 'price-agreements'] });
-      qc.invalidateQueries({ queryKey: ['pricing-requests'] });
+      qc.setQueryData(['pricing-requests', updated.id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'price_request', entityId: updated.id });
       toast.success(
         'Proposal submitted for Finance review. Customer terms stay unchanged until accepted.',
       );
-      navigate('/crm/price-agreements');
+            safety.allowNavigationAfterSave();
+navigate('/crm/price-agreements');
     },
     onError: (e) => {
+      if ((e as { response?: { status?: number } }).response?.status === 409) {
+        setRecordChanged(true);
+        if (negotiationId) void qc.invalidateQueries({ queryKey: ['pricing-requests', negotiationId] });
+        toast.error('This pricing request changed. Review the latest version before submitting.');
+        return;
+      }
       applyServerValidationErrors(e, setError, 'Failed to save price agreement.');
     },
   });
@@ -244,6 +295,15 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
       className="min-w-0 w-full space-y-5 px-4 py-5 sm:px-5 lg:py-6 [color-scheme:light] dark:[color-scheme:dark]"
     >
       <FormDraftBanner safety={safety} inset={false} />
+      {recordChanged && (
+        <div role="alert" className="rounded-md border border-warning bg-warning/10 p-3 text-sm">
+          <p className="font-medium">This pricing request changed while you were editing.</p>
+          <p className="mt-1">Your entries are preserved. Review the latest request before submitting again.</p>
+          <Button type="button" size="sm" className="mt-2" onClick={() => window.location.reload()}>
+            Load latest request
+          </Button>
+        </div>
+      )}
       <p className="text-sm text-muted">
         Finance reviews this proposal before the customer can accept it. Existing agreement prices
         remain unchanged.
@@ -275,59 +335,22 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
               <div className="min-w-0 space-y-3">
                 <Select
                   searchable
-                  onSearch={(value) => setProductSearch(value)}
-                  title="Part number or product name"
-                  fieldSize="lg"
-                  label="Product"
-                  disabled={!!negotiationId}
-                  required
-                  {...register('product_id')}
-                  value={productId}
-                  error={errors.product_id?.message}
-                >
-                  <option value="">
-                    {productsLoading ? 'Loading products…' : 'Select product'}
-                  </option>
-                  {productId && !productAlreadyListed && (
-                    <option value={productId}>
-                      {selectedProduct
-                        ? `${selectedProduct.part_number} · ${selectedProduct.name}`
-                        : (initial?.product?.name ?? 'Selected product')}
-                    </option>
-                  )}
-
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.part_number} · {product.name}
-                    </option>
-                  ))}
-                </Select>
-                {productsError && (
-                  <p role="alert" className="text-sm text-danger-fg">
-                    Cannot load products.{' '}
-                    <Button type="button" size="sm" onClick={() => retryProducts()}>
-                      Retry
-                    </Button>
-                  </p>
-                )}
-                {!productsLoading && !productsError && productSearch && !products.length && (
-                  <p role="status" className="text-xs text-muted">
-                    No matching products.
-                  </p>
-                )}
-              </div>
-              <div className="min-w-0 space-y-3">
-                <Select
-                  searchable
                   onSearch={(value) => setCustomerSearch(value)}
                   title="Customer name or code"
                   fieldSize="lg"
                   label="Customer"
                   disabled={!!negotiationId}
                   required
-                  {...register('customer_id')}
+                  {...customerField}
+                  onChange={(event) => {
+                    void customerField.onChange(event);
+                    if (!negotiationId) {
+                      setValue('product_id', '', { shouldDirty: true });
+                    }
+                  }}
                   value={customerId}
                   error={errors.customer_id?.message}
+                  helper="Choose a customer first to see eligible products."
                 >
                   <option value="">
                     {customersLoading ? 'Loading customers…' : 'Select customer'}
@@ -357,6 +380,88 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
                     No matching customers.
                   </p>
                 )}
+              </div>
+              <div className="min-w-0 space-y-3">
+                <Select
+                  searchable
+                  onSearch={(value) => setProductSearch(value)}
+                  title="Part number or product name"
+                  fieldSize="lg"
+                  label="Product"
+                  disabled={
+                    !!negotiationId ||
+                    !customerId ||
+                    activeAgreementsPending ||
+                    activeAgreementsError
+                  }
+                  loading={productsLoading || activeAgreementsPending}
+                  required
+                  {...register('product_id')}
+                  value={productId}
+                  error={errors.product_id?.message}
+                  helper={
+                    filtersActiveAgreements
+                      ? 'Products with an active agreement for this customer are hidden.'
+                      : undefined
+                  }
+                >
+                  <option value="">
+                    {!customerId
+                      ? 'Select a customer first'
+                      : activeAgreementsPending
+                        ? 'Checking active agreements…'
+                        : productsLoading
+                          ? 'Loading products…'
+                          : activeAgreementsError
+                            ? 'Cannot check agreements'
+                            : productsError
+                              ? 'Cannot load products'
+                              : availableProducts.length
+                                ? 'Select product'
+                                : 'No eligible products'}
+                  </option>
+                  {productId && !productAlreadyListed && canShowSelectedProduct && (
+                    <option value={productId}>
+                      {selectedProduct
+                        ? `${selectedProduct.part_number} · ${selectedProduct.name}`
+                        : (initial?.product?.name ?? 'Selected product')}
+                    </option>
+                  )}
+
+                  {availableProducts.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.part_number} · {product.name}
+                    </option>
+                  ))}
+                </Select>
+                {productsError && (
+                  <p role="alert" className="text-sm text-danger-fg">
+                    Cannot load products.{' '}
+                    <Button type="button" size="sm" onClick={() => retryProducts()}>
+                      Retry
+                    </Button>
+                  </p>
+                )}
+                {filtersActiveAgreements && activeAgreementsError && (
+                  <p role="alert" className="text-sm text-danger-fg">
+                    Cannot check this customer’s active agreements.{' '}
+                    <Button type="button" size="sm" onClick={() => retryActiveAgreements()}>
+                      Retry
+                    </Button>
+                  </p>
+                )}
+                {customerId &&
+                  !productsLoading &&
+                  !productsError &&
+                  !activeAgreementsPending &&
+                  !activeAgreementsError &&
+                  !availableProducts.length && (
+                    <p role="status" className="text-xs text-muted">
+                      {filtersActiveAgreements
+                        ? 'No products are available without an active agreement for this customer.'
+                        : 'No matching products.'}
+                    </p>
+                  )}
               </div>
             </div>
           </section>
@@ -597,7 +702,7 @@ export function PriceAgreementForm({ initial, negotiationId }: Props) {
               type="submit"
               variant="primary"
               className="min-h-11 w-full"
-              disabled={isSubmitting || mutation.isPending}
+              disabled={isSubmitting || mutation.isPending || recordChanged}
               loading={mutation.isPending}
             >
               {mutation.isPending ? 'Submitting…' : 'Submit for Finance review'}

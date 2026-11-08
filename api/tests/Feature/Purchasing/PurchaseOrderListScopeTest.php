@@ -288,12 +288,13 @@ class PurchaseOrderListScopeTest extends TestCase
         $owner = $this->userWithRole('purchasing_officer');
         $draft = $this->poIn(null, $owner->id);
 
-        $actions = $this->actingAs($owner, 'sanctum')
+        $response = $this->actingAs($owner, 'sanctum')
             ->getJson('/api/v1/purchasing/purchase-orders/'.$draft->hash_id)
-            ->assertOk()
-            ->json('data.actions');
+            ->assertOk();
+        $actions = $response->json('data.available_actions');
 
         $this->assertIsArray($actions);
+        $this->assertSame($actions, $response->json('data.actions'));
         $this->assertTrue($actions['can_view']);
         $this->assertTrue($actions['can_update']);
         $this->assertTrue($actions['can_delete']);

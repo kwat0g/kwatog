@@ -18,6 +18,9 @@ import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { PriceRequest } from '@/types/pricing';
 import { PricingNavigation } from './PricingNavigation';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import type { PaginatedResponse } from '@/types';
 
 const statuses: Record<PriceRequest['status'], { label: string; variant: ChipVariant }> = {
   requested: { label: 'Awaiting sales proposal', variant: 'info' },
@@ -37,45 +40,62 @@ export default function PricingRequestsPage() {
   const openedRequest = useRef<string | null>(null);
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<PriceRequest | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<'view' | 'review' | 'withdraw'>('view');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
-  const costReview = useQuery({
-    queryKey: ['pricing-request-review', selected?.id],
-    queryFn: () => pricingRequestsApi.show(selected!.id),
-    enabled: !!selected && mode === 'review' && can('crm.price_agreements.approve'),
-    staleTime: 0,
-  });
   const query = useQuery({
     queryKey: ['pricing-requests', page, requestId],
     queryFn: () => pricingRequestsApi.list(requestId ? 1 : page, requestId),
-    placeholderData: requestId ? undefined : (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      requestId === undefined && previousQuery?.queryKey[2] === undefined ? previous : undefined,
   });
+  const selected = selectedId === null
+    ? null
+    : query.data?.data.find((row) => row.id === selectedId) ?? null;
+  const selectedIsFresh = !!selected && !query.isFetching && !query.isError;
+  const canWithdraw = selectedIsFresh && selected?.available_actions?.can_withdraw === true;
+  const canApprove = selectedIsFresh && selected?.available_actions?.can_approve === true;
+  const costReview = useQuery({
+    queryKey: ['pricing-request-review', selectedId],
+    queryFn: () => pricingRequestsApi.show(selectedId!),
+    enabled: !!selectedId && !!selected && mode === 'review' && can('crm.price_agreements.approve'),
+    staleTime: 0,
+  });
+  useRealtimeRecord('price_request', selectedId ?? undefined);
   const action = useMutation({
     mutationFn: async (decision: 'approve' | 'withdraw') => {
-      if (decision === 'approve')
-        await pricingRequestsApi.approve(
-          selected!.id,
+      if (!selectedIsFresh || !selected) throw new Error('This pricing request is no longer available. Refresh and try again.');
+      if (decision === 'approve') {
+        if (!canApprove) throw new Error('This pricing request is no longer available for approval. Refresh and try again.');
+        return pricingRequestsApi.approve(
+          selected.id,
           notes,
           costReview.data!.version,
           costReview.data!.cost_review!.signature,
         );
-      else await pricingRequestsApi.withdraw(selected!.id, notes);
+      }
+      if (!canWithdraw) throw new Error('This pricing request is no longer available for withdrawal. Refresh and try again.');
+      return pricingRequestsApi.withdraw(selected.id, notes, selected.version);
     },
-    onSuccess: (_, decision) => {
-      qc.invalidateQueries({ queryKey: ['pricing-requests'] });
+    onSuccess: (updated, decision) => {
+      qc.setQueryData(['pricing-requests', updated.id], updated);
+      qc.setQueryData<PaginatedResponse<PriceRequest>>(['pricing-requests', page, requestId], (current) => current
+        ? { ...current, data: current.data.map((row) => row.id === updated.id ? updated : row) }
+        : current);
+      void invalidateRealtimeChange(qc, { entityType: 'price_request', entityId: updated.id });
       toast.success(
         decision === 'approve'
           ? 'Proposal sent for customer acceptance.'
           : 'Pricing request withdrawn.',
       );
-      setSelected(null);
+      setSelectedId(null);
       setNotes('');
     },
     onError: (e: unknown) => {
-      qc.invalidateQueries({ queryKey: ['pricing-request-review', selected?.id] });
-      qc.invalidateQueries({ queryKey: ['pricing-requests'] });
+      qc.invalidateQueries({ queryKey: ['pricing-request-review', selectedId] });
+      if (selectedId) void invalidateRealtimeChange(qc, { entityType: 'price_request', entityId: selectedId });
+      else void qc.invalidateQueries({ queryKey: ['pricing-requests'], refetchType: 'active' });
       setError(
         (e as { response?: { data?: { message?: string } } }).response?.data?.message ??
           'Could not update pricing request. Your notes have been kept. Please try again.',
@@ -83,7 +103,7 @@ export default function PricingRequestsPage() {
     },
   });
   const open = useCallback((request: PriceRequest, nextMode: typeof mode) => {
-    setSelected(request);
+    setSelectedId(request.id);
     setMode(nextMode);
     setNotes('');
     setError('');
@@ -178,8 +198,7 @@ export default function PricingRequestsPage() {
       className: 'min-w-40',
       cell: (r) => (
         <div className="flex flex-wrap justify-end gap-1.5">
-          {can('crm.price_agreements.propose') &&
-            ['requested', 'pending_finance', 'offered'].includes(r.status) && (
+          {r.available_actions?.can_propose && (
               <Button
                 variant="primary"
                 size="sm"
@@ -188,7 +207,7 @@ export default function PricingRequestsPage() {
                 Propose terms
               </Button>
             )}
-          {r.status === 'pending_finance' && can('crm.price_agreements.approve') ? (
+          {r.available_actions?.can_approve ? (
             <Button size="sm" onClick={() => open(r, 'review')}>
               Review
             </Button>
@@ -197,8 +216,7 @@ export default function PricingRequestsPage() {
               Details
             </Button>
           )}
-          {['requested', 'pending_finance', 'offered'].includes(r.status) &&
-            (can('crm.price_agreements.propose') || can('crm.price_agreements.approve')) && (
+          {r.available_actions?.can_withdraw && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -264,9 +282,9 @@ export default function PricingRequestsPage() {
         )}
       </div>
       <Modal
-        isOpen={!!selected}
+        isOpen={selectedId !== null}
         onClose={() => {
-          if (!action.isPending) setSelected(null);
+          if (!action.isPending) setSelectedId(null);
         }}
         closeOnOverlayClick={!action.isPending}
         title={
@@ -278,8 +296,15 @@ export default function PricingRequestsPage() {
         }
         size="lg"
       >
-        {selected && (
+        {selected ? (
           <div className="space-y-4">
+            {(query.isFetching || query.isError) && (
+              <p role="status" className="text-sm text-muted">
+                {query.isFetching
+                  ? 'Refreshing the current request and available actions…'
+                  : 'The current request could not be verified. Retry the list before continuing.'}
+              </p>
+            )}
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-sm font-medium">
@@ -436,15 +461,16 @@ export default function PricingRequestsPage() {
               </p>
             )}
             <ModalFooter className="flex-wrap">
-              <Button disabled={action.isPending} onClick={() => setSelected(null)}>
+              <Button disabled={action.isPending} onClick={() => setSelectedId(null)}>
                 {mode === 'view' ? 'Close' : 'Cancel'}
               </Button>
               {mode === 'withdraw' && (
                 <Button
                   variant="danger"
                   loading={action.isPending}
-                  disabled={!notes.trim()}
+                  disabled={!notes.trim() || action.isPending || !canWithdraw}
                   onClick={() => {
+                    if (!canWithdraw) return;
                     setError('');
                     action.mutate('withdraw');
                   }}
@@ -458,6 +484,7 @@ export default function PricingRequestsPage() {
                   loading={action.isPending}
                   disabled={
                     !notes.trim() ||
+                    !canApprove ||
                     costReview.isFetching ||
                     costReview.isError ||
                     costReview.data?.status !== 'pending_finance' ||
@@ -465,6 +492,7 @@ export default function PricingRequestsPage() {
                     basis.incomplete
                   }
                   onClick={() => {
+                    if (!canApprove || costReview.isFetching || costReview.isError || !basis || basis.incomplete) return;
                     setError('');
                     action.mutate('approve');
                   }}
@@ -474,7 +502,15 @@ export default function PricingRequestsPage() {
               )}
             </ModalFooter>
           </div>
-        )}
+        ) : selectedId !== null ? (
+          <p role="status" className="text-sm text-muted">
+            {query.isFetching
+              ? 'Checking whether this pricing request is still available…'
+              : query.isError
+                ? 'The current request could not be verified. Retry the list before continuing.'
+                : 'This pricing request is no longer available to your account.'}
+          </p>
+        ) : null}
       </Modal>
     </div>
   );

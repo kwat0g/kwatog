@@ -28,7 +28,7 @@ class UpdateJobPostingRequest extends FormRequest
                 }
             }
         }
-        if (!empty($merge)) {
+        if (! empty($merge)) {
             $this->merge($merge);
         }
     }
@@ -36,22 +36,23 @@ class UpdateJobPostingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'position_id'      => [
+            'position_id' => [
                 'nullable',
                 Rule::exists('positions', 'id')->where(fn ($query) => $query
                     ->where('department_id', $this->input('department_id'))
                     ->whereNull('deleted_at')),
             ],
-            'department_id'    => ['required', 'exists:departments,id'],
-            'title'            => ['required', 'string', 'max:200'],
-            'description'      => ['required', 'string'],
-            'requirements'     => ['required', 'string'],
-            'employment_type'  => ['required', Rule::enum(EmploymentType::class)],
+            'department_id' => ['required', 'exists:departments,id'],
+            'title' => ['required', 'string', 'max:200'],
+            'description' => ['required', 'string'],
+            'requirements' => ['required', 'string'],
+            'employment_type' => ['required', Rule::enum(EmploymentType::class)],
             'salary_range_min' => ['nullable', 'decimal:0,2', 'min:0'],
             'salary_range_max' => ['nullable', 'decimal:0,2', 'min:0', 'gte:salary_range_min'],
-            'show_salary'      => ['boolean'],
-            'slots'            => ['integer', 'min:1', 'max:100'],
-            'closes_at'        => ['nullable', 'date'],
+            'show_salary' => ['boolean'],
+            'slots' => ['integer', 'min:1', 'max:100'],
+            'closes_at' => ['nullable', 'date'],
+            'expected_version' => ['sometimes', 'string', 'max:64'],
         ];
     }
 }

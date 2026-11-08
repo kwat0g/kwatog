@@ -1,0 +1,444 @@
+﻿source,line,source_line
+api/app/Common/Listeners/NotifySystemAdminsOnQueueLongWait.php,22,"if (! Cache::add($cacheKey, $dedupeKey, 300)) {"
+api/app/Common/Listeners/NotifySystemAdminsOnQueueLongWait.php,49,Cache::forget($cacheKey);
+api/app/Common/Services/BackupService.php,2042,$probe = FailOpenCache::remember(
+api/app/Common/Services/BackupService.php,2043,"Cache::store(),"
+api/app/Common/Services/QueueRestartSignalPolicy.php,26,$signal = $this->cache->get(self::KEY);
+api/app/Common/Services/QueueRestartSignalPolicy.php,34,"$this->cache->forever(self::KEY, $signal);"
+api/app/Common/Services/RealtimeQueueHealth.php,39,return Cache::remember(
+api/app/Common/Services/RedisCacheKeyAuditReader.php,21,$store = Cache::store($storeName)->getStore();
+api/app/Common/Services/RedisCacheKeyAuditReader.php,102,$store = Cache::store($storeName)->getStore();
+api/app/Common/Services/RedisCacheKeyAuditReader.php,134,$repository = Cache::store('generations');
+api/app/Common/Services/RedisCacheKeyAuditReader.php,174,$store = Cache::store('redis')->getStore();
+api/app/Common/Services/SettingsService.php,60,"$cached = Cache::get($cacheKey, $cacheMiss);"
+api/app/Common/Services/SettingsService.php,71,"Cache::put($cacheKey, $value, self::CACHE_TTL);"
+api/app/Common/Services/SettingsService.php,309,return CacheGeneration::currentDefault(
+api/app/Common/Services/SettingsService.php,318,return CacheGeneration::currentDefault(
+api/app/Common/Services/SettingsService.php,338,CacheGeneration::rotateDefault(
+api/app/Common/Services/SettingsService.php,346,"Cache::forget(""settings:{$key}"");"
+api/app/Common/Services/SettingsService.php,478,CacheGeneration::rotateDefault(
+api/app/Common/Services/SettingsService.php,495,return CacheGeneration::rotateDefault(
+api/app/Common/Services/SystemUserResolver.php,47,$cached = Cache::get($cacheKey);
+api/app/Common/Services/SystemUserResolver.php,76,"Cache::put($cacheKey, $userId, self::CACHE_TTL_SECONDS);"
+api/app/Common/Services/SystemUserResolver.php,78,Cache::forget(self::CACHE_KEY);
+api/app/Common/Support/CacheGeneration.php,26,"return self::rotate(Cache::store(self::DEFAULT_STORE), $key, $ttlSeconds, $owner, $generation);"
+api/app/Common/Support/CacheGeneration.php,42,"return self::current(Cache::store(self::DEFAULT_STORE), $key, $ttlSeconds, $owner);"
+api/app/Common/Support/CacheGeneration.php,67,"if ($cache->put($key, $generation, $ttlSeconds)) {"
+api/app/Common/Support/CacheGeneration.php,94,if ($cache->forget($key)) {
+api/app/Common/Support/CacheGeneration.php,101,if ($cache->get($key) === null) {
+api/app/Common/Support/CacheGeneration.php,123,$version = $cache->get($key);
+api/app/Common/Support/CacheGeneration.php,134,"$cache->add($key, $candidate, $ttlSeconds);"
+api/app/Common/Support/CacheGeneration.php,135,$version = $cache->get($key);
+api/app/Common/Support/E2EClock.php,20,"Cache::store('redis')->put(self::CACHE_KEY, $frozen->toIso8601String(), 60 * 24 * 30);"
+api/app/Common/Support/E2EClock.php,30,Cache::store('redis')->forget(self::CACHE_KEY);
+api/app/Common/Support/E2EClock.php,43,$instant ??= Cache::store('redis')->get(self::CACHE_KEY);
+api/app/Common/Support/FailOpenCache.php,31,"$cached = $repository->get($key, $missing);"
+api/app/Common/Support/FailOpenCache.php,45,"$repository->put($key, $value, $ttlSeconds);"
+api/app/Console/Commands/AuditCache.php,85,"$summaryStored = Cache::store('redis')->put('ops:cache-audit:last:v1', ["
+api/app/Modules/Accounting/Observers/AccountStatementCacheObserver.php,38,"Cache::tags(['financial_statements', 'finance_dashboard'])->flush();"
+api/app/Modules/Accounting/Observers/JournalEntryObserver.php,56,"Cache::tags(['financial_statements', 'finance_dashboard'])->flush();"
+api/app/Modules/Accounting/Services/Statements/BalanceSheetService.php,39,return FailOpenCache::remember(
+api/app/Modules/Accounting/Services/Statements/BalanceSheetService.php,40,"Cache::store(),"
+api/app/Modules/Accounting/Services/Statements/FinancialStatementCacheGeneration.php,20,return CacheGeneration::currentDefault(
+api/app/Modules/Accounting/Services/Statements/FinancialStatementCacheGeneration.php,34,$rotated = CacheGeneration::rotateDefault(
+api/app/Modules/Accounting/Services/Statements/FinancialStatementCacheGeneration.php,48,return CacheGeneration::rotateDefault(
+api/app/Modules/Accounting/Services/Statements/IncomeStatementService.php,30,return FailOpenCache::remember(
+api/app/Modules/Accounting/Services/Statements/IncomeStatementService.php,31,"Cache::store(),"
+api/app/Modules/Accounting/Services/Statements/TrialBalanceService.php,31,return FailOpenCache::remember(
+api/app/Modules/Accounting/Services/Statements/TrialBalanceService.php,32,"Cache::store(),"
+api/app/Modules/Admin/Services/AdminSystemHealthService.php,57,$store = Cache::store($storeName)->getStore();
+api/app/Modules/Admin/Services/AdminSystemHealthService.php,91,$audit = Cache::store('redis')->get(self::CACHE_AUDIT_KEY);
+api/app/Modules/Admin/Services/RoleService.php,382,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/app/Modules/Admin/Services/UserAdminService.php,404,"Cache::forget(""auth:role_perms:{$oldRoleId}"");"
+api/app/Modules/Attendance/Services/HolidayCacheGeneration.php,22,return CacheGeneration::currentDefault(
+api/app/Modules/Attendance/Services/HolidayCacheGeneration.php,32,CacheGeneration::rotateDefault(
+api/app/Modules/Attendance/Services/HolidayCacheGeneration.php,41,"Cache::forget(""holidays:{$year}"");"
+api/app/Modules/Attendance/Services/HolidayCacheGeneration.php,42,Cache::tags(['attendance-holidays'])->flush();
+api/app/Modules/Attendance/Services/HolidayCacheGeneration.php,57,$rotated = CacheGeneration::rotateDefault(
+api/app/Modules/Attendance/Services/HolidayCacheGeneration.php,64,Cache::tags(['attendance-holidays'])->flush();
+api/app/Modules/Attendance/Services/HolidayService.php,93,$cached = FailOpenCache::remember(
+api/app/Modules/Attendance/Services/HolidayService.php,94,"Cache::store(),"
+api/app/Modules/Auth/Models/User.php,148,$rolePerms = FailOpenCache::remember(
+api/app/Modules/Auth/Models/User.php,149,"Cache::store(),"
+api/app/Modules/Auth/Models/User.php,150,"app(RolePermissionCacheGeneration::class)->keyFor((int) $this->role_id, $permissionsVersion),"
+api/app/Modules/Auth/Models/User.php,201,"Cache::forget(""auth:permissions:{$userId}"");"
+api/app/Modules/Auth/Models/User.php,203,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/app/Modules/Auth/Services/RolePermissionCacheGeneration.php,30,return $this->generation = CacheGeneration::currentDefault(
+api/app/Modules/Auth/Services/RolePermissionCacheGeneration.php,50,$rotated = CacheGeneration::rotateDefault(
+api/app/Modules/DSS/Services/DssParameterService.php,35,$version = CacheGeneration::currentDefault(
+api/app/Modules/DSS/Services/DssParameterService.php,40,$restoreVersion = CacheGeneration::currentDefault(
+api/app/Modules/DSS/Services/DssParameterService.php,49,"$cached = Cache::get($cacheKey, $miss);"
+api/app/Modules/DSS/Services/DssParameterService.php,69,"Cache::put($cacheKey, $row->value, self::CACHE_TTL_SECONDS);"
+api/app/Modules/DSS/Services/DssParameterService.php,116,CacheGeneration::rotateDefault(
+api/app/Modules/DSS/Services/DssParameterService.php,123,"Cache::forget(""dss:params:{$detectorId}:{$key}"");"
+api/app/Modules/DSS/Services/DssParameterService.php,136,return CacheGeneration::rotateDefault(
+api/app/Modules/DSS/Services/DssRunnerService.php,117,"return Cache::lock(""dss:detector-run:{$id}"", 310)->block("
+api/app/Modules/Dashboard/Services/AdminDashboardService.php,45,"return FailOpenCache::remember(Cache::store(), ""dashboard:admin:v4:{$generation}:{$user->id}:{$cacheScope}"", self::CACHE_TTL, function () use ($user) {"
+api/app/Modules/Dashboard/Services/Analytics/AnalyticsCache.php,86,return CacheGeneration::currentDefault(
+api/app/Modules/Dashboard/Services/Analytics/AnalyticsCache.php,99,return CacheGeneration::currentDefault(
+api/app/Modules/Dashboard/Services/Analytics/AnalyticsCache.php,117,return CacheGeneration::rotateDefault(
+api/app/Modules/Dashboard/Services/Analytics/AnalyticsCache.php,166,$lock = Cache::lock(
+api/app/Modules/Dashboard/Services/Analytics/AnalyticsCache.php,248,"CacheGeneration::rotateDefault($key, self::VERSION_TTL_SECONDS, 'dashboard.analytics');"
+api/app/Modules/Dashboard/Services/Analytics/AnalyticsCache.php,255,"return Cache::get($key, $default);"
+api/app/Modules/Dashboard/Services/Analytics/AnalyticsCache.php,266,"Cache::put($key, $value, $ttl);"
+api/app/Modules/Dashboard/Services/Analytics/Domains/DomainMetric.php,95,$result = $this->cache->remember(
+api/app/Modules/Dashboard/Services/BadgeService.php,162,"return FailOpenCache::remember(Cache::store(),"
+api/app/Modules/Dashboard/Services/BadgeService.php,173,return CacheGeneration::currentDefault(
+api/app/Modules/Dashboard/Services/BadgeService.php,202,$rotated = CacheGeneration::rotateDefault(
+api/app/Modules/Dashboard/Services/BadgeService.php,215,return CacheGeneration::rotateDefault(
+api/app/Modules/Dashboard/Services/DashboardCacheGeneration.php,23,$global = CacheGeneration::currentDefault(
+api/app/Modules/Dashboard/Services/DashboardCacheGeneration.php,46,$rotated = CacheGeneration::rotateDefault(
+api/app/Modules/Dashboard/Services/DashboardCacheGeneration.php,69,return CacheGeneration::rotateDefault(
+api/app/Modules/Dashboard/Services/DashboardCacheGeneration.php,81,return CacheGeneration::currentDefault(
+api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php,74,$result[$key] = FailOpenCache::remember(
+api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php,75,"Cache::store(),"
+api/app/Modules/Dashboard/Services/FinanceDashboardService.php,69,return FailOpenCache::remember(
+api/app/Modules/Dashboard/Services/FinanceDashboardService.php,70,"Cache::tags(['financial_statements', 'finance_dashboard']),"
+api/app/Modules/Dashboard/Services/HrDashboardService.php,57,"return FailOpenCache::remember(Cache::store(), ""dashboard:hr:v5:{$generation}:{$user->id}:{$cacheScope}:d{$today}"", self::CACHE_TTL, function () use ($user, $nextTransitionAt) {"
+api/app/Modules/Dashboard/Services/HrDashboardService.php,152,$generation = DashboardCacheGeneration::current('dashboard:employee');
+api/app/Modules/Dashboard/Services/HrDashboardService.php,153,"return FailOpenCache::remember(Cache::store(), ""dashboard:employee:v4:{$generation}:{$user->id}:{$cacheScope}"", self::CACHE_TTL, function () use ($user) {"
+api/app/Modules/Dashboard/Services/PlantManagerDashboardService.php,51,"return FailOpenCache::remember(Cache::store(), ""dashboard:plant_manager:v4:{$generation}:{$user->id}:{$cacheScope}:{$range}"", self::CACHE_TTL, function () use ($user, $range) {"
+api/app/Modules/Dashboard/Services/PpcDashboardService.php,45,"return FailOpenCache::remember(Cache::store(), ""dashboard:ppc:v4:{$generation}:{$user->id}:{$cacheScope}"", self::CACHE_TTL, function () use ($user) {"
+api/app/Modules/Dashboard/Services/PpcDashboardService.php,94,$generation = DashboardCacheGeneration::scopedVersion('dashboard:finance');
+api/app/Modules/Dashboard/Services/PpcDashboardService.php,95,"return FailOpenCache::remember(Cache::store(), ""dashboard:accounting:v4:{$generation}:{$user->id}:{$cacheScope}"", self::CACHE_TTL, function () use ($user) {"
+api/app/Modules/Dashboard/Services/PurchasingDashboardService.php,42,"return FailOpenCache::remember(Cache::store(), ""dashboard:purchasing:v4:{$generation}:{$user->id}:{$cacheScope}"", self::CACHE_TTL, function () use ($user) {"
+api/app/Modules/Dashboard/Services/QualityDashboardService.php,43,"return FailOpenCache::remember(Cache::store(), ""dashboard:quality:v4:{$generation}:{$user->id}:{$cacheScope}"", self::CACHE_TTL, function () use ($user) {"
+api/app/Modules/Dashboard/Services/WarehouseDashboardService.php,44,"return FailOpenCache::remember(Cache::store(), ""dashboard:warehouse:v4:{$generation}:{$user->id}:{$cacheScope}"", self::CACHE_TTL, function () use ($user) {"
+api/app/Modules/Dashboard/Services/WidgetAnalyticsService.php,82,return FailOpenCache::remember(
+api/app/Modules/Dashboard/Services/WidgetAnalyticsService.php,83,"Cache::store(),"
+api/app/Modules/Inventory/Services/InventoryDashboardCache.php,24,return FailOpenCache::remember(
+api/app/Modules/Inventory/Services/InventoryDashboardCache.php,25,"Cache::store(),"
+api/app/Modules/Inventory/Services/InventoryDashboardCache.php,38,CacheGeneration::rotateDefault(
+api/app/Modules/Inventory/Services/InventoryDashboardCache.php,52,return CacheGeneration::rotateDefault(
+api/app/Modules/Inventory/Services/InventoryDashboardCache.php,61,return CacheGeneration::currentDefault(
+api/app/Modules/Inventory/Services/InventoryDashboardService.php,30,return $this->cache->remember(fn () => $this->compute());
+api/app/Modules/MRP/Services/MrpEngineService.php,848,"$lock = Cache::lock('mrp:plant-run', 1200);"
+api/app/Modules/Payroll/Services/GovernmentContributionTableImportService.php,329,CacheGeneration::rotateDefault(
+api/app/Modules/Payroll/Services/GovernmentContributionTableImportService.php,334,"Cache::forget(""gov_table:{$key}:active"");"
+api/app/Modules/Payroll/Services/GovernmentContributionTableService.php,216,$rotated = CacheGeneration::rotateDefault(
+api/app/Modules/Payroll/Services/GovernmentContributionTableService.php,223,"Cache::forget(""gov_table:{$key}:active"");"
+api/app/Modules/Payroll/Services/GovernmentContributionTableService.php,254,$rows = FailOpenCache::remember(
+api/app/Modules/Payroll/Services/GovernmentContributionTableService.php,255,"Cache::store(),"
+api/app/Modules/Payroll/Services/GovernmentContributionTableService.php,277,return CacheGeneration::currentDefault(
+api/app/Modules/Payroll/Services/PayrollProgressTracker.php,42,$version = CacheGeneration::currentDefault(
+api/app/Modules/Payroll/Services/PayrollProgressTracker.php,65,"Cache::put($this->key($period), $snapshot, self::TTL_SECONDS);"
+api/app/Modules/Payroll/Services/PayrollProgressTracker.php,81,$snapshot = Cache::get($this->key($period));
+api/app/Modules/Payroll/Services/PayrollProgressTracker.php,102,Cache::forget($key);
+api/app/Modules/Payroll/Services/PayrollProgressTracker.php,116,return CacheGeneration::rotateDefault(
+api/app/Modules/Production/Services/ProductionDashboardService.php,53,CacheGeneration::rotateDefault(
+api/app/Modules/Production/Services/ProductionDashboardService.php,63,Cache::forget(self::CACHE_KEY);
+api/app/Modules/Production/Services/ProductionDashboardService.php,75,$rotated = CacheGeneration::rotateDefault(
+api/app/Modules/Production/Services/ProductionDashboardService.php,82,Cache::forget(self::CACHE_KEY);
+api/app/Modules/Production/Services/ProductionDashboardService.php,92,$version = CacheGeneration::currentDefault(
+api/app/Modules/Production/Services/ProductionDashboardService.php,98,"return FailOpenCache::remember(Cache::store(), $this->cacheKey($version), self::CACHE_TTL_SECONDS, function () {"
+api/app/Modules/Production/Services/WorkOrderOutputService.php,586,$outputId = Cache::get($cacheKey);
+api/app/Modules/Production/Services/WorkOrderOutputService.php,899,"Cache::put(""production:idem:{$output->work_order_id}:{$idempotencyKey}"", $output->id, self::IDEMPOTENCY_TTL_SECONDS);"
+api/app/Modules/Purchasing/Controllers/ProcurementChainController.php,39,"$prCounts = $cache->remember('procurement_chain_pr', 60, fn () => ["
+api/app/Modules/Purchasing/Controllers/ProcurementChainController.php,44,"$poCounts = $cache->remember('procurement_chain_po', 60, fn () => ["
+api/app/Modules/Purchasing/Controllers/ProcurementChainController.php,58,"$grnCounts = $cache->remember('procurement_chain_grn', 60, fn () => ["
+api/app/Modules/Purchasing/Controllers/ProcurementChainController.php,64,"$billCounts = $cache->remember('procurement_chain_bills', 60, fn () => ["
+api/app/Modules/Purchasing/Controllers/ProcurementChainController.php,76,"$threeWayStats = $cache->remember('procurement_chain_three_way', 120, fn () => ["
+api/app/Modules/Purchasing/Services/ProcurementChainCache.php,25,$version = CacheGeneration::currentDefault(
+api/app/Modules/Purchasing/Services/ProcurementChainCache.php,31,return FailOpenCache::remember(
+api/app/Modules/Purchasing/Services/ProcurementChainCache.php,32,"Cache::store(),"
+api/app/Modules/Purchasing/Services/ProcurementChainCache.php,84,return CacheGeneration::rotateDefault(
+api/database/migrations/0561_grant_outbound_dispatch_to_impex_officer.php,33,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/0561_grant_outbound_dispatch_to_impex_officer.php,41,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/0563_align_aql_sample_plan_with_z14.php,55,Cache::forget('settings:'.self::KEY);
+api/database/migrations/0571_seed_punch_settings_and_audit_permission.php,41,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_09_25_220000_enable_customer_return_completion.php,20,Cache::forget('auth:role_perms:'.$roleId);
+api/database/migrations/2026_10_02_000002_scope_procurement_chain_access.php,28,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_02_000002_scope_procurement_chain_access.php,54,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_02_000003_align_role_clearance_and_payroll_access.php,57,"Cache::forget(""auth:role_perms:{$hrId}"");"
+api/database/migrations/2026_10_02_000003_align_role_clearance_and_payroll_access.php,63,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_02_000003_align_role_clearance_and_payroll_access.php,81,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_02_000003_align_role_clearance_and_payroll_access.php,106,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_02_000004_align_notification_preferences_access.php,20,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_04_000005_add_pricing_negotiation_and_cost_reviews.php,65,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_04_000006_harden_cross_module_pricing_reviews.php,24,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_05_230000_create_work_order_crews.php,51,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_09_050000_create_invoice_payment_submissions.php,53,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_09_050000_create_invoice_payment_submissions.php,66,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_09_060000_restrict_purchasing_grn_receiving.php,27,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_09_060000_restrict_purchasing_grn_receiving.php,41,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_09_230000_add_stock_work_order_cancellation_permission.php,20,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_09_230100_add_maintenance_supervisor_role.php,53,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_09_230300_grant_maintenance_verification.php,20,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_10_000200_restrict_hr_employee_account_changes.php,23,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_10_000200_restrict_hr_employee_account_changes.php,36,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_10_000400_enable_assigned_maintenance_self_service.php,26,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_10_000400_enable_assigned_maintenance_self_service.php,37,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_10_000500_restore_maintenance_supervisor_visibility.php,26,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_10_000500_restore_maintenance_supervisor_visibility.php,57,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_11_100000_grant_company_dashboard_read.php,89,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_11_100000_grant_company_dashboard_read.php,106,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_11_120000_grant_role_dashboard_reads.php,109,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_11_120000_grant_role_dashboard_reads.php,137,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_11_130000_add_company_chain_recovery_widget.php,54,"Cache::forget(""auth:role_perms:{$vicePresidentId}"");"
+api/database/migrations/2026_10_11_130000_add_company_chain_recovery_widget.php,101,"Cache::forget(""auth:role_perms:{$vicePresidentId}"");"
+api/database/migrations/2026_10_11_140000_add_executive_quality_and_phase_five_widgets.php,76,"Cache::forget(""auth:role_perms:{$vicePresidentId}"");"
+api/database/migrations/2026_10_11_140000_add_executive_quality_and_phase_five_widgets.php,126,"Cache::forget(""auth:role_perms:{$vicePresidentId}"");"
+api/database/migrations/2026_10_12_130000_create_dss_tables.php,221,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_12_130000_create_dss_tables.php,254,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_22_090000_grant_ppc_head_sales_order_visibility.php,21,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_22_090000_grant_ppc_head_sales_order_visibility.php,35,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_22_120000_complete_quality_rollout_template_criteria.php,51,"Cache::forget(""settings:{$key}"");"
+api/database/migrations/2026_10_23_090000_restrict_dss_access_to_decision_roles.php,31,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_23_090000_restrict_dss_access_to_decision_roles.php,48,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_23_170000_add_sales_customer_product_access_permission.php,28,"Cache::forget(""auth:role_perms:{$salesRoleId}"");"
+api/database/migrations/2026_10_23_180000_align_sales_product_pricing_permissions.php,31,"Cache::forget(""auth:role_perms:{$salesRoleId}"");"
+api/database/migrations/2026_10_23_180000_align_sales_product_pricing_permissions.php,38,"Cache::forget(""auth:role_perms:{$financeRoleId}"");"
+api/database/migrations/2026_10_23_180000_align_sales_product_pricing_permissions.php,47,"Cache::forget(""auth:role_perms:{$customerServiceRoleId}"");"
+api/database/migrations/2026_10_23_180000_align_sales_product_pricing_permissions.php,70,"Cache::forget(""auth:role_perms:{$financeRoleId}"");"
+api/database/migrations/2026_10_23_180000_align_sales_product_pricing_permissions.php,78,"Cache::forget(""auth:role_perms:{$customerServiceRoleId}"");"
+api/database/migrations/2026_10_23_200000_align_customer_master_and_sales_order_access.php,36,"Cache::forget(""auth:role_perms:{$salesRoleId}"");"
+api/database/migrations/2026_10_23_200000_align_customer_master_and_sales_order_access.php,43,"Cache::forget(""auth:role_perms:{$customerServiceRoleId}"");"
+api/database/migrations/2026_10_23_200000_align_customer_master_and_sales_order_access.php,61,"Cache::forget(""auth:role_perms:{$salesRoleId}"");"
+api/database/migrations/2026_10_23_200000_align_customer_master_and_sales_order_access.php,71,"Cache::forget(""auth:role_perms:{$customerServiceRoleId}"");"
+api/database/migrations/2026_10_23_210000_remove_customer_service_price_agreement_access.php,21,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_23_210000_remove_customer_service_price_agreement_access.php,39,"Cache::forget(""auth:role_perms:{$roleId}"");"
+api/database/migrations/2026_10_24_090000_reconcile_projection_demand_movement_types.php,40,Cache::forget('settings:'.self::KEY);
+api/database/seeders/RolePermissionSeeder.php,1254,"DB::afterCommit(static fn () => Cache::forget(""auth:role_perms:{$role->id}""));"
+api/tests/Feature/Accounting/AccountingPeriodRealtimeTest.php,97,"Cache::put('dashboard:cache:version', 'period-test-before', 3600);"
+api/tests/Feature/Accounting/AccountsReceivableSignalParityTest.php,27,Cache::flush();
+api/tests/Feature/Accounting/ReversedJournalStatementHistoryTest.php,65,Cache::tags(['financial_statements'])->flush();
+api/tests/Feature/Accounting/RunArDunningCommandTest.php,277,Cache::forget('settings:accounting.ar_dunning.enabled');
+api/tests/Feature/Accounting/StatementCacheAfterCommitTest.php,41,"Cache::tags($tags)->put('commit-probe', 'old-snapshot', 300);"
+api/tests/Feature/Accounting/StatementCacheAfterCommitTest.php,47,"self::assertSame('old-snapshot', Cache::tags($tags)->get('commit-probe'));"
+api/tests/Feature/Accounting/StatementCacheAfterCommitTest.php,50,self::assertNull(Cache::tags($tags)->get('commit-probe'));
+api/tests/Feature/Admin/RbacConcurrencyTest.php,319,$permissionCacheKey = app(RolePermissionCacheGeneration::class)->keyFor(
+api/tests/Feature/Admin/RbacConcurrencyTest.php,324,$this->assertTrue(Cache::has($permissionCacheKey));
+api/tests/Feature/Admin/RbacConcurrencyTest.php,353,"Cache::has($permissionCacheKey),"
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,28,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,29,Cache::forget('settings:approvals.auto_resolve.default_hours');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,30,Cache::forget('settings:approvals.auto_resolve.default_action');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,40,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,64,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,93,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,114,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,135,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,156,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,191,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,192,Cache::forget('settings:approvals.auto_resolve.default_hours');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,193,Cache::forget('settings:approvals.auto_resolve.default_action');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,228,Cache::forget('settings:approvals.auto_resolve.enabled');
+api/tests/Feature/Approval/ApprovalAutoResolveTest.php,253,Cache::forget('settings:approvals.escalation.superior_role_map');
+api/tests/Feature/Approval/ApprovalEscalationVisibilityTest.php,29,Cache::forget('settings:approvals.reminder_hours');
+api/tests/Feature/Attendance/AutoDetectOvertimeFeatureTest.php,316,\Illuminate\Support\Facades\Cache::forget('settings:attendance.auto_ot_detect.enabled');
+api/tests/Feature/Attendance/Concerns/PunchFixtures.php,102,"Cache::put('holidays:cache_version', (int) Cache::get('holidays:cache_version', 0) + 1);"
+api/tests/Feature/Attendance/HolidayCacheAfterCommitTest.php,39,Cache::forget('holidays:cache_version');
+api/tests/Feature/Attendance/HolidayCacheAfterCommitTest.php,40,"$oldGeneration = Cache::get('holidays:cache_version', 0);"
+api/tests/Feature/Attendance/HolidayCacheAfterCommitTest.php,50,"self::assertSame($oldGeneration, Cache::get('holidays:cache_version', 0));"
+api/tests/Feature/Attendance/HolidayCacheAfterCommitTest.php,53,"self::assertNotSame($oldGeneration, Cache::get('holidays:cache_version'));"
+api/tests/Feature/Audit/PortalAuditActorTest.php,103,"Cache::forever(SystemUserResolver::CACHE_KEY, $oldUser->id);"
+api/tests/Feature/Audit/PortalAuditActorTest.php,110,$this->assertTrue(Cache::has($scopedKey));
+api/tests/Feature/Audit/PortalAuditActorTest.php,111,$this->assertFalse(Cache::has(SystemUserResolver::CACHE_KEY));
+api/tests/Feature/Audit/PortalAuditActorTest.php,114,$this->assertFalse(Cache::has($scopedKey));
+api/tests/Feature/Auth/PermissionCacheAfterCommitTest.php,42,"Cache::put($userKey, ['old'], 300);"
+api/tests/Feature/Auth/PermissionCacheAfterCommitTest.php,43,"Cache::put($roleKey, ['old'], 300);"
+api/tests/Feature/Auth/PermissionCacheAfterCommitTest.php,48,self::assertTrue(Cache::has($userKey));
+api/tests/Feature/Auth/PermissionCacheAfterCommitTest.php,49,self::assertTrue(Cache::has($roleKey));
+api/tests/Feature/Auth/PermissionCacheAfterCommitTest.php,52,self::assertFalse(Cache::has($userKey));
+api/tests/Feature/Auth/PermissionCacheAfterCommitTest.php,53,self::assertFalse(Cache::has($roleKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,79,$this->assertTrue(Cache::has($cacheKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,82,Cache::forget($cacheKey);
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,83,$this->assertFalse(Cache::has($cacheKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,86,$this->assertTrue(Cache::has($cacheKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,95,$this->assertTrue(Cache::has($oldKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,97,self::assertTrue(app(RolePermissionCacheGeneration::class)->invalidateForDatabaseRestore());
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,101,"$this->assertTrue(Cache::has($oldKey), 'The retired entry remains TTL-bounded but is no longer addressable.');"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,102,$this->assertFalse(Cache::has($newKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,108,$generation = app(RolePermissionCacheGeneration::class)->current();
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,112,"$this->assertNotSame($generation, app(RolePermissionCacheGeneration::class)->current());"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,140,"Cache::put(""auth:permissions:{$user->id}"", ['legacy'], 300);"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,141,"Cache::put(""auth:role_perms:{$user->role_id}"", [1 => 'cached'], 300);"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,143,"$this->assertTrue(Cache::has(""auth:permissions:{$user->id}""));"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,144,"$this->assertTrue(Cache::has(""auth:role_perms:{$user->role_id}""));"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,148,"$this->assertFalse(Cache::has(""auth:permissions:{$user->id}""));"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,149,"$this->assertFalse(Cache::has(""auth:role_perms:{$user->role_id}""));"
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,159,$this->assertTrue(Cache::has($user1CacheKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,162,Cache::forget($user1CacheKey);
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,163,$this->assertFalse(Cache::has($user2CacheKey));
+api/tests/Feature/Auth/PermissionCacheFreshnessTest.php,200,return app(RolePermissionCacheGeneration::class)->keyFor(
+api/tests/Feature/Auth/RoleResponsibilityAlignmentTest.php,31,Cache::flush();
+api/tests/Feature/Cache/CacheAuditCommandTest.php,17,$auditStore = Cache::store('redis');
+api/tests/Feature/Cache/CacheAuditCommandTest.php,18,$auditStore->forget('ops:cache-audit:last:v1');
+api/tests/Feature/Cache/CacheAuditCommandTest.php,48,$summary = $auditStore->get('ops:cache-audit:last:v1');
+api/tests/Feature/Common/SettingsCacheAfterCommitTest.php,53,"Cache::put($versionKey, 'before-generation', 604800);"
+api/tests/Feature/Common/SettingsCacheAfterCommitTest.php,54,"Cache::put($cacheKey, 'old-value', 3600);"
+api/tests/Feature/Common/SettingsCacheAfterCommitTest.php,59,"self::assertSame('before-generation', Cache::get($versionKey));"
+api/tests/Feature/Common/SettingsCacheAfterCommitTest.php,60,"self::assertSame('old-value', Cache::get($cacheKey));"
+api/tests/Feature/Common/SettingsCacheAfterCommitTest.php,63,"self::assertNotSame('before-generation', Cache::get($versionKey));"
+api/tests/Feature/Common/SettingsCacheAfterCommitTest.php,66,"Cache::put($cacheKey, 'stale-old-value', 3600);"
+api/tests/Feature/Common/SettingsCacheAfterCommitTest.php,68,"self::assertSame('stale-old-value', Cache::get($cacheKey));"
+api/tests/Feature/Common/SettingsCacheTest.php,20,"Cache::forget(""settings:{$key}"");"
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,42,$generationCache = Cache::store('generations');
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,44,$version = (string) $generationCache->get($versionKey);
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,51,self::assertTrue(Cache::has($cacheKey));
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,52,"self::assertSame(['limit' => 1], Cache::get($cacheKey));"
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,53,"self::assertSame($version, $generationCache->get($versionKey));"
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,56,"self::assertNotSame($version, $generationCache->get($versionKey));"
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,57,"Cache::put($cacheKey, ['limit' => 999], 3600);"
+api/tests/Feature/DSS/DssParameterCacheAfterCommitTest.php,59,"self::assertSame(['limit' => 999], Cache::get($cacheKey));"
+api/tests/Feature/Dashboard/ActionCenterControllerTest.php,110,"Cache::put('badges.version', 'before-action-badge-generation', 3600);"
+api/tests/Feature/Dashboard/ActionCenterControllerTest.php,111,"Cache::put('dashboard:cache:version', 'before-action-dashboard-generation', 3600);"
+api/tests/Feature/Dashboard/AdminDashboardServiceTest.php,94,Cache::flush();
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,42,Cache::flush();
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,229,"$lock = Cache::lock('dash:an:fill:'.config('app.env').':'.hash('sha256', $key), 30);"
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,233,"$fallback = $cache->remember($definition, 'company', $filters, function () use (&$computes): array {"
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,242,"$this->assertFalse(Cache::has($key), ""A contended fallback must not overwrite the lock owner's cache fill."");"
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,245,"Cache::put($key, ['total' => 9], 60);"
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,246,"$ownerResult = $cache->remember($definition, 'company', $filters, static function (): array {"
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,267,$this->assertTrue(Cache::has($versionKey));
+api/tests/Feature/Dashboard/AnalyticsLayerTest.php,269,$this->assertFalse(Cache::has($versionKey));
+api/tests/Feature/Dashboard/AttendanceForecastTest.php,42,Cache::flush();
+api/tests/Feature/Dashboard/BadgeControllerTest.php,67,Cache::flush();
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,77,"$v1 = (int) Cache::get('badges.version', 1);"
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,81,"$v2 = (int) Cache::get('badges.version', 1);"
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,89,Cache::forget('badges.version');
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,92,$this->assertTrue(Cache::has('badges.version'));
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,95,$this->assertFalse(Cache::has('badges.version'));
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,100,"Cache::put('badges.version', 2, 1);"
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,101,"Cache::put('badges.user.999.v2', ['stale-generation'], 30);"
+api/tests/Feature/Dashboard/BadgeRealtimeTest.php,104,$this->assertFalse(Cache::has('badges.version'));
+api/tests/Feature/Dashboard/CapacityForecastTest.php,40,Cache::flush();
+api/tests/Feature/Dashboard/CashFlowForecastTest.php,40,Cache::flush();
+api/tests/Feature/Dashboard/DashboardPanelGateTest.php,43,Cache::flush();
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,234,Cache::forget($summaryKey);
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,235,Cache::forget($richKey);
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,259,"$this->assertTrue(Cache::has(""dashboard:widget:summary:v3:{$summaryVersion}:{$secondUser->id}:{$secondScope}:production.active_wo""));"
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,260,"$this->assertTrue(Cache::has(""dashboard:widget:rich:v3:{$richVersion}:{$secondUser->id}:{$secondScope}:breakdown:production.wo_breakdown""));"
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,269,"Cache::put($oldKey, ['value' => 'stale'], 30);"
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,277,"Cache::put($oldKey, ['value' => 'late-stale'], 30);"
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,282,"$this->assertTrue(Cache::has(""dashboard:widget:summary:v3:{$newVersion}:{$user->id}:{$scope}:production.active_wo""));"
+api/tests/Feature/Dashboard/DashboardWidgetDataTest.php,333,"Cache::forget(""dashboard:widget:summary:{$user->id}:finance.cash_position"");"
+api/tests/Feature/Dashboard/EffectivenessDueBadgeParityTest.php,24,Cache::flush();
+api/tests/Feature/Dashboard/EffectivenessDueBadgeParityTest.php,58,Cache::flush();
+api/tests/Feature/Dashboard/LeaveApprovalBadgeParityTest.php,34,Cache::flush();
+api/tests/Feature/Dashboard/MaintenanceWorkOrderBadgeParityTest.php,26,Cache::flush();
+api/tests/Feature/Dashboard/NcrOpenBadgeParityTest.php,22,Cache::flush();
+api/tests/Feature/Dashboard/NcrRecoveryCoverageTest.php,24,Cache::flush();
+api/tests/Feature/Dashboard/NcrSlaOverdueBadgeParityTest.php,23,Cache::flush();
+api/tests/Feature/Dashboard/NewDomainAnalyticsTest.php,149,"Cache::forget(""dashboard:widget:rich:{$this->admin->id}:breakdown:finance.ar_aging"");"
+api/tests/Feature/Dashboard/OvertimeApprovalBadgeParityTest.php,30,Cache::flush();
+api/tests/Feature/Dashboard/ProfileUpdateActionBadgeParityTest.php,27,Cache::flush();
+api/tests/Feature/Dashboard/PurchaseOrderActionSignalTest.php,29,Cache::flush();
+api/tests/Feature/Dashboard/PurchaseOrderReceiptOverdueSignalTest.php,30,Cache::flush();
+api/tests/Feature/Dashboard/RichLayoutEndpointTest.php,65,"Cache::forget(""auth:role_perms:{$user->role_id}"");"
+api/tests/Feature/Dashboard/RoleDashboardServiceTest.php,475,Cache::forget('settings:hr.probation.period_months');
+api/tests/Feature/Forecasting/ForecastDashboardTest.php,38,Cache::flush();
+api/tests/Feature/HR/AutoProvisionUserOnHireTest.php,89,\Illuminate\Support\Facades\Cache::forget('settings:hr.auto_provision_user.enabled');
+api/tests/Feature/HR/ClearanceDepartmentGateTest.php,38,Cache::flush();
+api/tests/Feature/HR/SalaryAdjustmentEffectiveDateTest.php,44,Cache::flush();
+api/tests/Feature/HR/SeparationCancelTest.php,55,Cache::flush();
+api/tests/Feature/HR/SeparationCancelTest.php,57,Cache::flush();
+api/tests/Feature/HR/SeparationContractRegressionTest.php,61,Cache::flush();
+api/tests/Feature/HR/SeparationContractRegressionTest.php,63,Cache::flush();
+api/tests/Feature/HR/SeparationContractRegressionTest.php,264,Cache::flush();
+api/tests/Feature/Inventory/GrnGlPostingTest.php,312,Cache::forget('settings:modules.accounting');
+api/tests/Feature/Inventory/GrnHttpContractTest.php,493,Cache::flush();
+api/tests/Feature/Inventory/GrnHttpContractTest.php,531,Cache::flush();
+api/tests/Feature/Inventory/InventoryDashboardHashIdTest.php,35,Cache::forget('inv:dashboard:summary');
+api/tests/Feature/Inventory/InventoryStockRealtimeTest.php,49,"Cache::store('generations')->put('inv:dashboard:summary.version', (string) Str::uuid(), 604800);"
+api/tests/Feature/Inventory/InventoryStockRealtimeTest.php,61,"$this->assertSame('before', $cache->remember(fn () => 'before'));"
+api/tests/Feature/Inventory/InventoryStockRealtimeTest.php,87,"$this->assertSame('after', $cache->remember(fn () => 'after'));"
+api/tests/Feature/Inventory/InventoryStockRealtimeTest.php,163,"$this->assertSame('before', $cache->remember(fn () => 'before'));"
+api/tests/Feature/Inventory/InventoryStockRealtimeTest.php,175,"$this->assertSame('before', $cache->remember(fn () => 'should not replace'));"
+api/tests/Feature/Inventory/InventoryStockRealtimeTest.php,187,"Cache::put(""badges.user.{$user->id}.v{$badgeVersion}.s{$stockVersion}"", $staleSnapshot, 30);"
+api/tests/Feature/Inventory/InventoryStockSignalParityTest.php,26,Cache::flush();
+api/tests/Feature/Inventory/RecomputeSafetyStockCommandTest.php,22,\Illuminate\Support\Facades\Cache::forget('settings:inventory.safety_stock.enabled');
+api/tests/Feature/Inventory/RecomputeSafetyStockCommandTest.php,23,\Illuminate\Support\Facades\Cache::forget('settings:inventory.safety_stock.service_level_z');
+api/tests/Feature/Inventory/RecomputeSafetyStockCommandTest.php,24,\Illuminate\Support\Facades\Cache::forget('settings:inventory.safety_stock.history_days');
+api/tests/Feature/Inventory/RecomputeSafetyStockCommandTest.php,25,\Illuminate\Support\Facades\Cache::forget('settings:inventory.safety_stock.min_demand_days');
+api/tests/Feature/Inventory/RecomputeSafetyStockCommandTest.php,34,\Illuminate\Support\Facades\Cache::forget('settings:inventory.safety_stock.enabled');
+api/tests/Feature/Inventory/RecomputeSafetyStockCommandTest.php,121,\Illuminate\Support\Facades\Cache::forget('settings:inventory.safety_stock.enabled');
+api/tests/Feature/MRP/MrpAutomationTest.php,344,"$lock = Cache::lock('mrp:plant-run', 1200);"
+api/tests/Feature/NotificationValidationTest.php,160,$cacheKey = app(RolePermissionCacheGeneration::class)->keyFor(
+api/tests/Feature/NotificationValidationTest.php,168,"Cache::put($cacheKey, $permissions, 300);"
+api/tests/Feature/NotificationValidationTest.php,228,Cache::forget($cacheKey);
+api/tests/Feature/Payroll/EffectiveDatedBracketsTest.php,21,Cache::flush();
+api/tests/Feature/Payroll/EffectiveDatedBracketsTest.php,56,"$oldVersion = (string) Cache::get('gov_table:sss:ver', 'legacy-v1');"
+api/tests/Feature/Payroll/EffectiveDatedBracketsTest.php,61,"Cache::put('gov_table:sss:ver', 'after-write', 604800);"
+api/tests/Feature/Payroll/EffectiveDatedBracketsTest.php,62,"Cache::put(""gov_table:sss:rows-v2:v{$oldVersion}:active"", $staleRows, 300);"
+api/tests/Feature/Payroll/EffectiveDatedBracketsTest.php,177,Cache::flush();
+api/tests/Feature/Payroll/EmailPayslipOnFinalizeTest.php,76,Cache::forget('settings:payroll.payslip_email.enabled');
+api/tests/Feature/Payroll/GovComputationServicesTest.php,32,Cache::flush(); // gov-table service caches results for 5 min — flush per test.
+api/tests/Feature/Payroll/LoanFinalPayReservationFlagTest.php,37,Cache::flush();
+api/tests/Feature/Payroll/MidCycleSalaryProrationTest.php,32,Cache::flush();
+api/tests/Feature/Payroll/MissingGovTableComputeBlockTest.php,31,Cache::flush(); // gov-table service caches results for 5 min — flush per test.
+api/tests/Feature/Payroll/MissingGovTableComputeBlockTest.php,82,Cache::flush();
+api/tests/Feature/Payroll/MissingGovTableComputeBlockTest.php,138,Cache::flush();
+api/tests/Feature/Payroll/PayrollCalculatorServiceTest.php,37,Cache::flush();
+api/tests/Feature/Payroll/PayrollComputeRecoveryTest.php,153,Cache::flush();
+api/tests/Feature/Payroll/PayrollComputeRecoveryTest.php,159,Cache::flush();
+api/tests/Feature/Payroll/PayrollListSortAndExportPrecisionTest.php,52,Cache::flush();
+api/tests/Feature/Payroll/PayrollRecomputeIntegrityTest.php,55,Cache::flush();
+api/tests/Feature/Payroll/SalaryEffectiveDateProrationTest.php,49,Cache::flush();
+api/tests/Feature/Production/ProductionAuditHardeningTest.php,253,"Cache::forget(""auth:role_perms:{$managerRole->id}"");"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,39,"Cache::put('dashboard:production:version', 'before-generation', 604800);"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,40,"Cache::put('dashboard:production:vbefore-generation', ['revision' => 'before'], 60);"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,45,"self::assertSame('before-generation', Cache::get('dashboard:production:version'));"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,48,"Cache::get('dashboard:production:vbefore-generation'),"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,52,"self::assertNotSame('before-generation', Cache::get('dashboard:production:version'));"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,55,"Cache::put('dashboard:production:vbefore-generation', ['revision' => 'stale'], 30);"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,56,"self::assertSame(['revision' => 'stale'], Cache::get('dashboard:production:vbefore-generation'));"
+api/tests/Feature/Production/ProductionDashboardCacheAfterCommitTest.php,57,"self::assertNotSame('before-generation', Cache::get('dashboard:production:version'));"
+api/tests/Feature/Production/StockWorkOrderCancellationTest.php,163,"$this->assertFalse(Cache::has(""auth:role_perms:{$roleId}""));"
+api/tests/Feature/Production/WorkOrderMaterialHandoverGateTest.php,150,Cache::flush();
+api/tests/Feature/Production/WorkOrderMaterialHandoverGateTest.php,167,Cache::flush();
+api/tests/Feature/Production/WorkOrderOutputIdempotencyKeyTest.php,164,Cache::flush();
+api/tests/Feature/Purchasing/ProcurementChainCacheInvalidationTest.php,67,Cache::forget($cache->versionKey($key));
+api/tests/Feature/Purchasing/ProcurementChainCacheInvalidationTest.php,68,Cache::forget($cache->initialSummaryKey($key));
+api/tests/Feature/Purchasing/ProcurementChainCacheInvalidationTest.php,70,Cache::forget('badges.version');
+api/tests/Feature/Purchasing/ProcurementChainCacheInvalidationTest.php,92,Cache::forget($cache->versionKey($key));
+api/tests/Feature/Purchasing/ProcurementChainCacheInvalidationTest.php,93,Cache::forget($cache->initialSummaryKey($key));
+api/tests/Feature/Purchasing/ProcurementChainCacheInvalidationTest.php,139,Cache::forget('badges.version');
+api/tests/Feature/Quality/CalibrationSignalParityTest.php,26,Cache::flush();
+api/tests/Feature/Quality/IncomingLotChecklistTest.php,781,\Illuminate\Support\Facades\Cache::flush();
+api/tests/Feature/Queue/HorizonLongWaitNotificationTest.php,33,Cache::forget('horizon-long-wait:redis:default');
+api/tests/Feature/Queue/HorizonLongWaitNotificationTest.php,116,Cache::forget('horizon-long-wait:redis:default');
+api/tests/Feature/Queue/HorizonLongWaitNotificationTest.php,134,$this->assertFalse(Cache::has('horizon-long-wait:redis:default'));
+api/tests/Feature/ReturnManagement/ReturnRequestPendingSignalParityTest.php,26,Cache::flush();
+api/tests/Feature/SupplyChain/DeliveryReadPermissionTest.php,46,Cache::flush();
+api/tests/Unit/Common/Services/DatabaseRestoreCacheInvalidatorTest.php,41,"Cache::put($key, 'before-restore', 3600);"
+api/tests/Unit/Common/Services/DatabaseRestoreCacheInvalidatorTest.php,63,"self::assertNotSame('before-restore', Cache::get($key), ""Cache generation [{$key}] was not rotated."");"
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,18,$store = Cache::store('generations');
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,23,"$store->put($key, 'opaque-generation-value', now()->addMinutes(5));"
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,34,$store->forget($key);
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,40,$store = Cache::store('redis');
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,47,"$store->put($boundedKey, 'opaque-test-value', now()->addMinutes(5));"
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,54,$store->forget($unboundedKey);
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,55,$store->forget($boundedKey);
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,63,$payloads = Cache::store('redis');
+api/tests/Unit/Common/Services/RedisCacheKeyAuditReaderTest.php,64,$markers = Cache::store('generations');
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,19,$payloadCache = Cache::store('array');
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,20,"$payloadCache->put($key, 'old-payload-marker', 60);"
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,23,"$generation = CacheGeneration::currentDefault($key, 60, 'test.isolation');"
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,26,"self::assertSame('old-payload-marker', $payloadCache->get($key));"
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,27,"self::assertTrue(CacheGeneration::rotateDefault($key, 60, 'test.isolation', 'new-generation'));"
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,28,"self::assertSame('new-generation', CacheGeneration::currentDefault($key, 60, 'test.isolation'));"
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,29,"self::assertSame('old-payload-marker', $payloadCache->get($key));"
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,31,Cache::store('generations')->forget($key);
+api/tests/Unit/Common/Support/CacheGenerationIsolationTest.php,32,$payloadCache->forget($key);
+api/tests/Unit/Common/Support/FailOpenCacheTest.php,20,"Cache::store('array'),"
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,18,$repository = Cache::store('array');
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,19,$repository->forget('dashboard:cache:version');
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,20,"$repository->put('dashboard:cache:version', 'old-generation', 604800);"
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,21,"$repository->put('dashboard:probe:vold-generation', 'stale-snapshot', 60);"
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,31,"return $attempt === 1 ? false : $repository->put($key, $generation, $ttl);"
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,49,$value = FailOpenCache::remember(
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,50,"Cache::store('array'),"
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,63,$repository = Cache::store('array');
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,64,$repository->forget('dashboard:cache:version');
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,65,"$repository->put('dashboard:cache:version', 'old-generation', 604800);"
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,66,"$repository->put('dashboard:probe:vold-generation', 'stale-snapshot', 60);"
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,76,->andReturnUsing(static fn (string $key): bool => $repository->forget($key));
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,92,$value = FailOpenCache::remember(
+api/tests/Unit/Modules/Dashboard/DashboardCacheGenerationFailureTest.php,93,"Cache::store('array'),"
+api/tests/Unit/Modules/Dashboard/DashboardCacheInvalidationObserverTest.php,431,"Cache::put('dashboard:cache:version', 'global-before', 60);"
+api/tests/Unit/Modules/Dashboard/DashboardCacheInvalidationObserverTest.php,432,"Cache::put('dashboard:cache:scope:'.hash('sha256', 'dashboard:ppc'), 'ppc-before', 60);"
+api/tests/Unit/Modules/Dashboard/DashboardCacheInvalidationObserverTest.php,433,"Cache::put('dashboard:cache:scope:'.hash('sha256', 'widget-summary:maintenance.due_schedules'), 'widget-before', 60);"
+api/tests/Unit/PruneExpiredPermissionOverridesTest.php,92,"Cache::put(""auth:permissions:{$user->id}"", ['stale'], 300);"
+api/tests/Unit/PruneExpiredPermissionOverridesTest.php,93,"Cache::put(""auth:role_perms:{$user->role_id}"", [99 => 'stale'], 300);"
+api/tests/Unit/PruneExpiredPermissionOverridesTest.php,119,"$this->assertFalse(Cache::has(""auth:permissions:{$user->id}""));"
+api/tests/Unit/PruneExpiredPermissionOverridesTest.php,120,"$this->assertFalse(Cache::has(""auth:role_perms:{$user->role_id}""));"

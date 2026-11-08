@@ -6,6 +6,7 @@ namespace Tests\Feature\Accounting;
 
 use App\Common\Enums\PermissionOverrideType;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Collection;
@@ -128,6 +129,37 @@ class InvoicePaymentSubmissionServiceTest extends TestCase
         $this->assertSame($verified->id, $service->verify($this->invoice, $row, $bank, $this->finance)->id);
         $this->assertSame($before[0] + 1, Collection::count());
     }
+
+    public function test_submission_and_rejection_refresh_invoice_viewers_once_per_change(): void
+    {
+        $service = app(InvoicePaymentSubmissionService::class);
+        $countSignals = fn (): int => DB::table('chain_step_runs')
+            ->where('entity_type', 'invoice')
+            ->where('entity_id', $this->invoice->id)
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count();
+        $actions = fn (): array => DB::table('chain_step_runs')
+            ->join('event_outbox', 'event_outbox.id', '=', 'chain_step_runs.outbox_id')
+            ->where('chain_step_runs.entity_type', 'invoice')
+            ->where('chain_step_runs.entity_id', $this->invoice->id)
+            ->where('chain_step_runs.event_type', ChainStepAdvanced::class)
+            ->pluck('event_outbox.payload')
+            ->map(fn (string $payload): string => json_decode($payload, true, flags: JSON_THROW_ON_ERROR)['action'])
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(0, $countSignals());
+        $row = $service->submit($this->invoice, $this->payload(), $this->proof(), $this->portal);
+        $this->assertSame(1, $countSignals(), 'Pending payment evidence changes invoice actions for internal viewers.');
+        $this->assertSame(['updated'], $actions());
+
+        $service->reject($this->invoice, $row, 'Bank record does not match.', $this->finance);
+        $this->assertSame(2, $countSignals(), 'Payment rejection restores the customer submission action.');
+        $this->assertSame(['updated', 'updated'], $actions());
+        $service->reject($this->invoice, $row, 'Bank record does not match.', $this->finance);
+        $this->assertSame(2, $countSignals(), 'An idempotent rejection replay does not broadcast a duplicate.');
+    }
     private function rejected(callable $action): void
     {
         try { $action(); $this->fail('Unsafe payment action succeeded.'); }
@@ -145,6 +177,30 @@ class InvoicePaymentSubmissionServiceTest extends TestCase
         $this->assertCount(1, Storage::disk('local')->allFiles());
         $this->rejected(fn () => $service->submit($this->invoice, [...$payload, 'reference_number' => 'changed'], $this->proof(), $this->portal));
         $this->assertDatabaseCount('invoice_payment_submissions', 1);
+    }
+
+    public function test_partial_bank_transfer_submission_can_be_verified_and_updates_only_paid_amount(): void
+    {
+        $service = app(InvoicePaymentSubmissionService::class);
+        $submission = $service->submit(
+            $this->invoice,
+            [...$this->payload(), 'amount' => '5000.00'],
+            $this->proof(),
+            $this->portal,
+        );
+
+        $this->assertSame('5000.00', (string) $submission->amount);
+        $verified = $service->verify(
+            $this->invoice,
+            $submission,
+            Account::where('code', '1020')->firstOrFail()->hash_id,
+            $this->finance,
+        );
+
+        $this->assertSame('verified', $verified->status->value);
+        $this->assertSame('5000.00', (string) $this->invoice->fresh()->amount_paid);
+        $this->assertSame('14600.00', (string) $this->invoice->fresh()->balance);
+        $this->assertSame('partial', $this->invoice->fresh()->status->value);
     }
 
     public function test_money_shape_current_balance_date_and_proof_are_checked_before_storage(): void

@@ -175,9 +175,10 @@ class NotificationServiceHardeningTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        // One preference lookup + one bulk insert. The old implementation ran
-        // three queries per recipient (in_app pref, email pref, insert) — 75.
-        $this->assertLessThanOrEqual(3, count($queries), sprintf(
+        // One preference lookup, one inbox insert and one outbox insert, plus
+        // one batch claim and one batch publish update. Query count must stay
+        // constant as the recipient count grows.
+        $this->assertLessThanOrEqual(5, count($queries), sprintf(
             "Expected a constant number of queries, got %d:\n%s",
             count($queries),
             implode("\n", array_column($queries, 'query')),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Resources;
 
 use App\Modules\Inventory\Services\StockLocationSummaryService;
+use App\Modules\Inventory\Support\StockCountAvailableActions;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -36,6 +37,7 @@ class StockCountItemResource extends JsonResource
                 ? app(StockLocationSummaryService::class)->lots((int) $this->item_id, (int) $this->location_id) : []),
             'status' => $this->status?->value,
             'status_label' => $this->status?->label(),
+            'available_actions' => StockCountAvailableActions::forItem($this->resource, $request->user()),
             'counted_by' => $this->whenLoaded('counter', fn () => $this->counter ? [
                 'id' => $this->counter->hash_id,
                 'name' => $this->counter->name,

@@ -4,21 +4,25 @@ declare(strict_types=1);
 
 use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
+use App\Modules\B2B\Controllers\CustomerInvoicePaymentController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
-use App\Modules\CRM\Controllers\ProductImageController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\InternalSupplierActivityController;
 use App\Modules\B2B\Controllers\PortalAccessController;
 use App\Modules\B2B\Controllers\PortalNotificationController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
-use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierDeliveryScheduleController;
 use App\Modules\B2B\Controllers\SupplierInvoiceController;
+use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
-use App\Modules\B2B\Controllers\SupplierShipmentController;
 use App\Modules\B2B\Controllers\SupplierRfqController;
+use App\Modules\B2B\Controllers\SupplierShipmentController;
 use App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware;
 use App\Modules\B2B\Middleware\CheckPortalPasswordExpiry;
+use App\Modules\CRM\Controllers\PriceNegotiationController;
+use App\Modules\CRM\Controllers\ProductImageController;
+use App\Modules\CRM\Controllers\SalesOrderAgreementController;
+use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -40,6 +44,8 @@ Route::prefix('b2b/supplier')->group(function () {
 
     // Authenticated
     Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals', CheckPortalPasswordExpiry::class, B2BTenancyScopeMiddleware::class])->group(function () {
+        Route::match(['get', 'post'], 'broadcasting/auth', [BroadcastController::class, 'authenticate'])
+            ->middleware('portal.password.changed');
         Route::get('me', [SupplierAuthController::class, 'me']);
         // The supplier portal is a session guard, so the internal
         // /business-policies endpoint (auth:sanctum) cannot serve it. Portal
@@ -171,6 +177,8 @@ Route::prefix('b2b/customer')->group(function () {
 
     // Authenticated
     Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', CheckPortalPasswordExpiry::class, B2BTenancyScopeMiddleware::class])->group(function () {
+        Route::match(['get', 'post'], 'broadcasting/auth', [BroadcastController::class, 'authenticate'])
+            ->middleware('portal.password.changed');
         Route::get('me', [CustomerAuthController::class, 'me']);
         // The customer portal is a session guard, so the internal
         // /business-policies endpoint (auth:sanctum) cannot serve it. Portal
@@ -186,9 +194,9 @@ Route::prefix('b2b/customer')->group(function () {
             Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
             Route::get('catalog', [CustomerPortalController::class, 'catalog']);
             Route::get('catalog/{product}/image', [ProductImageController::class, 'showForCustomer']);
-            Route::get('price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'portalIndex']);
-            Route::post('price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'portalStore'])->middleware('throttle:sensitive');
-            Route::post('price-requests/{priceRequest}/respond', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'respond'])->middleware('throttle:sensitive');
+            Route::get('price-requests', [PriceNegotiationController::class, 'portalIndex']);
+            Route::post('price-requests', [PriceNegotiationController::class, 'portalStore'])->middleware('throttle:sensitive');
+            Route::post('price-requests/{priceRequest}/respond', [PriceNegotiationController::class, 'respond'])->middleware('throttle:sensitive');
             Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
             Route::post('orders/quote', [CustomerPortalController::class, 'quoteOrder']);
             Route::post('orders', [CustomerPortalController::class, 'storeOrder'])->middleware('throttle:sensitive');
@@ -196,9 +204,9 @@ Route::prefix('b2b/customer')->group(function () {
             Route::post('orders/{salesOrder}/delivery-proposals/{response}/respond', [CustomerPortalController::class, 'respondToDeliveryProposal'])->middleware('throttle:sensitive');
             Route::post('orders/{salesOrder}/cancel', [CustomerPortalController::class, 'cancelOrder'])->middleware('throttle:sensitive');
             Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
-            Route::get('orders/{salesOrder}/agreements', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'index']);
-            Route::post('orders/{salesOrder}/agreements/{agreement}/acknowledge', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'acknowledgePortal'])->middleware('throttle:sensitive');
-            Route::get('orders/{salesOrder}/agreements/{agreement}/file', [\App\Modules\CRM\Controllers\SalesOrderAgreementController::class, 'file']);
+            Route::get('orders/{salesOrder}/agreements', [SalesOrderAgreementController::class, 'index']);
+            Route::post('orders/{salesOrder}/agreements/{agreement}/acknowledge', [SalesOrderAgreementController::class, 'acknowledgePortal'])->middleware('throttle:sensitive');
+            Route::get('orders/{salesOrder}/agreements/{agreement}/file', [SalesOrderAgreementController::class, 'file']);
             Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
             // Sales-order negotiation — customer accepts / proposes changes / declines.
             Route::post('orders/{salesOrder}/respond', [CustomerPortalController::class, 'respondToSalesOrder'])->middleware('throttle:sensitive');
@@ -206,8 +214,8 @@ Route::prefix('b2b/customer')->group(function () {
             Route::get('invoices', [CustomerPortalController::class, 'invoices']);
             Route::get('invoices/{invoice}', [CustomerPortalController::class, 'invoiceDetail']);
             Route::get('invoices/{invoice}/pdf', [CustomerPortalController::class, 'invoicePdf']);
-            Route::post('invoices/{invoice}/payment-submissions', [\App\Modules\B2B\Controllers\CustomerInvoicePaymentController::class, 'store'])->middleware('throttle:sensitive');
-            Route::get('invoices/{invoice}/payment-submissions/{paymentSubmission}/proof', [\App\Modules\B2B\Controllers\CustomerInvoicePaymentController::class, 'proof']);
+            Route::post('invoices/{invoice}/payment-submissions', [CustomerInvoicePaymentController::class, 'store'])->middleware('throttle:sensitive');
+            Route::get('invoices/{invoice}/payment-submissions/{paymentSubmission}/proof', [CustomerInvoicePaymentController::class, 'proof']);
             Route::get('deliveries', [CustomerPortalController::class, 'deliveries']);
             Route::get('deliveries/{delivery}', [CustomerPortalController::class, 'deliveryDetail']);
             Route::get('deliveries/{delivery}/receipt-group', [CustomerPortalController::class, 'receiptGroup']);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Common\Jobs\CreateBackupJob;
+use App\Common\Events\AdminBackupsChanged;
 use App\Common\Models\BackupOperation;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -12,6 +13,7 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -55,6 +57,9 @@ class BackupControllerTest extends TestCase
             'type' => 'backup',
             'status' => 'queued',
         ]);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', AdminBackupsChanged::class)
+            ->count());
         Queue::assertPushed(CreateBackupJob::class);
 
         $this->actingAs($admin)

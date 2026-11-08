@@ -1,86 +1,119 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
+function versionManifestPlugin(version: string): Plugin {
+  return {
+    name: 'ogami-version-manifest',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: `${JSON.stringify({ version })}\n`,
+      });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+export default defineConfig(({ command }) => {
+  const configuredBuildId = process.env.OGAMI_BUILD_ID?.trim();
+  const safeBuildId = configuredBuildId && /^[a-zA-Z0-9._-]{1,80}$/.test(configuredBuildId)
+    ? configuredBuildId
+    : Date.now().toString(36);
+  const buildId =
+    command === 'build'
+      ? safeBuildId
+      : 'dev';
+
+  return {
+    plugins: [react(), versionManifestPlugin(buildId)],
+    define: {
+      __OGAMI_BUILD_ID__: JSON.stringify(buildId),
     },
-  },
-  server: {
-    host: '0.0.0.0',
-    allowedHosts: ['ogamiph.dev', 'www.ogamiph.dev'],
-    watch: { ignored: ['**/*test-results/**', '**/.playwright-artifacts*/**', '**/e2e-real/results/**', '**/*playwright*report/**'] },
-    // Native Windows development serves the SPA on the standard localhost
-    // port; Laravel remains on 8000 and receives the API proxy traffic below.
-    port: 80,
-    strictPort: true,
-    // Direct proxy for local dev without docker (kept for convenience).
-    proxy: process.env.VITE_DISABLE_API_PROXY === 'true' ? {} : {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
-      '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
     },
-    hmr: {
-      // When accessed through the Nginx proxy on port 80, the browser
-      // must connect its HMR WebSocket to the same origin — not Vite's
-      // internal port 5173. Override clientPort so it matches NGINX_PORT.
-      protocol: process.env.VITE_HMR_PROTOCOL === 'wss' ? 'wss' : 'ws',
-      host: process.env.VITE_HMR_HOST || 'localhost',
-      clientPort: Number(process.env.VITE_HMR_PORT) || Number(process.env.NGINX_PORT) || 80,
+    server: {
+      host: '0.0.0.0',
+      allowedHosts: ['ogamiph.dev', 'www.ogamiph.dev'],
+      watch: { ignored: ['**/*test-results/**', '**/.playwright-artifacts*/**', '**/e2e-real/results/**', '**/*playwright*report/**'] },
+      // Native Windows development serves the SPA on the standard localhost
+      // port; Laravel remains on 8000 and receives the API proxy traffic below.
+      port: 80,
+      strictPort: true,
+      // Direct proxy for local dev without docker (kept for convenience).
+      proxy: process.env.VITE_DISABLE_API_PROXY === 'true' ? undefined : {
+        '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
+        '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
+      },
+      hmr: {
+        // When accessed through the Nginx proxy on port 80, the browser
+        // must connect its HMR WebSocket to the same origin — not Vite's
+        // internal port 5173. Override clientPort so it matches NGINX_PORT.
+        protocol: process.env.VITE_HMR_PROTOCOL === 'wss' ? 'wss' : 'ws',
+        host: process.env.VITE_HMR_HOST || 'localhost',
+        clientPort: Number(process.env.VITE_HMR_PORT) || Number(process.env.NGINX_PORT) || 80,
+      },
     },
-  },
-  build: {
-    chunkSizeWarningLimit: 600,
-    sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (
-            id.includes('node_modules/react/') ||
-            id.includes('node_modules/react-dom/') ||
-            id.includes('node_modules/react-router-dom/')
-          ) {
-            return 'vendor-react';
-          }
-          if (
-            id.includes('node_modules/@tanstack/react-query') ||
-            id.includes('node_modules/@tanstack/react-table')
-          ) {
-            return 'vendor-query';
-          }
-          if (
-            id.includes('node_modules/react-hook-form/') ||
-            id.includes('node_modules/@hookform/') ||
-            id.includes('node_modules/zod/')
-          ) {
-            return 'vendor-forms';
-          }
-          if (id.includes('node_modules/recharts/')) {
-            return 'vendor-charts';
-          }
-          // Landing-only heavy deps — split so they stream in parallel and
-          // only ever load on the lazy `/` route, never in the ERP bundle.
-          if (id.includes('node_modules/three/')) {
-            return 'vendor-three';
-          }
-          if (id.includes('node_modules/gsap/') || id.includes('node_modules/lenis/')) {
-            return 'vendor-motion';
-          }
-          if (
-            id.includes('node_modules/lucide-react/') ||
-            id.includes('node_modules/date-fns/') ||
-            id.includes('node_modules/clsx/')
-          ) {
-            return 'vendor-ui';
-          }
-          if (id.includes('node_modules/laravel-echo/') || id.includes('node_modules/pusher-js/')) {
-            return 'vendor-realtime';
-          }
+    preview: {
+      // Permit the private Compose proxy hostname only in the isolated E2E
+      // runtime; keep Vite's default host checks in all other environments.
+      allowedHosts: process.env.E2E_ENV === 'true' ? ['nginx'] : undefined,
+    },
+    build: {
+      chunkSizeWarningLimit: 600,
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router-dom/')
+            ) {
+              return 'vendor-react';
+            }
+            if (
+              id.includes('node_modules/@tanstack/react-query') ||
+              id.includes('node_modules/@tanstack/react-table')
+            ) {
+              return 'vendor-query';
+            }
+            if (
+              id.includes('node_modules/react-hook-form/') ||
+              id.includes('node_modules/@hookform/') ||
+              id.includes('node_modules/zod/')
+            ) {
+              return 'vendor-forms';
+            }
+            if (id.includes('node_modules/recharts/')) {
+              return 'vendor-charts';
+            }
+            // Landing-only heavy deps — split so they stream in parallel and
+            // only ever load on the lazy `/` route, never in the ERP bundle.
+            if (id.includes('node_modules/three/')) {
+              return 'vendor-three';
+            }
+            if (id.includes('node_modules/gsap/') || id.includes('node_modules/lenis/')) {
+              return 'vendor-motion';
+            }
+            if (
+              id.includes('node_modules/lucide-react/') ||
+              id.includes('node_modules/date-fns/') ||
+              id.includes('node_modules/clsx/')
+            ) {
+              return 'vendor-ui';
+            }
+            if (id.includes('node_modules/laravel-echo/') || id.includes('node_modules/pusher-js/')) {
+              return 'vendor-realtime';
+            }
+          },
         },
       },
     },
-  },
+  };
 });

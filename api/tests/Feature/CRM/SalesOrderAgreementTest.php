@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\CRM;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
@@ -105,6 +106,25 @@ class SalesOrderAgreementTest extends TestCase
 
         $second = app(SalesOrderAgreementService::class)->publish($order, $actor, 'Revised terms.', null);
         $this->postJson("/api/v1/crm/sales-orders/{$order->hash_id}/agreements/{$second->hash_id}/acknowledge", array_replace($body, ['acknowledged_at' => now()->addDay()->toIso8601String()]))->assertUnprocessable();
+    }
+
+    public function test_agreement_publication_and_acknowledgment_stage_parent_refreshes(): void
+    {
+        [$order, $actor] = $this->orderWithActor('crm.sales_orders.update', 'crm.sales_orders.confirm');
+        $service = app(SalesOrderAgreementService::class);
+
+        $revision = $service->publish($order, $actor, 'Customer approved these terms.', null);
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+        $payload = json_decode((string) DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->value('payload'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('sales_order', $payload['entityType']);
+        $this->assertSame($order->hash_id, $payload['entityHashId']);
+        $this->assertSame('updated', $payload['action']);
+
+        $service->acknowledgeExternal($order, $revision, $actor, [
+            'representative' => 'A. Buyer', 'acknowledged_at' => now()->subHour(), 'reference' => 'Email approval',
+        ]);
+
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
     }
 
     public function test_stale_terms_cannot_be_acknowledged_or_confirmed_and_history_cannot_be_edited(): void

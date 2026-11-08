@@ -30,6 +30,7 @@ class MaterialIssueSlipResource extends JsonResource
             ] : null),
             'items'          => MaterialIssueSlipItemResource::collection($this->whenLoaded('items')),
             'created_at'     => optional($this->created_at)->toIso8601String(),
+            'updated_at'     => optional($this->updated_at)->toIso8601String(),
         ];
     }
 }

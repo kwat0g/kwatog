@@ -74,6 +74,7 @@ export interface ApprovalStep {
 }
 
 export type ChainEntityType =
+  | 'purchase_request'
   | 'sales_order'
   | 'work_order'
   | 'purchase_order'
@@ -111,6 +112,7 @@ export interface ChainBottlenecks {
   total: number;
   groups: ChainBottleneckGroup[];
   automation?: ChainAutomationSummary;
+  generated_at?: string;
 }
 
 export type ChainAutomationStatus = 'healthy' | 'attention' | 'unavailable';

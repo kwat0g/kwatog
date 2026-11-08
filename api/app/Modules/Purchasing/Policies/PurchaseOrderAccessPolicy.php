@@ -12,6 +12,7 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseOrderResponse;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
@@ -163,8 +164,14 @@ final class PurchaseOrderAccessPolicy
         // `purchasing.po.approve` tier (it is the module's global row tier), so
         // without this check the action map advertised Update/Delete/Submit to
         // Finance and the VP — buttons the route then refused with a 403.
+        return $po->status === PurchaseOrderStatus::Draft
+            && $this->canManagePurchaseOrder($user, $po);
+    }
+
+    /** Check action scope without conflating authorization with current state. */
+    public function canManagePurchaseOrder(User $user, PurchaseOrder $po): bool
+    {
         return $user->hasPermission('purchasing.po.create')
-            && $po->status === PurchaseOrderStatus::Draft
             && $this->isOwner($user, $po);
     }
 
@@ -316,11 +323,26 @@ final class PurchaseOrderAccessPolicy
             'can_send' => $this->canSend($user, $po),
             'can_cancel' => $this->canCancel($user, $po),
             'can_close' => $this->canClose($user, $po),
+            'can_short_close' => $user->hasPermission('purchasing.po.create') && $po->isShortClosable(),
             'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $po),
             'can_print' => $canView,
             // Lets the SPA say why Approve is missing instead of showing Reject alone.
             'approve_blocked_by_vendor_sod' => $vendorSodBlocked,
         ];
+    }
+
+    /**
+     * Viewer-specific actions for a supplier response under a PO they can view.
+     * The response routes and parent-visibility checks remain authoritative.
+     *
+     * @return array{accept: bool, reject: bool}
+     */
+    public function responseActionsFor(User $user, PurchaseOrderResponse $response): array
+    {
+        $canResolve = $user->hasPermission('purchasing.po.responses.resolve')
+            && $response->status === PurchaseOrderResponseStatus::Pending;
+
+        return ['accept' => $canResolve, 'reject' => $canResolve];
     }
 
     /**

@@ -19,6 +19,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { salvageExceedsCost, salvageIsUnchanged } from './salvageBound';
 
 const baseSchema = z.object({
@@ -95,10 +96,11 @@ export default function EditAssetPage() {
       location: formData.location || undefined,
     }),
     onSuccess: (asset) => {
-      qc.invalidateQueries({ queryKey: ['assets'] });
-      qc.invalidateQueries({ queryKey: ['asset', id] });
+      qc.setQueryData(['asset', asset.id], asset);
+      void invalidateRealtimeChange(qc, { entityType: 'asset', entityId: asset.id }, [], [['asset', asset.id]]);
       toast.success(`Asset ${asset.asset_code} updated.`);
-      navigate(`/assets/${asset.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/assets/${asset.id}`);
     },
     onError: (error) => {
       applyServerValidationErrors(error, setError, 'Failed to update asset.');

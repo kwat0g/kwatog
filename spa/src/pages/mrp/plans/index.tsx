@@ -14,7 +14,9 @@ import { MrpRunStatusPanel } from '@/components/mrp/MrpRunStatusPanel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import type { MrpPlan, MrpPlanStatus } from '@/types/mrp';
 import { formatDateIso } from '@/lib/formatDate';
 
@@ -37,6 +39,8 @@ export default function MrpPlansListPage() {
   const runId = searchParams.get('run') ?? undefined;
   const queryClient = useQueryClient();
   const { can } = usePermission();
+  useRealtimeList('mrp_plan', can('mrp.plans.view') ? 'visible' : undefined);
+  useRealtimeList('mrp_run', can('mrp.runs.view') ? 'visible' : undefined);
   // Bound to the URL so dashboard drill-downs (?status=active) arrive
   // pre-filtered and the browser back button restores the previous view.
   const [filters, setFilters] = useUrlFilters<MrpPlanListParams>(DEFAULT_FILTERS);
@@ -46,19 +50,14 @@ export default function MrpPlansListPage() {
     queryFn: () => mrpRunsApi.latest(),
     enabled: can('mrp.runs.view'),
     staleTime: 5_000,
-    refetchInterval: (query) => (query.state.data?.status === 'running' ? 3_000 : 15_000),
   });
-  // Declared above the plans query, which follows a run in progress.
-  const runInProgress = latestRun.data?.status === 'running';
 
+  const queryKey = ['mrp', 'plans', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['mrp', 'plans', filters],
+    queryKey,
     queryFn: () => mrpPlansApi.list(filters),
-    placeholderData: (prev) => prev,
-    // A run writes plan rows. Without this the table caught up only on the next
-    // manual refresh — which is what the success toast used to instruct, and a
-    // screen that has to be told to refresh reads as one that cannot be trusted.
-    refetchInterval: runInProgress ? 3_000 : false,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
   const { data: planOptions } = useQuery({
     queryKey: ['mrp', 'plans', 'options'],
@@ -72,21 +71,15 @@ export default function MrpPlansListPage() {
     queryKey: ['mrp', 'runs', 'history', runId],
     queryFn: () => mrpRunsApi.list({ per_page: runId ? 1 : 8, page: 1, run: runId }),
     enabled: can('mrp.runs.view'),
-    placeholderData: runId ? undefined : (prev) => prev,
     staleTime: 5_000,
-    refetchInterval: 15_000,
   });
   const latestVisibleRun = runId ? runHistory.data?.data[0] : latestRun.data ?? runHistory.data?.data[0];
 
   const triggerRun = useMutation({
     mutationFn: () => mrpRunsApi.trigger(),
-    onSuccess: () => {
-      // This said "refresh in a moment for results". The page already polls the
-      // run status every 3s while a run is active and now polls the plan list
-      // too, so telling the user to refresh was both unnecessary and a signal
-      // that the screen could not be trusted to update itself.
+    onSuccess: (run) => {
       toast.success('MRP run started. Results appear here as it completes.');
-      queryClient.invalidateQueries({ queryKey: ['mrp', 'runs', 'latest'] });
+      queryClient.setQueryData(['mrp', 'runs', 'latest'], run);
       queryClient.invalidateQueries({ queryKey: ['mrp', 'runs', 'history'] });
       queryClient.invalidateQueries({ queryKey: ['mrp', 'plans'] });
     },

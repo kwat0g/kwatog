@@ -19,6 +19,7 @@ use App\Modules\Production\Models\ProductRouting;
 use App\Modules\Production\Models\RoutingOperation;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Events\ProductionRoutingChanged;
 use App\Modules\Production\Services\ProductionRoutingService;
 use App\Modules\Production\Services\WoOperationService;
 use Database\Seeders\RolePermissionSeeder;
@@ -57,6 +58,19 @@ class ProductionRoutingTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
         $this->service = app(ProductionRoutingService::class);
+    }
+
+
+    public function test_simple_production_does_not_generate_operation_records_or_require_routing_qc(): void
+    {
+        config(['production.routing_execution_enabled' => false, 'inspection.finish_first_wo_enabled' => true]);
+        $product = $this->product();
+        $this->service->create($this->payload($product, [$this->operation(['qc_required' => true])]));
+        $wo = WorkOrder::factory()->create(['product_id' => $product->id]);
+        $this->assertTrue($wo->usesFinishFirstQc());
+        app(WoOperationService::class)->generateFromRouting($wo);
+        $this->assertSame(0, $wo->operations()->count());
+        $wo->assertFinishFirstRoutingCompatible();
     }
 
     // ── Fixtures ─────────────────────────────────────────────────
@@ -144,6 +158,15 @@ class ProductionRoutingTest extends TestCase
     }
 
     // ── 1. One active version, audited transitions ───────────────
+
+    public function test_create_stages_a_durable_routing_refresh_signal(): void
+    {
+        $this->service->create($this->payload($this->product()));
+
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', ProductionRoutingChanged::class)
+            ->count());
+    }
 
     public function test_create_publishes_the_only_active_version(): void
     {

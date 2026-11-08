@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Inventory;
 
 use App\Common\Enums\AlertType;
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Models\Alert;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -64,6 +65,19 @@ class AutoReplenishmentAttributionTest extends TestCase
         $this->assertNotNull($pr, 'A purchase request should be auto-created.');
         $this->assertTrue((bool) $pr->is_auto_generated);
         $this->assertSame($admin->id, $pr->requested_by, 'PR must be attributed to the system_admin, not id 1.');
+        $this->assertDatabaseHas('chain_step_runs', [
+            'entity_type' => 'purchase_request',
+            'entity_id' => $pr->id,
+            'step' => 'draft',
+            'event_type' => ChainStepAdvanced::class,
+        ]);
+        $payload = DB::table('chain_step_runs')
+            ->join('event_outbox', 'event_outbox.id', '=', 'chain_step_runs.outbox_id')
+            ->where('chain_step_runs.entity_type', 'purchase_request')
+            ->where('chain_step_runs.entity_id', $pr->id)
+            ->where('chain_step_runs.event_type', ChainStepAdvanced::class)
+            ->value('event_outbox.payload');
+        $this->assertSame('created', json_decode((string) $payload, true, flags: JSON_THROW_ON_ERROR)['action']);
     }
 
     public function test_no_pr_created_when_no_users_exist(): void

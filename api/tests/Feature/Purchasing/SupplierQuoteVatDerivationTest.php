@@ -6,9 +6,9 @@ namespace Tests\Feature\Purchasing;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
-use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
@@ -65,6 +65,26 @@ final class SupplierQuoteVatDerivationTest extends TestCase
         $this->assertSame('3600.00', $quote['vat_amount']);
     }
 
+    public function test_stale_supplier_quote_save_returns_a_state_conflict(): void
+    {
+        [$rfq, $rfqItem, $vendor] = $this->openRfq();
+        $this->actAsSupplier($vendor->id);
+        $rfq->forceFill(['status' => RfqStatus::Closed])->save();
+
+        $this->putJson("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/quote", [
+            'vat_treatment' => 'exclusive',
+            'submit' => false,
+            'items' => [[
+                'request_for_quote_item_id' => $rfqItem->hash_id,
+                'response_status' => 'quoted',
+                'offered_quantity' => '500.000',
+                'unit_price' => '60.000',
+            ]],
+        ])->assertStatus(409)
+            ->assertJsonPath('code', 'supplier_quote_state_conflict')
+            ->assertJsonPath('errors.state.0', 'This RFQ is no longer accepting quotations. Refresh and review its current status.');
+    }
+
     public function test_vat_is_back_extracted_when_the_quote_is_declared_vat_inclusive(): void
     {
         [$rfq, $rfqItem, $vendor] = $this->openRfq();
@@ -108,8 +128,6 @@ final class SupplierQuoteVatDerivationTest extends TestCase
         $this->assertSame('0.00', $quote['vat_amount']);
     }
 
-
-
     public function test_submission_requires_at_least_one_quoted_line(): void
     {
         [$rfq, $rfqItem, $vendor] = $this->openRfq();
@@ -150,7 +168,6 @@ final class SupplierQuoteVatDerivationTest extends TestCase
         $this->assertSame('1200.00', $quote['freight_amount']);
         $this->assertSame('28224.00', $quote['total_delivered_cost']);
     }
-
 
     public function test_supplier_rfq_list_searches_filters_and_sorts(): void
     {
@@ -198,6 +215,7 @@ final class SupplierQuoteVatDerivationTest extends TestCase
     {
         $supplier = SupplierPortalUser::factory()->create(['vendor_id' => $vendorId, 'must_change_password' => false]);
         Sanctum::actingAs($supplier, ['*'], 'supplier_portal');
+
         return $supplier;
     }
 

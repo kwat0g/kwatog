@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\AttendancePunch;
 use App\Modules\Attendance\Models\Holiday;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
@@ -122,6 +123,57 @@ class EmployeeAvailabilityService
         }
 
         return array_replace($result, ['state' => 'unknown', 'reason_code' => 'unverified', 'reason' => 'Attendance unverified. Confirm physical presence or change workers.']);
+    }
+
+    /**
+     * Return the next time boundary that can change production presence or
+     * shift coverage without a database write. Data changes use realtime events.
+     */
+    public function nextProductionBoundary(Employee $employee, Carbon $after): ?Carbon
+    {
+        $after = $after->copy()->timezone(config('app.timezone'));
+        $day = $after->copy()->startOfDay();
+        $next = null;
+        $consider = static function (?Carbon $boundary) use (&$next, $after): void {
+            if ($boundary && $boundary->gt($after) && ($next === null || $boundary->lt($next))) {
+                $next = $boundary->copy();
+            }
+        };
+
+        // Include yesterday for overnight shifts and tomorrow so the next
+        // shift start is scheduled directly. A midnight refresh advances this horizon.
+        foreach ([-1, 0, 1] as $offset) {
+            $date = $day->copy()->addDays($offset);
+            $assignment = app(ShiftAssignmentService::class)->assignmentFor($employee, $date);
+            $shift = $assignment?->shift;
+            $workingDays = $assignment?->working_days;
+
+            if ($shift?->is_active && is_array($workingDays) && in_array($date->dayOfWeekIso, $workingDays, true)) {
+                $start = Carbon::parse($date->toDateString().' '.$shift->start_time, config('app.timezone'));
+                $end = Carbon::parse($date->toDateString().' '.$shift->end_time, config('app.timezone'));
+                if ($end->lte($start)) {
+                    $end->addDay();
+                }
+                $consider($start);
+                $consider($end);
+            }
+
+            $attendance = $this->attendanceFor($employee, $date->toDateString());
+            if ($attendance) {
+                $consider($attendance->time_in);
+                $consider($attendance->time_out);
+            }
+        }
+
+        $futurePunch = AttendancePunch::query()
+            ->where('employee_id', $employee->id)
+            ->where('punched_at', '>', $after)
+            ->min('punched_at');
+        if ($futurePunch) {
+            $consider(Carbon::parse($futurePunch, config('app.timezone')));
+        }
+
+        return $next;
     }
 
     public function leaveBlocker(Employee $employee, string $workDate, Carbon $end): ?string

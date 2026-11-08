@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StartProductionDialog } from './StartProductionDialog';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { offsetScheduleDate, scheduleDateKey } from '@/components/production/scheduleDates';
+import type { WorkOrder } from '@/types/production';
 
 vi.mock('@/api/production/workOrders', () => ({
   workOrdersApi: {
@@ -33,13 +34,13 @@ const readiness = {
   presence: [],
 };
 function show(action: 'start' | 'extend' = 'start') {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <StartProductionDialog woId="wo" woNumber="WO-1" action={action} onClose={vi.fn()} />
     </QueryClientProvider>,
   );
+  return client;
 }
 it('checks readiness first and requires physical-presence confirmation before starting', async () => {
   vi.mocked(workOrdersApi.executionReadiness).mockResolvedValue({
@@ -67,9 +68,39 @@ it('checks readiness first and requires physical-presence confirmation before st
     }),
   );
 });
-it('refreshes unchanged readiness without clearing physical-presence confirmation', async () => {
-  vi.mocked(workOrdersApi.executionReadiness).mockResolvedValue({
+
+it('installs the start response in the open work-order cache before an older detail read can win', async () => {
+  const key = ['production', 'work-orders', 'detail', 'wo'];
+  const previous = { id: 'wo', status: 'confirmed' } as WorkOrder;
+  const updated = { ...previous, status: 'in_progress' } as WorkOrder;
+  let resolveStaleRead!: (value: WorkOrder) => void;
+  const staleRead = new Promise<WorkOrder>((resolve) => {
+    resolveStaleRead = resolve;
+  });
+  vi.mocked(workOrdersApi.executionReadiness).mockResolvedValue(readiness);
+  vi.mocked(workOrdersApi.start).mockResolvedValue(updated);
+  const client = show();
+  client.setQueryData(key, previous);
+  const staleFetch = client.fetchQuery({
+    queryKey: key,
+    queryFn: () => staleRead,
+    staleTime: 0,
+  });
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Start production' }));
+  await waitFor(() => expect(workOrdersApi.start).toHaveBeenCalledWith('wo', expect.any(Object)));
+  await waitFor(() => expect(client.getQueryData<WorkOrder>(key)?.status).toBe('in_progress'));
+
+  resolveStaleRead(previous);
+  await staleFetch.catch(() => undefined);
+  expect(client.getQueryData<WorkOrder>(key)?.status).toBe('in_progress');
+  client.clear();
+});
+it('refetches readiness at its next clock boundary instead of every 30 seconds', async () => {
+  const nextRefreshAt = new Date(Date.now() + 60_000).toISOString();
+  vi.mocked(workOrdersApi.executionReadiness).mockResolvedValueOnce({
     ...readiness,
+    next_refresh_at: nextRefreshAt,
     presence: [
       {
         state: 'unknown',
@@ -79,7 +110,7 @@ it('refreshes unchanged readiness without clearing physical-presence confirmatio
         work_date: '2026-10-06',
       },
     ],
-  });
+  }).mockResolvedValue({ ...readiness, next_refresh_at: null });
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
   show();
   const checkbox = await screen.findByRole('checkbox');
@@ -90,11 +121,19 @@ it('refreshes unchanged readiness without clearing physical-presence confirmatio
   await act(async () => {
     await vi.advanceTimersByTimeAsync(30_000);
   });
-  await waitFor(() => expect(workOrdersApi.executionReadiness).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect((checkbox as HTMLInputElement).checked).toBe(true));
+  expect(workOrdersApi.executionReadiness).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: 'Start production' }).hasAttribute('disabled')).toBe(
     false,
   );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30_000);
+  });
+  await waitFor(() => expect(workOrdersApi.executionReadiness).toHaveBeenCalledTimes(2));
+  expect((checkbox as HTMLInputElement).checked).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30_000);
+  });
+  expect(workOrdersApi.executionReadiness).toHaveBeenCalledTimes(2);
   expect(workOrdersApi.start).not.toHaveBeenCalled();
 });
 it('approves suggested timing and crew without starting automatically, then checks again', async () => {

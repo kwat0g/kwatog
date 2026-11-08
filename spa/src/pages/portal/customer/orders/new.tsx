@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuCheck, LuPackage, LuPlus, LuX, LuSend, LuSearch } from '@/lib/icons';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -15,7 +15,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { fromCentavos, toCentavos } from '@/lib/money';
-import type { PortalCatalogItem } from '@/types/b2b';
+import type { CustomerPortalUser, PortalCatalogItem } from '@/types/b2b';
 import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
 
 interface OrderLine {
@@ -32,6 +32,7 @@ const PAYMENT_METHODS = [
 export default function CustomerPlaceOrderPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const portalSession = useOutletContext<CustomerPortalUser>();
   const queryClient = useQueryClient();
   const initializedOrderRef = useRef<string | null>(null);
   const { data: existingOrder, isLoading: orderLoading, isError: orderError } = useQuery({
@@ -65,9 +66,8 @@ export default function CustomerPlaceOrderPage() {
   }, [catalogOpen]);
 
   const { data: catalog, isLoading, isFetching, isError, refetch } = useQuery({
-    queryKey: ['portal', 'customer', 'catalog', debouncedSearch, deliveryDate],
+    queryKey: ['portal', 'customer', 'catalog', portalSession.id, portalSession.customer_id, debouncedSearch, deliveryDate],
     queryFn: ({ signal }) => customerPortalApi.listCatalog({ search: debouncedSearch || undefined, as_of: deliveryDate || undefined }, signal),
-    placeholderData: (prev) => prev,
   });
 
   const { data: policies, isError: policyError, refetch: refetchPolicies } = useQuery({
@@ -106,21 +106,19 @@ export default function CustomerPlaceOrderPage() {
   });
   const debouncedQuotePayload = useDebounce(quotePayload, 300);
   const quoteQuery = useQuery({
-    queryKey: ['portal', 'customer', 'order-quote', debouncedQuotePayload],
+    queryKey: ['portal', 'customer', 'order-quote', portalSession.id, portalSession.customer_id, debouncedQuotePayload],
     queryFn: () => customerPortalApi.quoteOrder(JSON.parse(debouncedQuotePayload)),
     enabled: lines.length > 0 && !deliveryError && invalidLines.length === 0 && debouncedQuotePayload === quotePayload,
     retry: false,
   });
   const quote = debouncedQuotePayload === quotePayload && !quoteQuery.isFetching && !quoteQuery.isError ? quoteQuery.data : undefined;
   const quotedLine = (line: OrderLine) => quote?.items.find((item) => item.product_id === line.product.id);
-  const lineTotalCentavos = (line: OrderLine) => quotedLine(line) ? toCentavos(quotedLine(line)!.total)
-    : Math.round(toCentavos(line.product.unit_price) * (Number(line.quantity) || 0));
-  const subtotalCentavos = quote ? toCentavos(quote.subtotal) : lines.reduce((sum, line) => sum + lineTotalCentavos(line), 0);
-  const vatCentavos = quote ? toCentavos(quote.vat_amount) : taxReady ? vatRegistered ? Math.round(subtotalCentavos * rate!) : 0 : null;
+  const subtotalCentavos = quote ? toCentavos(quote.subtotal) : null;
+  const vatCentavos = quote ? toCentavos(quote.vat_amount) : null;
   const appliedVat = quote ? toCentavos(quote.vat_amount) > 0 : vatRegistered;
-  const appliedVatRate = quote && subtotalCentavos > 0 ? toCentavos(quote.vat_amount) / subtotalCentavos : rate ?? 0;
-  const orderSubtotal = fromCentavos(subtotalCentavos);
-  const orderTotal = quote ? quote.total_amount : vatCentavos != null ? fromCentavos(subtotalCentavos + vatCentavos) : null;
+  const appliedVatRate = quote && subtotalCentavos != null && subtotalCentavos > 0 ? toCentavos(quote.vat_amount) / subtotalCentavos : rate ?? 0;
+  const orderSubtotal = subtotalCentavos != null ? fromCentavos(subtotalCentavos) : null;
+  const orderTotal = quote ? quote.total_amount : null;
   const quoteError = quoteQuery.error as Error & { response?: { data?: { message?: string; errors?: Record<string, string[]> } } } | null;
   const pricingError = quoteQuery.isError && debouncedQuotePayload === quotePayload
     ? Object.values(quoteError?.response?.data?.errors ?? {}).flat().join(' ') || quoteError?.response?.data?.message || 'Unable to check prices. Try again.' : null;
@@ -310,8 +308,8 @@ export default function CustomerPlaceOrderPage() {
                             error={!(Number.isSafeInteger(Number(line.quantity)) && Number(line.quantity) >= 1) ? 'Enter a whole number of at least 1.' : undefined}
                             onChange={(e) => updateQuantity(idx, e.target.value)} />
                         </Td>
-                        <Td align="right" mono className="whitespace-nowrap text-muted">{formatPeso(quotedLine(line)?.unit_price ?? line.product.unit_price)}<p className="mt-1 font-sans text-xs">{(quotedLine(line)?.price_source ?? line.product.price_source) === 'agreement' ? 'Agreed price' : (quotedLine(line)?.price_source ?? line.product.price_source) === 'base' ? 'Standard price' : id ? 'Recorded price' : 'Standard price'}</p></Td>
-                        <Td align="right" mono className="whitespace-nowrap font-medium">{formatPeso(fromCentavos(lineTotalCentavos(line)))}</Td>
+                        <Td align="right" mono className="whitespace-nowrap text-muted">{quotedLine(line) ? formatPeso(quotedLine(line)!.unit_price) : pricingError ? 'Unavailable' : 'Pending'}<p className="mt-1 font-sans text-xs">{quotedLine(line)?.price_source === 'agreement' ? 'Agreed price' : quotedLine(line)?.price_source === 'base' ? 'Standard price' : quote ? 'Price unavailable' : pricingError ? 'Price check failed' : 'Checking price…'}</p></Td>
+                        <Td align="right" mono className="whitespace-nowrap font-medium">{quotedLine(line) ? formatPeso(quotedLine(line)!.total) : pricingError ? 'Unavailable' : 'Pending'}</Td>
                         <Td>
                           <Button type="button" variant="ghost" iconOnly className="min-h-11 min-w-11"
                             icon={<LuX size={18} />} aria-label={`Remove ${line.product.name}`} onClick={() => removeLine(idx)} />
@@ -326,7 +324,7 @@ export default function CustomerPlaceOrderPage() {
             <aside aria-labelledby="order-review-heading" className="min-w-0 rounded-lg border border-default bg-surface p-4 sm:p-5 xl:sticky xl:top-16">
               <h2 id="order-review-heading" className="text-base font-semibold">Order summary</h2>
               <dl className="mt-5 space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-3"><dt className="text-muted">Subtotal</dt><dd data-testid="order-subtotal" className="font-mono tabular-nums">{formatPeso(orderSubtotal)}</dd></div>
+                <div className="flex items-center justify-between gap-3"><dt className="text-muted">Subtotal</dt><dd data-testid="order-subtotal" className="font-mono tabular-nums">{orderSubtotal != null ? formatPeso(orderSubtotal) : pricingError ? 'Unavailable' : 'Pending'}</dd></div>
                 <div className="flex items-center justify-between gap-3"><dt className="text-muted">{taxReady && appliedVat ? `VAT (${Number((appliedVatRate * 100).toFixed(4))}%)` : 'VAT'}</dt>
                   <dd data-testid="order-vat" className="font-mono tabular-nums">{vatCentavos != null ? formatPeso(fromCentavos(vatCentavos)) : 'Pending'}</dd></div>
                 <div className="border-t border-default pt-4">

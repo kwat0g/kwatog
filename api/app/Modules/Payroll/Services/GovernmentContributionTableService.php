@@ -5,16 +5,25 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\CacheGeneration;
+use App\Common\Support\FailOpenCache;
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Models\GovernmentContributionTable;
+use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class GovernmentContributionTableService
 {
     private const CACHE_TTL = 300; // 5 minutes
+
+    private const CACHE_VERSION_TTL = 604800;
+
+    private const CACHE_FORMAT_VERSION = 2;
 
     /**
      * Active brackets for an agency, ordered by bracket_min asc.
@@ -26,10 +35,10 @@ class GovernmentContributionTableService
     public function activeBrackets(string|ContributionAgency $agency): Collection
     {
         $key = $agency instanceof ContributionAgency ? $agency->value : $agency;
+        $version = $this->cacheVersion($key);
 
-        return Cache::remember(
-            "gov_table:{$key}:active",
-            self::CACHE_TTL,
+        return $this->rememberBrackets(
+            "gov_table:{$key}:rows-v".self::CACHE_FORMAT_VERSION.":v{$version}:active",
             fn () => GovernmentContributionTable::query()
                 ->agency($key)
                 ->active()
@@ -49,12 +58,11 @@ class GovernmentContributionTableService
     public function bracketsEffectiveOn(string|ContributionAgency $agency, Carbon|string $date): Collection
     {
         $key = $agency instanceof ContributionAgency ? $agency->value : $agency;
-        $on  = $date instanceof Carbon ? $date->toDateString() : (string) $date;
-        $ver = (int) Cache::get("gov_table:{$key}:ver", 1);
+        $on = $date instanceof Carbon ? $date->toDateString() : (string) $date;
+        $ver = $this->cacheVersion($key);
 
-        return Cache::remember(
-            "gov_table:{$key}:v{$ver}:eff:{$on}",
-            self::CACHE_TTL,
+        return $this->rememberBrackets(
+            "gov_table:{$key}:rows-v".self::CACHE_FORMAT_VERSION.":v{$ver}:eff:{$on}",
             function () use ($key, $on) {
                 $effective = GovernmentContributionTable::query()
                     ->agency($key)
@@ -101,7 +109,8 @@ class GovernmentContributionTableService
                 $this->assertNoOverlap($locked);
             }
             $locked->save();
-            DB::afterCommit(fn () => $this->bust($locked->agency));
+            $this->stageChange($locked->agency, 'updated', $locked->updated_at?->format('Y-m-d\TH:i:s.uP'));
+
             return $locked->fresh();
         });
     }
@@ -112,7 +121,8 @@ class GovernmentContributionTableService
             $locked = GovernmentContributionTable::query()->lockForUpdate()->findOrFail($row->id);
             $locked->is_active = false;
             $locked->save();
-            DB::afterCommit(fn () => $this->bust($locked->agency));
+            $this->stageChange($locked->agency, 'status_changed', $locked->updated_at?->format('Y-m-d\TH:i:s.uP'));
+
             return $locked->fresh();
         });
     }
@@ -124,7 +134,8 @@ class GovernmentContributionTableService
             $locked->is_active = true;
             $this->assertNoOverlap($locked);
             $locked->save();
-            DB::afterCommit(fn () => $this->bust($locked->agency));
+            $this->stageChange($locked->agency, 'status_changed', $locked->updated_at?->format('Y-m-d\TH:i:s.uP'));
+
             return $locked->fresh();
         });
     }
@@ -135,7 +146,7 @@ class GovernmentContributionTableService
             $locked = GovernmentContributionTable::query()->lockForUpdate()->findOrFail($row->id);
             $agency = $locked->agency;
             $locked->delete();
-            DB::afterCommit(fn () => $this->bust($agency));
+            $this->stageChange($agency, 'deleted', now()->format('Y-m-d\TH:i:s.uP'));
         });
     }
 
@@ -146,10 +157,21 @@ class GovernmentContributionTableService
                 ->lockForUpdate()
                 ->findOrFail($row->id);
             $locked->restore();
-            DB::afterCommit(fn () => $this->bust($locked->agency));
+            $this->stageChange($locked->agency, 'updated', $locked->updated_at?->format('Y-m-d\TH:i:s.uP'));
 
             return $locked->fresh();
         });
+    }
+
+    /** Rotate all statutory table generations after replacing the source database. */
+    public function invalidateForDatabaseRestore(): bool
+    {
+        $rotated = true;
+        foreach (ContributionAgency::values() as $agency) {
+            $rotated = $this->bust($agency) && $rotated;
+        }
+
+        return $rotated;
     }
 
     private function assertNoOverlap(GovernmentContributionTable $candidate): void
@@ -185,11 +207,74 @@ class GovernmentContributionTableService
         }
     }
 
-    private function bust(ContributionAgency|string|null $agency): void
+    private function bust(ContributionAgency|string|null $agency): bool
     {
-        if (! $agency) return;
+        if (! $agency) {
+            return true;
+        }
         $key = $agency instanceof ContributionAgency ? $agency->value : (string) $agency;
-        Cache::forget("gov_table:{$key}:active");
-        Cache::put("gov_table:{$key}:ver", ((int) Cache::get("gov_table:{$key}:ver", 1)) + 1, 86400);
+        $rotated = CacheGeneration::rotateDefault(
+            "gov_table:{$key}:ver",
+            self::CACHE_VERSION_TTL,
+            'payroll.government_tables.'.$key,
+        );
+
+        try {
+            Cache::forget("gov_table:{$key}:active");
+        } catch (Throwable $exception) {
+            // The generation is already rotated; this removes only a legacy key.
+            Log::warning('Government contribution legacy cache cleanup failed after commit.', [
+                'agency' => $key,
+                'exception' => $exception::class,
+            ]);
+        }
+
+        return $rotated;
+    }
+
+    private function stageChange(ContributionAgency|string $agency, string $action, ?string $version): void
+    {
+        // Cache generation rotates first after commit so an event-driven
+        // refetch cannot repopulate/read the prior statutory bracket set.
+        DB::afterCommit(fn () => $this->bust($agency));
+        app(GovernmentTableRealtimeService::class)->stage($action, $version);
+    }
+
+    /**
+     * Cache only database attribute arrays; callers still receive hydrated
+     * models, preserving the service contract without serializing Eloquent
+     * state, relations, or connection metadata into Redis.
+     *
+     * @param  Closure(): Collection<int, GovernmentContributionTable>  $load
+     * @return Collection<int, GovernmentContributionTable>
+     */
+    private function rememberBrackets(string $key, Closure $load): Collection
+    {
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = FailOpenCache::remember(
+            Cache::store(),
+            $key,
+            self::CACHE_TTL,
+            static fn (): array => $load()
+                ->map(static fn (GovernmentContributionTable $row): array => $row->getAttributes())
+                ->all(),
+            'payroll.government_contribution_tables',
+        );
+
+        return collect($rows)->map(static function (array $attributes): GovernmentContributionTable {
+            $row = new GovernmentContributionTable;
+            $row->setRawAttributes($attributes, true);
+            $row->exists = true;
+
+            return $row;
+        });
+    }
+
+    private function cacheVersion(string $agency): string
+    {
+        $key = "gov_table:{$agency}:ver";
+
+        return CacheGeneration::currentDefault(
+            $key, self::CACHE_VERSION_TTL, 'payroll.government_tables');
     }
 }

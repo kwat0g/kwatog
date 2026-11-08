@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -13,7 +14,9 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\OpenSupplyService;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use App\Modules\Quality\Services\InspectionSpecService;
 use Carbon\Carbon;
@@ -34,13 +37,19 @@ final class StockProductionPlanningService
         if (! $bom) {
             $blockers[] = 'Configure an active BOM before planning stock production.';
         } else {
-            try { $boms->assertComponentIntegrity($bom); }
-            catch (BusinessRuleException $error) { $blockers[] = $error->getMessage(); }
+            try {
+                $boms->assertComponentIntegrity($bom);
+            } catch (BusinessRuleException $error) {
+                $blockers[] = $error->getMessage();
+            }
         }
         try {
             $product->loadMissing('inspectionSpec.items', 'inspectionSpec.currentRevision');
             app(InspectionSpecService::class)->assertInspectable($product->inspectionSpec);
-        } catch (BusinessRuleException $error) { $blockers[] = $error->getMessage(); }
+        } catch (BusinessRuleException $error) {
+            $blockers[] = $error->getMessage();
+        }
+
         return ['eligible' => $blockers === [], 'blockers' => $blockers];
     }
 
@@ -76,7 +85,9 @@ final class StockProductionPlanningService
             }
             $product = Product::query()->lockForUpdate()->findOrFail($data['product_id']);
             $readiness = $this->productReadiness($product);
-            if (! $readiness['eligible']) throw new BusinessRuleException(implode(' ', $readiness['blockers']));
+            if (! $readiness['eligible']) {
+                throw new BusinessRuleException(implode(' ', $readiness['blockers']));
+            }
             $boms = app(BomService::class);
             $boms->assertComponentIntegrity($boms->ensureFreshForPlanning($boms->activeForProduct($product->id)));
             $root = app(WorkOrderService::class)->createDraft(array_replace($data, [
@@ -113,7 +124,7 @@ final class StockProductionPlanningService
             $shortages = [];
             foreach ($plan['materials'] as $row) {
                 $item = Item::findOrFail($row['item_id']);
-                $supply = app(\App\Modules\Purchasing\Services\OpenSupplyService::class)->stockPlanningSupply($item->id, $root->id);
+                $supply = app(OpenSupplyService::class)->stockPlanningSupply($item->id, $root->id);
                 $free = $supply['available_to_root'];
                 $needed = bcsub($row['gross_quantity'], bccomp($free, '0', 3) < 0 ? '0.000' : $free, 3);
                 if (bccomp($needed, '0', 3) > 0) {
@@ -125,6 +136,7 @@ final class StockProductionPlanningService
                 }
             }
             $request = PurchaseRequest::where('stock_production_work_order_id', $root->id)->where('status', '!=', 'cancelled')->lockForUpdate()->first();
+            $requestWasCreated = false;
             if ($shortages !== [] && ! $request) {
                 $request = PurchaseRequest::create([
                     'pr_number' => app(DocumentSequenceService::class)->generate('pr'),
@@ -134,6 +146,7 @@ final class StockProductionPlanningService
                     'is_auto_generated' => true, 'stock_production_work_order_id' => $root->id,
                 ]);
                 $request->forceFill(['status' => 'draft'])->save();
+                $requestWasCreated = true;
             }
             if ($request && ($request->status?->value ?? 'draft') === 'draft' && ! $request->purchaseOrders()->exists() && ! $request->rfqs()->exists()) {
                 if ($shortages === []) {
@@ -154,6 +167,15 @@ final class StockProductionPlanningService
             if ($shortages !== [] && $request && ($request->status->value !== 'draft' || $request->purchaseOrders()->exists() || $request->rfqs()->exists())) {
                 throw new BusinessRuleException("Procurement must review additional material requirements against {$request->pr_number} before replanning.");
             }
+            if ($request && $shortages !== []) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $request->fresh(),
+                    PurchaseRequestStatus::Draft->value,
+                    $actor,
+                    action: $requestWasCreated ? 'created' : 'updated',
+                );
+            }
+
             return ['material_shortages' => count($shortages)];
         }, 3);
     }

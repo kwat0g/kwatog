@@ -14,9 +14,8 @@ class EmployeeDocument extends Model
 {
     use HasFactory, HasHashId, SoftDeletes;
 
-    public $timestamps = false;
     protected $fillable = ['employee_id', 'document_type', 'file_name', 'file_path', 'uploaded_at', 'created_at'];
-    protected $casts = ['uploaded_at' => 'datetime', 'created_at' => 'datetime'];
+    protected $casts = ['uploaded_at' => 'datetime', 'created_at' => 'datetime', 'updated_at' => 'datetime'];
 
     public function employee(): BelongsTo
     {

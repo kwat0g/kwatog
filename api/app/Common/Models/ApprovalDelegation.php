@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * OGAMI-013 — Approval delegation.
@@ -248,6 +249,81 @@ class ApprovalDelegation extends Model
 
             return false;
         }));
+    }
+
+    /**
+     * Return the next known time this user's effective permissions may change
+     * without a write event: an expiring override or delegation date boundary.
+     */
+    public static function nextAccessScopeRefreshAt(User $user): ?Carbon
+    {
+        $now = now();
+        $today = $now->toDateString();
+        $boundaries = [];
+
+        $ownOverrideExpiry = DB::table('user_permission_overrides')
+            ->where('user_id', $user->getKey())
+            ->whereNull('deleted_at')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '>', $now)
+            ->min('expires_at');
+        if ($ownOverrideExpiry !== null) {
+            $boundaries[] = Carbon::parse($ownOverrideExpiry, config('app.timezone'));
+        }
+
+        $delegations = static::query()
+            ->where('is_active', true)
+            ->where('delegate_user_id', $user->getKey())
+            ->whereDate('ends_at', '>=', $today)
+            ->get(['delegator_user_id', 'starts_at', 'ends_at']);
+
+        $activeDelegatorIds = [];
+        foreach ($delegations as $delegation) {
+            $startsAt = $delegation->starts_at->copy()->startOfDay();
+            if ($startsAt->greaterThan($now)) {
+                $boundaries[] = $startsAt;
+            }
+
+            $endsAt = $delegation->ends_at->copy()->addDay()->startOfDay();
+            if ($endsAt->greaterThan($now)) {
+                $boundaries[] = $endsAt;
+            }
+
+            if (
+                $delegation->starts_at->toDateString() <= $today
+                && $delegation->ends_at->toDateString() >= $today
+            ) {
+                $activeDelegatorIds[] = (int) $delegation->delegator_user_id;
+            }
+        }
+
+        if ($activeDelegatorIds !== []) {
+            $delegatedOverrideExpiry = DB::table('user_permission_overrides as override')
+                ->join('permissions', 'permissions.id', '=', 'override.permission_id')
+                ->whereIn('override.user_id', array_values(array_unique($activeDelegatorIds)))
+                ->whereIn('permissions.slug', self::CUSTOM_APPROVAL_PERMISSIONS)
+                ->whereNull('override.deleted_at')
+                ->whereNotNull('override.expires_at')
+                ->where('override.expires_at', '>', $now)
+                ->min('override.expires_at');
+            if ($delegatedOverrideExpiry !== null) {
+                $boundaries[] = Carbon::parse($delegatedOverrideExpiry, config('app.timezone'));
+            }
+        }
+
+        if ($boundaries === []) {
+            return null;
+        }
+
+        usort($boundaries, static function (Carbon $left, Carbon $right): int {
+            if ($left->lessThan($right)) {
+                return -1;
+            }
+
+            return $left->greaterThan($right) ? 1 : 0;
+        });
+
+        return $boundaries[0];
     }
 
     private static function mayReadCustomApproval(User $delegate, string $permission): bool

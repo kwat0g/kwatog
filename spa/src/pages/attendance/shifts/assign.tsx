@@ -16,6 +16,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import { localIsoDate } from '@/lib/formatDate';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -29,6 +31,9 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function BulkAssignShiftPage() {
+  const { can } = usePermission();
+  useRealtimeList('shift', can('attendance.shifts.manage') ? 'visible' : undefined);
+  useRealtimeList('employee_shift_assignment', can('attendance.shifts.manage') ? 'visible' : undefined);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [assignmentPage, setAssignmentPage] = useState(1);

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { LuLayers, LuPencil, LuPlus, LuX } from '@/lib/icons';
@@ -22,6 +23,9 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useSupplierListingRealtime } from '@/hooks/useRealtimeRecord';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import type { SupplierPortalUser } from '@/types/b2b';
 
 type ListingFilters = { page: number; per_page: number };
 
@@ -73,6 +77,9 @@ const statusLabel: Record<PortalListingStatus, string> = {
 };
 
 export default function SupplierItemListingsPage() {
+  const portalUser = useOutletContext<SupplierPortalUser>();
+  const vendorHashId = portalUser.vendor?.id;
+  useSupplierListingRealtime(vendorHashId);
   const queryClient = useQueryClient();
   const [filters, setFilters] = useUrlFilters<ListingFilters>({ page: 1, per_page: 25 });
   const [showForm, setShowForm] = useState(false);
@@ -85,21 +92,25 @@ export default function SupplierItemListingsPage() {
   const [bulkPage, setBulkPage] = useState(1);
   const [bulkFailures, setBulkFailures] = useState<PortalBulkListingFailure[]>([]);
 
+  const listingQueryKey = ['portal', 'supplier', 'item-listings', vendorHashId, filters] as const;
   const listings = useQuery({
-    queryKey: ['portal', 'supplier', 'item-listings', filters],
+    queryKey: listingQueryKey,
     queryFn: () => supplierPortalApi.listItemListings(filters),
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listingQueryKey, 4) ? previous : undefined,
   });
   const catalog = useQuery({
     queryKey: ['portal', 'supplier', 'item-catalog', 'picker'],
     queryFn: () => supplierPortalApi.itemCatalog({ per_page: 100 }),
     enabled: showForm,
   });
+  const bulkCatalogQueryKey = ['portal', 'supplier', 'item-catalog', 'bulk', { search: bulkSearch, page: bulkPage }] as const;
   const bulkCatalog = useQuery({
-    queryKey: ['portal', 'supplier', 'item-catalog', 'bulk', { search: bulkSearch, page: bulkPage }],
+    queryKey: bulkCatalogQueryKey,
     queryFn: () => supplierPortalApi.itemCatalog({ search: bulkSearch || undefined, page: bulkPage, per_page: 25 }),
     enabled: showBulk,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, bulkCatalogQueryKey, 4) ? previous : undefined,
   });
 
   const selected = catalog.data?.data.find((item) => item.id === form.item_id);

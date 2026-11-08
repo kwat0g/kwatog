@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Button } from '@/components/ui/Button';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -11,7 +12,7 @@ import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { cn } from '@/lib/cn';
-import type { VendorStatementOfAccount } from '@/types/b2b';
+import type { SupplierPortalUser, VendorStatementOfAccount } from '@/types/b2b';
 
 const bucketColors: Record<string, string> = {
   current: 'text-success-fg',
@@ -25,8 +26,9 @@ type OpenBill = VendorStatementOfAccount['open_bills'][number];
 type OpenInvoice = OpenBill & { supplier_invoice_number?: string | null };
 
 export default function SupplierStatementOfAccountPage() {
+  const portalUser = useOutletContext<SupplierPortalUser | undefined>();
   const { data: soa, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'supplier', 'statement-of-account'],
+    queryKey: ['portal', 'supplier', 'statement-of-account', portalUser?.vendor?.id],
     queryFn: () => supplierPortalApi.statementOfAccount(),
   });
 

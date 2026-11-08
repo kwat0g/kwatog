@@ -4,14 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Landing;
 
+use App\Common\Enums\PermissionOverrideType;
+use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\SettingsService;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
-use App\Modules\Landing\Models\ContactInquiry;
+use App\Modules\Landing\Events\ContactInquiryChanged;
 use App\Modules\Landing\Mail\ContactInquiryReceivedMail;
+use App\Modules\Landing\Models\ContactInquiry;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
@@ -171,6 +178,68 @@ class ContactInquiryTest extends TestCase
         $this->assertSame($inquiry->hash_id, $response->json('data.0.id'));
     }
 
+    public function test_inquiry_resource_projects_current_actions_version_and_viewer_permission(): void
+    {
+        $inquiry = ContactInquiry::factory()->create(['status' => ContactInquiryStatus::New]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->getJson("/api/v1/crm/inquiries/{$inquiry->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.version', $inquiry->fresh()->updated_at?->toISOString())
+            ->assertJsonPath('data.permissions.manage', true)
+            ->assertJsonPath('data.available_actions.mark_in_progress', true)
+            ->assertJsonPath('data.available_actions.close', true);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/status", ['status' => 'closed'])
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.mark_in_progress', false)
+            ->assertJsonPath('data.available_actions.close', false);
+
+        $viewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        UserPermissionOverride::query()->create([
+            'user_id' => $viewer->id,
+            'permission_id' => Permission::query()->where('slug', 'crm.inquiries.view')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $admin->id,
+            'reason' => 'Read-only inquiry action projection coverage.',
+        ]);
+        $viewer->flushPermissionsCache();
+
+        $this->actingAs($viewer)
+            ->getJson("/api/v1/crm/inquiries/{$inquiry->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.permissions.manage', false)
+            ->assertJsonPath('data.available_actions.mark_in_progress', false)
+            ->assertJsonPath('data.available_actions.close', false);
+    }
+
+    public function test_stale_expected_status_returns_typed_conflict(): void
+    {
+        $inquiry = ContactInquiry::factory()->create(['status' => ContactInquiryStatus::New]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/status", [
+                'status' => 'closed',
+                'expected_status' => 'new',
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/status", [
+                'status' => 'in_progress',
+                'expected_status' => 'new',
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'contact_inquiry_state_conflict');
+
+        $this->assertSame(ContactInquiryStatus::Closed, $inquiry->fresh()->status);
+    }
+
     public function test_inbox_clamps_non_positive_page_sizes(): void
     {
         ContactInquiry::factory()->count(2)->create();
@@ -244,5 +313,55 @@ class ContactInquiryTest extends TestCase
             ->assertUnprocessable();
 
         $this->assertSame(ContactInquiryStatus::Closed, $inquiry->fresh()->status);
+    }
+
+    public function test_retention_command_coalesces_expired_inquiry_deletions_into_a_refresh_signal(): void
+    {
+        $expiredAt = now()->subMonths(3);
+        $expiredClosed = ContactInquiry::factory()->create([
+            'status' => ContactInquiryStatus::Closed,
+            'created_at' => $expiredAt,
+            'updated_at' => $expiredAt,
+        ]);
+        $expiredSoftDeleted = ContactInquiry::factory()->create([
+            'status' => ContactInquiryStatus::New,
+            'created_at' => $expiredAt,
+            'updated_at' => $expiredAt,
+        ]);
+        $expiredSoftDeleted->forceFill(['deleted_at' => $expiredAt])->saveQuietly();
+        $oldOpen = ContactInquiry::factory()->create([
+            'status' => ContactInquiryStatus::New,
+            'created_at' => $expiredAt,
+            'updated_at' => $expiredAt,
+        ]);
+        $recentClosed = ContactInquiry::factory()->create([
+            'status' => ContactInquiryStatus::Closed,
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ]);
+
+        self::assertSame(0, Artisan::call('landing:prune-pii', ['--months' => 1]));
+
+        $this->assertDatabaseMissing('contact_inquiries', ['id' => $expiredClosed->id]);
+        $this->assertDatabaseMissing('contact_inquiries', ['id' => $expiredSoftDeleted->id]);
+        $this->assertDatabaseHas('contact_inquiries', ['id' => $oldOpen->id]);
+        $this->assertDatabaseHas('contact_inquiries', ['id' => $recentClosed->id]);
+
+        $messages = DB::table('event_outbox')
+            ->where('event_type', ContactInquiryChanged::class)
+            ->where('payload', 'like', '%"action":"deleted"%')
+            ->get();
+        $this->assertCount(1, $messages, 'Multiple expired records in one run share one inbox refresh signal.');
+
+        $storedPayload = json_decode((string) $messages->first()->payload, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('deleted', $storedPayload['action']);
+        $this->assertNull($storedPayload['entityHashId']);
+        $payload = app(OutboxEventCodec::class)
+            ->decode(ContactInquiryChanged::class, $storedPayload)
+            ->broadcastWith();
+        $this->assertSame('contact_inquiry', $payload['entity_type']);
+        $this->assertNull($payload['entity_id'], 'A bulk-delete signal must not claim one deleted record.');
+        $this->assertArrayNotHasKey('email', $payload);
+        $this->assertArrayNotHasKey('message', $payload);
     }
 }

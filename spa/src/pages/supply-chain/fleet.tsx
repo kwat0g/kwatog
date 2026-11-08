@@ -1,5 +1,5 @@
 /** Sprint 7 — Task 67 — Fleet vehicle registry and lifecycle controls. */
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -17,8 +17,12 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { usePermission } from '@/hooks/usePermission';
+import type { PaginatedResponse } from '@/types';
 import type { Vehicle } from '@/types/supplyChain';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList, useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const STATUS_CHIP: Record<string, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  available: 'success',
@@ -56,20 +60,31 @@ export default function FleetPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('supply_chain.fleet.manage');
+ const canViewFleet = can('supply_chain.view');
+ useRealtimeList('vehicle', canViewFleet ? 'visible' : undefined);
  const [showArchived, setShowArchived] = useState(false);
  const [formOpen, setFormOpen] = useState(false);
  const [editing, setEditing] = useState<Vehicle | null>(null);
+ const [remoteVehicleChanged, setRemoteVehicleChanged] = useState(false);
  const [form, setForm] = useState<VehicleForm>(EMPTY_FORM);
- const [archiveId, setArchiveId] = useState<string | null>(null);
+ const [archiveVehicle, setArchiveVehicle] = useState<Vehicle | null>(null);
  const [filters, setFilters] = useUrlFilters<VehicleListParams>({ page: 1, per_page: 50 });
+ const markRemoteVehicleChange = useCallback(() => setRemoteVehicleChanged(true), []);
+ useRealtimeRecord('vehicle', canManage && canViewFleet ? editing?.id : undefined, [], markRemoteVehicleChange);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['supply-chain', 'vehicles', { ...filters, showArchived }],
+ useEffect(() => {
+  qc.removeQueries({ queryKey: ['supply-chain', 'vehicles', 'options'], exact: true });
+ }, [qc]);
+
+  const queryKey = ['supply-chain', 'vehicles', { ...filters, showArchived }] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => vehiclesApi.list({ ...filters, trashed: showArchived ? 'with' : undefined }),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
  const { data: vehicleOptions } = useQuery({
- queryKey: ['supply-chain', 'vehicles', 'options'],
+ queryKey: ['supply-chain', 'vehicle-options'],
  queryFn: () => vehiclesApi.options(),
  staleTime: 300_000,
  });
@@ -95,45 +110,74 @@ export default function FleetPage() {
    status: form.status,
    notes: form.notes.trim() || null,
   };
-  return editing ? vehiclesApi.update(editing.id, payload) : vehiclesApi.create(payload);
+  return editing
+   ? vehiclesApi.update(editing.id, { ...payload, expected_version: editing.version })
+   : vehiclesApi.create(payload);
  },
- onSuccess: () => {
+ onSuccess: (saved) => {
+  if (editing) {
+   const current = qc.getQueryData<PaginatedResponse<Vehicle>>(queryKey);
+   if (current) {
+    qc.setQueryData<PaginatedResponse<Vehicle>>(queryKey, {
+     ...current,
+     data: current.data.map((vehicle) => vehicle.id === saved.id ? saved : vehicle),
+    });
+   }
+  }
   toast.success(editing ? 'Vehicle updated.' : 'Vehicle created.');
   setFormOpen(false);
   setEditing(null);
   setForm(EMPTY_FORM);
-  qc.invalidateQueries({ queryKey: ['supply-chain', 'vehicles'] });
+  void invalidateRealtimeChange(qc, { entityType: 'vehicle', entityId: saved.id });
  },
- onError: (error) => toast.error(errorMessage(error, 'Could not save vehicle.')),
+ onError: (error) => {
+  if (isAxiosError(error) && error.response?.status === 409) {
+   setRemoteVehicleChanged(true);
+   if (editing) void invalidateRealtimeChange(qc, { entityType: 'vehicle', entityId: editing.id });
+  }
+  toast.error(errorMessage(error, 'Could not save vehicle.'));
+ },
  });
 
  const archive = useMutation({
- mutationFn: (id: string) => vehiclesApi.destroy(id),
- onSuccess: () => {
+ mutationFn: (vehicle: Vehicle) => vehiclesApi.destroy(vehicle.id, vehicle.version),
+ onSuccess: (_result, vehicle) => {
   toast.success('Vehicle archived.');
-  setArchiveId(null);
-  qc.invalidateQueries({ queryKey: ['supply-chain', 'vehicles'] });
+  setArchiveVehicle(null);
+  void invalidateRealtimeChange(qc, { entityType: 'vehicle', entityId: vehicle.id });
  },
- onError: (error) => toast.error(errorMessage(error, 'Could not archive vehicle.')),
+ onError: (error, vehicle) => {
+  if (isAxiosError(error) && error.response?.status === 409) {
+   void invalidateRealtimeChange(qc, { entityType: 'vehicle', entityId: vehicle.id });
+  }
+  toast.error(errorMessage(error, 'Could not archive vehicle.'));
+ },
  });
 
  const restore = useMutation({
- mutationFn: (id: string) => vehiclesApi.restore(id),
- onSuccess: () => {
+ mutationFn: (vehicle: Vehicle) => vehiclesApi.restore(vehicle.id, vehicle.version),
+ onSuccess: (_result, vehicle) => {
   toast.success('Vehicle restored.');
-  qc.invalidateQueries({ queryKey: ['supply-chain', 'vehicles'] });
+  void invalidateRealtimeChange(qc, { entityType: 'vehicle', entityId: vehicle.id });
  },
- onError: (error) => toast.error(errorMessage(error, 'Could not restore vehicle.')),
+ onError: (error, vehicle) => {
+  if (isAxiosError(error) && error.response?.status === 409) {
+   void invalidateRealtimeChange(qc, { entityType: 'vehicle', entityId: vehicle.id });
+  }
+  toast.error(errorMessage(error, 'Could not restore vehicle.'));
+ },
  });
 
  const openCreate = () => {
   setEditing(null);
+  setRemoteVehicleChanged(false);
   setForm(EMPTY_FORM);
   setFormOpen(true);
  };
 
  const openEdit = (vehicle: Vehicle) => {
   setEditing(vehicle);
+  setRemoteVehicleChanged(false);
   setForm({
    plate_number: vehicle.plate_number,
    name: vehicle.name,
@@ -143,6 +187,13 @@ export default function FleetPage() {
    notes: vehicle.notes ?? '',
   });
   setFormOpen(true);
+ };
+
+ const closeForm = () => {
+  if (save.isPending) return;
+  setFormOpen(false);
+  setEditing(null);
+  setRemoteVehicleChanged(false);
  };
 
  const toggleArchived = () => {
@@ -163,14 +214,19 @@ export default function FleetPage() {
   ...(canManage ? [{
    key: 'actions',
    header: 'Actions',
-   cell: (r: Vehicle) => r.deleted_at ? (
-    <Button size="sm" variant="secondary" onClick={(event) => { event.stopPropagation(); restore.mutate(r.id); }} loading={restore.isPending}>Restore</Button>
-   ) : (
-    <div className="flex items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
-     <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>Edit</Button>
-     <Button size="sm" variant="ghost" className="text-danger-fg" onClick={() => setArchiveId(r.id)}>Archive</Button>
-    </div>
-   ),
+   cell: (r: Vehicle) => {
+    const actions = r.available_actions ?? [];
+    if (actions.includes('restore')) {
+     return <Button size="sm" variant="secondary" onClick={(event) => { event.stopPropagation(); restore.mutate(r); }} loading={restore.isPending}>Restore</Button>;
+    }
+    if (!actions.includes('update') && !actions.includes('archive')) return null;
+    return (
+     <div className="flex items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+      {actions.includes('update') && <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>Edit</Button>}
+      {actions.includes('archive') && <Button size="sm" variant="ghost" className="text-danger-fg" onClick={() => setArchiveVehicle(r)}>Archive</Button>}
+     </div>
+    );
+   },
   } as Column<Vehicle>] : []),
  ];
 
@@ -201,8 +257,11 @@ export default function FleetPage() {
   {data && data.data.length === 0 && <EmptyState icon="truck" title={filters.status === 'maintenance' ? 'No vehicles in maintenance' : showArchived ? 'No archived vehicles' : 'No vehicles'} description={canManage ? 'Create a vehicle to make it available for delivery assignment.' : undefined} />}
   {data && data.data.length > 0 && <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((current) => ({ ...current, page }))} onPageSizeChange={changePageSize} /></div>}
 
-  <Modal isOpen={formOpen} onClose={() => { if (!save.isPending) setFormOpen(false); }} title={editing ? `Edit ${editing.name}` : 'New vehicle'}>
+  <Modal isOpen={formOpen} onClose={closeForm} title={editing ? `Edit ${editing.name}` : 'New vehicle'}>
    <div className="space-y-3">
+    {editing && remoteVehicleChanged && <div role="alert" className="rounded-md bg-warning-bg p-3 text-sm text-warning-fg">
+     This vehicle changed while you were editing it. Your form values are preserved. Close this form and reopen the refreshed row before saving again.
+    </div>}
     <Input label="Plate number" required value={form.plate_number} onChange={(event) => setForm((current) => ({ ...current, plate_number: event.target.value }))} maxLength={20} />
     <Input label="Name" required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} maxLength={100} />
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -223,16 +282,16 @@ export default function FleetPage() {
     </Select>
     <Textarea label="Notes" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} maxLength={500} rows={3} />
     <ModalFooter>
-     <Button variant="secondary" onClick={() => setFormOpen(false)} disabled={save.isPending}>Cancel</Button>
-     <Button variant="primary" onClick={() => save.mutate()} loading={save.isPending} disabled={!form.plate_number.trim() || !form.name.trim() || !form.vehicle_type}>Save vehicle</Button>
+     <Button variant="secondary" onClick={closeForm} disabled={save.isPending}>Cancel</Button>
+     <Button variant="primary" onClick={() => save.mutate()} loading={save.isPending} disabled={remoteVehicleChanged || !form.plate_number.trim() || !form.name.trim() || !form.vehicle_type}>Save vehicle</Button>
     </ModalFooter>
    </div>
   </Modal>
 
   <ConfirmDialog
-   isOpen={Boolean(archiveId)}
-   onClose={() => setArchiveId(null)}
-   onConfirm={() => { if (archiveId) archive.mutate(archiveId); }}
+   isOpen={Boolean(archiveVehicle)}
+   onClose={() => setArchiveVehicle(null)}
+   onConfirm={() => { if (archiveVehicle) archive.mutate(archiveVehicle); }}
    title="Archive this vehicle?"
    description="Vehicles with scheduled or active deliveries or linked assets cannot be archived. Disassociate the fixed asset first. Historical delivery records remain readable after a successful archive."
    confirmLabel="Archive vehicle"

@@ -26,8 +26,9 @@ class DispatchOutboxMessage implements ShouldQueue
 
     public function __construct(public readonly string $outboxId)
     {
-        // Lane: high — the cross-module realtime bus. Never behind bulk jobs.
-        $this->onQueue('high');
+        // Lane: high — outbox fan-out uses the low-latency realtime Redis
+        // connection but keeps its own queue, separate from BroadcastEvent.
+        $this->onConnection('redis_broadcasts')->onQueue('high');
     }
 
     public function handle(OutboxDispatcher $dispatcher): void

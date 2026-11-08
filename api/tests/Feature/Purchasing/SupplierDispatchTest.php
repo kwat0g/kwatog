@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
@@ -26,6 +27,7 @@ use App\Modules\Purchasing\Services\SupplierDispatchService;
 use App\Modules\Purchasing\Support\SupplierDispatchResult;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\SendQueuedMailable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -63,6 +65,7 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame(1, SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->count());
         $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
         $this->assertNotNull($po->fresh()->sent_to_supplier_at);
+        $this->assertPurchaseOrderRefreshWasStaged($po, 2, 1);
         $this->assertSame($po->id, app(SupplierPortalService::class)->purchaseOrders($vendor->id, [])->first()?->id);
     }
 
@@ -89,7 +92,7 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
         $this->assertSame(SupplierDispatchStatus::Confirmed, $dispatch?->status);
         $this->assertGreaterThan(1, $transactionLevel);
-        Queue::assertPushed(\Illuminate\Mail\SendQueuedMailable::class, 1);
+        Queue::assertPushed(SendQueuedMailable::class, 1);
     }
 
     public function test_missing_portal_user_creates_an_actionable_manual_dispatch(): void
@@ -105,6 +108,7 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame('send_pdf_and_confirm', $dispatch->metadata['next_action']);
         $this->assertSame(PurchaseOrderStatus::Approved, $po->fresh()->status);
         $this->assertNull($po->fresh()->sent_to_supplier_at);
+        $this->assertPurchaseOrderRefreshWasStaged($po, 2);
     }
 
     public function test_missing_supplier_portal_recipient_creates_a_purchasing_in_app_alert(): void
@@ -252,6 +256,7 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
         $this->assertSame(1, $dispatch?->attempts);
         $this->assertSame(0, $calls);
+        $this->assertPurchaseOrderRefreshWasStaged($po, 1, 1);
     }
 
     public function test_provider_failure_is_persisted_and_a_later_retry_can_recover(): void
@@ -283,6 +288,7 @@ class SupplierDispatchTest extends TestCase
 
         $failed = SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->firstOrFail();
         $this->assertSame(SupplierDispatchStatus::Failed, $failed->status);
+        $this->assertPurchaseOrderRefreshWasStaged($po, 2);
 
         $recovered = app(SupplierDispatchService::class)->prepareForApproved($po->fresh());
         $this->assertNotNull($recovered);
@@ -340,6 +346,80 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
     }
 
+    public function test_claim_stages_a_refresh_before_calling_the_supplier_gateway(): void
+    {
+        $po = $this->approvedPo();
+        $refreshesAtPublish = 0;
+
+        app()->instance(SupplierDispatchGateway::class, new class($refreshesAtPublish, (string) $po->hash_id) implements SupplierDispatchGateway
+        {
+            public function __construct(private int &$refreshesAtPublish, private string $purchaseOrderHashId) {}
+
+            public function publish(PurchaseOrder $purchaseOrder, string $idempotencyKey): SupplierDispatchResult
+            {
+                $this->refreshesAtPublish = DB::table('event_outbox')
+                    ->where('event_type', ChainStepAdvanced::class)
+                    ->get()
+                    ->filter(function ($row): bool {
+                        $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                        return ($payload['entityType'] ?? null) === 'purchase_order'
+                            && ($payload['entityHashId'] ?? null) === $this->purchaseOrderHashId;
+                    })
+                    ->count();
+
+                return SupplierDispatchResult::manualRequired('No active supplier portal user.');
+            }
+        });
+
+        app(SupplierDispatchService::class)->prepareForApproved($po);
+
+        $this->assertSame(1, $refreshesAtPublish);
+        $this->assertPurchaseOrderRefreshWasStaged($po, 2);
+    }
+
+    public function test_recovery_of_an_already_sent_po_refreshes_new_confirmation_state(): void
+    {
+        $po = $this->approvedPo();
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        SupplierOrderDispatch::create([
+            'purchase_order_id' => $po->id,
+            'idempotency_key' => "purchase-order:{$po->id}:approved:v1",
+            'status' => SupplierDispatchStatus::Pending,
+            'attempts' => 1,
+        ]);
+
+        $result = app(SupplierDispatchService::class)->recoverStale();
+
+        $this->assertSame(1, $result['confirmed']);
+        $this->assertSame(
+            SupplierDispatchStatus::Confirmed,
+            SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->firstOrFail()->status,
+        );
+        $this->assertPurchaseOrderRefreshWasStaged($po);
+    }
+
+    public function test_recovery_of_cancelled_po_refreshes_dispatch_closure(): void
+    {
+        $po = $this->approvedPo();
+        $po->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
+        SupplierOrderDispatch::create([
+            'purchase_order_id' => $po->id,
+            'idempotency_key' => "purchase-order:{$po->id}:approved:v1",
+            'status' => SupplierDispatchStatus::Pending,
+            'attempts' => 1,
+        ]);
+
+        $result = app(SupplierDispatchService::class)->recoverStale();
+
+        $this->assertSame(1, $result['cancelled']);
+        $this->assertSame(
+            SupplierDispatchStatus::Cancelled,
+            SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->firstOrFail()->status,
+        );
+        $this->assertPurchaseOrderRefreshWasStaged($po);
+    }
+
     public function test_confirming_sent_is_idempotent_and_closes_the_dispatch_boundary(): void
     {
         $po = $this->approvedPo();
@@ -352,6 +432,7 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame(SupplierDispatchStatus::Confirmed, $second->status);
         $this->assertSame($first->id, $second->id);
         $this->assertSame(1, SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertPurchaseOrderRefreshWasStaged($po, 3);
     }
 
     public function test_scheduled_recovery_reclaims_a_stale_pending_dispatch(): void
@@ -375,6 +456,7 @@ class SupplierDispatchTest extends TestCase
         $dispatch = SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->firstOrFail();
         $this->assertSame(SupplierDispatchStatus::ManualRequired, $dispatch->status);
         $this->assertSame(2, $dispatch->attempts);
+        $this->assertPurchaseOrderRefreshWasStaged($po, 2);
     }
 
     public function test_failed_dispatch_requires_explicit_retry_flag(): void
@@ -406,6 +488,7 @@ class SupplierDispatchTest extends TestCase
             SupplierDispatchStatus::ManualRequired,
             SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->firstOrFail()->status,
         );
+        $this->assertPurchaseOrderRefreshWasStaged($po, 2);
     }
 
     public function test_purchase_order_cancellation_closes_dispatch_and_replay_is_idempotent(): void
@@ -421,6 +504,7 @@ class SupplierDispatchTest extends TestCase
         $dispatch = SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->firstOrFail();
         $this->assertSame(SupplierDispatchStatus::Cancelled, $dispatch->status);
         $this->assertTrue((bool) ($dispatch->metadata['cancelled_by_process'] ?? false));
+        $this->assertPurchaseOrderRefreshWasStaged($po, 3);
     }
 
     private function approvedPo(?Vendor $vendor = null): PurchaseOrder
@@ -431,5 +515,26 @@ class SupplierDispatchTest extends TestCase
         $po->forceFill(['status' => 'approved'])->save();
 
         return $po->fresh();
+    }
+
+    private function assertPurchaseOrderRefreshWasStaged(
+        PurchaseOrder $purchaseOrder,
+        int $expectedCount = 1,
+        int $expectedChainLedgerCount = 0,
+    ): void {
+        $events = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->filter(static function ($row) use ($purchaseOrder): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $purchaseOrder->hash_id;
+            });
+
+        $this->assertCount($expectedCount, $events);
+        $this->assertSame($expectedChainLedgerCount, DB::table('chain_step_runs')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count());
     }
 }

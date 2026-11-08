@@ -1,8 +1,9 @@
 import { lazy } from 'react';
-import { Outlet, Route } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 import { AuthGuard } from '@/components/guards/AuthGuard';
 import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
+import { DriverRealtimeBoundary } from '@/components/guards/DriverRealtimeBoundary';
 
 // T2.5 — Driver delivery surface (self-scoped to driver_id).
 //
@@ -23,7 +24,7 @@ export const driverRoutes = (
  <AuthGuard>
  <ModuleGuard module="supply_chain">
  <PermissionGuard permission="supply_chain.driver.access">
- <Outlet />
+ <DriverRealtimeBoundary />
  </PermissionGuard>
  </ModuleGuard>
  </AuthGuard>

@@ -6,6 +6,7 @@ export type ProfileUpdateRequestStatus =
  | 'pending_finance'
  | 'approved'
  | 'rejected';
+export type ProfileUpdateRequestFilterStatus = ProfileUpdateRequestStatus | 'all';
 
 export type ProfileUpdateRequestSignal = 'awaiting_my_action';
 
@@ -13,6 +14,12 @@ export interface ProfileUpdateReviewItem {
  id: string;
  status: ProfileUpdateRequestStatus;
  requires_finance: boolean;
+ permissions: { review_hr: boolean; review_finance: boolean };
+ available_actions: {
+  can_review_hr: boolean;
+  can_approve_finance: boolean;
+  can_reject_finance: boolean;
+ };
  changes: Record<string, string | null>;
  note: string | null;
  employee: {
@@ -33,7 +40,7 @@ export interface ProfileUpdateReviewItem {
 
 export const profileUpdateRequestsApi = {
  options: () => client.get<{ data: { statuses: Array<{ value: ProfileUpdateRequestStatus; label: string }> } }>('/hr/profile-update-requests/options').then((r) => r.data.data),
- list: (params?: { status?: ProfileUpdateRequestStatus; signal?: ProfileUpdateRequestSignal; page?: number; per_page?: number }) =>
+ list: (params?: { status?: ProfileUpdateRequestFilterStatus; signal?: ProfileUpdateRequestSignal; page?: number; per_page?: number }) =>
  client
  .get<PaginatedResponse<ProfileUpdateReviewItem>>('/hr/profile-update-requests', { params })
  .then((r) => r.data),

@@ -11,10 +11,12 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import type { MaterialIssueSlip } from '@/types/inventory';
 import { formatPeso } from '@/lib/formatNumber';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 interface MaterialIssueListParams extends ListParams {
@@ -32,6 +34,7 @@ const DEFAULT_FILTERS: MaterialIssueListParams = {
 export default function MaterialIssuesListPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useUrlFilters<MaterialIssueListParams>(DEFAULT_FILTERS);
+  useRealtimeList('material_issue_slip', 'visible');
 
   // Dashboard KPI links to ?date=today — expand to a from/to range at mount
   // because the backend filters on issued_date via from/to.
@@ -42,10 +45,12 @@ export default function MaterialIssuesListPage() {
       setFilters((f) => ({ ...f, date: undefined, from: today, to: today }));
     }
   }, [filters.date, setFilters]);
+ const queryKey = ['inventory', 'material-issues', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['inventory', 'material-issues', filters],
+ queryKey,
  queryFn: () => materialIssuesApi.list(filters),
- placeholderData: (prev) => prev,
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
 
  const columns: Column<MaterialIssueSlip>[] = [

@@ -14,9 +14,16 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { usePermission } from '@/hooks/usePermission';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDateTime } from '@/lib/formatDate';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { PayrollAnomalyFlag, PayrollAnomalyType, PayrollPeriodStatus } from '@/types/payroll';
+
+interface AnomalyPage {
+ data: PayrollAnomalyFlag[];
+ meta: { total: number };
+}
 
 const TYPE_VARIANT: Record<PayrollAnomalyType, 'danger' | 'warning' | 'info'> = {
  large_change: 'warning',
@@ -38,25 +45,40 @@ export function AnomalyReviewPanel({ periodId, periodStatus, makerIds }: Props) 
  const { can } = usePermission();
  const actorId = useAuthStore((state) => state.user?.id);
  const [showResolved, setShowResolved] = useState(false);
- const [resolveTarget, setResolveTarget] = useState<PayrollAnomalyFlag | null>(null);
  const [remarks, setRemarks] = useState('');
 
- const { data, isLoading, isError } = useQuery({
+ const { data, isLoading, isFetching, isError } = useQuery({
  queryKey: ['payroll', periodId, 'anomalies', { resolved: showResolved }],
  queryFn: () => payrollAnomaliesApi.list(periodId, { is_resolved: showResolved, per_page: 100 }),
  enabled: can('payroll.anomalies.review'),
- placeholderData: (prev) => prev,
  });
+ const flags = data?.data ?? [];
+ const resolveActionTarget = useQueryRecordTarget(flags, { isFetching, isError });
+ const resolveTarget = resolveActionTarget.target;
+ const targetResolved = resolveTarget?.is_resolved === true;
 
  const resolve = useMutation({
- mutationFn: () => payrollAnomaliesApi.resolve(resolveTarget!.id, remarks),
- onSuccess: () => {
+ mutationFn: () => payrollAnomaliesApi.resolve(resolveActionTarget.targetId!, remarks),
+ onSuccess: (resolvedFlag) => {
  toast.success('Anomaly marked as reviewed');
- queryClient.invalidateQueries({ queryKey: ['payroll', periodId, 'anomalies'] });
- setResolveTarget(null);
+  queryClient.setQueryData<AnomalyPage>(
+   ['payroll', periodId, 'anomalies', { resolved: false }],
+   (page) => page ? {
+    ...page,
+    data: page.data.filter((flag) => flag.id !== resolvedFlag.id),
+    meta: { ...page.meta, total: Math.max(0, page.meta.total - 1) },
+   } : page,
+  );
+  void invalidateRealtimeChange(
+   queryClient,
+   { entityType: 'payroll_anomaly', entityId: periodId },
+   [['payroll-period', periodId]],
+  );
+ resolveActionTarget.close();
  setRemarks('');
  },
  onError: (e) => {
+ void queryClient.invalidateQueries({ queryKey: ['payroll', periodId, 'anomalies'] });
  const msg = e instanceof AxiosError ? e.response?.data?.message : undefined;
  toast.error(msg ?? 'Failed to resolve anomaly');
  },
@@ -65,7 +87,6 @@ export function AnomalyReviewPanel({ periodId, periodStatus, makerIds }: Props) 
  if (!can('payroll.anomalies.review')) return null;
 
  const total = data?.meta.total ?? 0;
- const flags = data?.data ?? [];
  const hasUnresolved = flags.some((flag) => !flag.is_resolved);
  const blockedReason = makerIds.includes(actorId)
   ? 'You created or computed this payroll. A different authorized reviewer must resolve its anomaly flags.'
@@ -163,7 +184,7 @@ export function AnomalyReviewPanel({ periodId, periodStatus, makerIds }: Props) 
  <Button
  variant="secondary"
  size="sm"
- onClick={() => { setResolveTarget(f); setRemarks(''); }}
+ onClick={() => { resolveActionTarget.open(f); setRemarks(''); }}
  >
  Mark as reviewed
  </Button>
@@ -174,13 +195,29 @@ export function AnomalyReviewPanel({ periodId, periodStatus, makerIds }: Props) 
  </ul>
  )}
 
- {resolveTarget && (
- <Modal isOpen onClose={() => setResolveTarget(null)} size="sm" title="Resolve anomaly">
+ {resolveActionTarget.targetId && (
+ <Modal isOpen onClose={resolveActionTarget.close} size="sm" title="Resolve anomaly">
  <div className="px-5 py-4 space-y-3">
+ {resolveActionTarget.isChecking && (
+ <p role="status" className="text-sm text-muted">Checking the latest anomaly status. Your remarks are kept.</p>
+ )}
+ {resolveActionTarget.isUnverified && (
+ <p role="alert" className="text-sm text-danger-fg">The latest status could not be checked. Your remarks are kept; retry the refresh before resolving.</p>
+ )}
+ {blockedReason && (
+ <p role="alert" className="text-sm text-warning-fg">{blockedReason}</p>
+ )}
+ {!resolveActionTarget.isChecking && !resolveActionTarget.isUnverified && (resolveActionTarget.isUnavailable || targetResolved) && (
+ <p role="alert" className="text-sm text-warning-fg">
+ This anomaly is no longer unresolved. The list has refreshed. Your remarks are kept; close this dialog to return to the updated list.
+ </p>
+ )}
+ {resolveActionTarget.isFresh && resolveTarget && !targetResolved && (
  <p className="text-sm text-muted">
  Confirm review for <strong>{resolveTarget.flag_type_label ?? resolveTarget.flag_type}</strong>
  {resolveTarget.employee ? <> on <span className="font-mono">{resolveTarget.employee.employee_no}</span> {resolveTarget.employee.name}</> : null}.
  </p>
+ )}
  <Textarea
  label="Remarks"
  value={remarks}
@@ -189,12 +226,23 @@ export function AnomalyReviewPanel({ periodId, periodStatus, makerIds }: Props) 
  rows={4}
  />
  <div className="flex items-center justify-end gap-2 pt-2 border-t border-default">
- <Button variant="secondary" size="sm" onClick={() => setResolveTarget(null)}>Cancel</Button>
+ <Button variant="secondary" size="sm" onClick={resolveActionTarget.close}>Cancel</Button>
  <Button
  variant="primary"
  size="sm"
- onClick={() => resolve.mutate()}
- disabled={resolve.isPending || remarks.trim().length < 3}
+ onClick={() => {
+  if (!blockedReason && resolveActionTarget.isFresh && resolveTarget && !targetResolved && remarks.trim().length >= 3) {
+   resolve.mutate();
+  }
+ }}
+ disabled={
+  resolve.isPending ||
+  Boolean(blockedReason) ||
+  !resolveActionTarget.isFresh ||
+  !resolveTarget ||
+  targetResolved ||
+  remarks.trim().length < 3
+ }
  loading={resolve.isPending}
  >
  Mark reviewed

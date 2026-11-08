@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
-use App\Common\Services\NotificationService;
-use App\Common\Services\OutboxEventCodec;
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Mail\QueuedMailable;
+use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxDispatcher;
+use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
@@ -19,6 +21,8 @@ use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\RfqStatus;
+use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Events\RequestForQuoteChanged;
 use App\Modules\Purchasing\Events\RfqLifecycleEvent;
 use App\Modules\Purchasing\Listeners\DeliverRfqLifecycleNotification;
 use App\Modules\Purchasing\Mail\SupplierRfqLifecycleMail;
@@ -63,6 +67,35 @@ final class RfqBiddingTest extends TestCase
         $this->buyer = $this->roleUser('purchasing_officer');
     }
 
+    public function test_purchase_request_detail_exposes_canonical_available_actions(): void
+    {
+        [$pr] = $this->approvedPr('10.00');
+
+        $data = $this->actingAs($this->buyer)
+            ->getJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertArrayHasKey('available_actions', $data);
+        $this->assertSame($data['actions'], $data['available_actions']);
+    }
+
+    public function test_stale_rfq_publish_returns_a_state_conflict(): void
+    {
+        [$pr] = $this->approvedPr('10.00');
+        [$vendor] = $this->supplier();
+        $rfq = $this->startRfq($pr, [$vendor], publish: false);
+        $pr->rfqs()->firstOrFail()
+            ->forceFill(['status' => RfqStatus::Open])
+            ->save();
+
+        $this->asBuyer();
+        $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/publish")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'request_for_quote_state_conflict')
+            ->assertJsonStructure(['errors' => ['state']]);
+    }
+
     public function test_buyer_and_suppliers_run_an_rfq_through_to_a_draft_po(): void
     {
         [$pr] = $this->approvedPr('10.00');
@@ -70,6 +103,20 @@ final class RfqBiddingTest extends TestCase
         [$vendorB, $portalB] = $this->supplier();
 
         $rfq = $this->startRfq($pr, [$vendorA, $vendorB], publish: true);
+        $this->assertSame(1, $this->rfqRefreshCount());
+        $this->assertDatabaseHas('chain_step_runs', [
+            'entity_type' => 'purchase_request',
+            'entity_id' => $pr->id,
+            'step' => 'approved',
+            'event_type' => ChainStepAdvanced::class,
+        ]);
+        $payload = DB::table('chain_step_runs')
+            ->join('event_outbox', 'event_outbox.id', '=', 'chain_step_runs.outbox_id')
+            ->where('chain_step_runs.entity_type', 'purchase_request')
+            ->where('chain_step_runs.entity_id', $pr->id)
+            ->where('chain_step_runs.event_type', ChainStepAdvanced::class)
+            ->value('event_outbox.payload');
+        $this->assertSame('updated', json_decode((string) $payload, true, flags: JSON_THROW_ON_ERROR)['action']);
         $this->assertSame('open', $rfq['status']);
         $lineId = $rfq['items'][0]['id'];
         $this->assertSame(PurchaseRequestConversionStatus::SourcingPending, $pr->fresh()->po_conversion_status);
@@ -79,6 +126,7 @@ final class RfqBiddingTest extends TestCase
             ->assertJsonPath('data.goods_amount', '500.00')
             ->assertJsonPath('data.vat_amount', '72.00')
             ->assertJsonPath('data.total_delivered_cost', '672.00');
+        $this->assertSame(3, $this->rfqRefreshCount()); // supplier document + submitted quote
 
         // Sealed while open, even for the buyer; close-now waits for everyone.
         $this->asBuyer();
@@ -86,16 +134,19 @@ final class RfqBiddingTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.quotes', [])
             ->assertJsonPath('data.responded_count', 1)
-            ->assertJsonPath('data.actions.can_close_now', false);
+            ->assertJsonPath('data.actions.can_close_now', false)
+            ->assertJsonPath('data.available_actions.can_close_now', false);
         $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/close")->assertStatus(422);
         $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}/comparison")->assertStatus(422);
 
         $this->submitQuote($portalB, $rfq['id'], $lineId, '10', '45.0000', freight: '200.00')
             ->assertJsonPath('data.total_delivered_cost', '728.00');
+        $this->assertSame(5, $this->rfqRefreshCount());
 
         $this->asBuyer();
         $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertJsonPath('data.actions.can_close_now', true);
         $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/close")->assertOk()->assertJsonPath('data.status', 'closed');
+        $this->assertSame(6, $this->rfqRefreshCount());
 
         $quotes = collect($this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}/comparison")->assertOk()->json('data.quotes'))
             ->keyBy(fn (array $quote): string => $quote['vendor']['id']);
@@ -112,6 +163,7 @@ final class RfqBiddingTest extends TestCase
             'award_reason' => 'Lowest delivered cost.',
             'lines' => [['request_for_quote_item_id' => $lineId, 'supplier_quote_item_id' => $lineA['id']]],
         ])->assertOk()->assertJsonPath('data.status', 'awarded');
+        $this->assertSame(7, $this->rfqRefreshCount());
         $this->assertCount(1, $award->json('purchase_orders'));
 
         $po = PurchaseOrder::query()->with('items')->where('request_for_quote_id', RequestForQuote::query()->value('id'))->sole();
@@ -132,6 +184,25 @@ final class RfqBiddingTest extends TestCase
             'award_reason' => 'Again.',
             'lines' => [['request_for_quote_item_id' => $lineId, 'supplier_quote_item_id' => $lineA['id']]],
         ])->assertStatus(422)->assertJsonPath('message', 'This RFQ has already been awarded.');
+    }
+
+    public function test_rfq_create_and_publish_stage_one_content_free_refresh_each(): void
+    {
+        [$pr] = $this->approvedPr('10.00');
+        [$vendor] = $this->supplier();
+        $rfq = $this->startRfq($pr, [$vendor], publish: false);
+        $eventType = 'App\\Modules\\Purchasing\\Events\\RequestForQuoteChanged';
+
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', $eventType)->count());
+        $createdEvent = DB::table('event_outbox')->where('event_type', $eventType)->first();
+        $this->assertSame(['rfqHashId', 'action', 'version', 'actorId', 'eventId'], array_keys(json_decode($createdEvent->payload, true)));
+
+        $this->asBuyer();
+        $this->putJson("/api/v1/purchasing/rfqs/{$rfq['id']}", $this->rfqBody([$vendor]))->assertOk();
+        $this->assertSame(2, $this->rfqRefreshCount());
+        $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/publish")->assertOk();
+
+        $this->assertSame(3, $this->rfqRefreshCount());
     }
 
     public function test_a_suppliers_unsubmitted_draft_never_reaches_the_comparison(): void
@@ -795,6 +866,7 @@ final class RfqBiddingTest extends TestCase
         $this->actingAsFresh($finance);
         $approveResponse = $this->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/approve")
             ->assertOk();
+        $this->dispatchLatestPurchaseOrderApproval();
         $po = $po->fresh();
 
         // The VP step is skipped below 50000; portal-ready POs dispatch after approval.
@@ -854,6 +926,7 @@ final class RfqBiddingTest extends TestCase
         $this->actingAsFresh($vp);
         $vpApprove = $this->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/approve")
             ->assertOk();
+        $this->dispatchLatestPurchaseOrderApproval();
         $po = $po->fresh();
 
         // Approval publishes this portal-ready PO, so it is already sent.
@@ -864,6 +937,25 @@ final class RfqBiddingTest extends TestCase
     private function asBuyer(): void
     {
         $this->actingAsFresh($this->buyer);
+    }
+
+    private function rfqRefreshCount(): int
+    {
+        return DB::table('event_outbox')->where('event_type', RequestForQuoteChanged::class)->count();
+    }
+
+    private function dispatchLatestPurchaseOrderApproval(): void
+    {
+        $outbox = DB::table('event_outbox')
+            ->where('event_type', PurchaseOrderApproved::class)
+            ->orderByDesc('created_at')
+            ->first();
+        $this->assertNotNull($outbox, 'The PO approval must be recorded before supplier dispatch runs.');
+
+        // The real application publishes this durable event on the outbox
+        // worker. Run that boundary explicitly in this integration test so it
+        // verifies the post-approval supplier-dispatch side effect as well.
+        app(OutboxDispatcher::class)->dispatch((string) $outbox->id);
     }
 
     private function actingAsFresh(User $user): void

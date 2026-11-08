@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
@@ -29,6 +30,8 @@ import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { localIsoDate } from '@/lib/formatDate';
 import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const optionalNumber = z.preprocess(
   (value) => (value === '' || value === null ? undefined : value),
@@ -167,6 +170,9 @@ export default function CreateReturnRequestPage() {
     roleSlug !== 'customer_service_officer' || can('purchasing.po.create');
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
+  useRealtimeRecord('return_request', editing ? id : undefined);
+  const initialUpdatedAt = useRef<string | null>(null);
+  const [remoteStateChanged, setRemoteStateChanged] = useState(false);
   const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -196,7 +202,7 @@ export default function CreateReturnRequestPage() {
     setValue,
     reset,
     setError,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = form;
   const { data: existing } = useQuery({
     queryKey: ['return-request', id],
@@ -206,6 +212,14 @@ export default function CreateReturnRequestPage() {
 
   useEffect(() => {
     if (!existing) return;
+    const updatedAt = existing.updated_at ?? '';
+    if (initialUpdatedAt.current !== null && updatedAt === initialUpdatedAt.current) return;
+    if (initialUpdatedAt.current !== null && isDirty) {
+      setRemoteStateChanged(true);
+      return;
+    }
+    initialUpdatedAt.current = updatedAt;
+    setRemoteStateChanged(false);
     reset({
       type: existing.type,
       return_date: existing.return_date ?? localIsoDate(),
@@ -235,7 +249,7 @@ export default function CreateReturnRequestPage() {
         serial_number: line.serial_number ?? '',
       })),
     });
-  }, [existing, reset]);
+  }, [existing, isDirty, reset]);
 
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const returnType = watch('type');
@@ -438,14 +452,22 @@ export default function CreateReturnRequestPage() {
       queryClient.invalidateQueries({ queryKey: ['return-management'] });
       queryClient.invalidateQueries({ queryKey: ['return-request', id] });
       toast.success(editing ? 'Draft return request updated.' : 'Return request created.');
-      navigate(`/return-management/${rma.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/return-management/${rma.id}`);
     },
-    onError: (error) =>
+    onError: (error) => {
+      if (editing && error instanceof AxiosError && error.response?.status === 409) {
+        setRemoteStateChanged(true);
+        if (id) void invalidateRealtimeChange(queryClient, { entityType: 'return_request', entityId: id });
+        toast.error(error.response.data?.message ?? 'This RMA changed. Your edits are preserved; review its latest status.');
+        return;
+      }
       applyServerValidationErrors<FormValues>(
         error,
         setError,
         editing ? 'Failed to update return request.' : 'Failed to create return request.',
-      ),
+      );
+    },
   });
   const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
@@ -463,6 +485,11 @@ export default function CreateReturnRequestPage() {
         backTo={editing ? `/return-management/${id}` : '/return-management'}
       />
       <FormDraftBanner safety={safety} />
+      {remoteStateChanged && (
+        <p role="status" className="mx-5 mt-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm text-warning-fg">
+          This RMA changed while you were editing. Your unsaved edits are preserved; compare them with the latest record before saving again.
+        </p>
+      )}
       <form
         onSubmit={handleSubmit((data) => mutation.mutate(data), onFormInvalid<FormValues>())}
         className="min-w-0 w-full px-5 py-4 space-y-4"
@@ -833,7 +860,7 @@ export default function CreateReturnRequestPage() {
             type="submit"
             variant="primary"
             loading={mutation.isPending}
-            disabled={isSubmitting || mutation.isPending}
+            disabled={isSubmitting || mutation.isPending || (editing && existing?.available_actions?.can_edit === false)}
           >
             {mutation.isPending
               ? editing

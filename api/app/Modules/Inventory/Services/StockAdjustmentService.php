@@ -14,6 +14,7 @@ use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Exceptions\StockAdjustmentStateConflictException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockCountItem;
@@ -267,10 +268,10 @@ class StockAdjustmentService
             // the status check and post the stock movement twice (P37).
             $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
             if ($locked->status === StockAdjustmentStatus::Approved) {
-                throw new BusinessRuleException('Adjustment is already approved.');
+                throw new StockAdjustmentStateConflictException('Adjustment is already approved. Refresh and review its current status.');
             }
             if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
-                throw new BusinessRuleException('Adjustment is no longer pending.');
+                throw new StockAdjustmentStateConflictException('Adjustment is no longer pending. Refresh and review its current status.');
             }
             if (! ApprovalDelegation::canActForPermission($by, 'inventory.adjust.approve', [(int) $locked->requested_by])) {
                 throw new BusinessRuleException('You are not authorized to approve stock adjustments.');
@@ -321,7 +322,7 @@ class StockAdjustmentService
         return DB::transaction(function () use ($adj, $by, $reason) {
             $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
             if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
-                throw new BusinessRuleException('Adjustment is no longer pending.');
+                throw new StockAdjustmentStateConflictException('Adjustment is no longer pending. Refresh and review its current status.');
             }
             if (! ApprovalDelegation::canActForPermission($by, 'inventory.adjust.approve', [(int) $locked->requested_by])) {
                 throw new BusinessRuleException('You are not authorized to reject stock adjustments.');
@@ -352,7 +353,7 @@ class StockAdjustmentService
         return DB::transaction(function () use ($adj, $by) {
             $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
             if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
-                throw new BusinessRuleException('Adjustment is no longer pending.');
+                throw new StockAdjustmentStateConflictException('Adjustment is no longer pending. Refresh and review its current status.');
             }
             if ((int) $locked->requested_by !== (int) $by->id) {
                 throw new BusinessRuleException('Only the requester may withdraw this adjustment.');

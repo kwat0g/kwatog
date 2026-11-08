@@ -1,6 +1,6 @@
 /** Sprint 7 — Task 68 — File a customer complaint. */
 import { useForm } from 'react-hook-form';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { z } from 'zod';
@@ -24,6 +24,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { localIsoDate } from '@/lib/formatDate';
+import { scheduleRealtimeChangeInvalidation } from '@/lib/realtime/invalidationMap';
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
  product_id: z.string().optional().or(z.literal('')),
@@ -38,6 +39,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function CreateComplaintPage() {
  const navigate = useNavigate();
+ const queryClient = useQueryClient();
  const [selectedCustomerId, setSelectedCustomerId] = useState('');
  const [customerSearch, setCustomerSearch] = useState('');
  const [productSearch, setProductSearch] = useState('');
@@ -69,7 +71,7 @@ export default function CreateComplaintPage() {
  enabled: Boolean(selectedCustomerId),
  });
  const complaintOptions = useQuery({
- queryKey: ['crm', 'complaints', 'options'],
+ queryKey: ['crm', 'complaint-options'],
  queryFn: () => complaintsApi.options(),
  });
 
@@ -92,8 +94,11 @@ export default function CreateComplaintPage() {
  const submit = useMutation({
  mutationFn: (data: CreateComplaintData) => complaintsApi.create(data),
  onSuccess: (c) => {
+ queryClient.setQueryData(['crm', 'complaints', c.id], c);
+ scheduleRealtimeChangeInvalidation(queryClient, { entityType: 'customer_complaint', entityId: c.id });
  toast.success(`Complaint ${c.complaint_number} opened${c.ncr ? `; NCR ${c.ncr.ncr_number} auto-created` : ''}`);
- navigate(`/crm/complaints/${c.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/crm/complaints/${c.id}`);
  },
  onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
  if (e.response?.data?.errors) {

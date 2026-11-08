@@ -336,7 +336,7 @@ final class WorkOrderFinalInspectionService
             $resource['defective_quantity'] = (int) $inspection->sample_defect_count;
             $resource['described_defective_quantity'] = $inspection->defectivePieces()->count();
             $resource['checks_confirmed_at'] = $inspection->usesConfirmedChecks() ? $inspection->coverage_confirmed_at?->toISOString() : null;
-            $resource['missing_readings'] = $inspection->usesConfirmedChecks() ? 0 : max(0, $sizes->count() * $inspection->batch_quantity - $inspection->pieceReadings()->whereIn('requirement_id', $sizes->pluck('id'))->count());
+            $resource['missing_readings'] = ($inspection->quantity_result || $inspection->usesConfirmedChecks()) ? 0 : max(0, $sizes->count() * $inspection->batch_quantity - $inspection->pieceReadings()->whereIn('requirement_id', $sizes->pluck('id'))->count());
             return $resource;
         })->all();
         $pieces = [];

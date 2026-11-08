@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuPencil, LuPlus } from '@/lib/icons';
 import { customersApi } from '@/api/accounting/customers';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { invoicesApi } from '@/api/accounting/invoices';
 import { priceAgreementsApi } from '@/api/crm/priceAgreements';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
@@ -22,6 +23,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 
 export default function CustomerDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  useRealtimeRecord('customer', id);
   const navigate = useNavigate();
   const { can } = usePermission();
 

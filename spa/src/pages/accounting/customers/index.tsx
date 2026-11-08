@@ -15,15 +15,18 @@ import type { Customer } from '@/types/accounting';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 export default function CustomersPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  const [filters, setFilters] = useUrlFilters<CustomerListParams>({ page: 1, per_page: 25 });
 
+ const queryKey = ['accounting', 'customers', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['accounting', 'customers', filters],
+ queryKey,
  queryFn: () => customersApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
 
  const columns: Column<Customer>[] = [
  { key: 'name', header: 'Customer', cell: (r) => r.name },

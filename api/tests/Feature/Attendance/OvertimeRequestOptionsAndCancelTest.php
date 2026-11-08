@@ -120,12 +120,34 @@ class OvertimeRequestOptionsAndCancelTest extends TestCase
         $ot = $this->makeOt($emp);
 
         $this->actingAs($user)
+            ->withHeader('If-Match', '"1"')
             ->deleteJson("/api/v1/attendance/overtime-requests/{$ot->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.status', OvertimeStatus::Rejected->value)
+            ->assertJsonPath('data.version', 2)
             ->assertJsonPath('data.rejection_reason', 'Cancelled.');
 
         $this->assertSame(OvertimeStatus::Rejected, $ot->fresh()->status);
+        $this->assertSame(2, $ot->fresh()->version);
+    }
+
+    public function test_owner_cannot_cancel_with_a_stale_if_match_version(): void
+    {
+        $this->seedRoles();
+
+        $employee = Employee::factory()->create();
+        $user = User::factory()->create([
+            'employee_id' => $employee->id,
+            'role_id' => Role::where('slug', 'employee')->value('id'),
+        ]);
+        $overtime = $this->makeOt($employee);
+
+        $this->actingAs($user)
+            ->withHeader('If-Match', '"0"')
+            ->deleteJson("/api/v1/attendance/overtime-requests/{$overtime->hash_id}")
+            ->assertStatus(409);
+
+        $this->assertSame(OvertimeStatus::Pending, $overtime->fresh()->status);
     }
 
     public function test_admin_can_cancel_any_pending_request(): void

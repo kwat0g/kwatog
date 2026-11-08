@@ -25,7 +25,8 @@ import { cn } from '@/lib/cn';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
-import { formatDateIso } from '@/lib/formatDate';
+import { formatDate, formatDateIso } from '@/lib/formatDate';
+import type { JobPosting } from '@/types/recruitment';
 const schema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   department_id: z.string().min(1, 'Department is required'),
@@ -49,6 +50,10 @@ export default function PostingEditPage() {
   const [reqTags, setReqTags] = useState<string[]>([]);
   const [reqInput, setReqInput] = useState('');
   const [tagsInitialized, setTagsInitialized] = useState(false);
+  const [postingConflict, setPostingConflict] = useState<string | null>(null);
+  const [latestPosting, setLatestPosting] = useState<JobPosting | null>(null);
+  const [refreshingConflict, setRefreshingConflict] = useState(false);
+  const [conflictRefreshFailed, setConflictRefreshFailed] = useState(false);
 
   const { data: posting, isLoading } = useQuery({
     queryKey: ['recruitment-posting', id],
@@ -149,16 +154,36 @@ export default function PostingEditPage() {
 
   const mutation = useMutation({
     mutationFn: (data: FormData) =>
-      recruitmentApi.updatePosting(id!, data as Parameters<typeof recruitmentApi.updatePosting>[1]),
-    onSuccess: () => {
+      recruitmentApi.updatePosting(id!, data as Parameters<typeof recruitmentApi.updatePosting>[1], posting?.version),
+    onSuccess: (res) => {
       toast.success('Posting updated.');
-      queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
+      queryClient.setQueryData<JobPosting>(['recruitment-posting', id], res.data.data);
       queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
-      navigate(`/hr/recruitment/postings/${id}`);
+      queryClient.invalidateQueries({ queryKey: ['recruitment-applications', { job_posting_id: id }] });
+            safety.allowNavigationAfterSave();
+navigate(`/hr/recruitment/postings/${id}`);
     },
-    onError: (err: AxiosError<{ errors?: Record<string, string[]> }>) => {
-      toast.error('Failed to update posting.');
+    onError: (err: AxiosError<{ errors?: Record<string, string[]>; code?: string; message?: string }>) => {
       const body = err.response?.data;
+      if (err.response?.status === 409 && body?.code === 'recruitment_state_conflict') {
+        const message = body.message
+          ?? 'This posting changed. Return to the posting and reopen Edit to review the latest version.';
+        setPostingConflict(message);
+        setLatestPosting(null);
+        setConflictRefreshFailed(false);
+        setRefreshingConflict(true);
+        void recruitmentApi.showPosting(id!).then((result) => {
+          setLatestPosting(result.data.data);
+        }).catch(() => {
+          setConflictRefreshFailed(true);
+        }).finally(() => {
+          setRefreshingConflict(false);
+        });
+        toast.error(`${message} Your edits remain on this screen.`);
+        queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
+        return;
+      }
+      toast.error('Failed to update posting.');
       if (err.response?.status === 422 && body?.errors) {
         Object.entries(body.errors).forEach(([field, msgs]) => {
           setError(field as keyof FormData, { message: msgs[0] });
@@ -179,9 +204,27 @@ export default function PostingEditPage() {
         backLabel="Posting"
       />
       <FormDraftBanner safety={safety} />
+      {postingConflict && <div role="status" className="mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning bg-warning-bg p-3 text-sm text-warning-fg">
+        <span>
+          {postingConflict} Your typed edits are still here. {latestPosting
+            ? `The latest server version was fetched at ${formatDate(latestPosting.updated_at)}.`
+            : conflictRefreshFailed
+              ? 'The latest posting could not be loaded.'
+              : 'Loading the latest posting…'}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => navigate(`/hr/recruitment/postings/${id}`)}
+          disabled={!latestPosting || refreshingConflict}
+        >
+          Review latest posting
+        </Button>
+      </div>}
 
       <form
-        onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())}
+        onSubmit={handleSubmit((d) => { if (!postingConflict) mutation.mutate(d); }, onFormInvalid<FormData>())}
         className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Job Details">
@@ -374,7 +417,7 @@ export default function PostingEditPage() {
           <Button
             type="submit"
             variant="primary"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || postingConflict !== null || !posting?.available_actions.includes('edit')}
             loading={mutation.isPending}
           >
             {mutation.isPending ? 'Saving…' : 'Save Changes'}

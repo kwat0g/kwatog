@@ -21,9 +21,12 @@ import { productionDateTime } from '@/components/production/scheduleDates';
 import type { ListParams } from '@/types';
 import type { StockMovement } from '@/types/inventory';
 import { usePermission } from '@/hooks/usePermission';
+import { useInventoryStockRealtime } from '@/hooks/useInventoryStockRealtime';
 import { useAuthStore } from '@/stores/authStore';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { applyStockMovementListResponse, canRetryStockMovement } from '@/lib/realtime/stockMovementCache';
 const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
   if (['grn_receipt', 'material_return', 'production_receipt', 'adjustment_in'].includes(t))
     return 'success';
@@ -104,6 +107,7 @@ export function StockMovementsTab({
 }) {
   const qc = useQueryClient();
   const { can } = usePermission();
+  useInventoryStockRealtime(can('inventory.view'));
   const userId = useAuthStore((state) => state.user?.id);
   const pendingStorageKey = `ogami:inventory:material-return:${userId ?? 'unknown'}`;
   const [pendingReturn, setPendingReturn] = useState<PendingMaterialReturn | null>(() =>
@@ -116,10 +120,12 @@ export function StockMovementsTab({
     movement_id: initialMovementId || undefined,
   });
 
+  const queryKey = ['inventory', 'movements', filters] as const;
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
-    queryKey: ['inventory', 'movements', filters],
+    queryKey,
     queryFn: () => stockMovementsApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
   const { data: movementOptions } = useQuery({
     queryKey: ['inventory', 'movements', 'options'],
@@ -174,6 +180,7 @@ export function StockMovementsTab({
   const retryGl = useMutation({
     mutationFn: (movementId: string) => stockMovementsApi.retryGlHandoff(movementId),
     onSuccess: (movement) => {
+      applyStockMovementListResponse(qc, movement);
       qc.invalidateQueries({ queryKey: ['inventory', 'movements'] });
       toast.success(
         movement.gl_handoff.status === 'generated'
@@ -182,6 +189,9 @@ export function StockMovementsTab({
       );
     },
     onError: (error: AxiosError<{ message?: string }>) => {
+      if (error.response?.status === 409) {
+        void qc.invalidateQueries({ queryKey: ['inventory', 'movements'] });
+      }
       toast.error(
         error.response?.data?.message ??
           'The stock movement could not be posted to the General Ledger.',
@@ -307,7 +317,7 @@ export function StockMovementsTab({
         <span title={handoff.message ?? undefined}>
           <Chip variant={variant}>{handoff.status_label ?? handoff.status.replace('_', ' ')}</Chip>
         </span>
-        {can('accounting.journal.post') && handoff.status === 'manual_required' && (
+        {canRetryStockMovement(movement) && (
           <Button
             type="button"
             variant="ghost"

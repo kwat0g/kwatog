@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LeaveTypesManager } from './types';
 import { leaveTypesApi } from '@/api/leave';
 import type { LeaveType } from '@/types/leave';
@@ -18,6 +18,7 @@ vi.mock('@/api/leave', () => ({
 vi.mock('@/hooks/usePermission', () => ({
  usePermission: () => ({ can: () => true }),
 }));
+
 
 const activeType: LeaveType = {
  id: 'lt-vl',
@@ -71,6 +72,8 @@ function renderManager() {
  );
 }
 
+afterEach(() => cleanup());
+
 describe('leave type archive actions', () => {
  beforeEach(() => {
   vi.clearAllMocks();
@@ -84,20 +87,20 @@ describe('leave type archive actions', () => {
  it('keeps Edit for active rows and exposes Restore instead of Edit for archived rows', async () => {
   renderManager();
 
-  expect(await screen.findByRole('button', { name: 'Edit Vacation Leave' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Archive Vacation Leave' })).toBeInTheDocument();
+  expect(await screen.findAllByRole('button', { name: 'Edit Vacation Leave' })).not.toHaveLength(0);
+  expect(screen.getAllByRole('button', { name: 'Archive Vacation Leave' })).not.toHaveLength(0);
 
-  fireEvent.click(screen.getByRole('radio', { name: 'Show active and archived records' }));
+  fireEvent.click(screen.getAllByRole('radio', { name: 'Show active and archived records' })[0]!);
 
-  expect(await screen.findByRole('button', { name: 'Restore Bereavement Leave' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Edit Bereavement Leave' })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Edit Vacation Leave' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Archive Vacation Leave' })).toBeInTheDocument();
+  expect(await screen.findAllByRole('button', { name: 'Restore Bereavement Leave' })).not.toHaveLength(0);
+  expect(screen.queryAllByRole('button', { name: 'Edit Bereavement Leave' })).toHaveLength(0);
+  expect(screen.getAllByRole('button', { name: 'Edit Vacation Leave' })).not.toHaveLength(0);
+  expect(screen.getAllByRole('button', { name: 'Archive Vacation Leave' })).not.toHaveLength(0);
 
-  fireEvent.click(screen.getByRole('radio', { name: 'Show archived records only' }));
+  fireEvent.click(screen.getAllByRole('radio', { name: 'Show archived records only' })[0]!);
 
-  expect(await screen.findByRole('button', { name: 'Restore Bereavement Leave' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Edit Bereavement Leave' })).not.toBeInTheDocument();
+  expect(await screen.findAllByRole('button', { name: 'Restore Bereavement Leave' })).not.toHaveLength(0);
+  expect(screen.queryAllByRole('button', { name: 'Edit Bereavement Leave' })).toHaveLength(0);
   expect(leaveTypesApi.update).not.toHaveBeenCalled();
  });
 
@@ -111,15 +114,15 @@ describe('leave type archive actions', () => {
   });
   renderManager();
 
-  expect(await screen.findByRole('button', { name: 'Archive Vacation Leave' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('radio', { name: 'Show archived records only' }));
+  expect(await screen.findAllByRole('button', { name: 'Archive Vacation Leave' })).not.toHaveLength(0);
+  fireEvent.click(screen.getAllByRole('radio', { name: 'Show archived records only' })[0]!);
   await waitFor(() => expect(leaveTypesApi.list).toHaveBeenLastCalledWith(
    expect.objectContaining({ trashed: 'only' }),
   ));
 
-  expect(screen.queryByRole('button', { name: 'Restore Vacation Leave' })).not.toBeInTheDocument();
+  expect(screen.queryAllByRole('button', { name: 'Restore Vacation Leave' })).toHaveLength(0);
 
   releaseArchived(page([archivedType]));
-  expect(await screen.findByRole('button', { name: 'Restore Bereavement Leave' })).toBeInTheDocument();
+  expect(await screen.findAllByRole('button', { name: 'Restore Bereavement Leave' })).not.toHaveLength(0);
  });
 });

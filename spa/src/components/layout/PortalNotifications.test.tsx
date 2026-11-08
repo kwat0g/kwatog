@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { notificationsApi, type NotificationListResponse } from '@/api/notifications';
@@ -8,7 +8,9 @@ import NotificationsListPage from '@/pages/notifications';
 
 vi.mock('@/api/notifications', () => ({ notificationsApi: { list: vi.fn(), markRead: vi.fn(), markAllRead: vi.fn(), remove: vi.fn(), clearRead: vi.fn() } }));
 vi.mock('@/lib/echo', () => ({ getEcho: vi.fn().mockRejectedValue(new Error('Unavailable in test')) }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+const { useNotificationRealtimeMock } = vi.hoisted(() => ({ useNotificationRealtimeMock: vi.fn() }));
+vi.mock('@/hooks/useNotificationRealtime', () => ({ useNotificationRealtime: useNotificationRealtimeMock }));
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 
 const response: NotificationListResponse = {
   data: [{ id: 'notice-1', type: 'sales_order.delivery_proposed', data: { title: 'Review delivery date', message: 'Accept or decline proposed date.', link_to: '/portal/customer/orders/order-1' }, read_at: null, created_at: '2026-10-04T12:00:00Z' }],
@@ -19,12 +21,61 @@ function api() {
   return { list: vi.fn().mockResolvedValue(response), markRead: vi.fn().mockResolvedValue({ id: 'notice-1', read_at: '2026-10-04' }), markAllRead: vi.fn().mockResolvedValue({ marked_read: 1 }), remove: vi.fn().mockResolvedValue({ deleted: true }), clearRead: vi.fn().mockResolvedValue({ deleted: 0 }) };
 }
 
+it('does not keep a page-owned polling timer on the active notification inbox', async () => {
+  const portalApi = api();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryKey = ['portal', 'customer', 'reader-1', 'notifications'];
+  render(<QueryClientProvider client={queryClient}><MemoryRouter>
+    <NotificationsListPage api={portalApi} queryKey={queryKey} linkPrefix="/portal/customer" />
+  </MemoryRouter></QueryClientProvider>);
+
+  const queryOptions = queryClient.getQueryCache().find({ queryKey })?.options as { refetchInterval?: unknown } | undefined;
+  expect(queryOptions?.refetchInterval).toBeUndefined();
+  queryClient.clear();
+});
+
+it('does not run a healthy internal notification bell polling timer', async () => {
+  vi.useFakeTimers();
+  const internalApi = api();
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>
+    <NotificationBell api={internalApi} />
+  </MemoryRouter></QueryClientProvider>);
+
+  expect(internalApi.list).toHaveBeenCalledTimes(1);
+  await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+  expect(internalApi.list).toHaveBeenCalledTimes(1);
+});
+
+it('subscribes a portal bell to its own realtime channel without a healthy-socket polling timer', async () => {
+  vi.useFakeTimers();
+  const portalApi = api();
+  const queryKey = ['portal', 'customer', 'reader-1', 'notifications'];
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>
+    <NotificationBell
+      api={portalApi}
+      queryKey={queryKey}
+      inboxPath="/portal/customer/notifications"
+      realtimeChannel="portal.customer.user.reader-1"
+      linkPrefix="/portal/customer"
+    />
+  </MemoryRouter></QueryClientProvider>);
+
+  expect(useNotificationRealtimeMock).toHaveBeenCalledWith({
+    channel: 'portal.customer.user.reader-1',
+    queryKey,
+    showToast: false,
+  });
+  expect(portalApi.list).toHaveBeenCalledTimes(1);
+  await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+  expect(portalApi.list).toHaveBeenCalledTimes(1);
+});
+
 it('portal bell renders portal notices, opens portal inbox, and keeps internal cache separate', async () => {
   const portalApi = api();
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   queryClient.setQueryData(['notifications', 'peek'], { ...response, data: [{ ...response.data[0], data: { title: 'Internal payroll secret' } }] });
   render(<QueryClientProvider client={queryClient}><MemoryRouter>
-    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
+    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" linkPrefix="/portal/customer" />
     <Routes><Route path="/" element={null} /><Route path="/portal/customer/notifications" element={<p>Customer inbox opened</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
@@ -54,7 +105,7 @@ it('portal inbox marks its own notice read and navigates to customer next step',
 it('portal bell notification is a link and marks read when opened', async () => {
   const portalApi = api();
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>
-    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
+    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" linkPrefix="/portal/customer" />
     <Routes><Route path="/" element={null} /><Route path="/portal/customer/orders/order-1" element={<p>Customer order opened</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
@@ -68,7 +119,7 @@ it('portal bell notification is a link and marks read when opened', async () => 
 it('marks a bell notice read on middle-click while preserving its anchor destination', async () => {
   const portalApi = api();
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>
-    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
+    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" linkPrefix="/portal/customer" />
   </MemoryRouter></QueryClientProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
   const link = await screen.findByRole('link', { name: /Review delivery date/ });

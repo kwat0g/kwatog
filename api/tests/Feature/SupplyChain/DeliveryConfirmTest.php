@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\SupplyChain;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Services\DeliveryService;
@@ -39,11 +41,38 @@ class DeliveryConfirmTest extends TestCase
         $this->svc = app(DeliveryService::class);
     }
 
+    public function test_confirm_action_projection_matches_viewer_permission_and_delivery_readiness(): void
+    {
+        $authorized = $this->makeUser();
+        $delivery = $this->seedDelivery($authorized, 'delivered');
+        DeliveryProof::create([
+            'delivery_id' => $delivery->id,
+            'proof_type' => 'photo',
+            'file_name' => 'customer-receipt.jpg',
+            'file_path' => 'deliveries/'.$delivery->id.'/customer-receipt.jpg',
+            'mime_type' => 'image/jpeg',
+            'uploaded_by' => $authorized->id,
+        ]);
+
+        $this->actingAs($authorized)
+            ->getJson('/api/v1/supply-chain/deliveries/'.$delivery->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.can_confirm', true)
+            ->assertJsonPath('data.available_actions.confirm', true);
+
+        $readOnly = $this->makeUser(false);
+        $this->actingAs($readOnly)
+            ->getJson('/api/v1/supply-chain/deliveries/'.$delivery->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.can_confirm', true)
+            ->assertJsonPath('data.available_actions.confirm', false);
+    }
+
     // ─── (b) No proof → cannot confirm ───────────────────────────────────────
 
     public function test_confirm_requires_at_least_one_proof(): void
     {
-        $user     = $this->makeUser();
+        $user = $this->makeUser();
         $delivery = $this->seedDelivery($user, 'delivered');
 
         $this->expectException(\RuntimeException::class);
@@ -56,7 +85,7 @@ class DeliveryConfirmTest extends TestCase
 
     public function test_confirm_already_confirmed_is_noop(): void
     {
-        $user     = $this->makeUser();
+        $user = $this->makeUser();
         $delivery = $this->seedDelivery($user, 'confirmed');
 
         // Should not throw.
@@ -80,21 +109,21 @@ class DeliveryConfirmTest extends TestCase
      */
     public function test_double_confirm_produces_only_one_confirmation_effect(): void
     {
-        $user     = $this->makeUser();
+        $user = $this->makeUser();
         $delivery = $this->seedDelivery($user, 'delivered');
 
         // Add a proof so the guard passes.
         DeliveryProof::create([
             'delivery_id' => $delivery->id,
-            'proof_type'  => 'photo',
-            'file_name'   => 'receipt.jpg',
-            'file_path'   => 'deliveries/' . $delivery->id . '/receipt.jpg',
-            'mime_type'   => 'image/jpeg',
+            'proof_type' => 'photo',
+            'file_name' => 'receipt.jpg',
+            'file_path' => 'deliveries/'.$delivery->id.'/receipt.jpg',
+            'mime_type' => 'image/jpeg',
             'uploaded_by' => $user->id,
         ]);
 
         // Count invoices before.
-        $invoiceCountBefore = \App\Modules\Accounting\Models\Invoice::count();
+        $invoiceCountBefore = Invoice::count();
 
         // First confirm — should succeed and (try to) create a draft invoice.
         $first = $this->svc->confirm($delivery, $user);
@@ -102,14 +131,14 @@ class DeliveryConfirmTest extends TestCase
         $this->assertNotNull($first->confirmed_at);
 
         // Record state after first confirm.
-        $invoiceCountAfterFirst = \App\Modules\Accounting\Models\Invoice::count();
+        $invoiceCountAfterFirst = Invoice::count();
 
         // Second confirm — the delivery is now confirmed; must be a no-op.
         $second = $this->svc->confirm($delivery->fresh(), $user);
         $this->assertSame('confirmed', $second->status->value);
 
         // No new invoice must have been created on the second call.
-        $invoiceCountAfterSecond = \App\Modules\Accounting\Models\Invoice::count();
+        $invoiceCountAfterSecond = Invoice::count();
         $this->assertSame(
             $invoiceCountAfterFirst,
             $invoiceCountAfterSecond,
@@ -132,15 +161,15 @@ class DeliveryConfirmTest extends TestCase
      */
     public function test_stale_model_double_confirm_is_noop(): void
     {
-        $user     = $this->makeUser();
+        $user = $this->makeUser();
         $delivery = $this->seedDelivery($user, 'delivered');
 
         DeliveryProof::create([
             'delivery_id' => $delivery->id,
-            'proof_type'  => 'signed_dr',
-            'file_name'   => 'dr.pdf',
-            'file_path'   => 'deliveries/' . $delivery->id . '/dr.pdf',
-            'mime_type'   => 'application/pdf',
+            'proof_type' => 'signed_dr',
+            'file_name' => 'dr.pdf',
+            'file_path' => 'deliveries/'.$delivery->id.'/dr.pdf',
+            'mime_type' => 'application/pdf',
             'uploaded_by' => $user->id,
         ]);
 
@@ -152,9 +181,9 @@ class DeliveryConfirmTest extends TestCase
         // stale model that the second concurrent request would hold at the point
         // it entered confirm() before the first request committed).
         $staleModel = $delivery->fresh();
-        $staleModel->forceFill(['status' => \App\Modules\SupplyChain\Enums\DeliveryStatus::Delivered]);
+        $staleModel->forceFill(['status' => DeliveryStatus::Delivered]);
 
-        $invoiceCountBefore = \App\Modules\Accounting\Models\Invoice::count();
+        $invoiceCountBefore = Invoice::count();
 
         // The fix: inside the transaction a lockForUpdate re-read sees
         // `status = confirmed` and returns early — no extra save, no extra invoice.
@@ -163,25 +192,31 @@ class DeliveryConfirmTest extends TestCase
         $this->assertSame('confirmed', $result->status->value);
         $this->assertSame(
             $invoiceCountBefore,
-            \App\Modules\Accounting\Models\Invoice::count(),
+            Invoice::count(),
             'Lock-reload path must not create a second invoice for a stale model.',
         );
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    private function makeUser(): User
+    private function makeUser(bool $canConfirm = true): User
     {
         $role = Role::create([
-            'name'        => 'Confirm Test Role ' . uniqid(),
-            'slug'        => 'confirm_test_' . uniqid(),
+            'name' => 'Confirm Test Role '.uniqid(),
+            'slug' => 'confirm_test_'.uniqid(),
             'description' => 'Test',
         ]);
-        $perm = Permission::firstOrCreate(
-            ['slug' => 'supply_chain.deliveries.confirm'],
-            ['name' => 'Confirm Delivery', 'module' => 'supply_chain'],
-        );
-        $role->permissions()->syncWithoutDetaching([$perm->id]);
+        $permissions = [Permission::firstOrCreate(
+            ['slug' => 'supply_chain.deliveries.view'],
+            ['name' => 'View Deliveries', 'module' => 'supply_chain'],
+        )];
+        if ($canConfirm) {
+            $permissions[] = Permission::firstOrCreate(
+                ['slug' => 'supply_chain.deliveries.confirm'],
+                ['name' => 'Confirm Delivery', 'module' => 'supply_chain'],
+            );
+        }
+        $role->permissions()->syncWithoutDetaching(array_map(static fn (Permission $permission): int => $permission->id, $permissions));
 
         return User::factory()->create(['role_id' => $role->id]);
     }
@@ -189,7 +224,7 @@ class DeliveryConfirmTest extends TestCase
     private function seedCustomer(): Customer
     {
         return Customer::create([
-            'name'      => 'Test Customer ' . uniqid(),
+            'name' => 'Test Customer '.uniqid(),
             'is_active' => true,
         ]);
     }
@@ -198,15 +233,16 @@ class DeliveryConfirmTest extends TestCase
     {
         $customer = $this->seedCustomer();
         $so = SalesOrder::create([
-            'so_number'    => 'SO-T-' . substr(uniqid(), -5),
-            'customer_id'  => $customer->id,
-            'date'         => now()->toDateString(),
-            'subtotal'     => '10000.00',
-            'vat_amount'   => '1200.00',
+            'so_number' => 'SO-T-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'date' => now()->toDateString(),
+            'subtotal' => '10000.00',
+            'vat_amount' => '1200.00',
             'total_amount' => '11200.00',
-            'created_by'   => $user->id,
+            'created_by' => $user->id,
         ]);
         $so->forceFill(['status' => 'confirmed'])->save();
+
         return $so;
     }
 
@@ -214,12 +250,13 @@ class DeliveryConfirmTest extends TestCase
     {
         $so = $this->seedSalesOrder($user);
         $delivery = Delivery::create([
-            'delivery_number' => 'DL-T-' . substr(uniqid(), -5),
-            'sales_order_id'  => $so->id,
-            'scheduled_date'  => now()->toDateString(),
-            'created_by'      => $user->id,
+            'delivery_number' => 'DL-T-'.substr(uniqid(), -5),
+            'sales_order_id' => $so->id,
+            'scheduled_date' => now()->toDateString(),
+            'created_by' => $user->id,
         ]);
         $delivery->forceFill(['status' => $status])->save();
+
         return $delivery;
     }
 }

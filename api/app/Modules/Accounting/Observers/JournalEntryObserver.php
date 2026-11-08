@@ -7,7 +7,11 @@ namespace App\Modules\Accounting\Observers;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Services\JournalEntryRealtimeService;
+use App\Modules\Accounting\Services\Statements\FinancialStatementCacheGeneration;
+use App\Modules\Dashboard\Services\DashboardCacheGeneration;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Flush statement caches whenever a JE materially changes (saved or deleted).
@@ -27,23 +31,36 @@ class JournalEntryObserver
         }
     }
 
-    public function saved(JournalEntry $je): void
+    public function created(JournalEntry $je): void
     {
-        $this->flush();
+        $this->invalidate($je, 'created');
+    }
+
+    public function updated(JournalEntry $je): void
+    {
+        $this->invalidate($je, $je->wasChanged('status') ? 'status_changed' : 'updated');
     }
 
     public function deleted(JournalEntry $je): void
     {
-        $this->flush();
+        $this->invalidate($je, 'deleted');
     }
 
-    private function flush(): void
+    private function invalidate(JournalEntry $je, string $action): void
     {
-        try {
-            Cache::tags(['financial_statements', 'finance_dashboard'])->flush();
-        } catch (\Throwable) {
-            // Some cache stores (file/database) don't support tags. Safe to ignore;
-            // statements re-key by date so stale entries cap out at TTL anyway.
-        }
+        FinancialStatementCacheGeneration::rotateAfterCommit();
+        DashboardCacheGeneration::touch();
+
+        DB::afterCommit(static function (): void {
+            try {
+                Cache::tags(['financial_statements', 'finance_dashboard'])->flush();
+            } catch (\Throwable) {
+                // Some cache stores do not support tags; versioned keys still retire safely.
+            }
+        });
+
+        // Register cache-generation callbacks before the outbox dispatch callback
+        // so a viewer refetch cannot observe the pre-commit statement snapshot.
+        app(JournalEntryRealtimeService::class)->stage($je, $action);
     }
 }

@@ -20,8 +20,8 @@ function readPending(key: string): Values | null {
   } catch { return null; }
 }
 
-export function NotArrivedPanel({ deliveryId, onClose }: { deliveryId: string; onClose: () => void }) {
-  const key = `ogami:delivery-trace:${deliveryId}`;
+export function NotArrivedPanel({ deliveryId, portalUserId, onClose }: { deliveryId: string; portalUserId: string; onClose: () => void }) {
+  const key = `ogami:delivery-trace:${portalUserId}:${deliveryId}`;
   const [pending, setPending] = useState<Values | null>(() => readPending(key));
   const [failure, setFailure] = useState('');
   const navigate = useNavigate();

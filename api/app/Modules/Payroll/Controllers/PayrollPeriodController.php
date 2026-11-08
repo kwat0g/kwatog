@@ -23,6 +23,7 @@ use App\Modules\Payroll\Enums\BankFileFormat;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodType;
 use App\Modules\Payroll\Enums\PayrollHalfType;
+use App\Modules\Payroll\Exceptions\PayrollPeriodStateConflictException;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use App\Modules\Payroll\Services\ThirteenthMonthService;
 use Illuminate\Http\JsonResponse;
@@ -128,14 +129,15 @@ class PayrollPeriodController
      * status=processing. Previously this dispatched blind and returned the
      * still-Draft period, so the SPA could not tell a queued run from an
      * untouched one — the Compute button stayed enabled and every extra click
-     * queued another full recompute. A rejected claim is a 422 with the reason.
+     * queued another full recompute. State conflicts now return 409; other
+     * business-rule refusals remain 422.
      */
     public function compute(PayrollPeriod $period, Request $request): JsonResponse
     {
         try {
             $claimed = $this->service->claimForComputeAndStage($period, $request->user());
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return (new PayrollPeriodResource($claimed))
@@ -146,14 +148,14 @@ class PayrollPeriodController
     /**
      * REC-04 — approve is the maker-checker gate. The service rejects an actor
      * who computed this same run (unless they hold self_approve_override),
-     * surfaced here as 422 so the SPA toast shows the reason cleanly.
+     * surfaced here as a typed state conflict or business-rule response.
      */
     public function approve(PayrollPeriod $period, Request $request): JsonResponse
     {
         try {
             $approved = $this->service->approve($period, $request->user());
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return response()->json([
@@ -167,7 +169,7 @@ class PayrollPeriodController
         try {
             $updated = $this->service->requestCorrection($period, $request->user(), $request->validated('reason'));
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return response()->json([
@@ -180,7 +182,7 @@ class PayrollPeriodController
         try {
             $period = $this->service->finalize($period, $request->user());
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return response()->json([
@@ -194,7 +196,7 @@ class PayrollPeriodController
         try {
             $updated = $this->service->retryGlPosting($period);
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return response()->json([
@@ -258,7 +260,7 @@ class PayrollPeriodController
         try {
             $updated = $this->service->forceUnlock($period, $request->user(), $data['reason'] ?? null);
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return response()->json([
@@ -274,14 +276,14 @@ class PayrollPeriodController
      * PayrollPeriodService::void(), which reverses any GL posting via a
      * balanced mirror JE, transitions the period to Voided, and writes an
      * audit row + PayrollPeriodVoided event. Actor is recorded as voided_by.
-     * Service throws on any non-finalized status, surfaced here as 422.
+     * Service throws on any non-finalized status, surfaced as a typed conflict.
      */
     public function void(VoidPayrollPeriodRequest $request, PayrollPeriod $period): JsonResponse
     {
         try {
             $voided = $this->service->void($period, $request->user(), $request->validated()['reason']);
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return response()->json([
@@ -318,7 +320,7 @@ class PayrollPeriodController
             $svc = app(BankFileService::class);
             $record = $svc->generate($period, $request->user(), $validated['format'] ?? null, true);
         } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->businessRuleResponse($e);
         }
 
         return response()->json([
@@ -364,5 +366,17 @@ class PayrollPeriodController
         );
 
         return (new PayrollPeriodResource($period))->response()->setStatusCode(201);
+    }
+
+    private function businessRuleResponse(BusinessRuleException $exception): JsonResponse
+    {
+        if ($exception instanceof PayrollPeriodStateConflictException) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'code' => $exception->errorCode(),
+            ], 409);
+        }
+
+        return response()->json(['message' => $exception->getMessage()], 422);
     }
 }

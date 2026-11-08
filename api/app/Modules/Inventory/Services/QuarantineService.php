@@ -13,6 +13,7 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Exceptions\MaterialReviewRecordStateConflictException;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
@@ -592,7 +593,7 @@ class QuarantineService
         array $releaseEvidence = [],
     ): MaterialReviewRecord {
         if ($mrb->status !== MrbStatus::Held) {
-            throw new BusinessRuleException("MRB {$mrb->mrb_number} is not held (status: {$mrb->status->value}).");
+            throw new MaterialReviewRecordStateConflictException('This MRB is no longer held. Refresh and review its current status.');
         }
 
         $dispo = NcrDisposition::tryFrom($disposition);
@@ -606,7 +607,7 @@ class QuarantineService
             // and re-move the quarantine stock (P40).
             $locked = MaterialReviewRecord::query()->lockForUpdate()->findOrFail($mrb->getKey());
             if ($locked->status !== MrbStatus::Held) {
-                throw new BusinessRuleException("MRB {$locked->mrb_number} is not held (status: {$locked->status->value}).");
+                throw new MaterialReviewRecordStateConflictException('This MRB is no longer held. Refresh and review its current status.');
             }
             if ((int) $locked->held_by === (int) $by->id) {
                 throw new BusinessRuleException('A different user must release an MRB hold than the one who placed it.');

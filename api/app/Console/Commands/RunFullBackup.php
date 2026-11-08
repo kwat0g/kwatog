@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Common\Services\BackupManifestStore;
+use App\Common\Services\AdminBackupsRealtimeService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 use Symfony\Component\Process\Process;
@@ -108,7 +109,7 @@ class RunFullBackup extends Command
         }
 
         try {
-            app(BackupManifestStore::class)->publish(
+            $manifest = app(BackupManifestStore::class)->publish(
                 $databaseFilename,
                 $filesFilename,
                 is_string($this->option('manifest-id')) ? $this->option('manifest-id') : null,
@@ -119,6 +120,16 @@ class RunFullBackup extends Command
             $this->error('db:full-backup — artifacts completed but their recovery manifest could not be published.');
             report($exception);
             return self::FAILURE;
+        }
+
+        // Admin operations publish a row-transition signal after completion.
+        // Scheduled and recovery-created artifacts have no ledger row to do so.
+        if (! is_string($this->option('manifest-id')) || trim($this->option('manifest-id')) === '') {
+            app(AdminBackupsRealtimeService::class)->signalManifest(
+                (string) ($manifest['id'] ?? $databaseFilename),
+                'created',
+                (string) ($manifest['created_at'] ?? now()->toISOString()),
+            );
         }
 
         $this->info('db:full-backup — database and private files backup completed.');

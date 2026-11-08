@@ -42,6 +42,10 @@ const ENV = {
   BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
   LARAVEL_STORAGE_PATH: TEST_STORAGE,
   SESSION_SECURE_COOKIE: 'false', SESSION_SAME_SITE: 'lax',
+  // The VPS .env scopes cookies to ogamiph.dev. Isolated browser apps use
+  // loopback origins, so they need host-only cookies to retain Sanctum CSRF
+  // and session state.
+  SESSION_DOMAIN: '',
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
   INVENTORY_BROWSER_DB: DB, INVENTORY_BROWSER_FIXTURE: FIXTURE_IN_CONTAINER,
   ...(INVENTORY_TAG ? { E2E_INVENTORY_TAG: INVENTORY_TAG } : {}),
@@ -1015,6 +1019,12 @@ async function runOtherInventoryUi() {
   ]);
 }
 
+async function runInventoryAdjustmentApprovalRealtime() {
+  await runRealSpaTests('inventory-adjustment-approval-realtime', [
+    'e2e-real/inventory-adjustment-approval.spec.ts',
+  ]);
+}
+
 async function runQualityHeldAdjustmentUi() {
   await runRealSpaTests('quality-held-adjustment-ui', [
     'e2e-real/quality-held-stock-adjustment.spec.ts',
@@ -1097,6 +1107,7 @@ async function runMobile(browser) {
       else if (phase === 'mrb') await runMrb(browser);
       else if (phase === 'stock-count-ui') await runStockCountUi();
       else if (phase === 'other-inventory-ui') await runOtherInventoryUi();
+      else if (phase === 'inventory-adjustment-approval-realtime') await runInventoryAdjustmentApprovalRealtime();
       else if (phase === 'quality-held-adjustment-ui') await runQualityHeldAdjustmentUi();
       else if (phase === 'mobile') await runMobile(browser);
       else throw new Error(`Unknown INVENTORY_TEST_PHASE: ${phase}`);

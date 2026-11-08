@@ -34,9 +34,10 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatDateTime, localIsoDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
-import type { PaymentMethod } from '@/types/accounting';
+import type { Invoice, PaymentMethod } from '@/types/accounting';
 import { agingBucketLabel } from '@/lib/labels';
 import { ReviewPaymentDialog } from './ReviewPaymentDialog';
+import { invalidateRealtimeChange, reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 const collectionSchema = z.object({
   cash_account_id: z.string().min(1, 'Required'),
@@ -44,7 +45,7 @@ const collectionSchema = z.object({
   amount: z.string().regex(/^\d{1,13}(?:\.\d{1,2})?$/, 'Use a positive amount with no more than two decimal places.').refine((value) => /[1-9]/.test(value), 'Amount must be positive.'),
   payment_method: z.string().min(1, 'Required'),
   reference_number: z.string().max(50).optional().or(z.literal('')),
-  manual_reason: z.string().trim().min(10, 'Explain the exception in at least 10 characters.').max(500),
+  manual_reason: z.string().trim().max(500).optional().or(z.literal('')),
 });
 type CollectionFormValues = z.infer<typeof collectionSchema>;
 
@@ -52,7 +53,7 @@ export default function InvoiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can, canApprove } = usePermission();
+  const { can } = usePermission();
   const user = useAuthStore((state) => state.user);
   const [showCollect, setShowCollect] = useState(false);
   const [showPaymentReview, setShowPaymentReview] = useState(false);
@@ -69,8 +70,20 @@ export default function InvoiceDetailPage() {
     queryKey: ['accounting', 'invoices', id],
     queryFn: () => invoicesApi.show(id),
     enabled: !!id,
-    refetchInterval: (query) => query.state.data && !['paid', 'cancelled'].includes(query.state.data.status) && document.visibilityState === 'visible' ? 30_000 : false,
   });
+  const invoiceDetailKey = ['accounting', 'invoices', id] as const;
+  const refreshInvoice = (fresh?: Invoice) => {
+    if (fresh) {
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'invoice', entityId: id },
+        invoiceDetailKey,
+        fresh,
+      );
+      return;
+    }
+    void invalidateRealtimeChange(qc, { entityType: 'invoice', entityId: id });
+  };
 
   // 2026-08-08 — live chain progress (finalize / collections) on the invoice page.
   useChainProgress('invoice', id, ['accounting', 'invoices', id]);
@@ -81,7 +94,7 @@ export default function InvoiceDetailPage() {
 
   const { data: cashAccounts, isError: cashAccountsFailed, isFetching: cashAccountsPending, refetch: refetchCashAccounts } = useQuery({
     queryKey: ['accounting', 'accounts', 'cash'],
-    queryFn: () => accountsApi.list({ per_page: 50, type: 'asset' }),
+    queryFn: () => accountsApi.list({ per_page: 100, type: 'asset' }),
     enabled: showCollect,
   });
 
@@ -89,37 +102,38 @@ export default function InvoiceDetailPage() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
     reset,
   } = useForm<CollectionFormValues>({
     resolver: zodResolver(collectionSchema),
     mode: 'onChange',
-    defaultValues: { collection_date: localIsoDate(), payment_method: '' },
+    defaultValues: { collection_date: localIsoDate(), payment_method: invoice?.sales_order?.payment_method ?? '' },
   });
 
   const finalizeMut = useMutation({
     mutationFn: () => invoicesApi.finalize(id),
     onSuccess: (inv) => {
       toast.success(`Invoice ${inv.invoice_number} finalized.`);
-      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+      refreshInvoice(inv);
     },
     onError: (e: Error & { response?: { data?: { message?: string } } }) =>
       toast.error(e.response?.data?.message ?? 'Failed to finalize.'),
   });
   const approvePrebillMut = useMutation({
     mutationFn: () => invoicesApi.approvePrebill(id),
-    onSuccess: () => {
+    onSuccess: (inv) => {
       toast.success('Prebill invoice approved.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+      refreshInvoice(inv);
     },
     onError: (e: Error & { response?: { data?: { message?: string } } }) =>
       toast.error(e.response?.data?.message ?? 'Failed to approve prebill invoice.'),
   });
   const cancelMut = useMutation({
     mutationFn: () => invoicesApi.cancel(id),
-    onSuccess: () => {
+    onSuccess: (inv) => {
       toast.success('Invoice cancelled.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+      refreshInvoice(inv);
     },
     onError: (e: Error & { response?: { data?: { message?: string } } }) =>
       toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
@@ -132,12 +146,12 @@ export default function InvoiceDetailPage() {
         amount: String(d.amount),
         payment_method: d.payment_method as PaymentMethod,
         reference_number: d.reference_number || undefined,
-        manual_reason: d.manual_reason,
+        manual_reason: d.manual_reason ?? '',
         idempotency_key: `collection:${id}:${invoice?.amount_paid ?? ''}:${invoice?.balance ?? ''}`,
       }),
     onSuccess: () => {
       toast.success('Collection recorded.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+      refreshInvoice();
       setShowCollect(false);
       reset({
         collection_date: localIsoDate(),
@@ -170,6 +184,7 @@ export default function InvoiceDetailPage() {
   const isDraft = invoice.status === 'draft';
   const isOpen = invoice.status === 'finalized' || invoice.status === 'partial';
   const enteredAmount = watch('amount') ?? '';
+  const selectedPaymentMethod = watch('payment_method');
   const amountCents = (value: string) => { const [whole, fraction = ''] = value.split('.'); return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0')); };
   const amountExceedsBalance = /^\d{1,13}(?:\.\d{1,2})?$/.test(enteredAmount) && amountCents(enteredAmount) > amountCents(invoice.balance);
   const pendingPayment = invoice.payment_submissions?.find((payment) => payment.status === 'pending');
@@ -193,7 +208,7 @@ export default function InvoiceDetailPage() {
   const prebillPending = isPrebill && isDraft && !invoice.prebill_approved_by;
   const isMaker = invoice.created_by?.id === user?.id;
   const isPrebillApprover = invoice.prebill_approved_by?.id === user?.id;
-  const canApprovePrebill = prebillPending && !isMaker && canApprove('accounting.invoices.prebill_approve');
+  const canApprovePrebill = invoice.available_actions?.approve_prebill === true;
   const canEditPrebill = isDraft && isPrebill && can('accounting.invoices.update');
   const canFinalize = isDraft
     && can('accounting.invoices.create')
@@ -232,6 +247,9 @@ export default function InvoiceDetailPage() {
   const cashAccts = (cashAccounts?.data ?? []).filter(
     (a) => a.code.startsWith('10') && a.is_active && !cashParentIds.has(a.id),
   );
+  const availableCollectionAccounts = selectedPaymentMethod === 'bank_transfer'
+    ? cashAccts.filter((account) => account.code === '1020' || account.parent_code === '1020')
+    : cashAccts;
 
   return (
     <div>
@@ -293,7 +311,7 @@ export default function InvoiceDetailPage() {
                 Finalize
               </Button>
             )}
-            {pendingPayment && can('accounting.invoices.collect') && (
+            {invoice.available_actions?.review_payment === true && pendingPayment && (
               <Button
                 variant="primary"
                 size="sm"
@@ -320,7 +338,18 @@ export default function InvoiceDetailPage() {
 
       <div className="px-5 pt-4">
         {isOpen && <p role="status" className="text-sm text-muted mb-3">{pendingPayment ? 'Customer payment submitted. Verify the receiving bank record before recording funds.' : 'Awaiting customer payment submission.'}</p>}
-        {isOpen && !pendingPayment && can('accounting.invoices.collect_manual') && <details className="mb-3 text-sm"><summary className="cursor-pointer text-muted">Exceptional collection</summary><Button variant="secondary" size="sm" onClick={() => setShowCollect(true)}>Record exceptional collection</Button></details>}
+        {isOpen && !pendingPayment && ((can('accounting.invoices.collect') && ['cash', 'check'].includes(invoice.sales_order?.payment_method ?? '')) || can('accounting.invoices.collect_manual')) && (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-default bg-canvas px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-primary">Record payment received</p>
+              <p className="mt-1 text-xs text-muted">Record the agreed cash, check, or bank transfer received by Finance.</p>
+            </div>
+            <Button variant="secondary" onClick={() => {
+              reset({ collection_date: localIsoDate(), payment_method: invoice.sales_order?.payment_method ?? '', cash_account_id: '', amount: '', reference_number: '', manual_reason: '' });
+              setShowCollect(true);
+            }}>Record collection</Button>
+          </div>
+        )}
         {!!invoice.payment_submissions?.length && <Panel title="Payment submissions">
           {invoice.payment_submissions.map((payment) => <div key={payment.id} className="py-3 border-b border-default last:border-0">
             <div className="flex flex-wrap justify-between gap-2"><span>{payment.sending_bank} · {payment.reference_number} · {formatPeso(payment.amount)}</span><Chip variant={payment.status === 'verified' ? 'success' : payment.status === 'rejected' ? 'danger' : 'warning'}>{payment.status === 'pending' ? 'Awaiting verification' : payment.status}</Chip></div>
@@ -550,7 +579,7 @@ export default function InvoiceDetailPage() {
       <Modal
         isOpen={showCollect}
         onClose={() => setShowCollect(false)}
-        title={`Exceptional collection · ${invoice.invoice_number ?? 'DRAFT'}`}
+        title={`Record collection · ${invoice.invoice_number ?? 'DRAFT'}`}
         size="sm"
       >
         <form
@@ -577,7 +606,7 @@ export default function InvoiceDetailPage() {
             error={errors.cash_account_id?.message}
           >
             <option value="">— Select —</option>
-            {cashAccts.map((a: { id: string; code: string; name: string }) => (
+            {availableCollectionAccounts.map((a: { id: string; code: string; name: string }) => (
               <option key={a.id} value={a.id}>
                 {a.code} — {a.name}
               </option>
@@ -590,18 +619,33 @@ export default function InvoiceDetailPage() {
             {...register('collection_date')}
             error={errors.collection_date?.message}
           />
-          <Input
-            label={`Amount (max ${formatPeso(invoice.balance)})`}
-            min="0.01"
-            max={invoice.balance}
-            className="font-mono tabular-nums text-right"
-            required
-            prefix="₱"
-            {...numberInputProps()}
-            step="0.01"
-            {...register('amount')}
-            error={errors.amount?.message ?? (amountExceedsBalance ? 'Amount exceeds outstanding balance.' : undefined)}
-          />
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="collection-amount" className="text-label text-muted font-medium">
+                Amount (max {formatPeso(invoice.balance)})<span aria-hidden="true" className="ml-0.5 text-danger-fg">*</span>
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setValue('amount', String(invoice.balance), { shouldDirty: true, shouldValidate: true })}
+              >
+                Exact Amount
+              </Button>
+            </div>
+            <Input
+              id="collection-amount"
+              min="0.01"
+              max={invoice.balance}
+              className="font-mono tabular-nums text-right"
+              required
+              prefix="₱"
+              {...numberInputProps()}
+              step="0.01"
+              {...register('amount')}
+              error={errors.amount?.message ?? (amountExceedsBalance ? 'Amount exceeds outstanding balance.' : undefined)}
+            />
+          </div>
           <Select
             label="Method"
             required
@@ -609,14 +653,14 @@ export default function InvoiceDetailPage() {
             error={errors.payment_method?.message}
           >
             <option value="">— Select —</option>
-            {(accountingOptions?.payment_methods ?? []).map((option) => (
+            {(accountingOptions?.payment_methods ?? []).filter((option) => can('accounting.invoices.collect_manual') ? ['cash', 'check', 'bank_transfer'].includes(option.value) : option.value === invoice.sales_order?.payment_method && ['cash', 'check'].includes(option.value)).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </Select>
           <Input label="Reference no. (optional)" helper="Leave blank for cash; enter the check number or transfer reference when available." {...register('reference_number')} />
-          <Textarea label="Exception reason" required maxLength={500} {...register('manual_reason')} error={errors.manual_reason?.message} />
+          {can('accounting.invoices.collect_manual') && <Textarea label="Reason if payment method differs from order terms" maxLength={500} {...register('manual_reason')} error={errors.manual_reason?.message} />}
           <ModalFooter>
             <Button type="button" variant="secondary" onClick={() => setShowCollect(false)}>
               Cancel

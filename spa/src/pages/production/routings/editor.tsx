@@ -37,6 +37,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonForm } from '@/components/ui/Skeleton';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { FormGrid } from '@/components/layout/ContentLayouts';
@@ -45,8 +46,12 @@ import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
 import { routingsApi } from '@/api/production/routings';
 import { usePermission } from '@/hooks/usePermission';
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
+import type { ProductRouting } from '@/types/production/routing';
 
 // ─── Schema ──────────────────────────────────────────────────────
 
@@ -98,6 +103,29 @@ const blankOperation = {
  machine_rate_per_hour: '', overhead_rate_per_hour: '', qc_required: false, description: '',
 };
 
+function routingToFormValues(routing: ProductRouting): FormValues {
+ return {
+  product_id: routing.product?.id ?? '',
+  notes: routing.notes ?? '',
+  operations: routing.operations.length > 0
+   ? routing.operations.map((op) => ({
+     sequence: String(op.sequence),
+     operation_name: op.operation_name,
+     work_center: op.work_center ?? '',
+     machine_id: op.machine?.id ?? '',
+     mold_id: op.mold?.id ?? '',
+     setup_time_minutes: op.setup_time_minutes ?? '',
+     cycle_time_minutes: op.cycle_time_minutes ?? '',
+     labor_rate_per_hour: op.labor_rate_per_hour ?? '',
+     machine_rate_per_hour: op.machine_rate_per_hour ?? '',
+     overhead_rate_per_hour: op.overhead_rate_per_hour ?? '',
+     qc_required: op.qc_required,
+     description: op.description ?? '',
+    }))
+   : [{ ...blankOperation }],
+ };
+}
+
 /** Backend list endpoints cap `per_page` at 100. */
 const LOOKUP_PAGE_SIZE = 100;
 
@@ -110,8 +138,11 @@ export default function RoutingEditorPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('production.routings.manage');
+ const canView = can('production.view') && can('production.routings.view');
  const [productSearch, setProductSearch] = useState('');
  const [confirmActivate, setConfirmActivate] = useState(false);
+ const [remoteUpdatePending, setRemoteUpdatePending] = useState(false);
+ const hydratedRouting = useRef<{ id: string; updatedAt: string } | null>(null);
 
  // ── Existing routing (edit / view mode) ──────────────────
  const existing = useQuery({
@@ -119,6 +150,7 @@ export default function RoutingEditorPage() {
  queryFn: () => routingsApi.show(id!),
  enabled: isEdit,
  });
+ useRealtimeRecord('product_routing', isEdit && canView ? id : undefined);
 
  // A superseded version is history: it is the definition past work orders
  // were built from, so it is never edited in place. Rolling back is an
@@ -126,13 +158,14 @@ export default function RoutingEditorPage() {
  const isSuperseded = isEdit && existing.data ? !existing.data.is_active : false;
  const readOnly = !canManage || isSuperseded;
 
- const {
- register, control, handleSubmit, setError, reset, watch,
- formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+ const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { product_id: '', notes: '', operations: [{ ...blankOperation }] },
  });
+ const {
+ register, control, handleSubmit, setError, reset, watch,
+ formState: { errors, isSubmitting, isDirty },
+ } = form;
 
  const { fields, append, remove } = useFieldArray({ control, name: 'operations' });
  const selectedProductId = watch('product_id');
@@ -187,31 +220,27 @@ export default function RoutingEditorPage() {
  const productsTruncated = (products.data?.meta.total ?? 0) > (products.data?.data.length ?? 0);
  const machinesTruncated = (machines.data?.meta.total ?? 0) > (machines.data?.data.length ?? 0);
 
- // Populate form when viewing or editing an existing routing.
+ // Hydrate the first route, or a new route after navigation. Later realtime
+ // refetches update a clean form, but never replace text the operator typed.
  useEffect(() => {
  if (!existing.data) return;
- const r = existing.data;
- reset({
- product_id: r.product?.id ?? '',
- notes: r.notes ?? '',
- operations: r.operations.length > 0
- ? r.operations.map((op) => ({
- sequence: String(op.sequence),
- operation_name: op.operation_name,
- work_center: op.work_center ?? '',
- machine_id: op.machine?.id ?? '',
- mold_id: op.mold?.id ?? '',
- setup_time_minutes: op.setup_time_minutes ?? '',
- cycle_time_minutes: op.cycle_time_minutes ?? '',
- labor_rate_per_hour: op.labor_rate_per_hour ?? '',
- machine_rate_per_hour: op.machine_rate_per_hour ?? '',
- overhead_rate_per_hour: op.overhead_rate_per_hour ?? '',
- qc_required: op.qc_required,
- description: op.description ?? '',
- }))
- : [{ ...blankOperation }],
- });
- }, [existing.data, reset]);
+ const signature = { id: existing.data.id, updatedAt: existing.data.updated_at };
+ const previous = hydratedRouting.current;
+ if (!previous || previous.id !== signature.id) {
+  reset(routingToFormValues(existing.data));
+  hydratedRouting.current = signature;
+  setRemoteUpdatePending(false);
+  return;
+ }
+ if (previous.updatedAt === signature.updatedAt) return;
+ if (isDirty) {
+  setRemoteUpdatePending(true);
+  return;
+ }
+ reset(routingToFormValues(existing.data));
+ hydratedRouting.current = signature;
+ setRemoteUpdatePending(false);
+ }, [existing.data, isDirty, reset]);
 
  // ── Mutations ────────────────────────────────────────────
  const saveMut = useMutation({
@@ -239,7 +268,13 @@ export default function RoutingEditorPage() {
  : routingsApi.create(payload);
  },
  onSuccess: (routing) => {
- qc.invalidateQueries({ queryKey: ['production', 'routings'] });
+ qc.setQueryData(['production', 'routings', 'detail', routing.id], routing);
+ void invalidateRealtimeChange(
+ qc,
+ { entityType: 'product_routing', entityId: routing.id },
+ [],
+ [['production', 'routings', 'detail', routing.id]],
+ );
  // An edit publishes a new version rather than rewriting the old one —
  // say so, otherwise the version jump on the next screen looks like a bug.
  toast.success(
@@ -247,7 +282,9 @@ export default function RoutingEditorPage() {
  ? `Routing v${routing.version} published; the previous version is kept as history.`
  : `Routing v${routing.version} created.`,
  );
- navigate(`/production/routings/${routing.id}`);
+ formSafety.draftState.discard();
+  formSafety.allowNavigationAfterSave();
+navigate(`/production/routings/${routing.id}`);
  },
  onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
  if (e.response?.status === 422 && e.response.data.errors) {
@@ -261,10 +298,23 @@ export default function RoutingEditorPage() {
  },
  });
 
+ const formSafety = useFormSafety({
+ form,
+ saved: saveMut.isSuccess,
+ formKey: `production.routing:${id ?? 'new'}`,
+ draft: !readOnly && (!isEdit || existing.isSuccess),
+ });
+
  const activateMut = useMutation({
  mutationFn: () => routingsApi.activate(id!),
  onSuccess: (routing) => {
- qc.invalidateQueries({ queryKey: ['production', 'routings'] });
+ qc.setQueryData(['production', 'routings', 'detail', routing.id], routing);
+ void invalidateRealtimeChange(
+ qc,
+ { entityType: 'product_routing', entityId: routing.id },
+ [],
+ [['production', 'routings', 'detail', routing.id]],
+ );
  setConfirmActivate(false);
  toast.success(`Routing v${routing.version} is now the active process plan.`);
  },
@@ -277,9 +327,16 @@ export default function RoutingEditorPage() {
  const duplicateMut = useMutation({
  mutationFn: () => routingsApi.duplicate(id!),
  onSuccess: (routing) => {
- qc.invalidateQueries({ queryKey: ['production', 'routings'] });
+ qc.setQueryData(['production', 'routings', 'detail', routing.id], routing);
+ void invalidateRealtimeChange(
+ qc,
+ { entityType: 'product_routing', entityId: routing.id },
+ [],
+ [['production', 'routings', 'detail', routing.id]],
+ );
  toast.success(`Routing v${routing.version} created from this version.`);
- navigate(`/production/routings/${routing.id}`);
+  formSafety.allowNavigationAfterSave();
+navigate(`/production/routings/${routing.id}`);
  },
  onError: (e: AxiosError<{ message?: string }>) => {
  toast.error(e.response?.data?.message ?? 'Failed to duplicate routing.');
@@ -335,6 +392,25 @@ export default function RoutingEditorPage() {
 
  return (
  <PageShell variant="grid">
+ {remoteUpdatePending && existing.data && (
+  <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning bg-warning-bg px-4 py-3 text-sm text-warning-fg">
+   <span>
+    Routing v{existing.data.version} changed while you were editing. Your draft is preserved; loading the latest version will discard it.
+   </span>
+   <Button
+    type="button"
+    size="sm"
+    variant="secondary"
+    onClick={() => {
+     reset(routingToFormValues(existing.data!));
+     hydratedRouting.current = { id: existing.data!.id, updatedAt: existing.data!.updated_at };
+     setRemoteUpdatePending(false);
+    }}
+   >
+    Discard draft and load latest
+   </Button>
+  </div>
+ )}
  <PageHeader
  inset={false}
  title={pageTitle}
@@ -380,6 +456,7 @@ export default function RoutingEditorPage() {
  className="min-w-0 w-full"
  data-touch-target
  >
+ {!readOnly && (!isEdit || existing.isSuccess) && <FormDraftBanner safety={formSafety} inset={false} />}
  {/* Product + notes */}
  <fieldset className="mb-8" disabled={readOnly}>
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Product</legend>

@@ -7,6 +7,7 @@ namespace Tests\Feature\ReturnManagement;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,7 +56,8 @@ class ReturnRequestApprovalChainTest extends TestCase
         $this->actingAs($submitter)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/submit")
             ->assertOk()
-            ->assertJsonPath('data.status', 'pending_approval');
+            ->assertJsonPath('data.status', 'pending_approval')
+            ->assertJsonPath('data.available_actions.can_cancel', true);
 
         $this->actingAs($this->userWithRole('department_head'))
             ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
@@ -69,6 +71,65 @@ class ReturnRequestApprovalChainTest extends TestCase
             ->assertJsonPath('data.approval_records.1.step_order', 2)
             ->assertJsonPath('data.approval_records.1.role_slug', 'production_manager')
             ->assertJsonPath('data.approval_records.1.action', 'pending');
+    }
+
+    public function test_detail_projects_main_return_actions_for_the_current_viewer(): void
+    {
+        $viewer = $this->userWithRole('system_admin');
+        $physicalReturn = $this->draftRma($viewer);
+        $physicalReturn->update(['type' => 'customer_return', 'status' => 'approved']);
+
+        $this->actingAs($viewer)
+            ->getJson("/api/v1/return-management/return-requests/{$physicalReturn->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.can_receive', true)
+            ->assertJsonPath('data.available_actions.can_edit', false)
+            ->assertJsonPath('data.available_actions.can_inspect', false)
+            ->assertJsonPath('data.available_actions.can_split', false);
+
+        $qcReturn = $this->draftRma($viewer);
+        $qcReturn->update([
+            'status' => 'approved',
+            'source_key' => 'grn-rejection:test',
+        ]);
+
+        $this->actingAs($viewer)
+            ->getJson("/api/v1/return-management/return-requests/{$qcReturn->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.can_receive', false);
+    }
+
+    public function test_detail_projects_split_eligibility_per_return_line(): void
+    {
+        $viewer = $this->userWithRole('system_admin');
+        $rma = $this->draftRma($viewer);
+        $rma->update(['type' => 'customer_return', 'status' => 'received']);
+        ReturnRequestItem::query()->create([
+            'return_request_id' => $rma->id,
+            'quantity' => 10,
+            'returned_quantity' => 10,
+            'disposition' => 'restock',
+        ]);
+
+        $this->actingAs($viewer)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.can_split', true)
+            ->assertJsonPath('data.items.0.available_actions.can_split', false);
+    }
+
+    public function test_repeated_submit_returns_a_state_conflict(): void
+    {
+        $submitter = $this->userWithRole('system_admin');
+        $rma = $this->draftRma($submitter);
+        $path = "/api/v1/return-management/return-requests/{$rma->hash_id}/submit";
+
+        $this->actingAs($submitter)->postJson($path)->assertOk();
+
+        $this->actingAs($submitter)
+            ->postJson($path)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'return_request_state_conflict');
     }
 
     public function test_pending_step_advances_after_a_partial_approval(): void
@@ -179,7 +240,9 @@ class ReturnRequestApprovalChainTest extends TestCase
             ->assertJsonPath('data.pending_approval_step', 1)
             ->assertJsonPath('data.approval_records.0.role_slug', 'finance_officer')
             ->assertJsonPath('data.actions.can_approve', false)
-            ->assertJsonPath('data.actions.can_reject', false);
+            ->assertJsonPath('data.actions.can_reject', false)
+            ->assertJsonPath('data.available_actions.can_approve', false)
+            ->assertJsonPath('data.available_actions.can_reject', false);
 
         $this->actingAs($departmentHead)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/reject", [
@@ -194,7 +257,9 @@ class ReturnRequestApprovalChainTest extends TestCase
             ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.actions.can_approve', true)
-            ->assertJsonPath('data.actions.can_reject', true);
+            ->assertJsonPath('data.actions.can_reject', true)
+            ->assertJsonPath('data.available_actions.can_approve', true)
+            ->assertJsonPath('data.available_actions.can_reject', true);
 
         $this->actingAs($finance)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/reject", [
@@ -206,5 +271,22 @@ class ReturnRequestApprovalChainTest extends TestCase
         $record = $rma->approvalRecords()->firstOrFail();
         $this->assertSame('rejected', $record->action);
         $this->assertSame($finance->id, (int) $record->approver_id);
+    }
+
+    public function test_cancel_action_is_unavailable_after_physical_receipt(): void
+    {
+        $manager = $this->userWithRole('system_admin');
+        $rma = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-REC-'.substr(uniqid(), -5),
+            'type' => 'customer_return',
+            'status' => 'approved',
+            'created_by' => $manager->id,
+            'received_at' => now(),
+        ]);
+
+        $this->actingAs($manager)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.can_cancel', false);
     }
 }

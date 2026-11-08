@@ -25,6 +25,14 @@ export interface PriceRequest {
     | 'withdrawn'
     | 'expired';
   version: number;
+  available_actions?: {
+    can_propose: boolean;
+    can_approve: boolean;
+    can_withdraw: boolean;
+    can_accept: boolean;
+    can_reject: boolean;
+  };
+  permissions?: { view: boolean; propose: boolean; approve: boolean; withdraw: boolean };
   decision_reason?: string | null;
   cost_review?: {
     signature: string;
@@ -47,5 +55,8 @@ export interface ItemCostReview {
   proposed_cost: string;
   current_cost: string;
   status: 'pending' | 'approved' | 'rejected';
+  updated_at?: string;
   notes: string | null;
+  permissions?: { view: boolean; review: boolean; approve: boolean };
+  available_actions?: { approve: boolean; reject: boolean; renew: boolean };
 }

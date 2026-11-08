@@ -23,7 +23,7 @@ import type { PayrollVarianceReport } from '@/types/payroll';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
@@ -41,6 +41,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeature } from '@/hooks/useFeature';
 import { useEcho } from '@/hooks/useEcho';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatRelative } from '@/lib/formatDate';
 import type {
@@ -56,26 +58,7 @@ import { FileInput } from '@/components/ui/FileInput';
 import { Tabs } from '@/components/ui/Tabs';
 import { localIsoDate } from '@/lib/formatDate';
 
-const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
-  switch (status) {
-    case 'disbursed':
-      return 'success';
-    case 'finalized':
-      return 'info';
-    case 'approved':
-      return 'info';
-    case 'computed':
-      return 'info';
-    case 'processing':
-      return 'info';
-    case 'draft':
-      return 'warning';
-    case 'voided':
-      return 'danger';
-    default:
-      return 'neutral';
-  }
-};
+import { payrollPeriodStatusVariant } from '@/lib/statusVariants';
 
 /**
  * "Jul 16 – Jul 31, 2026" — the cutoff the operator is actually committing.
@@ -106,7 +89,7 @@ export default function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can, canApprove: canAct } = usePermission();
+  const { can } = usePermission();
   const actorId = useAuthStore((state) => state.user?.id);
   const accountingEnabled = useFeature('accounting');
   const journalEntryReference = (entryId: string, entryNumber: string): ReactNode => {
@@ -123,12 +106,28 @@ export default function PayrollPeriodDetailPage() {
   const [compareToId, setCompareToId] = useState<string>('');
   const [bankFormat, setBankFormat] = useState<string>('');
   const [showBankFormatModal, setShowBankFormatModal] = useState(false);
+  const payrollPeriodQueryKey = ['payroll-period', id] as const;
+  useRealtimeRecord('payroll_period', id);
+  const refreshAfterStateConflict = (error: { response?: { status?: number } }) => {
+    if (error.response?.status === 409 && id) {
+      void invalidateRealtimeChange(qc, { entityType: 'payroll_period', entityId: id });
+    }
+  };
+
+  // The acting browser applies the authoritative mutation response immediately;
+  // the same centralized query map refreshes active related views while other
+  // viewers receive the post-commit private-channel ping.
+  const applyPeriodResponse = (updated: PayrollPeriod) => {
+    if (!id) return;
+    qc.setQueryData<PayrollPeriod>(payrollPeriodQueryKey, (current) => current
+      ? { ...current, ...updated, summary: updated.summary ?? current.summary }
+      : updated);
+    void invalidateRealtimeChange(qc, { entityType: 'payroll_period', entityId: id });
+  };
 
   useEffect(() => {
     setPayrollPage(1);
   }, [activeTab, payrollSearch]);
-
-  const isProcessing = (period?: PayrollPeriod | null) => period?.status === 'processing';
 
   const {
     data: period,
@@ -136,41 +135,31 @@ export default function PayrollPeriodDetailPage() {
     isError: periodError,
     refetch,
   } = useQuery({
-    queryKey: ['payroll-period', id],
+    queryKey: payrollPeriodQueryKey,
     queryFn: () => periodsApi.show(id!),
     enabled: !!id,
-    refetchInterval: (q) =>
-      isProcessing(q.state.data as PayrollPeriod | undefined) ? 3000 : false,
   });
 
-  // Live compute progress. ProcessPayrollJob broadcasts every 10 employees, so
-  // the bar moves in near real time instead of stepping once per 3s poll. The
-  // poll above stays as the fallback for when Reverb is unreachable, and the
-  // server caches each snapshot so a page opened mid-run paints a real bar
-  // immediately. Patching the cached period in place avoids a refetch per event.
-  useEcho<PayrollProgressEventPayload>(`payroll.period.${id}`, '.payroll.progress', (payload) => {
-    qc.setQueryData(
-      ['payroll-period', id],
-      (prev: PayrollPeriod | undefined) =>
-        prev && {
-          ...prev,
-          status: payload.status ?? prev.status,
-          compute_progress: {
-            processed: payload.processed,
-            total: payload.total,
-            failures: payload.failures,
-            percent: payload.percent,
-            updated_at: new Date().toISOString(),
-          },
-        },
-    );
-
-    // The run just ended — pull the authoritative row (and its totals) and
-    // refresh the employee table, rather than waiting on the next poll.
-    if (payload.status && payload.status !== 'processing') {
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
-      qc.invalidateQueries({ queryKey: ['payrolls'] });
-    }
+  // Progress payloads only announce a change. Debounce bursts and refetch the
+  // authorized period resource so the database/cache remains authoritative.
+  const progressRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (progressRefreshTimer.current) clearTimeout(progressRefreshTimer.current);
+  }, []);
+  useEcho<PayrollProgressEventPayload>(`payroll.period.${id}`, '.payroll.progress', (signal) => {
+    if (progressRefreshTimer.current) clearTimeout(progressRefreshTimer.current);
+    progressRefreshTimer.current = setTimeout(() => {
+      progressRefreshTimer.current = null;
+      void refetch().then(({ data: freshPeriod }) => {
+        if (signal.action === 'completed' || (freshPeriod && freshPeriod.status !== 'processing')) {
+          void qc.invalidateQueries({ queryKey: ['payrolls'] });
+        }
+      });
+    }, 200);
+  }, () => {
+    void refetch();
+  }, () => {
+    void refetch();
   });
 
   const { data: bankFileOptions, isError: bankOptionsFailed, isFetching: bankOptionsPending, refetch: refetchBankOptions } = useQuery({
@@ -200,8 +189,7 @@ export default function PayrollPeriodDetailPage() {
     enabled:
       Boolean(period?.id) &&
       Boolean(bankFormat) &&
-      can('payroll.periods.bank_file') &&
-      (period?.status === 'finalized' || period?.status === 'disbursed'),
+      period?.available_actions?.bank_file === true,
     staleTime: 30_000,
   });
   const bankBlocked = (bankPreview?.unbankable_count ?? 0) > 0;
@@ -234,7 +222,6 @@ export default function PayrollPeriodDetailPage() {
     queryKey: ['payrolls', id, payrollFilters],
     queryFn: () => periodsApi.payrolls(id!, payrollFilters),
     enabled: !!id && (activeTab === 'employees' || activeTab === 'failures'),
-    placeholderData: (prev) => prev,
   });
 
   const varianceQ = useQuery({
@@ -253,56 +240,60 @@ export default function PayrollPeriodDetailPage() {
     mutationFn: () => periodsApi.compute(id!),
     onSuccess: (updated) => {
       toast.success('Computation started.');
-      // The 202 already carries status=processing, so seed the cache with it.
-      // The button disables and polling starts on this render rather than
-      // waiting for the next refetch — the window in which the old code let a
-      // user click Compute again.
-      qc.setQueryData(['payroll-period', id], updated);
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      applyPeriodResponse(updated);
     },
     // Surface the backend's reason (already computing, wrong status, …) instead
     // of a generic failure message.
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to start computation.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to start computation.');
+    },
   });
   const approveMutation = useMutation({
     mutationFn: () => periodsApi.approve(id!),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Period approved.');
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      applyPeriodResponse(updated);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to approve period.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to approve period.');
+    },
   });
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
   const requestCorrectionMutation = useMutation({
     mutationFn: (reason: string) => periodsApi.requestCorrection(id!, reason),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Correction requested — HR can update and recompute this period.');
       setShowCorrectionDialog(false);
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
-      qc.invalidateQueries({ queryKey: ['payrolls'] });
+      applyPeriodResponse(updated);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to request a correction.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to request a correction.');
+    },
   });
   const finalizeMutation = useMutation({
     mutationFn: () => periodsApi.finalize(id!),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Period finalized — GL posting queued.');
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      applyPeriodResponse(updated);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to finalize period.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to finalize period.');
+    },
   });
   const retryGlMutation = useMutation({
     mutationFn: () => periodsApi.retryGl(id!),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('GL handoff retry queued.');
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      applyPeriodResponse(updated);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to retry the GL handoff.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to retry the GL handoff.');
+    },
   });
 
   // ADV1 — Disbursement proof
@@ -314,12 +305,14 @@ export default function PayrollPeriodDetailPage() {
 
   const markDisbursedMutation = useMutation({
     mutationFn: () => periodsApi.markDisbursed(id!),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Period marked as disbursed.');
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      applyPeriodResponse(updated);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to mark period as disbursed.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to mark period as disbursed.');
+    },
   });
 
   // H-8 — Force-unlock for periods stuck at Processing because the worker crashed.
@@ -330,26 +323,30 @@ export default function PayrollPeriodDetailPage() {
   const [showForceUnlockDialog, setShowForceUnlockDialog] = useState(false);
   const forceUnlockMutation = useMutation({
     mutationFn: (reason: string) => periodsApi.forceUnlock(id!, reason),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Period unlocked — you can re-run compute.');
       setShowForceUnlockDialog(false);
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      applyPeriodResponse(updated);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to unlock period.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to unlock period.');
+    },
   });
 
   // REC-01 — Void a finalized period (reverses GL posting, transitions to Voided).
   const [showVoidModal, setShowVoidModal] = useState(false);
   const voidMutation = useMutation({
     mutationFn: (reason: string) => periodsApi.void(id!, reason),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Period voided — any GL posting was reversed.');
       setShowVoidModal(false);
-      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+      applyPeriodResponse(updated);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      toast.error(err.response?.data?.message ?? 'Failed to void period.'),
+    onError: (err: { response?: { status?: number; data?: { message?: string } } }) => {
+      refreshAfterStateConflict(err);
+      toast.error(err.response?.data?.message ?? 'Failed to void period.');
+    },
   });
 
   // Refresh the employee table once a run ends. The terminal status is
@@ -408,42 +405,43 @@ export default function PayrollPeriodDetailPage() {
   // Compute (first run) and Recompute (replace an existing run) are separate
   // affordances. Recompute is destructive — it rewrites every payroll row, so it
   // asks for confirmation. The backend rejects either one for any status outside
-  // draft/computed, so this is UX only.
-  const hasRows = (summary?.employee_count ?? 0) > 0;
-  const canCompute =
-    can('payroll.periods.compute') && period.status === 'draft' && !period.is_thirteenth_month;
-  const canRecompute =
-    can('payroll.periods.compute') && period.status === 'computed' && !period.is_thirteenth_month;
+  // draft/computed and waits until the cutoff has ended before enabling either.
+  const canCompute = period.available_actions?.compute === true;
+  const canRecompute = period.available_actions?.recompute === true;
+  const computeDateBlocked = Boolean(period.compute_available_on);
+  const showCompute = canCompute || (
+    computeDateBlocked
+    && period.permissions?.compute === true
+    && period.status === 'draft'
+    && !period.is_thirteenth_month
+  );
+  const showRecompute = canRecompute || (
+    computeDateBlocked
+    && period.permissions?.compute === true
+    && period.status === 'computed'
+    && !period.is_thirteenth_month
+  );
   // Approve requires a completed run with rows. Previously this was gated on
   // 'draft', so an uncomputed period could be approved into an empty ₱0 payroll.
-  const canApprove =
-    canAct('payroll.periods.approve') && period.status === 'computed' && hasRows && !hasUnclassifiedDeductions;
+  const canApprove = period.available_actions?.approve === true;
   const isApprovedWithoutApprover = period.status === 'approved' && !period.approver;
-  const canRequestCorrection =
-    can('payroll.periods.request_correction') &&
-    (period.status === 'computed' || isApprovedWithoutApprover);
+  const canRequestCorrection = period.available_actions?.request_correction === true;
   const isApprover = period.approver?.id === actorId;
-  const canFinalize =
-    can('payroll.periods.finalize') && period.status === 'approved' && !!period.approver && !isApprover && !hasUnclassifiedDeductions;
-  const canBankFile =
-    can('payroll.periods.bank_file') &&
-    (period.status === 'finalized' || period.status === 'disbursed');
-  const canDisburse = can('payroll.periods.disburse') && period.status === 'finalized';
-  const canRetryGl =
-    can('accounting.journal.post') &&
-    (period.status === 'finalized' || period.status === 'disbursed') &&
-    (period.gl_handoff_status === 'manual_required' || period.gl_handoff_status === 'not_required');
+  const canFinalize = period.available_actions?.finalize === true;
+  const canBankFile = period.available_actions?.bank_file === true;
+  const canDisburse = period.available_actions?.disburse === true;
+  const canRetryGl = period.available_actions?.retry_gl === true;
   const hasLiveProof = (period.disbursement_proofs ?? []).some((proof) => !proof.deleted_at);
   // H-8 — Force-unlock only surfaces when the period is stuck at Processing.
-  const canForceUnlock = can('payroll.periods.force_unlock') && period.status === 'processing';
+  const canForceUnlock = period.available_actions?.force_unlock === true;
   // REC-01 — Void only a finalized (not yet disbursed) period.
-  const canVoid = can('payroll.periods.void') && period.status === 'finalized';
+  const canVoid = period.available_actions?.void === true;
   const isProc = period.status === 'processing';
   // A Processing claim whose worker is presumed dead. The backend lets the next
   // Compute click take the claim over, so a plain retry is offered to anyone
   // with compute rights — force-unlock is no longer the only way out.
   const isStaleRun = isProc && !!period.is_compute_stale;
-  const canRetryStale = isStaleRun && can('payroll.periods.compute') && !period.is_thirteenth_month;
+  const canRetryStale = period.available_actions?.retry_stale_compute === true;
 
   const columns: Column<Payroll>[] = [
     {
@@ -543,7 +541,7 @@ export default function PayrollPeriodDetailPage() {
         backLabel="Payroll"
         actions={
           <>
-            <Chip variant={periodStatusVariant(period.status)} className="mr-2">
+            <Chip variant={payrollPeriodStatusVariant[period.status]} className="mr-2">
               {period.status_label}
             </Chip>
             {period.is_auto_created && (
@@ -558,29 +556,40 @@ export default function PayrollPeriodDetailPage() {
                 <Chip variant="info">Auto</Chip>
               </span>
             )}
-            {canCompute && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<LuPlay size={14} />}
-                onClick={() => computeMutation.mutate()}
-                disabled={computeMutation.isPending}
-                loading={computeMutation.isPending}
-              >
-                Compute
-              </Button>
-            )}
-            {canRecompute && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<LuRefreshCw size={14} />}
-                onClick={() => setShowRecomputeDialog(true)}
-                disabled={computeMutation.isPending}
-                loading={computeMutation.isPending}
-              >
-                Recompute
-              </Button>
+            {(showCompute || showRecompute) && (
+              <div className="flex flex-col items-end gap-1">
+                {showCompute && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<LuPlay size={14} />}
+                    onClick={() => computeMutation.mutate()}
+                    disabled={!canCompute || computeMutation.isPending}
+                    loading={computeMutation.isPending}
+                    aria-describedby={computeDateBlocked ? 'payroll-compute-availability' : undefined}
+                  >
+                    Compute
+                  </Button>
+                )}
+                {showRecompute && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<LuRefreshCw size={14} />}
+                    onClick={() => setShowRecomputeDialog(true)}
+                    disabled={!canRecompute || computeMutation.isPending}
+                    loading={computeMutation.isPending}
+                    aria-describedby={computeDateBlocked ? 'payroll-compute-availability' : undefined}
+                  >
+                    Recompute
+                  </Button>
+                )}
+                {computeDateBlocked && (
+                  <span id="payroll-compute-availability" className="text-xs text-muted">
+                    Available on {formatDate(period.compute_available_on)}
+                  </span>
+                )}
+              </div>
             )}
             {/* Progress, elapsed time and the stale-run recovery controls all
  live in PayrollComputeProgressPanel below — the header has no
@@ -720,8 +729,9 @@ export default function PayrollPeriodDetailPage() {
         bottom={<ChainHeader steps={chainSteps} />}
       />
 
-      <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
-        {/* Main content */}
+      <div className="w-full min-w-0 px-5 py-6 lg:px-8 lg:py-8">
+        <div className="space-y-7">
+        {/* Period overview and review sections */}
         <div>
           {period.status === 'draft' && period.correction_reason && (
             <div className="mb-4 flex items-start gap-2 rounded-md bg-warning-bg px-3 py-2 text-sm text-warning-fg">
@@ -746,7 +756,7 @@ export default function PayrollPeriodDetailPage() {
             />
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
             <StatCard label="Employees" value={summary ? summary.employee_count : '—'} />
             <StatCard label="Total Gross" value={summary ? formatPeso(summary.total_gross) : '—'} />
             <StatCard
@@ -861,8 +871,8 @@ export default function PayrollPeriodDetailPage() {
           )}
 
           {/* Tabs */}
-          <Tabs
-            className="mb-3"
+            <Tabs
+            className="mb-5"
             label="Payroll period sections"
             value={activeTab}
             onChange={setActiveTab}
@@ -877,7 +887,7 @@ export default function PayrollPeriodDetailPage() {
 
           {(activeTab === 'employees' || activeTab === 'failures') && (
             <>
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between">
                 <Input
                   type="search"
                   placeholder="Search employees..."
@@ -902,7 +912,7 @@ export default function PayrollPeriodDetailPage() {
                 />
               )}
               {payrolls && payrolls.data.length > 0 && (
-                <div className="max-h-[600px] overflow-y-auto rounded-md border border-default [&>div]:border-0 [&>div]:shadow-none">
+                <div className="min-w-0 w-full overflow-x-auto rounded-md border border-default [&>div]:border-0 [&>div]:shadow-none">
                   <DataTable
                     onRowClick={(r) => navigate(`/payroll/periods/${period.id}/employee/${r.id}`)}
                     columns={columns}
@@ -979,7 +989,7 @@ export default function PayrollPeriodDetailPage() {
         </div>
 
         {/* ADV1 — Disbursement Proof Section */}
-        <div className="col-span-1 lg:col-span-2">
+        <div>
           <Panel title="Disbursement Proof">
             {!period.disbursement_proofs || period.disbursement_proofs.length === 0 ? (
               <div className="space-y-3">
@@ -1013,6 +1023,7 @@ export default function PayrollPeriodDetailPage() {
               </div>
             )}
           </Panel>
+        </div>
         </div>
       </div>
 

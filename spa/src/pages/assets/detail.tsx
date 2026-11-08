@@ -21,10 +21,12 @@ import { Textarea } from '@/components/ui/Textarea';
 import { LuPencil } from '@/lib/icons';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatPeso } from '@/lib/formatNumber';
 import { localIsoDate } from '@/lib/formatDate';
-import type { AssociateAssetData } from '@/types/assets';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { Asset, AssociateAssetData } from '@/types/assets';
 
 const ASSOCIATION_LABELS: Record<AssociateAssetData['target_type'], string> = {
   machine: 'Machine',
@@ -38,6 +40,7 @@ function isOperationalCategory(value: string): value is AssociateAssetData['targ
 
 export default function AssetDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  useRealtimeRecord('asset', id);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
@@ -65,7 +68,7 @@ export default function AssetDetailPage() {
   const disposalReasonError = disposalReason.trim() === '' ? 'A disposal reason is required.' : undefined;
   const disposalDateError = disposalDate === '' ? 'Disposal date is required.' : undefined;
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, error, isLoading, isError, refetch } = useQuery({
     queryKey: ['asset', id],
     queryFn: () => assetsApi.show(id),
   });
@@ -74,7 +77,6 @@ export default function AssetDetailPage() {
     queryKey: ['asset', id, 'qr'],
     queryFn: () => assetsApi.qr(id),
     enabled: !!id && !!data,
-    staleTime: Infinity,
   });
   useEffect(() => {
     let active = true;
@@ -128,9 +130,9 @@ export default function AssetDetailPage() {
       disposed_date: disposalDate,
       remarks: disposalReason.trim(),
     }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['asset', id] });
-      qc.invalidateQueries({ queryKey: ['assets'] });
+    onSuccess: (asset) => {
+      qc.setQueryData(['asset', id], asset);
+      void invalidateRealtimeChange(qc, { entityType: 'asset', entityId: id }, [], [['asset', id]]);
       toast.success('Disposal request submitted for approval.');
       setDisposeOpen(false);
       setDisposalReason('');
@@ -138,9 +140,9 @@ export default function AssetDetailPage() {
     onError: (error) => toast.error(isAxiosError(error) ? error.response?.data?.message ?? 'Failed to request asset disposal.' : 'Failed to request asset disposal.'),
   });
 
-  const invalidateDisposal = () => {
-    qc.invalidateQueries({ queryKey: ['asset', id] });
-    qc.invalidateQueries({ queryKey: ['assets'] });
+  const invalidateDisposal = (asset: Asset) => {
+    qc.setQueryData(['asset', id], asset);
+    void invalidateRealtimeChange(qc, { entityType: 'asset', entityId: id }, [], [['asset', id]]);
   };
   const disposalErrMsg = (error: unknown, fallback: string) =>
     (isAxiosError(error) ? error.response?.data?.message : undefined) ?? fallback;
@@ -148,7 +150,7 @@ export default function AssetDetailPage() {
   const approveDisposal = useMutation({
     mutationFn: () => assetsApi.approveDisposal(id),
     onSuccess: (asset) => {
-      invalidateDisposal();
+      invalidateDisposal(asset);
       toast.success(asset.status === 'disposed' ? 'Disposal approved. Journal entry posted.' : 'Disposal step approved.');
       setApproveDisposalOpen(false);
     },
@@ -157,8 +159,8 @@ export default function AssetDetailPage() {
 
   const rejectDisposal = useMutation({
     mutationFn: (reason: string) => assetsApi.rejectDisposal(id, reason),
-    onSuccess: () => {
-      invalidateDisposal();
+    onSuccess: (asset) => {
+      invalidateDisposal(asset);
       toast.success('Disposal request rejected. The asset stays active.');
       setRejectDisposalOpen(false);
     },
@@ -167,8 +169,8 @@ export default function AssetDetailPage() {
 
   const cancelDisposal = useMutation({
     mutationFn: () => assetsApi.cancelDisposal(id),
-    onSuccess: () => {
-      invalidateDisposal();
+    onSuccess: (asset) => {
+      invalidateDisposal(asset);
       toast.success('Disposal request cancelled.');
       setCancelDisposalOpen(false);
     },
@@ -183,9 +185,7 @@ export default function AssetDetailPage() {
     },
     onSuccess: (asset) => {
       qc.setQueryData(['asset', id], asset);
-      qc.invalidateQueries({ queryKey: ['asset', id] });
-      qc.invalidateQueries({ queryKey: ['asset', id, 'association-options'] });
-      qc.invalidateQueries({ queryKey: ['assets'] });
+      void invalidateRealtimeChange(qc, { entityType: 'asset', entityId: id }, [], [['asset', id]]);
       toast.success(asset.association ? 'Operational record linked.' : 'Operational record unlinked.');
       setAssociationOpen(false);
       setClearAssociationOpen(false);
@@ -196,15 +196,18 @@ export default function AssetDetailPage() {
 
   if (isLoading) return <SkeletonDetail />;
   if (isError || !data) {
+    const noLongerAvailable = isAxiosError(error) && [403, 404].includes(error.response?.status ?? 0);
+
     return (
       <EmptyState
         icon="alert-circle"
-        title="Failed to load asset"
-        action={
+        title={noLongerAvailable ? 'Asset is no longer available' : 'Failed to load asset'}
+        description={noLongerAvailable ? 'The asset may have been removed or your access may have changed.' : undefined}
+        action={noLongerAvailable ? undefined : (
           <Button variant="secondary" onClick={() => refetch()}>
             Retry
           </Button>
-        }
+        )}
       />
     );
   }
@@ -229,7 +232,7 @@ export default function AssetDetailPage() {
             >
               {statusLabel ?? data.status}
             </Chip>
-            {can('assets.update') && (
+            {data.available_actions?.can_edit === true && (
               <Button variant="secondary" size="xs" onClick={() => navigate(`/assets/${id}/edit`)}>
                 <LuPencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>

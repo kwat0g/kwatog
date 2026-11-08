@@ -54,7 +54,6 @@ export default function HolidaysPage() {
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['attendance', 'holidays', year, { trashed: archiveToTrashed(scope) }],
  queryFn: () => holidaysApi.list({ year, per_page: 200, trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev,
  });
 
  const holidays = data?.data ?? [];

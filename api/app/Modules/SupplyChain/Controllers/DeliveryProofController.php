@@ -6,7 +6,6 @@ namespace App\Modules\SupplyChain\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\SupplyChain\Models\Delivery;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\DeliveryProofType;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Services\DeliveryService;
@@ -14,7 +13,6 @@ use App\Modules\SupplyChain\Resources\DeliveryProofResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -129,44 +127,8 @@ class DeliveryProofController
     /** DELETE /supply-chain/deliveries/{delivery}/proofs/{proof} */
     public function destroy(Delivery $delivery, DeliveryProof $proof): JsonResponse
     {
-        if ($proof->delivery_id !== $delivery->id) {
-            abort(404, 'Proof does not belong to this delivery.');
-        }
-
         try {
-            DB::transaction(function () use ($delivery, $proof): void {
-                // M044 — the "is this the last proof" count used to be taken
-                // BEFORE the transaction and without a lock, so two concurrent
-                // deletes against two proofs each saw one proof remaining, each
-                // passed the guard, and both committed: a confirmed delivery
-                // with zero proofs. confirm() already serializes on this row, so
-                // taking the same lock here puts both operations on one queue.
-                $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
-                if (! $locked) {
-                    throw new BusinessRuleException('Delivery not found.');
-                }
-
-                $target = DeliveryProof::query()->lockForUpdate()->find($proof->id);
-                if (! $target) {
-                    throw new BusinessRuleException('Delivery proof not found.');
-                }
-
-                // Once a delivery has been confirmed, removing the last proof
-                // would leave the confirmation undefensible.
-                $remaining = $locked->proofs()->where('id', '!=', $target->id)->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->count();
-                $status = $locked->status instanceof \BackedEnum ? $locked->status->value : $locked->status;
-                if ($target->proof_type === DeliveryProofType::LoadingPhoto->value && ! in_array($status, ['scheduled', 'loading', 'cancelled'], true)) {
-                    throw new BusinessRuleException('Loading evidence cannot be archived after dispatch.');
-                }
-                if ($status === 'confirmed' && $target->proof_type === DeliveryProofType::CertificateOfConformance->value) {
-                    throw new BusinessRuleException('The Certificate of Conformance cannot be deleted from a confirmed delivery.');
-                }
-                if ($status === 'confirmed' && $remaining === 0) {
-                    throw new BusinessRuleException('Cannot delete the only proof of a confirmed delivery.');
-                }
-
-                $target->delete();
-            });
+            app(DeliveryService::class)->archiveProof($delivery, $proof);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -177,25 +139,8 @@ class DeliveryProofController
     /** POST /supply-chain/deliveries/{delivery}/proofs/{proof}/restore */
     public function restore(Delivery $delivery, DeliveryProof $proof): JsonResponse
     {
-        if ($proof->delivery_id !== $delivery->id) {
-            abort(404, 'Proof does not belong to this delivery.');
-        }
+        app(DeliveryService::class)->restoreProof($delivery, $proof);
 
-        DB::transaction(function () use ($delivery, $proof): void {
-            $lockedDelivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
-            $lockedProof = DeliveryProof::withTrashed()->lockForUpdate()->findOrFail($proof->id);
-            if (! $lockedProof->trashed()) {
-                throw new BusinessRuleException('Only archived delivery proofs can be restored.');
-            }
-            if (! Storage::disk('local')->exists((string) $lockedProof->file_path)) {
-                throw new BusinessRuleException('The archived delivery proof file is missing and cannot be restored.');
-            }
-            if ($lockedDelivery->status === 'confirmed' && $lockedProof->proof_type === DeliveryProofType::CertificateOfConformance->value) {
-                $lockedProof->restore();
-                return;
-            }
-            $lockedProof->restore();
-        });
         return response()->json(['message' => 'Delivery proof restored.']);
     }
 }

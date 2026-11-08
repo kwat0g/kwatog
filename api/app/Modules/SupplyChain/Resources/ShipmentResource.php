@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Resources;
 
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -12,11 +13,37 @@ class ShipmentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $status = $this->status instanceof \BackedEnum ? $this->status : ShipmentStatus::from((string) $this->status);
+        $statusValue = $status->value;
+        $user = $request->user();
+        $canManage = $user !== null && method_exists($user, 'hasPermission')
+            && $user->hasPermission('supply_chain.shipments.manage');
+        $evidenceFrozen = in_array($statusValue, ['cleared', 'received', 'cancelled'], true);
+        $archiveBlocked = in_array($statusValue, ['customs', 'cleared', 'received', 'cancelled'], true);
+        $acceptedReceipt = $this->relationLoaded('goodsReceiptNote')
+            && in_array($this->goodsReceiptNote?->status?->value, ['accepted', 'partial_accepted'], true);
+
         return [
             'id' => $this->hash_id,
             'shipment_number' => $this->shipment_number,
-            'status' => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
-            'status_label' => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
+            'status' => $statusValue,
+            'status_label' => Str::headline($statusValue),
+            'version' => $this->updated_at?->toISOString() ?? $this->created_at?->toISOString(),
+            'permissions' => ['manage' => $canManage],
+            'available_actions' => [
+                'status_transitions' => $canManage
+                    ? array_values(array_map(
+                        static fn (ShipmentStatus $next): string => $next->value,
+                        array_filter(ShipmentStatus::cases(), static fn (ShipmentStatus $next): bool => $status->canTransitionTo($next)),
+                    ))
+                    : [],
+                'can_manage_documents' => $canManage && ! $evidenceFrozen,
+                'can_manage_containers' => $canManage && ! $evidenceFrozen,
+                'can_update_metadata' => $canManage && ! $evidenceFrozen,
+                'can_edit_landed_costs' => $canManage && ! $acceptedReceipt,
+                'can_archive' => $canManage && ! $archiveBlocked && ! $this->trashed(),
+                'can_restore' => $canManage && $this->trashed() && ! $archiveBlocked,
+            ],
             'carrier' => $this->carrier,
             'vessel' => $this->vessel,
             'container_number' => $this->whenLoaded('containers', function () {

@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\SupplyChain\Models\DeliveryItem;
@@ -21,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class StockMovement extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     public $timestamps = false;
 
@@ -43,6 +44,7 @@ class StockMovement extends Model
         'gl_handoff_status' => MovementGlHandoffStatus::class,
         'reference_id' => 'integer',
         'journal_entry_id' => 'integer',
+        'version' => 'integer',
         'created_at' => 'datetime',
         'gl_handoff_at' => 'datetime',
         'expiry_date' => 'date',
@@ -50,7 +52,7 @@ class StockMovement extends Model
 
     public function referenceMaintenanceWorkOrder(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\Maintenance\Models\MaintenanceWorkOrder::class, 'reference_id');
+        return $this->belongsTo(MaintenanceWorkOrder::class, 'reference_id');
     }
 
     public function referenceWorkOrder(): BelongsTo

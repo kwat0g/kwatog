@@ -74,7 +74,6 @@ export default function NotificationsListPage({ api = notificationsApi, queryKey
  queryKey: [...queryKey, { filter, unreadOnly }],
  queryFn: ({ pageParam }) =>
  api.list({ per_page: PAGE_SIZE, page: pageParam, unread_only: unreadOnly }),
- refetchInterval: linkPrefix ? 30_000 : false,
  initialPageParam: 1,
  getNextPageParam: (lastPage) =>
  lastPage.meta.current_page < lastPage.meta.last_page

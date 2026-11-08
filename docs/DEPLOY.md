@@ -1,59 +1,112 @@
 # Ogami ERP — Production Deployment Runbook
 
-Supported fresh deployment: Ubuntu 22.04 LTS VPS, [`docker-compose.prod.yml`](../docker-compose.prod.yml), static SPA, Nginx/Let's Encrypt, and Docker-managed scheduler/workers. Current domain: `ogamiph.dev`.
+Last checked: 2026-10-29. The verified production stack is Ubuntu 26.04.1 LTS,
+Docker Compose using [docker-compose.prod.yml](../docker-compose.prod.yml), a
+static React SPA, Nginx, Cloudflare Full (strict), PostgreSQL 16, Redis 7, and
+Laravel 12. Production uses the repository-root .env created from
+[.env.production.example](../.env.production.example); it does not use api/.env.
 
-## Moving the current VPS
+Always pass -f docker-compose.prod.yml to Compose commands. The default Compose
+file is for development and bind-mounts source code; omitting -f on the VPS can
+select the wrong stack.
 
-The running VPS still uses the legacy `docker-compose.yml` + `docker-compose.vps.yml` stack: Caddy with Cloudflare Origin certificates, Vite's development server, and Laravel settings from `api/.env`. A fresh production deployment below uses the root `.env` copied from [`.env.production.example`](../.env.production.example), static SPA files, and Nginx/Let's Encrypt. Do not mix the two Compose paths.
+## Choose one deployment layout
 
-The current private files are not production templates: both `.env` files set `APP_ENV=local`; `api/.env` enables demo/reference seeding; root `.env` sets `MAIL_MAILER=log` while `api/.env` sets SMTP. Do not copy either file as the new production `.env`. Use the production template, copy required company settings from the private API file, and keep all credentials out of Git.
+The existing VPS is an in-place checkout under /opt/ogami-erp. Its manual
+update entry point is scripts/deploy-update.sh. The GitHub Actions workflow
+uses timestamped releases under DEPLOY_PATH/releases, shared mutable state
+under DEPLOY_PATH/shared, and a DEPLOY_PATH/current symlink. These layouts are
+not interchangeable. Use the in-place script only on the existing flat
+checkout. For a new host, provision the releases/shared layout before running
+the GitHub workflow. Do not point that workflow at a flat checkout.
 
-The current `REVERB_APP_SECRET` matches a value that was present in the tracked development template. Git history retains it, so treat it as exposed: generate a fresh secret for the replacement server. Never reuse `CHANGEME` or a development example value in production.
+Both deployment paths now stop the mail worker before migrations, rebuild and
+recreate it with the new release, and verify it is running. They build and
+check the framework caches before restarting PHP-FPM and starting consumers.
+See [the deployment report](DEPLOYMENT-REPORT.md) for other known source-level
+seed and release blockers.
 
-The current `HASHIDS_SALT` also matches a tracked development placeholder. HashIDs only obfuscates IDs; it is not access control. When restoring the existing database, keep its current salt to preserve existing URLs. For a genuinely fresh database, generate a unique salt. Never change it after records and links exist without a planned ID migration.
+## Security and data handling
 
-Before the old VPS expires:
+The deployment report was previously committed with SSH and application
+credentials. Treat every credential that appeared there or in Git history as
+compromised: rotate it, remove values from the current document, and clean
+public Git history separately. Editing a file does not erase old commits.
 
-1. Create and verify an off-host PostgreSQL dump and private-file archive using [Daily backups](#9-daily-backups) and the Admin Backup & Restore center. Copy both archives somewhere outside the old server.
-2. Securely retain the current root `.env` and `api/.env` for reference. They contain credentials; do not add them to this repository. Production Compose uses only the new root `.env`.
-3. Record the new host's public IP, then update Cloudflare `A`/`AAAA` records for `ogamiph.dev` and `www.ogamiph.dev`.
-4. Production Compose uses Let's Encrypt certificates under `/etc/letsencrypt`. The legacy Caddy certificate and private key under `docker/caddy/certs/` are ignored by Git; create a new Cloudflare Origin certificate only if intentionally keeping the legacy Caddy stack.
-5. Recreate GitHub's `production` environment settings: secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`; variable `VITE_REVERB_APP_KEY`, matching `REVERB_APP_KEY` in the new `.env`.
-6. The old host uses an enabled `ogami-scheduler.timer`. The production Compose stack has its own `scheduler` service; use that service and do not also enable the host timer.
+Never copy a development .env or api/.env to production. Keep secrets in the
+host's root .env (mode 600) or a secret manager, and do not put credentials in
+Markdown, shell history, screenshots, or Git. Generate a fresh APP_KEY,
+database password, HASHIDS_SALT, Reverb secret, backup recovery secret, and
+SMTP credential. Preserve HASHIDS_SALT only when restoring the same database,
+because changing it can invalidate existing obfuscated links.
 
-Restore the database and private files before opening traffic. Do not run the initial administrator seeder against a restored database.
+Production defaults must include APP_ENV=production, APP_DEBUG=false,
+SESSION_SECURE_COOKIE=true, SEED_DEMO_DATA=false, and
+SEED_REFERENCE_DATA=false. Use a real administrator email and a unique
+administrator password. The demo account seeder creates active accounts with
+a shared known password and does not force a password change.
+
+Demo seeding is destructive. ComprehensiveDemoSeeder truncates transaction
+tables with PostgreSQL CASCADE. Run it only against a fresh, disposable demo
+database or after a verified backup and an explicit reset decision. Never
+include demo seeding in a routine production deploy.
+
+## Moving or rebuilding the current VPS
+
+Before migrating a host, create database and private-file backups, copy them
+off-host, and prove both can be restored to a disposable environment. Store an
+encrypted copy of .env separately. Restore data and private files before
+opening traffic. Do not run AdminUserSeeder against a restored database.
+
+For the current Cloudflare topology, use a Cloudflare Origin CA certificate
+and Full (strict). Restrict the AWS security group so SSH is reachable only
+from the operator's fixed address and web ports only from Cloudflare's
+published IP ranges. UFW alone is not sufficient protection for
+Docker-published ports. If direct API clients or webhooks are needed, create
+explicit Cloudflare WAF rules for those paths instead of exposing an
+unrestricted origin.
 
 ---
 
 ## 1. Provision a VPS
 
 1. Create an Ubuntu VPS:
-   - Image: **Ubuntu 22.04 LTS x64**
+   - Use a maintained Ubuntu LTS release. Ubuntu 26.04.1 LTS is the version
+     checked with this deployment on 2026-10-29.
    - Starting size: **4 GB RAM, 2 vCPU, 80 GB SSD**
    - Region near the users and database backups
    - SSH key: add yours; **disable password auth**.
 2. Point `ogamiph.dev` and `www.ogamiph.dev` at the new public IPv4/IPv6.
-3. SSH in as `root` and create a non-root admin:
+3. SSH in with the provisioned key and create a non-root deploy/admin user:
    ```bash
-   adduser ogami
-   usermod -aG sudo ogami
-   rsync --archive --chown=ogami:ogami ~/.ssh /home/ogami
+   sudo adduser --disabled-password --gecos "" ogami
+   sudo usermod -aG sudo ogami
+   sudo install -d -m 700 -o ogami -g ogami /home/ogami/.ssh
+   sudo install -m 600 -o ogami -g ogami ~/.ssh/authorized_keys /home/ogami/.ssh/authorized_keys
    ```
-4. Configure UFW:
+4. Configure UFW, and enforce the same restrictions in the AWS security group.
+   Docker-published ports can bypass UFW rules:
    ```bash
-   ufw default deny incoming
-   ufw default allow outgoing
-   ufw allow OpenSSH
-   ufw allow 80
-   ufw allow 443
-   ufw enable
+   sudo ufw default deny incoming
+   sudo ufw default allow outgoing
+   sudo ufw allow OpenSSH
+   sudo ufw allow 80
+   sudo ufw allow 443
+   sudo ufw enable
    ```
-5. Disable root SSH login and password auth:
+5. Disable root SSH login and password authentication with a drop-in:
    ```bash
-   sed -i 's/^PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config
-   sed -i 's/^#?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
-   systemctl restart sshd
+   sudo tee /etc/ssh/sshd_config.d/99-ogami-hardening.conf >/dev/null <<'EOF'
+   PermitRootLogin no
+   PasswordAuthentication no
+   KbdInteractiveAuthentication no
+   PubkeyAuthentication yes
+   EOF
+   sudo sshd -t
+   sudo systemctl reload ssh
    ```
+   Keep the current SSH session open and verify a second key-based login before
+   closing it. Never enable password SSH for the deploy user.
 
 ## 2. Install Docker and Docker Compose plugin
 
@@ -69,13 +122,15 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
   sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 
 sudo apt update && sudo apt install -y docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin certbot
-
+  docker-buildx-plugin docker-compose-plugin
 sudo usermod -aG docker ogami
 # log out and back in for group change to take effect
 ```
 
-## 3. Clone the repository
+## 3. Prepare an in-place checkout (existing VPS only)
+
+The existing VPS uses this flat checkout. A new GitHub Actions deployment
+ships releases from the CI runner and does not clone source into the host root.
 
 ```bash
 sudo mkdir -p /opt/ogami-erp && sudo chown ogami:ogami /opt/ogami-erp
@@ -84,38 +139,53 @@ git clone https://github.com/kwat0g/kwatog.git .
 git checkout main
 ```
 
-## 4. Provision SSL (Let's Encrypt)
+## 4. Provision TLS for Cloudflare
 
-The VPS must already have port 80 reachable from the internet.
+For the documented topology, create a Cloudflare Origin CA certificate for
+the apex and www hostnames. Install it on the VPS at
+/etc/letsencrypt/live/ogamiph.dev/fullchain.pem and privkey.pem, with the
+private key readable only by root. Production Compose mounts /etc/letsencrypt
+read-only into Nginx. Set Cloudflare SSL/TLS mode to Full (strict), proxy the
+DNS records, and verify the certificate names match SERVER_NAME.
 
-```bash
-# Stop anything bound to port 80 first.
-sudo certbot certonly --standalone \
-    -d ogamiph.dev -d www.ogamiph.dev \
-    -m admin@ogamiph.dev \
-    --agree-tos --no-eff-email
-```
+An Origin CA certificate is trusted between Cloudflare and the origin;
+browsers must use the proxied hostname. It is not a public browser certificate
+for direct-IP access. The current certificate has no automated renewal job, so
+record its expiry and replace it before expiration.
 
-Certs land at `/etc/letsencrypt/live/ogamiph.dev/`. The compose file
-mounts the parent directory **read-only** into the nginx container.
+If a future deployment will not sit behind Cloudflare, use a publicly trusted
+certificate and document its renewal path instead. Do not mix Caddy, Vite's
+development server, and this Nginx production Compose setup. See the official
+[Cloudflare IP ranges](https://www.cloudflare.com/ips/) when configuring the
+origin security group.
 
-### Auto-renew
+### Cloudflare rules for the SPA and API
 
-Certbot installs a systemd timer (`certbot.timer`) that runs twice a day. Add
-a post-renew hook to reload nginx:
+The SPA calls same-origin Laravel routes under `/api/v1/` and
+`/sanctum/csrf-cookie`; Reverb uses `/app/` and `/apps/` WebSocket paths. A
+Cloudflare challenge on an API request prevents the SPA from receiving JSON and
+can make features appear slow or broken. If a challenge appears, find its Ray
+ID in **Security → Events** and identify the service/rule that challenged it
+before changing protection. The Ray ID is the quickest way to isolate the
+specific request. See [Cloudflare's Ray ID
+guide](https://developers.cloudflare.com/fundamentals/reference/cloudflare-ray-id/).
 
-```bash
-sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'EOF'
-#!/bin/sh
-docker exec ogami-nginx nginx -s reload
-EOF
-sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
-
-# Test
-sudo certbot renew --dry-run
-```
+For a custom WAF or Super Bot Fight Mode rule, edit the matching challenge rule
+or add a narrowly scoped exception for the affected application paths. Keep
+rate limits and the other managed protections enabled where possible. The
+free Bot Fight Mode cannot be bypassed by a custom Skip rule; if Security
+Events identifies it as the cause, turn Bot Fight Mode off or use Super Bot
+Fight Mode for path-specific control. Do not disable the Cloudflare proxy or
+exempt the whole hostname to fix an API false positive. See [Skip rule
+limits](https://developers.cloudflare.com/waf/custom-rules/skip/) and [Bot
+Fight Mode false-positive guidance](https://developers.cloudflare.com/bots/troubleshooting/false-positives/).
 
 ## 5. Configure environment
+
+For the existing in-place host, put the production environment file at
+/opt/ogami-erp/.env. For a new GitHub Actions atomic release, put it at
+$DEPLOY_PATH/shared/.env; the workflow symlinks it into each release. Do not
+place secrets in a release directory or release tarball.
 
 ```bash
 cd /opt/ogami-erp
@@ -124,14 +194,58 @@ chmod 600 .env
 nano .env   # fill generated secrets, SMTP credentials, admin, and company settings
 ```
 
-For Amazon SES Mail Manager, use the authenticated ingress endpoint hostname
-ending in `.mail-manager-smtp.amazonaws.com`, together with that endpoint's
-username and SMTP password. Use an approved sender for `MAIL_FROM_ADDRESS`.
+For direct outbound mail through Amazon SES, use the standard SMTP submission
+endpoint `email-smtp.<region>.amazonaws.com` and SES SMTP credentials created in
+that same region. Verify the sender address or domain in SES. A hostname ending
+in `.mail-manager-smtp.amazonaws.com` is a Mail Manager ingress endpoint. It
+applies its traffic policy and rule set after SMTP accepts a message; use it
+for application mail only when the configured rules explicitly send the
+message to the intended external recipient and provider logs confirm delivery.
+Do not treat SMTP `235` or a successful Laravel queue job as proof that Gmail
+received the message. If the organization deliberately uses Mail Manager,
+review the ingress rule set and its CloudWatch/S3 event logs for each test.
+Configure sender authentication for the actual outbound service. For SES,
+publish the identity's DKIM CNAMEs. SES's default MAIL FROM uses an
+`amazonses.com` subdomain for SPF; if a custom MAIL FROM domain is configured,
+publish the exact SES-provided MX and SPF TXT records on that subdomain. Do not
+add a guessed root SPF record; keep at most one SPF record on each hostname.
+See [SES SPF guidance](https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-spf.html)
+and [custom MAIL FROM setup](https://docs.aws.amazon.com/ses/latest/dg/mail-from.html).
 The production settings are `MAIL_PORT=587` and `MAIL_SCHEME=smtp`.
 The production Compose file uses `env_file` with `format: raw`: values pass
 through unchanged, including `$`, `#`, and quote characters. Do not quote
 values, even when they contain spaces; keep the password exactly as supplied
 and do not shell-source `.env`.
+
+Redis uses two internal services. `redis` is the persistent queue/default
+connection with a 256 MiB `noeviction` cap; `redis-cache` is disposable with a
+96 MiB `volatile-lru` cap. Keep `REDIS_HOST=redis` and set the independent
+`REDIS_CACHE_HOST=redis-cache`, port, DB and credentials from
+`.env.production.example`. Do not point `REDIS_CACHE_URL` at the queue service.
+The API and migration service wait for both Redis health checks. On an upgrade
+from the previous single-Redis layout, restart every API/worker/scheduler
+consumer onto `redis-cache` before deleting only the old cache-prefix keys
+from the old cache DB; leave queue DB 0 untouched. Count and record the
+one-time cleanup during the first deployment of this topology.
+
+The general queue/default Redis connection uses logical DB 0. Broadcast jobs
+use logical DB 1 by default (`REDIS_BROADCAST_DB`) on the same non-evicting
+`redis` service, so this adds no Redis process or memory limit. Cache remains
+on the separate `redis-cache` service and sessions remain in PostgreSQL. If
+`REDIS_BROADCAST_HOST` is configured, the broadcast lane can use a dedicated
+Redis host instead. On first deployment of the split, already queued broadcast
+jobs may still be in DB 0. After rebuilding config and restarting API/Horizon,
+drain those jobs with the retained legacy connection, then repeat the drain
+after the longest configured broadcast retry delay:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T api \
+  php artisan queue:work redis_broadcasts_legacy --queue=broadcasts --stop-when-empty
+```
+
+Do not delete or flush queue DB 0. Check the legacy broadcasts queue and delayed
+retries are empty before removing this one-off drain step; the normal broadcast
+worker consumes DB 1 after cutover.
 
 If the organization uses another SMTP relay, use that provider's SMTP login,
 SMTP key/password, hostname, and verified sender instead. Do not use an API key,
@@ -145,6 +259,11 @@ Before opening traffic, verify all of the following:
 grep -E '^(MAIL_MAILER|MAIL_HOST|MAIL_PORT|MAIL_SCHEME|MAIL_FROM_ADDRESS)=' .env
 test "$(grep '^MAIL_MAILER=' .env | cut -d= -f2-)" = smtp
 ```
+
+Keep the seeding flags explicitly false in the production file:
+
+    SEED_DEMO_DATA=false
+    SEED_REFERENCE_DATA=false
 
 The deployment script checks the required SMTP values and performs a TLS
 reachability check. SMTP reachability is not the same as deliverability: the
@@ -176,55 +295,136 @@ missing or localhost value fails closed.
 
 ## 6. First-time deploy
 
-The repo's [`Makefile`](../Makefile) gains a production-flavoured target. Add it
-on the host (or use the inline command):
+Use this section only for a new host and an empty database. For a restored or
+existing database, use the subsequent-deploy procedure; do not run the demo
+seeders. The GitHub Actions workflow is the release path for a new
+releases/shared/current layout. Its required secrets and first-time layout are
+documented at the top of .github/workflows/deploy.yml. The existing flat VPS
+uses scripts/deploy-update.sh instead. Never mix the two layouts.
+
+For a new host, prepare the atomic layout as the deploy user before dispatching
+the workflow. Set DEPLOY_PATH to the value configured in GitHub Actions:
+
+    mkdir -p "$DEPLOY_PATH/releases" "$DEPLOY_PATH/shared/storage"
+    git clone --depth 1 https://github.com/kwat0g/kwatog.git /tmp/ogami-env-template
+    cp /tmp/ogami-env-template/.env.production.example "$DEPLOY_PATH/shared/.env"
+    rm -rf /tmp/ogami-env-template
+    chmod 600 "$DEPLOY_PATH/shared/.env"
+
+Fill that shared .env with unique production secrets, real company data, SMTP
+settings, and SERVER_NAME. Configure GitHub production secrets DEPLOY_HOST,
+DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH and variable VITE_REVERB_APP_KEY to
+match REVERB_APP_KEY in the shared .env. Verify the deploy user can write to
+the releases and shared directories. The workflow creates current on its first
+successful release.
+
+Before deploying, confirm the release ref is committed and clean, the root
+.env is mode 600, SERVER_NAME matches the DNS name, and the database and
+private-file backup destinations are configured. Keep AWS inbound 80/443
+closed until seed verification and account-password changes are complete. Do
+not copy secrets into the release tarball. The workflow packages committed
+source and SPA artifacts; it does not include uncommitted working-tree fixes.
+
+Run the following commands from the deployment root: /opt/ogami-erp for the
+existing in-place host, or $DEPLOY_PATH/current for the GitHub Actions layout.
+For a fresh non-demo installation, keep both seed flags false and run the
+ordinary seeder after migrations, before exposing the application. Keep the
+AWS 80/443 ingress closed. If the workflow already started the consumers, stop
+them first; leave only the database and Redis running:
+
+    docker compose -f docker-compose.prod.yml stop api nginx reverb horizon scheduler queue-mail
+    docker compose -f docker-compose.prod.yml run --rm --no-deps api php artisan db:seed --force
+
+AdminUserSeeder skips its bootstrap account if ADMIN_NAME, ADMIN_EMAIL, or
+ADMIN_PASSWORD is missing. Confirm the intended system administrator exists
+before opening traffic; a successful seeder exit alone is not sufficient.
+
+For a thesis/demo installation, first use a fresh database and keep the
+production .env flags false. Keep the app consumers stopped and leave only DB
+and Redis running. The temporary one-shot override below enables the reference
+and demo fixture groups without persisting demo mode in production
+configuration:
+
+    docker compose -f docker-compose.prod.yml run --rm --no-deps \
+      -e APP_ENV=local -e SEED_DEMO_DATA=true -e SEED_REFERENCE_DATA=true \
+      api php artisan db:seed --force
+
+The demo seeder truncates transaction tables with PostgreSQL CASCADE. Do not
+run that command against a populated database unless that reset is intended
+and a verified backup exists. The current source has two known clean-seed
+issues: DemoRfqBudgetSeeder reaches a PurchaseRequestFactory that uses Faker,
+which is omitted from the production image, and ComprehensiveDemoSeeder's
+CASCADE removes routing-operation rows created earlier in DatabaseSeeder. Do
+not treat a late seeder failure as success. Fix those source issues and verify
+all fixtures on a disposable database before using this sequence for a new
+public demo. Until the routing-order fix is merged, run ProductRoutingSeeder
+after the full demo seed and confirm active routings have operations.
+
+DemoAccountSeeder assigns a shared known password and sets
+must_change_password=false. Set ADMIN_EMAIL to a real address that is not one
+of the demo fixture accounts, then change every demo account password before
+opening a public demo. The standard account admin@ogami.test is not a
+deliverable email address. Do not publish demo credentials in this runbook.
+
+After seeding succeeds, start the application services:
+
+    docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler queue-mail
+    docker compose -f docker-compose.prod.yml exec -T api php artisan storage:link
+
+Verify the API and SPA over the origin, check scheduler health and failed jobs,
+confirm all services are running including queue-mail, and send a real test
+message to a deliverable inbox. A successful SMTP handshake alone does not
+prove that email delivery works.
+
+### PHP security patch level
+
+As checked on 2026-10-29, every running PHP service uses PHP 8.3.36. This is the
+fixed PHP 8.3 release for CVE-2026-109618 and CVE-2026-109619, the critical
+remote-code-execution vulnerabilities announced on 2026-10-21. No PHP minor
+upgrade is needed just to address those CVEs while the runtime is 8.3.36.
+The live runtime was already patched, so no PHP container restart was needed
+for this deployment. Both development and production Dockerfiles now pin the
+PHP patch and Alpine minor to `php:8.3.36-fpm-alpine3.24` ([official image
+tag](https://hub.docker.com/_/php/tags?name=8.3.36-fpm-alpine3.24)). For the next
+PHP security release, check the PHP advisory and a matching official image tag,
+then update both `docker/php/Dockerfile` and `docker/php/Dockerfile.prod` in the
+same change. Keep the PHP major/minor compatible with `api/composer.json` and
+record the resulting runtime version in the deployment report.
+
+Rebuild and recreate every production PHP image together after a PHP patch
+change. This includes the one-shot `migrate` image and all five long-running PHP
+services, including `queue-mail`:
 
 ```bash
-# Build images, migrate before any application or queue process starts, then
-# bring up the consumers.
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml build --no-cache
-docker compose -f docker-compose.prod.yml up -d db redis
-# Wait with a bounded loop; a failed healthcheck must stop the release.
-status=missing
-for i in $(seq 1 60); do
-    status="$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || echo missing)"
-    [ "$status" = healthy ] && break
-    sleep 3
+docker compose -f docker-compose.prod.yml build --pull migrate api reverb horizon scheduler queue-mail
+docker compose -f docker-compose.prod.yml up -d --force-recreate migrate api reverb horizon scheduler queue-mail
+
+for service in api horizon scheduler queue-mail reverb; do
+  printf '%s: ' "$service"
+  docker compose -f docker-compose.prod.yml exec -T "$service" php -r 'echo PHP_VERSION, PHP_EOL;'
 done
-[ "$status" = healthy ] || { echo "ERROR: production database did not become healthy" >&2; exit 1; }
-# The one-shot service must complete before any application consumer starts.
-docker compose -f docker-compose.prod.yml up migrate
-# Start the API, realtime server, queue worker, scheduler, and Nginx only after
-# the schema is ready.
-docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler
-# Seed once on a new installation, after migration and before opening traffic.
-docker compose -f docker-compose.prod.yml exec api php artisan db:seed --force
-docker compose -f docker-compose.prod.yml exec api php artisan storage:link
-
-# Queue one real integration message to the configured administrator. This
-# exercises the same SMTP + Redis queue path used by application mail. Inspect
-# the queue logs and the recipient inbox; a queued/DONE job alone is not proof
-# of delivery.
-docker compose -f docker-compose.prod.yml exec -T api php artisan tinker \
-    --execute='Mail::to(env("ADMIN_EMAIL"))->queue(new \App\Common\Mail\EmailIntegrationTestMail);'
-docker compose -f docker-compose.prod.yml logs --since=2m horizon
-
-# Confirm the administrator exists. AdminUserSeeder SKIPS silently when any of
-# ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD is blank, and db:seed still exits 0,
-# so a zero-user install looks like a clean one. Check rather than assume:
-docker compose -f docker-compose.prod.yml exec -T api \
-    php artisan tinker --execute='echo DB::table("users")->count(), PHP_EOL;'
-# Expect 1. If it prints 0, set the three keys in .env, then recreate the api
-# container so Compose re-injects env_file (`restart` does NOT re-read it) and
-# run the one seeder on its own:
-#   docker compose -f docker-compose.prod.yml up -d --force-recreate api
-#   docker compose -f docker-compose.prod.yml exec -T api \
-#       php artisan db:seed --class=AdminUserSeeder --force
+docker compose -f docker-compose.prod.yml run --rm --no-deps migrate php -r 'echo PHP_VERSION, PHP_EOL;'
 ```
 
-> **DO NOT** run `migrate:fresh` in production. Ever. Laravel only re-runs
-> migrations it hasn't seen, so subsequent deploys are safe with `migrate --force`.
+All six runtime checks must report the intended patch. The PHP 8.3 branch
+receives security-only support until 2027-12-31; plan and stage a move to a
+newer supported branch before then. See [the PHP security
+advisory](https://www.php.net/archive/2026.php#2026-10-21-5), [PHP 8.3.36
+release notes](https://www.php.net/releases/8_3_36.php), and [PHP's support
+schedule](https://www.php.net/supported-versions.php). PHP also published a
+follow-up conditional session-upload-progress advisory on 2026-10-23. The
+app/config scan found no runtime session-serializer switch; recheck this
+configuration-specific issue on each PHP advisory and apply the vendor
+mitigation if the affected handler sequence is introduced.
+
+Nginx also uses the floating nginx:1.27-alpine tag. The official stable
+release was 1.30.6 on 2026-10-29; plan a staged upgrade, pin a reviewed version
+or digest, and verify SPA/API/TLS/WebSocket behavior before release. Check the
+[official Nginx releases](https://nginx.org/en/download.html) again when
+planning that change.
+
+> Do not run migrate:fresh on a production database. Routine deploys run only
+> pending migrations and never run DatabaseSeeder.
 
 ### Release evidence before opening traffic
 
@@ -445,82 +645,82 @@ sudo /etc/cron.daily/ogami-pgdump
 tail -n 20 /var/log/ogami-backup.log
 ```
 
-Once the initial deploy is in, deploys are a `git pull + rebuild + migrate`:
+### Deploy the existing in-place VPS
 
-```bash
-cd /opt/ogami-erp
-git fetch origin
-git checkout v0.1-sem1   # or a tag, or main
-git pull --ff-only
+The existing host uses /opt/ogami-erp directly, not the releases/current
+symlink layout. Before updating, ensure all fixes are committed and the
+checkout has no local changes. Take and verify the pre-migration database
+backup, then stop the mail worker so it cannot process jobs against a changing
+schema:
 
-docker compose -f docker-compose.prod.yml build --pull
-docker compose -f docker-compose.prod.yml up -d db redis
-# Take the pre-migration backup before changing the schema.
-sudo /etc/cron.daily/ogami-pgdump
-status=missing
-for i in $(seq 1 60); do
-    status="$(docker inspect -f '{{.State.Health.Status}}' ogami-db 2>/dev/null || echo missing)"
-    [ "$status" = healthy ] && break
-    sleep 3
-done
-[ "$status" = healthy ] || { echo "ERROR: production database did not become healthy" >&2; exit 1; }
-# Migrate before starting the new code's consumers. Laravel skips already-run
-# files, so this remains safe for additive/backwards-compatible migrations.
-docker compose -f docker-compose.prod.yml up migrate
-docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler
-docker compose -f docker-compose.prod.yml exec api php artisan config:cache
-docker compose -f docker-compose.prod.yml exec api php artisan route:cache
-docker compose -f docker-compose.prod.yml exec api php artisan view:cache
+    cd /opt/ogami-erp
+    git status --short
+    sudo /etc/cron.daily/ogami-pgdump
+    docker compose -f docker-compose.prod.yml stop queue-mail
+    ./scripts/deploy-update.sh --branch main
 
-# Rebuild the SPA if /spa changed.
-cd spa && docker run --rm -v "$PWD:/app" -w /app node:20-alpine sh -c \
-    "npm ci --no-audit --no-fund && npm run build"
-docker compose -f /opt/ogami-erp/docker-compose.prod.yml exec nginx nginx -s reload
-```
+The deploy script now handles queue-mail and framework cache ordering. Do not
+use --no-backup for routine releases. Do not run DatabaseSeeder after a deploy.
+Verify the API health endpoint, SPA, all services, queue failures, scheduler
+heartbeat, and the external Cloudflare path. Cloudflare may challenge
+curl or webhook clients even when browser traffic works; configure an explicit
+WAF exception for intended integrations.
 
-The production Compose file also contains a one-shot `migrate` dependency:
-direct `docker compose up` waits for that service to complete successfully
-before starting the API and its consumers. The explicit `up migrate` command in
-this runbook makes that gate visible and rerunnable for an operator-controlled
-release.
+### Deploy through GitHub Actions
 
-## 11. Rollback (atomic deploy)
+The workflow dispatch deploys an atomic release and expects the releases/shared
+layout described at the top of this document. It is not a drop-in replacement
+for the existing flat checkout. It stops old consumers before migration,
+rebuilds config/route/event/view caches and checks Reverb settings, restarts API
+to reload OPcache, then recreates and verifies nginx, Reverb, Horizon,
+queue-mail, and scheduler.
 
-Phase 5b switched the GitHub Actions deploy to atomic releases: each
-deploy extracts a tarball into `$DEPLOY_PATH/releases/release-<ts>-<sha>/`
-and atomically retargets `$DEPLOY_PATH/current` to it. The last 5
-releases are retained on disk so rollback is a one-command operation.
+PHP security updates require rebuilding every PHP image, including api,
+migrate, reverb, horizon, scheduler, and queue-mail. Use --pull so the base
+image receives the latest patch. Verify the version inside every running
+worker; restarting a container does not update its image.
 
-```bash
-cd /opt/ogami-erp
-ls -1dt releases/release-* | head -n 5
-PREV=releases/release-20260605-101212-abc1234     # whichever you want
-ln -sfn $PREV current.new && mv -Tf current.new current
-docker compose -f current/docker-compose.prod.yml up -d
-# Migrations should be backwards-compatible. If not, restore from backup:
-gunzip -c /var/backups/ogami/ogami-YYYYMMDD-HHMM.sql.gz | \
-    docker compose -f current/docker-compose.prod.yml exec -T db \
-    psql -U "$DB_USERNAME" -d "$DB_DATABASE"
-```
+## 11. Rollback
 
-The `current/.env` and `current/api/storage/` symlinks point at the
-shared mutable state under `shared/`, so rolling back the release does
-NOT lose uploaded files or env config.
+### GitHub Actions atomic layout
 
-**First-time prep (one-off, only required when migrating from the old
-in-place deploy):**
+The workflow retains the five newest release directories. Use this procedure
+only when DEPLOY_PATH/current is a symlink into DEPLOY_PATH/releases. Select a
+known-good release, atomically retarget current, then recreate all application
+services including queue-mail:
 
-```bash
-mkdir -p /opt/ogami-erp/{releases,shared/storage}
-mv /opt/ogami-erp/.env /opt/ogami-erp/shared/.env
-mv /opt/ogami-erp/api/storage/* /opt/ogami-erp/shared/storage/
-# Seed an initial release that points at the old checkout if you want a
-# rollback target before the next deploy:
-ln -s /opt/ogami-erp /opt/ogami-erp/releases/release-genesis
-ln -s /opt/ogami-erp/releases/release-genesis /opt/ogami-erp/current
-```
+    cd "$DEPLOY_PATH"
+    ls -1dt releases/release-* | head -n 5
+    PREV="releases/<known-good-release>"
+    ln -sfn "$PREV" current.new && mv -Tf current.new current
+    docker compose -f current/docker-compose.prod.yml up -d --force-recreate api nginx reverb horizon scheduler queue-mail
+
+A release rollback does not roll back database migrations. Restore a database
+backup only after stopping application consumers, placing the site in
+maintenance, and confirming the chosen backup is correct. Database restore is
+destructive; follow the restore procedure in §9 and verify private-file state
+as well.
+
+### Existing in-place layout
+
+The existing /opt/ogami-erp checkout has no atomic release symlink. Roll back
+by deploying a reviewed prior commit with scripts/deploy-update.sh after a
+fresh backup. Confirm migrations remain backward-compatible; a code rollback
+does not undo schema changes.
+
+Do not create a genesis symlink by moving the current .env/storage paths by
+hand. The existing VPS is a flat in-place checkout. Moving it to the atomic
+layout needs a separately planned migration with a verified backup and
+explicit shared-state symlinks; do not improvise it during a release.
 
 ## 12. Monitoring & ops cheatsheet
+
+`make deploy`, `scripts/deploy-update.sh`, and the GitHub workflow stop consumers
+before migration, build Laravel's config, route, event and view caches, check
+the effective Reverb configuration, restart API to reload OPcache, then start
+fresh Nginx, Reverb, Horizon, queue-mail and scheduler containers. For local
+PHP/config changes, use `make dev-refresh-php` to clear framework artifacts and
+restart the PHP consumers; Vite HMR alone does not reload Horizon or Reverb.
 
 ```bash
 # Tail logs
@@ -531,11 +731,17 @@ docker compose -f docker-compose.prod.yml logs -f nginx
 docker compose -f docker-compose.prod.yml exec api php artisan tinker
 
 # Queue status / restart — Horizon supervises every lane (high, default,
-# mail, automation, bulk). Terminate workers gracefully, then restart the
+# broadcasts, mail, automation, bulk). Terminate workers gracefully, then restart the
 # container; `horizon:terminate` alone leaves the container without a master.
 docker compose -f docker-compose.prod.yml exec horizon php artisan horizon:status
 docker compose -f docker-compose.prod.yml exec horizon php artisan horizon:terminate
 docker compose -f docker-compose.prod.yml restart horizon
+
+# Redis memory policy and cache/queue isolation
+docker compose -f docker-compose.prod.yml exec redis redis-cli INFO memory
+docker compose -f docker-compose.prod.yml exec redis-cache redis-cli INFO memory
+docker compose -f docker-compose.prod.yml exec redis redis-cli CONFIG GET maxmemory maxmemory-policy
+docker compose -f docker-compose.prod.yml exec redis-cache redis-cli CONFIG GET maxmemory maxmemory-policy
 
 # Lease invariant, asserted by QueueLaneAssignmentTest: each supervisor's
 # retry_after must exceed its OWN timeout (a job reserved for less time than it

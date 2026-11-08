@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { isAxiosError } from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { budgetingApi } from '@/api/accounting/budgeting';
-import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeList } from '@/lib/realtime/invalidationMap';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
@@ -42,71 +44,87 @@ export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { can, canApprove } = usePermission();
-  const canManage = can('budgeting.manage');
-  const canApproveBudget = canApprove('budgeting.approve');
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [canContinueViewing, setCanContinueViewing] = useState(true);
 
   const budgetQuery = useQuery<Budget>({
     queryKey: ['budget', id],
     queryFn: () => budgetingApi.show(id!),
     enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
   const { data: budget, isLoading } = budgetQuery;
+  useRealtimeRecord('budget', canContinueViewing ? id : undefined);
   const { data: budgetOptions } = useQuery({
     queryKey: ['budgets', 'options'],
     queryFn: () => budgetingApi.options(),
     staleTime: 300_000,
   });
 
+  const seedBudgetResponse = (saved: Budget): void => {
+    queryClient.setQueryData<Budget>(['budget', id], (current) => ({ ...current, ...saved }));
+    setCanContinueViewing(saved.permissions?.view ?? true);
+    void invalidateRealtimeList(queryClient, 'budget');
+  };
+  const reportActionError = (error: unknown, fallback: string): void => {
+    if (isAxiosError(error) && error.response?.status === 409) {
+      void budgetQuery.refetch();
+      toast.error('This budget changed while you were acting. The latest state is loading; review it before trying again.');
+      return;
+    }
+    reportMutationError(error, fallback);
+  };
+
   const submitMutation = useMutation({
     mutationFn: () => budgetingApi.submit(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget', id] });
+    onSuccess: (saved) => {
+      seedBudgetResponse(saved);
       toast.success('Budget submitted for approval.');
       setConfirmSubmit(false);
     },
-    onError: (error) => reportMutationError(error, 'Could not submit the budget for approval.'),
+    onError: (error) => reportActionError(error, 'Could not submit the budget for approval.'),
   });
 
   const approveMutation = useMutation({
     mutationFn: () => budgetingApi.approve(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget', id] });
+    onSuccess: (saved) => {
+      seedBudgetResponse(saved);
       toast.success('Budget approved and activated.');
       setConfirmApprove(false);
     },
-    onError: (error) => reportMutationError(error, 'Could not approve the budget.'),
+    onError: (error) => reportActionError(error, 'Could not approve the budget.'),
   });
 
   const closeMutation = useMutation({
     mutationFn: () => budgetingApi.close(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget', id] });
+    onSuccess: (saved) => {
+      seedBudgetResponse(saved);
       toast.success('Budget closed.');
       setConfirmClose(false);
     },
-    onError: (error) => reportMutationError(error, 'Could not close the budget.'),
+    onError: (error) => reportActionError(error, 'Could not close the budget.'),
   });
 
   const rejectMutation = useMutation({
     mutationFn: (reason: string) => budgetingApi.reject(id!, reason),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget', id] });
+    onSuccess: (saved) => {
+      seedBudgetResponse(saved);
       toast.success('Budget returned to draft.');
       setConfirmReject(false);
     },
-    onError: (error) => reportMutationError(error, 'Could not return the budget to draft.'),
+    onError: (error) => reportActionError(error, 'Could not return the budget to draft.'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => budgetingApi.destroy(id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      void invalidateRealtimeList(queryClient, 'budget');
       toast.success('Draft budget deleted.');
       navigate('/budgeting');
     },
@@ -117,15 +135,15 @@ export default function BudgetDetailPage() {
   // A failed fetch used to render "Budget not found", telling the user the
   // record was gone when the request had simply errored.
   if (budgetQuery.isError) {
+    if (isAxiosError(budgetQuery.error) && [403, 404].includes(budgetQuery.error.response?.status ?? 0)) {
+      return <EmptyState icon="lock" title="Budget is no longer available" description="It may have been deleted or your access may have changed." action={<Button variant="secondary" onClick={() => navigate('/budgeting')}>Return to budgets</Button>} />;
+    }
     return <QueryErrorState subject="this budget" onRetry={() => void budgetQuery.refetch()} />;
   }
   if (!budget) return <EmptyState icon="alert-circle" title="Budget not found" />;
 
-  const canSubmit = budget.status === 'draft' && canManage;
-  const canApproveAction = budget.status === 'submitted' && canApproveBudget && budget.can_approve === true;
-  const canReject = budget.status === 'submitted' && canApproveBudget && budget.can_approve === true;
-  const canDelete = budget.status === 'draft' && canManage;
-  const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;
+  const availableActions = new Set(budget.available_actions ?? []);
+  const actionsAreCurrent = !budgetQuery.isFetching;
 
   return (
     <div className="p-5 space-y-6">
@@ -164,56 +182,61 @@ export default function BudgetDetailPage() {
             >
               <LuArrowLeft size={14} /> Back
             </Link>
-            {budget.status === 'draft' && canManage && (
+            {actionsAreCurrent && availableActions.has('edit') && (
               <Button size="sm" variant="secondary" onClick={() => navigate(`/budgeting/${budget.id}/edit`)}>
                 <LuPencil size={14} /> Edit
               </Button>
             )}
-            {canDelete && (
+            {actionsAreCurrent && availableActions.has('delete') && (
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => setConfirmDelete(true)}
                 loading={deleteMutation.isPending}
+                disabled={!actionsAreCurrent}
               >
                 <LuTrash2 size={14} /> Delete
               </Button>
             )}
-            {canSubmit && (
+            {actionsAreCurrent && availableActions.has('submit') && (
               <Button
                 size="sm"
                 variant="primary"
                 onClick={() => setConfirmSubmit(true)}
                 loading={submitMutation.isPending}
+                disabled={!actionsAreCurrent}
               >
                 <LuSend size={14} /> Submit for Approval
               </Button>
             )}
-            {canApproveAction && (
+            {actionsAreCurrent && availableActions.has('approve') && (
               <Button
                 size="xs"
                 variant="primary"
                 onClick={() => setConfirmApprove(true)}
                 loading={approveMutation.isPending}
+                disabled={!actionsAreCurrent}
               >
                 <LuCircleCheck size={14} /> Approve
               </Button>
             )}
-            {canReject && (
+            {actionsAreCurrent && availableActions.has('reject') && (
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => setConfirmReject(true)}
+                disabled={!actionsAreCurrent}
               >
                 <LuUndo2 size={14} /> Return to draft
               </Button>
             )}
-            {canClose && (
+            {actionsAreCurrent && availableActions.has('close') && (
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => setConfirmClose(true)}
                 loading={closeMutation.isPending}
+                disabled={!actionsAreCurrent}
               >
                 <LuCircleX size={14} /> Close
               </Button>
@@ -402,7 +425,7 @@ export default function BudgetDetailPage() {
       <ReasonDialog
         isOpen={confirmReject}
         onClose={() => setConfirmReject(false)}
-        onConfirm={(reason) => rejectMutation.mutateAsync(reason)}
+        onConfirm={async (reason) => { await rejectMutation.mutateAsync(reason); }}
         title="Return budget to draft?"
         description="The maker can rework and resubmit. The reason is recorded in the approval history."
         reasonLabel="Return reason"

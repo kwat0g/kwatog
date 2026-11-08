@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
+import { billsApi } from '@/api/accounting/bills';
 import { grnApi } from '@/api/inventory/grn';
 import { supplierActivityApi } from '@/api/b2b/supplier-activity';
 import { warehouseApi } from '@/api/inventory/warehouse';
@@ -9,27 +10,41 @@ import type { GoodsReceiptNote } from '@/types/inventory';
 import GrnDetailPage from './detail';
 
 vi.mock('@/api/inventory/grn', () => ({
-  grnApi: { show: vi.fn(), options: vi.fn(), finalize: vi.fn() },
+  grnApi: { show: vi.fn(), options: vi.fn(), finalize: vi.fn(), reject: vi.fn() },
 }));
+vi.mock('@/api/accounting/bills', () => ({ billsApi: { postDraft: vi.fn() } }));
 vi.mock('@/api/b2b/supplier-activity', () => ({
   supplierActivityApi: { forGoodsReceipt: vi.fn() },
 }));
 vi.mock('@/api/inventory/warehouse', () => ({ warehouseApi: { tree: vi.fn() } }));
 vi.mock('@/hooks/useChainProgress', () => ({ useChainProgress: () => undefined }));
-const permissions = vi.hoisted(() => ({ manageCases: true }));
+const permissions = vi.hoisted(() => ({ manageCases: true, canReceive: true }));
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({
     can: (permission: string) =>
-      permission !== 'return_management.manage' || permissions.manageCases,
+      permission === 'inventory.grn.create'
+        ? permissions.canReceive
+        : permission !== 'return_management.manage' || permissions.manageCases,
   }),
 }));
 afterEach(() => {
   vi.clearAllMocks();
   permissions.manageCases = true;
+  permissions.canReceive = true;
 });
 
 const draft: GoodsReceiptNote = {
   id: 'grn-1',
+  updated_at: '2026-10-08T00:00:00Z',
+  version: '2026-10-08T00:00:00.000000+00:00',
+  permissions: {
+    view: true,
+    receive: true,
+    manage_incoming_qc: false,
+    post_journal: false,
+    report_problem: false,
+  },
+  available_actions: ['finalize'],
   grn_number: 'GRN-202610-0001',
   status: 'draft',
   status_label: 'Draft',
@@ -304,6 +319,107 @@ it('asks which existing bin to use when the item is stored in several bins', asy
   client.clear();
 });
 
+it('keeps the GRN mutation response when an older detail read finishes afterward', async () => {
+  const pending: GoodsReceiptNote = {
+    ...draft,
+    status: 'pending_qc',
+    status_label: 'Pending QC',
+    incoming_qc_handoff: {
+      status: 'generated',
+      message: null,
+      at: null,
+    },
+    available_actions: ['reject'],
+    permissions: {
+      view: true,
+      receive: true,
+      manage_incoming_qc: false,
+      post_journal: false,
+      report_problem: false,
+    },
+    items: [],
+  };
+  const rejected: GoodsReceiptNote = {
+    ...pending,
+    status: 'rejected',
+    status_label: 'Rejected',
+    available_actions: [],
+  };
+  let finishOldRead: ((value: GoodsReceiptNote) => void) | undefined;
+  vi.mocked(grnApi.show)
+    .mockResolvedValueOnce(pending)
+    .mockImplementation(() => new Promise((resolve) => { finishOldRead = resolve; }));
+  vi.mocked(grnApi.options).mockResolvedValue({ statuses: [], default_qc_result: 'pending' });
+  vi.mocked(supplierActivityApi.forGoodsReceipt).mockResolvedValue({ shipment: null, documents: [], shipments: [] });
+  vi.mocked(warehouseApi.tree).mockResolvedValue([]);
+  vi.mocked(grnApi.reject).mockResolvedValue(rejected);
+  permissions.canReceive = false;
+  const client = renderDraft();
+  const detailKey = ['inventory', 'grn', 'detail', 'grn-1'];
+
+  await waitFor(() => expect(grnApi.show).toHaveBeenCalledOnce());
+  void client.refetchQueries({ queryKey: detailKey, type: 'active' });
+  await waitFor(() => expect(grnApi.show).toHaveBeenCalledTimes(2));
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByRole('textbox'), {
+    target: { value: 'Supplier delivered damaged material' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }));
+
+  await waitFor(() =>
+    expect(grnApi.reject).toHaveBeenCalledWith('grn-1', 'Supplier delivered damaged material'),
+  );
+  expect(client.getQueryData(detailKey)).toEqual(rejected);
+  expect(client.getQueryState(detailKey)?.status).toBe('success');
+  expect(screen.queryByRole('heading', { name: 'Failed to load GRN' })).not.toBeInTheDocument();
+  await act(async () => {
+    finishOldRead?.(pending);
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(client.getQueryState(detailKey)?.fetchStatus).toBe('idle'));
+  expect(grnApi.show).toHaveBeenCalledTimes(2);
+  expect(client.getQueryData(detailKey)).toEqual(rejected);
+  client.clear();
+});
+
+it('refreshes the GRN after a stale action returns a state conflict', async () => {
+  const pending: GoodsReceiptNote = {
+    ...draft,
+    status: 'pending_qc',
+    status_label: 'Pending QC',
+    incoming_qc_handoff: { status: 'generated', message: null, at: null },
+    available_actions: ['reject'],
+    items: [],
+  };
+  const accepted: GoodsReceiptNote = {
+    ...pending,
+    status: 'accepted',
+    status_label: 'Accepted',
+    available_actions: [],
+  };
+  vi.mocked(grnApi.show).mockResolvedValueOnce(pending).mockResolvedValueOnce(accepted);
+  vi.mocked(grnApi.options).mockResolvedValue({ statuses: [], default_qc_result: 'pending' });
+  vi.mocked(warehouseApi.tree).mockResolvedValue([]);
+  vi.mocked(grnApi.reject).mockRejectedValue({
+    response: { status: 409, data: { message: 'This GRN is no longer pending QC.' } },
+  });
+  const client = renderDraft();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByRole('textbox'), {
+    target: { value: 'Supplier delivery state changed' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }));
+
+  await screen.findByText('Accepted');
+  expect(grnApi.show).toHaveBeenCalledTimes(2);
+  expect(client.getQueryData(['inventory', 'grn', 'detail', 'grn-1'])).toEqual(accepted);
+  client.clear();
+});
+
 it('does not offer unannounced receiving when the supplier has no shipment', async () => {
   vi.mocked(grnApi.show).mockResolvedValue(draft);
   vi.mocked(grnApi.options).mockResolvedValue({
@@ -365,6 +481,7 @@ it('offers warehouse a shortage report beside the supplier dispatch difference',
     ...draft,
     status: 'pending_qc',
     received_date: '2026-10-08',
+    available_actions: ['report_shortage'],
     items: [{ ...draft.items![0], quantity_received: '18000.000' }],
     supplier_shipment: {
       id: 'shipment-1',
@@ -387,5 +504,52 @@ it('offers warehouse a shortage report beside the supplier dispatch difference',
   expect(await screen.findByText('Short by 2,000 pcs')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Report shortage' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Report a problem' })).not.toBeInTheDocument();
+  client.clear();
+});
+
+it('reconciles the posted bill response into the GRN before a stale detail read can win', async () => {
+  const current: GoodsReceiptNote = {
+    ...draft,
+    status: 'accepted',
+    available_actions: [],
+    bill: {
+      id: 'bill-1',
+      bill_number: 'BILL-202610-0001',
+      status: 'draft',
+      status_label: 'Draft',
+      total_amount: '100.00',
+    },
+  };
+  const postedBill = {
+    id: 'bill-1',
+    bill_number: 'BILL-202610-0001',
+    status: 'unpaid',
+    status_label: 'Unpaid',
+    total_amount: '100.00',
+  };
+  let resolveStaleRead!: (value: GoodsReceiptNote) => void;
+  const staleRead = new Promise<GoodsReceiptNote>((resolve) => {
+    resolveStaleRead = resolve;
+  });
+
+  vi.mocked(grnApi.show).mockResolvedValueOnce(current).mockReturnValueOnce(staleRead);
+  vi.mocked(grnApi.options).mockResolvedValue({ statuses: [], default_qc_result: 'pending' });
+  vi.mocked(warehouseApi.tree).mockResolvedValue([]);
+  vi.mocked(billsApi.postDraft).mockResolvedValue(postedBill as never);
+  const client = renderDraft();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Post bill' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Post bill' }));
+
+  await waitFor(() => expect(billsApi.postDraft).toHaveBeenCalledWith('bill-1'));
+  expect(await screen.findByText('Unpaid')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Post bill' })).not.toBeInTheDocument();
+
+  resolveStaleRead(current);
+  await waitFor(() => {
+    expect(client.getQueryData<GoodsReceiptNote>(['inventory', 'grn', 'detail', 'grn-1'])?.bill?.status)
+      .toBe('unpaid');
+  });
   client.clear();
 });

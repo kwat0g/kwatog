@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Support;
 
 use App\Modules\Auth\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The one place a bespoke dashboard panel says "who may read this?".
@@ -76,11 +77,11 @@ final class PanelGate
     /**
      * A stable fingerprint of how this viewer answers a given set of gates.
      *
-     * For the dashboards cached per user id, per-viewer panel sets are already
-     * cache-safe. FinanceDashboardService is not: it caches under ONE shared key
-     * (`finance_dashboard:summary:v2`) across every caller, so gating its panels
-     * per user would serve one viewer's payload to another — a gate that leaks
-     * is worse than no gate.
+     * For dashboards cached per user id, per-viewer panel sets are already
+     * cache-safe. FinanceDashboardService deliberately shares summaries among
+     * callers with the same gate answers. Its key includes this signature and a
+     * dashboard cache generation, so callers with different panel grants cannot
+     * receive one another's payload — a gate that leaks is worse than no gate.
      *
      * Keying by user id instead would give every finance user their own entry and
      * throw away the sharing that made a shared key worth having. This keys by
@@ -98,5 +99,30 @@ final class PanelGate
         sort($held);
 
         return substr(hash('sha256', implode('|', $held)), 0, 16);
+    }
+
+    /**
+     * Cache partition for per-viewer dashboard payloads. These values include
+     * panel sets and, for employee-linked users, department-scoped aggregates.
+     * A user ID alone is not enough: the same account can lose grants or move
+     * to a different department while its old 30-second snapshot is cached.
+     */
+    public function cacheScope(User $user): string
+    {
+        $permissions = array_values(array_unique($user->permission_slugs));
+        sort($permissions, SORT_STRING);
+
+        $departmentId = $user->employee_id === null
+            ? null
+            : DB::table('employees')->where('id', (int) $user->employee_id)->value('department_id');
+
+        return substr(hash('sha256', json_encode([
+            'user' => (int) $user->id,
+            'role_id' => $user->role_id === null ? null : (int) $user->role_id,
+            'role_slug' => $user->role?->slug,
+            'employee_id' => $user->employee_id === null ? null : (int) $user->employee_id,
+            'department_id' => $departmentId === null ? null : (int) $departmentId,
+            'permissions' => $permissions,
+        ], JSON_THROW_ON_ERROR)), 0, 24);
     }
 }

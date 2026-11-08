@@ -20,6 +20,20 @@ const PWA_MANIFESTS: Array<{
   },
 ];
 
+/** Clear only this application's offline shell caches on a shared device logout. */
+export async function clearPwaCaches(): Promise<boolean> {
+  if (!('caches' in globalThis) || !globalThis.caches) return true;
+
+  try {
+    const ownedCaches = (await globalThis.caches.keys()).filter((key) => key.startsWith('ogami-'));
+    const results = await Promise.allSettled(ownedCaches.map((key) => globalThis.caches.delete(key)));
+
+    return results.every((result) => result.status === 'fulfilled');
+  } catch {
+    return false;
+  }
+}
+
 export function registerSW() {
   // Swap the manifest link based on which PWA sub-app we're in.
   const manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -60,7 +74,9 @@ export function registerSW() {
   }
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
+    const workerUrl = new URL('/sw.js', window.location.origin);
+    workerUrl.searchParams.set('build', __OGAMI_BUILD_ID__);
+    navigator.serviceWorker.register(workerUrl.toString(), { scope: '/' }).catch(() => {
       // Service worker registration failed — app still works without it
     });
   });

@@ -48,7 +48,7 @@ class BudgetTransferController extends Controller
         $perPage = (int) $request->input('per_page', 20);
         $transfers = $query->paginate($perPage);
         foreach ($transfers->items() as $transfer) {
-            $this->setCanApprove($transfer, $request);
+            $this->setAvailableActions($transfer, $request);
         }
 
         return response()->json([
@@ -77,13 +77,15 @@ class BudgetTransferController extends Controller
     public function show(Request $request, BudgetTransfer $budgetTransfer): JsonResponse
     {
         $actor = $request->user();
-        $canApprove = $actor instanceof User
-            && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $budgetTransfer->requested_by])
-            && $this->transfers->canApprove($budgetTransfer, $actor);
+        $canAct = $actor instanceof User
+            && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $budgetTransfer->requested_by]);
+        $canApprove = $canAct && $this->transfers->canApprove($budgetTransfer, $actor);
+        $canReject = $canAct && $this->transfers->canReject($budgetTransfer, $actor);
         abort_unless($actor instanceof User && ($actor->hasPermission('budgeting.view') || $canApprove), 403);
 
         $budgetTransfer->load(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver', 'rejecter']);
         $budgetTransfer->setAttribute('can_approve', $canApprove);
+        $budgetTransfer->setAttribute('can_reject', $canReject);
 
         return response()->json([
             'success' => true,
@@ -113,7 +115,7 @@ class BudgetTransferController extends Controller
             'amount' => (string) $validated['amount'],
             'reason' => $validated['reason'],
         ], (int) auth()->id());
-        $this->setCanApprove($transfer, $request);
+        $this->setAvailableActions($transfer, $request);
 
         return response()->json([
             'success' => true,
@@ -127,7 +129,7 @@ class BudgetTransferController extends Controller
     public function approve(Request $request, BudgetTransfer $budgetTransfer): JsonResponse
     {
         $transfer = $this->transfers->approve($budgetTransfer, (int) auth()->id());
-        $this->setCanApprove($transfer, $request);
+        $this->setAvailableActions($transfer, $request);
 
         return response()->json(['success' => true, 'data' => new BudgetTransferResource($transfer), 'error' => null, 'meta' => null]);
     }
@@ -136,7 +138,7 @@ class BudgetTransferController extends Controller
     public function reject(Request $request, BudgetTransfer $budgetTransfer): JsonResponse
     {
         $transfer = $this->transfers->reject($budgetTransfer, (int) auth()->id());
-        $this->setCanApprove($transfer, $request);
+        $this->setAvailableActions($transfer, $request);
 
         return response()->json(['success' => true, 'data' => new BudgetTransferResource($transfer), 'error' => null, 'meta' => null]);
     }
@@ -158,14 +160,12 @@ class BudgetTransferController extends Controller
         return $id;
     }
 
-    private function setCanApprove(BudgetTransfer $transfer, Request $request): void
+    private function setAvailableActions(BudgetTransfer $transfer, Request $request): void
     {
         $actor = $request->user();
-        $transfer->setAttribute(
-            'can_approve',
-            $actor instanceof User
-                && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $transfer->requested_by])
-                && $this->transfers->canApprove($transfer, $actor),
-        );
+        $canAct = $actor instanceof User
+            && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $transfer->requested_by]);
+        $transfer->setAttribute('can_approve', $canAct && $this->transfers->canApprove($transfer, $actor));
+        $transfer->setAttribute('can_reject', $canAct && $this->transfers->canReject($transfer, $actor));
     }
 }

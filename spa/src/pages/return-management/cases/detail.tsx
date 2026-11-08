@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
@@ -17,6 +17,12 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord, useReturnCasePortalRealtime } from '@/hooks/useRealtimeRecord';
+import { useRealtimeEvent } from '@/hooks/useRealtimeEvent';
+import type { CustomerPortalUser, SupplierPortalUser } from '@/types/b2b';
+import { useAuthStore } from '@/stores/authStore';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { returnCaseQueryKeys } from '@/lib/queryKeys/returnCases';
 import type { ReturnCaseActionPayload, ReturnCasePreferredResolution, ReturnCaseRecord, ReturnCaseResolution, ReturnCaseResolutionOptions } from '@/types/returnCases';
 import { apiMessage, casePath, caseStatusVariant, evidenceFileError, realmFromPath, toMilli } from './shared';
 
@@ -245,6 +251,19 @@ export default function ReturnCaseDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const location = useLocation();
   const realm = realmFromPath(location.pathname);
+  const portalUser = useOutletContext<CustomerPortalUser | SupplierPortalUser | null>();
+  const authUserId = useAuthStore((state) => state.user?.id);
+  const portalScope = realm === 'customer'
+    ? (portalUser as CustomerPortalUser | null)?.customer?.id
+    : realm === 'supplier'
+      ? (portalUser as SupplierPortalUser | null)?.vendor?.id
+      : undefined;
+  const cacheScope = realm === 'internal' ? `user:${authUserId ?? 'unknown'}` : `${realm}:${portalScope ?? 'unknown'}`;
+  useRealtimeRecord('return_case', realm === 'internal' ? id : undefined);
+  useReturnCasePortalRealtime(
+    realm === 'internal' ? undefined : realm,
+    portalScope,
+  );
   const { can } = usePermission();
   const qc = useQueryClient();
   const [panel, setPanel] = useState<ActionPanel>(null);
@@ -259,11 +278,20 @@ export default function ReturnCaseDetailPage() {
   const [actionError, setActionError] = useState('');
 
   const { data: record, isLoading, isError, refetch } = useQuery({
-    queryKey: ['return-cases', realm, id], queryFn: () => returnCasesApi.show(realm, id), enabled: !!id,
-    refetchInterval: query => query.state.data?.status === 'in_progress' && query.state.data.type === 'customer' && query.state.data.resolution === 'redelivery' ? 15000 : false,
+    queryKey: returnCaseQueryKeys.detail(id, realm, cacheScope), queryFn: () => returnCasesApi.show(realm, id), enabled: !!id,
   });
+  const refreshEmbeddedOrderAgreements = () => {
+    void qc.invalidateQueries({ queryKey: returnCaseQueryKeys.detail(id, realm, cacheScope) });
+  };
+  useRealtimeEvent(
+    realm === 'internal' && record?.order_agreements?.sales_order_id ? `return_case.${id}` : '',
+    '.chain.refresh',
+    refreshEmbeddedOrderAgreements,
+    refreshEmbeddedOrderAgreements,
+    refreshEmbeddedOrderAgreements,
+  );
   const optionsQuery = useQuery({
-    queryKey: ['return-cases', realm, id, 'resolution-options'],
+    queryKey: returnCaseQueryKeys.resolutionOptions(realm, cacheScope, id),
     queryFn: () => returnCasesApi.resolutionOptions(realm, id),
     enabled: realm === 'internal' && panel === 'link_resolution',
   });
@@ -293,8 +321,8 @@ export default function ReturnCaseDetailPage() {
     onSuccess: (updated, payload) => {
       toast.success(actionSuccess(payload.action));
       setPanel(null); setMessage(''); setExpectedDate(''); setLinks({}); setActionError('');
-      qc.setQueryData(['return-cases', realm, id], updated);
-      qc.invalidateQueries({ queryKey: ['return-cases', realm] });
+      qc.setQueryData(returnCaseQueryKeys.detail(id, realm, cacheScope), updated);
+      void invalidateRealtimeChange(qc, { entityType: 'return_case', entityId: id });
     },
     onError: (error) => setActionError(apiMessage(error, 'The action was not saved. Your message is still here; check the case status and retry.')),
   });
@@ -309,7 +337,7 @@ export default function ReturnCaseDetailPage() {
     },
     onSuccess: (failed) => {
       setSelectedFiles([]); setPendingFiles(failed); setActionError('');
-      qc.invalidateQueries({ queryKey: ['return-cases', realm, id] });
+      qc.invalidateQueries({ queryKey: returnCaseQueryKeys.detail(id, realm, cacheScope) });
       if (failed.length) toast.error('Some files were not uploaded. Retry them below.', { id: `return-case-evidence-${id}` });
       else toast.success('Evidence uploaded.', { id: `return-case-evidence-${id}` });
     },

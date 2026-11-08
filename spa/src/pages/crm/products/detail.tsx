@@ -20,6 +20,9 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDateTime } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
 import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
+import { useRealtimeProductBom, useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import type { Product } from '@/types/crm';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 const EMPTY_CUSTOMER_OPTIONS: Array<{ id: string; name: string }> = [];
 
@@ -34,11 +37,20 @@ export default function ProductDetailPage() {
   const canViewCosts = can('inventory.costs.review') || can('inventory.costs.approve');
   const backTo = can('crm.products.view') ? '/crm/products' : '/dashboard';
   const backLabel = can('crm.products.view') ? 'Products' : 'Dashboard';
+  useRealtimeRecord('product', id);
+  useRealtimeProductBom(id, can('mrp.boms.view'));
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'products', 'detail', id],
     queryFn: () => productsApi.show(id!),
     enabled: !!id,
   });
+  const productDetailKey = ['crm', 'products', 'detail', id] as const;
+  const reconcileProduct = (updated: Product) => reconcileRealtimeMutationResponse(
+    queryClient,
+    { entityType: 'product', entityId: id! },
+    productDetailKey,
+    updated,
+  );
   const [editingAccess, setEditingAccess] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -66,8 +78,8 @@ export default function ProductDetailPage() {
       portal_visibility: accessVisibility,
       portal_customer_ids: accessCustomerIds,
     }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
+    onSuccess: (updated) => {
+      reconcileProduct(updated);
       setEditingAccess(false);
       toast.success('Customer access updated.');
     },
@@ -85,16 +97,14 @@ export default function ProductDetailPage() {
   const [financialError, setFinancialError] = useState('');
   const [priceError, setPriceError] = useState('');
   const financial = useMutation({
-    mutationFn: async (decision: 'propose' | 'approve' | 'reject') => {
+    mutationFn: (decision: 'propose' | 'approve' | 'reject') => {
       setFinancialError('');
       if (decision === 'propose')
-        await productsApi.proposeFinancial(id!, { standard_cost: standardCost, notes });
-      else
-        await productsApi.decideFinancial(id!, data!.financial_change_request!.id, decision, notes);
+        return productsApi.proposeFinancial(id!, { standard_cost: standardCost, notes });
+      return productsApi.decideFinancial(id!, data!.financial_change_request!.id, decision, notes);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
-      void refetch();
+    onSuccess: (updated) => {
+      reconcileProduct(updated);
       setEditingCost(false);
       setNotes('');
       toast.success('Financial review recorded.');
@@ -112,9 +122,8 @@ export default function ProductDetailPage() {
       base_selling_price: prices.base_selling_price || null,
       minimum_selling_price: prices.minimum_selling_price || null,
     }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
-      void refetch();
+    onSuccess: (updated) => {
+      reconcileProduct(updated);
       setEditingPrices(false);
       toast.success('Selling prices updated.');
     },

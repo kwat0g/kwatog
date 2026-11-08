@@ -14,6 +14,7 @@ use App\Modules\Attendance\Services\EmployeeAvailabilityService;
 use App\Modules\Attendance\Services\ShiftAssignmentService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Production\Exceptions\WorkOrderAssignmentConflictException;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderCrew;
@@ -417,7 +418,7 @@ class WorkOrderAssignmentService
             }
             $current = $this->currentCrew($wo, $ncrId);
             if (($current?->id) !== ($data['expected_crew_id'] ?? null)) {
-                throw new BusinessRuleException('The crew changed. Refresh and review the current assignment before saving.');
+                throw new WorkOrderAssignmentConflictException('The crew changed. Refresh and review the current assignment before saving.');
             }
             $minimum = (int) ($data['minimum_workers'] ?? $wo->minimum_workers);
             $maximum = isset($data['maximum_workers']) ? (int) $data['maximum_workers'] : 4;
@@ -486,6 +487,12 @@ class WorkOrderAssignmentService
                     'link_to' => '/self-service/work-orders/'.$wo->hash_id.'?crew_id='.$current->hash_id,
                     'entity_type' => 'work_order', 'entity_id' => $wo->hash_id], 'wo-crew-ended-'.$current->id, emailEnabled: false);
             }
+
+            app(WorkOrderAssignmentRealtimeService::class)->stage(
+                $wo,
+                'updated',
+                array_merge($current?->members->pluck('employee_id')->map(fn ($id) => (int) $id)->all() ?? [], $ids),
+            );
 
             return $crew->load('members.employee.user');
         });
@@ -632,6 +639,10 @@ class WorkOrderAssignmentService
             if ($issues === [] && $context === null) {
                 continue;
             }
+            // HR shift, account, and working-day changes affect the readiness
+            // shown to every authorized viewer of this work order, not only
+            // the operator notification recipients below.
+            app(AssignedWorkOrderRefreshService::class)->stage($crew->workOrder);
             $slot = $this->schedule($crew->workOrder, $crew->rework_ncr_id);
             app(NotificationService::class)->sendForSubject($crew->workOrder, $owners, 'production.assignment.review', [
                 'title' => 'Crew needs review: '.$crew->workOrder->wo_number,

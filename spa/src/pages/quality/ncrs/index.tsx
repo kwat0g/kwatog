@@ -18,11 +18,13 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { cn } from '@/lib/cn';
 import type { Ncr, NcrSeverity, NcrStatus } from '@/types/quality';
 import { formatDateIso } from '@/lib/formatDate';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   open: 'warning',
   in_progress: 'info',
@@ -49,6 +51,8 @@ export default function NcrsListPage() {
   const queryClient = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<NcrListParams>(DEFAULT_FILTERS);
+  const listQueryKey = ['quality', 'ncrs', filters] as const;
+  useRealtimeList('ncr', 'visible');
   const [bulkRows, setBulkRows] = useState<Ncr[]>([]);
   const [confirmBulkClose, setConfirmBulkClose] = useState(false);
   const [bulkResult, setBulkResult] = useState<Awaited<
@@ -57,9 +61,10 @@ export default function NcrsListPage() {
   const [tableInstance, setTableInstance] = useState(0);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['quality', 'ncrs', filters],
+    queryKey: listQueryKey,
     queryFn: () => ncrsApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? prev : undefined,
   });
   const { data: ncrOptions } = useQuery({
     queryKey: ['quality', 'ncr-options'],

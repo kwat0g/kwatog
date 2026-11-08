@@ -5,4 +5,5 @@ return [
     App\Providers\AuthServiceProvider::class,
     App\Providers\HorizonServiceProvider::class,
     App\Providers\ModuleServiceProvider::class,
+    App\Providers\E2EControlServiceProvider::class,
 ];

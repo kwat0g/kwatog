@@ -137,9 +137,9 @@ class AssetService
      *
      * @param  array{target_type:string, target_id:int|null}  $data
      */
-    public function associate(Asset $asset, array $data): Asset
+    public function associate(Asset $asset, array $data, ?User $by = null): Asset
     {
-        return DB::transaction(function () use ($asset, $data): Asset {
+        return DB::transaction(function () use ($asset, $data, $by): Asset {
             $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
             if ($data['target_id'] !== null && $locked->status === AssetStatus::Disposed) {
                 throw new BusinessRuleException('Disposed assets cannot be associated with operational records.');
@@ -157,7 +157,10 @@ class AssetService
                         ->each(fn ($target) => $target->forceFill(['asset_id' => null])->save());
                 }
 
-                return $this->loadAssociationRelations($locked->fresh());
+                $updated = $this->loadAssociationRelations($locked->fresh());
+                app(AssetRealtimeService::class)->stage($updated, 'updated', $by);
+
+                return $updated;
             }
 
             $type = (string) $data['target_type'];
@@ -201,13 +204,16 @@ class AssetService
 
             $target->forceFill(['asset_id' => $locked->getKey()])->save();
 
-            return $this->loadAssociationRelations($locked->fresh());
+            $updated = $this->loadAssociationRelations($locked->fresh());
+            app(AssetRealtimeService::class)->stage($updated, 'updated', $by);
+
+            return $updated;
         });
     }
 
-    public function create(array $data): Asset
+    public function create(array $data, ?User $by = null): Asset
     {
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $by) {
             $salvage = $data['salvage_value'] ?? Money::zero();
             if ($salvage === null || trim((string) $salvage) === '') {
                 $salvage = Money::zero();
@@ -233,13 +239,16 @@ class AssetService
                 'insured_value' => $data['insured_value'] ?? null,
             ]);
 
-            return $asset->fresh();
+            $created = $asset->fresh();
+            app(AssetRealtimeService::class)->stage($created, 'created', $by);
+
+            return $created;
         });
     }
 
-    public function update(Asset $asset, array $data): Asset
+    public function update(Asset $asset, array $data, ?User $by = null): Asset
     {
-        return DB::transaction(function () use ($asset, $data) {
+        return DB::transaction(function () use ($asset, $data, $by) {
             // Lock-then-guard: re-read so a concurrent dispose cannot slip a
             // write onto an asset that just became immutable.
             $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
@@ -288,7 +297,10 @@ class AssetService
             $locked->fill($changes);
             $locked->save();
 
-            return $locked->fresh();
+            $updated = $locked->fresh();
+            app(AssetRealtimeService::class)->stage($updated, 'updated', $by);
+
+            return $updated;
         });
     }
 
@@ -377,7 +389,10 @@ class AssetService
                 );
             }
 
-            return $locked->fresh();
+            $updated = $locked->fresh();
+            app(AssetRealtimeService::class)->stage($updated, 'updated', $by);
+
+            return $updated;
         });
     }
 
@@ -410,7 +425,12 @@ class AssetService
                 ], $by);
             }
 
-            return $locked->fresh();
+            $updated = $locked->fresh();
+            if ($updated->status !== AssetStatus::Disposed) {
+                app(AssetRealtimeService::class)->stage($updated, 'updated', $by);
+            }
+
+            return $updated;
         });
     }
 
@@ -430,7 +450,10 @@ class AssetService
             $this->approvals->reject($locked, $by, $reason);
             $this->clearDisposalRequest($locked);
 
-            return $locked->fresh();
+            $updated = $locked->fresh();
+            app(AssetRealtimeService::class)->stage($updated, 'updated', $by);
+
+            return $updated;
         });
     }
 
@@ -461,7 +484,10 @@ class AssetService
 
             $this->clearDisposalRequest($locked);
 
-            return $locked->fresh();
+            $updated = $locked->fresh();
+            app(AssetRealtimeService::class)->stage($updated, 'updated', $by);
+
+            return $updated;
         });
     }
 
@@ -617,7 +643,10 @@ class AssetService
                 'disposal_requested_by' => null,
             ])->save();
 
-            return $locked->fresh();
+            $updated = $locked->fresh();
+            app(AssetRealtimeService::class)->stage($updated, 'status_changed', $by);
+
+            return $updated;
         });
     }
 
@@ -630,9 +659,9 @@ class AssetService
         }
     }
 
-    public function delete(Asset $asset): void
+    public function delete(Asset $asset, ?User $by = null): void
     {
-        DB::transaction(function () use ($asset): void {
+        DB::transaction(function () use ($asset, $by): void {
             $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
             if ($locked->status !== AssetStatus::Active) {
                 throw new BusinessRuleException('Only active assets without financial or custody history can be deleted.');
@@ -651,6 +680,20 @@ class AssetService
             }
 
             $locked->delete();
+            app(AssetRealtimeService::class)->stage($locked, 'deleted', $by);
+        });
+    }
+
+    public function restore(Asset $asset, ?User $by = null): void
+    {
+        DB::transaction(function () use ($asset, $by): void {
+            $locked = Asset::withTrashed()->lockForUpdate()->findOrFail($asset->getKey());
+            if (! $locked->trashed()) {
+                return;
+            }
+
+            $locked->restore();
+            app(AssetRealtimeService::class)->stage($locked, 'restored', $by);
         });
     }
 

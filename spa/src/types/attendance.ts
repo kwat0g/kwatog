@@ -95,6 +95,9 @@ export interface Attendance {
 
 export interface OvertimeRequest {
  id: string;
+ version?: number;
+ permissions?: { approve?: boolean; reject?: boolean; cancel?: boolean; restore?: boolean };
+ available_actions?: { approve?: boolean; reject?: boolean; cancel?: boolean; restore?: boolean };
  employee: { id: string; full_name: string; employee_no: string } | null;
  date: string;
  hours_requested: string;

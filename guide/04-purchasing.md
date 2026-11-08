@@ -77,6 +77,11 @@ There is no standalone "new PO" page — every PO is born from a PR.
 5. The PO follows its own Finance → VP approval (same ≥ ₱50,000 rule),
    then it can be sent to the supplier.
 
+For a raw-material sourcing demo, start with **RM-001** (ABS resin) or
+**RM-002** (PP resin). Their preferred suppliers are seeded and approved, so
+the item is ready for supplier selection when creating the PR or PO. The full
+item-to-supplier map is in the [seed data reference](../docs/SEEDS.md#18-thesis-demo-extension).
+
 ## Part F — What the "Finance acknowledge" button means
 
 1. Open **PR-DEMO-BUDGET**. Notice the **Budget critical** warning box:

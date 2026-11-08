@@ -20,6 +20,7 @@ import { actionLabel } from '@/lib/labels';
 import { useMagnetic } from '@/pages/landing/hooks/useMagnetic';
 import { reduceMotion } from '@/pages/landing/motion';
 import { landingApi } from '@/api/landing';
+import { clearAuthSessionDrafts, publishAuthSessionSignal, serializeAuthSessionMutation, type AuthSessionRealm } from '@/lib/authSessionSync';
 
 const schema = z.object({
  email: z.string().min(1, 'Email is required').email('Invalid email'),
@@ -126,11 +127,23 @@ export default function LoginPage() {
  });
 
  const onSubmit = async (data: LoginForm) => {
+ const requestedRealmValue = (location.state as { realm?: unknown } | null)?.realm;
+ const requestedRealm: AuthSessionRealm | undefined =
+  requestedRealmValue === 'internal' || requestedRealmValue === 'customer' || requestedRealmValue === 'supplier' || requestedRealmValue === 'all'
+   ? requestedRealmValue
+   : undefined;
+ let sessionRealm: AuthSessionRealm =
+  requestedRealm === 'internal' || requestedRealm === 'customer' || requestedRealm === 'supplier'
+   ? requestedRealm
+   : 'all';
+ publishAuthSessionSignal(sessionRealm, 'changing');
+ clearAuthSessionDrafts();
  try {
-  const result = await authApi.signIn({
+  const result = await serializeAuthSessionMutation(() => authApi.signIn({
   email: data.email,
   password: data.password,
-  });
+  }));
+  sessionRealm = result.realm;
   queryClient.clear();
 
   if (result.realm === 'internal') {
@@ -173,6 +186,15 @@ export default function LoginPage() {
  } else {
  toast.error('Sign-in failed. Please try again.');
  }
+ } finally {
+  // Re-read through each tab's own guard after success or an ambiguous network
+  // failure; never send the returned user or permission data across tabs.
+  if (requestedRealm === undefined || requestedRealm === 'all') {
+   publishAuthSessionSignal('all', 'changed');
+  } else {
+   publishAuthSessionSignal(sessionRealm, 'changed');
+   if (requestedRealm !== sessionRealm) publishAuthSessionSignal(requestedRealm, 'changed');
+  }
  }
  };
 

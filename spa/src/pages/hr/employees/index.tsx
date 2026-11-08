@@ -21,7 +21,9 @@ import { StatusTabs } from '@/components/ui/StatusTabs';
 import { Tag } from '@/components/ui/Tag';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatDate } from '@/lib/formatDate';
 import { employeeStatusVariant } from '@/lib/statusVariants';
 import { SalaryAdjustmentsTab } from '@/pages/hr/salary-adjustments';
@@ -32,9 +34,9 @@ import { ScheduledExportFormModal } from '@/components/exports/ScheduledExportFo
 const DEFAULT_FILTERS: EmployeeListParams = {
   page: 1,
   per_page: 25,
-  sort: 'employee_no',
+  sort: 'date_hired',
   direction: 'desc',
-  status: 'active',
+  status: 'all',
 };
 
 export default function EmployeesListPage() {
@@ -48,6 +50,7 @@ export default function EmployeesListPage() {
   const canViewDepartments = can('hr.departments.view');
   const canViewEmployees = can('hr.employees.view');
   const canViewAdjustments = can('hr.salary_adjustments.view');
+  useRealtimeList('salary_adjustment', canViewAdjustments ? 'visible' : undefined);
   // Scope cut: salary adjustments folded into this page. A checker like
   // production_manager has hr.salary_adjustments.view WITHOUT hr.employees.view,
   // so the adjustments queue must be their landing view, not the employee list.
@@ -69,8 +72,7 @@ export default function EmployeesListPage() {
   const closePreview = () =>
     navigate({ pathname: location.pathname, search: location.search, hash: '' }, { replace: true });
 
-  // "All" is a tab sentinel. Omit it from requests while preserving the
-  // existing default of Active for first visits and old bookmarks.
+  // "All" is a tab sentinel; omit it from requests so first visits include every status.
   const listFilters = filters.status === 'all' ? { ...filters, status: undefined } : filters;
   const exportFilters = {
     status: filters.status === 'all' ? undefined : filters.status,
@@ -122,10 +124,12 @@ export default function EmployeesListPage() {
     (employeeOptions?.statuses ?? []).map((status) => [status.value, status.label]),
   );
 
+  const employeeListQueryKey = ['hr', 'employees', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['hr', 'employees', filters],
+    queryKey: employeeListQueryKey,
     queryFn: () => employeesApi.list(listFilters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, employeeListQueryKey, 2) ? previous : undefined,
     enabled: canViewEmployees,
   });
 
@@ -141,7 +145,6 @@ export default function EmployeesListPage() {
     queryKey: ['hr', 'employees', 'status-counts', countFilters],
     queryFn: () => employeesApi.statusCounts(countFilters),
     enabled: canViewEmployees && view === 'employees',
-    placeholderData: (prev) => prev,
   });
 
   const columns: Column<Employee>[] = [
@@ -289,7 +292,7 @@ export default function EmployeesListPage() {
           <StatusTabs
             label="Employee status"
             panelId="employee-results"
-            value={String(filters.status ?? 'active')}
+            value={String(filters.status ?? 'all')}
             onChange={(status) => setFilters((current) => ({ ...current, status, page: 1 }))}
             items={[
               { value: 'all', label: 'All', count: statusCounts?.total ?? 0 },

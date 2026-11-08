@@ -22,7 +22,11 @@ import type { ApiValidationError } from '@/types';
 import { AxiosError } from 'axios';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { useSkillCatalogRealtime } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { PaginatedResponse } from '@/types';
 const createSchema = z.object({
  name: z.string().min(1, 'Required').max(200),
  category: z.string().max(100).optional().or(z.literal('')),
@@ -33,14 +37,37 @@ type CreateForm = z.infer<typeof createSchema>;
 export default function SkillsListPage() {
  const { can } = usePermission();
  const qc = useQueryClient();
+ useSkillCatalogRealtime();
  const [showCreate, setShowCreate] = useState(false);
  const [filters, setFilters] = useUrlFilters<ListParams>({ page: 1, per_page: 25 });
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['hr', 'skills', filters],
+  const queryKey = ['hr', 'skills', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => skillsApi.list(filters),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
+
+ const reconcileSkill = (skill: Skill) => {
+  for (const [key, cached] of qc.getQueriesData<PaginatedResponse<Skill>>({ queryKey: ['hr', 'skills'] })) {
+   if (!cached) continue;
+   const exists = cached.data.some((item) => item.id === skill.id);
+   if (exists) {
+    qc.setQueryData<PaginatedResponse<Skill>>(key, {
+     ...cached,
+     data: cached.data.map((item) => item.id === skill.id ? skill : item),
+    });
+   } else if (key[2] === 'all' && skill.is_active) {
+    qc.setQueryData<PaginatedResponse<Skill>>(key, {
+     ...cached,
+     data: [...cached.data, skill].sort((left, right) => left.name.localeCompare(right.name)),
+     meta: { ...cached.meta, total: cached.meta.total + 1 },
+    });
+   }
+  }
+  void invalidateRealtimeChange(qc, { entityType: 'skill', entityId: skill.id });
+ };
 
  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateForm>({
  resolver: zodResolver(createSchema),
@@ -48,8 +75,8 @@ export default function SkillsListPage() {
 
  const createMutation = useMutation({
  mutationFn: (d: CreateForm) => skillsApi.create(d),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['hr', 'skills'] });
+ onSuccess: (skill) => {
+ reconcileSkill(skill);
  toast.success('Skill created.');
  setShowCreate(false);
  reset();
@@ -63,8 +90,8 @@ export default function SkillsListPage() {
 
  const deactivateMutation = useMutation({
  mutationFn: (id: string) => skillsApi.deactivate(id),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['hr', 'skills'] });
+ onSuccess: (skill) => {
+ reconcileSkill(skill);
  toast.success('Skill deactivated.');
  },
  });

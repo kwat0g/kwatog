@@ -36,7 +36,6 @@ export function DocumentList({ entityType, entityId }: DocumentListProps) {
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['documents', entityType, entityId],
  queryFn: () => documentsApi.listForEntity(entityType, entityId),
- placeholderData: (prev) => prev,
  });
 
  const columns = useMemo<Column<DocumentRecord>[]>(

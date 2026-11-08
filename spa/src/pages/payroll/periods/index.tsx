@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { periodsApi, type PeriodListParams } from '@/api/payroll/periods';
 import { DeMinimisManager } from '@/pages/payroll/de-minimis';
 import { Button } from '@/components/ui/Button';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -22,31 +22,27 @@ import type { PayrollPeriod } from '@/types/payroll';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { reportMutationError } from '@/lib/formErrors';
-const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
- switch (status) {
- case 'finalized': return 'success';
- case 'approved': return 'info';
- case 'computed': return 'info';
- case 'processing': return 'info';
- case 'draft': return 'warning';
- default: return 'neutral';
- }
-};
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { payrollPeriodStatusVariant } from '@/lib/statusVariants';
 
 export default function PayrollPeriodsPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
+ useRealtimeList('payroll_period', can('payroll.periods.view') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<PeriodListParams>({
  page: 1, per_page: 25, sort: 'period_start', direction: 'desc',
  });
  const [showThirteenth, setShowThirteenth] = useState(false);
  const [showDeMinimis, setShowDeMinimis] = useState(false);
 
+ const queryKey = ['payroll-periods', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['payroll-periods', filters],
+ queryKey,
  queryFn: () => periodsApi.list(filters),
- placeholderData: (prev) => prev,
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined,
  });
  const { data: periodOptions } = useQuery({
  queryKey: ['payroll-periods', 'options'],
@@ -103,7 +99,7 @@ export default function PayrollPeriodsPage() {
  key: 'status',
  header: 'Status',
  cell: (r) => (
- <Chip variant={periodStatusVariant(r.status)}>{statusLabels.get(r.status) ?? r.status_label}</Chip>
+ <Chip variant={payrollPeriodStatusVariant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip>
  ),
  },
  ];

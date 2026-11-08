@@ -16,20 +16,22 @@ import type { CustomerComplaint, ComplaintSeverity } from '@/types/crm';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { complaintStatusVariant } from '@/lib/statusVariants';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const SEVERITY_CHIP: Record<ComplaintSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  low: 'neutral', medium: 'info', high: 'warning', critical: 'danger' };
 
 export default function ComplaintsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
+ useRealtimeList('customer_complaint', can('crm.complaints.view') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<ComplaintListParams>({ page: 1, per_page: 25 });
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'complaints', filters],
  queryFn: () => complaintsApi.list(filters),
- placeholderData: (prev) => prev });
+ });
  const { data: complaintOptions } = useQuery({
- queryKey: ['crm', 'complaints', 'options'],
+ queryKey: ['crm', 'complaint-options'],
  queryFn: complaintsApi.options,
  staleTime: 5 * 60 * 1000 });
  const labels = new Map([

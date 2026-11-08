@@ -6,7 +6,9 @@ namespace App\Modules\Landing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
+use App\Modules\Auth\Models\User;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
+use App\Modules\Landing\Exceptions\ContactInquiryStateConflictException;
 use App\Modules\Landing\Models\ContactInquiry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,6 +22,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ContactInquiryInboxService
 {
+    public function __construct(private readonly ContactInquiryRealtimeService $realtime) {}
+
     /** @param array<string, mixed> $filters */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -56,11 +60,21 @@ class ContactInquiryInboxService
         return $inquiry;
     }
 
-    public function updateStatus(ContactInquiry $inquiry, ContactInquiryStatus $status): ContactInquiry
-    {
-        return DB::transaction(function () use ($inquiry, $status): ContactInquiry {
+    public function updateStatus(
+        ContactInquiry $inquiry,
+        ContactInquiryStatus $status,
+        ?ContactInquiryStatus $expectedStatus = null,
+    ): ContactInquiry {
+        return DB::transaction(function () use ($inquiry, $status, $expectedStatus): ContactInquiry {
             $locked = ContactInquiry::query()->lockForUpdate()->findOrFail($inquiry->id);
             $current = $locked->status;
+
+            if ($expectedStatus !== null && $current !== $expectedStatus) {
+                throw new ContactInquiryStateConflictException(
+                    "This contact inquiry changed from {$expectedStatus->value} to {$current->value}. Refresh and review the current status.",
+                );
+            }
+
             if ($current === $status) {
                 return $locked;
             }
@@ -77,6 +91,12 @@ class ContactInquiryInboxService
             }
 
             $locked->forceFill(['status' => $status])->save();
+            $actor = auth()->user();
+            $this->realtime->stage(
+                'status_changed',
+                $actor instanceof User ? $actor : null,
+                (string) $locked->hash_id,
+            );
 
             return $this->show($locked->fresh());
         });

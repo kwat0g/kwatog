@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { formatDateTime } from '@/lib/formatDate';
 import { detectorLabel } from '@/pages/decision-center/presentation';
 
@@ -168,11 +169,10 @@ function DetectorRow({ detector }: { detector: DssDetectorState }) {
 }
 
 export default function DssAdminPage() {
+  useRealtimeSignal('dss_changed', 'dss.refresh', '.dss.changed');
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dss', 'admin', 'detectors'],
     queryFn: () => dssApi.detectors(),
-    refetchInterval: 5000,
-    refetchIntervalInBackground: false,
   });
   const {
     data: activity,

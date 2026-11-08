@@ -7,12 +7,32 @@ namespace App\Modules\CRM\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
+use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Support\WarrantyAdvisory;
 
 class CustomerComplaintResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $viewer = $request->user();
+        $canManage = $viewer instanceof User && $viewer->hasPermission('crm.complaints.manage');
+        $status = $this->status instanceof \BackedEnum ? $this->status->value : (string) $this->status;
+        $reportLoaded = $this->resource->relationLoaded('eightDReport');
+        $report = $reportLoaded ? $this->resource->getRelation('eightDReport') : null;
+        $ncrLoaded = $this->resource->relationLoaded('ncr');
+        $ncr = $ncrLoaded ? $this->resource->getRelation('ncr') : null;
+        $ncrStatus = $ncr?->status instanceof \BackedEnum ? $ncr->status->value : $ncr?->status;
+        $reportFinalized = (bool) $report?->finalized_at;
+        $requiredEightDFields = [
+            'd1_team', 'd2_problem', 'd3_containment', 'd4_root_cause',
+            'd5_corrective_action', 'd6_verification', 'd7_prevention', 'd8_recognition',
+        ];
+        $reportComplete = $report !== null && collect($requiredEightDFields)
+            ->every(fn (string $field): bool => trim((string) $report->{$field}) !== '');
+        $qualityCompletionReady = $reportFinalized
+            && $ncrStatus === 'closed'
+            && $ncr?->disposition !== null;
+
         return [
             'id'                => $this->hash_id,
             'complaint_number'  => $this->complaint_number,
@@ -20,6 +40,14 @@ class CustomerComplaintResource extends JsonResource
             'severity_label'    => Str::headline((string) ($this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity)),
             'status'            => $this->status   instanceof \BackedEnum ? $this->status->value   : $this->status,
             'status_label'      => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
+            'permissions'       => ['manage' => $canManage],
+            'available_actions' => [
+                'retry_ncr_handoff' => $canManage && $this->ncr_handoff_status?->value === 'manual_required',
+                'edit_8d' => $canManage && $reportLoaded && (! $report || ! $reportFinalized),
+                'finalize_8d' => $canManage && $reportLoaded && $reportComplete && ! $reportFinalized,
+                'resolve' => $canManage && in_array($status, ['open', 'investigating'], true) && $qualityCompletionReady,
+                'close' => $canManage && $status === 'resolved' && $qualityCompletionReady,
+            ],
             'description'       => $this->description,
             'affected_quantity' => (int) $this->affected_quantity,
             'ncr_handoff'      => [
@@ -77,6 +105,7 @@ class CustomerComplaintResource extends JsonResource
             ] : null),
             'eight_d_report'    => $this->whenLoaded('eightDReport', fn () => $this->eightDReport ? [
                 'id'                   => $this->eightDReport->hash_id,
+                'version'              => $this->eightDReport->version,
                 'd1_team'              => $this->eightDReport->d1_team,
                 'd2_problem'           => $this->eightDReport->d2_problem,
                 'd3_containment'       => $this->eightDReport->d3_containment,

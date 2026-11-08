@@ -122,7 +122,8 @@ class WorkOrderService
                 'exceptionAuthorizer:id,name',
                 'currentProductionSchedule',
                 'activeReworks:id,rework_work_order_id,confirmed_rework_quantity,rework_started_at,rework_finished_at',
-            ]);
+            ])
+            ->withExists(['outputs as has_recorded_outputs']);
 
         TrashedFilter::apply($q, $filters);
 
@@ -289,6 +290,13 @@ class WorkOrderService
             // the execution rows for the same work order.
             if (! $wo->rework_source_output_id) {
                 $this->operations->generateFromRouting($wo);
+            }
+
+            // Generated routing operations already stage one coalesced parent
+            // refresh. Drafts without operations still need a list/detail ping
+            // so viewers see the new WorkOrder even when no routing is active.
+            if (! $wo->operations()->exists()) {
+                app(ChainBroadcaster::class)->refreshWorkOrder($wo->fresh());
             }
 
             return $this->show($wo->fresh());
@@ -527,6 +535,8 @@ class WorkOrderService
             'execution_start' => $preview ? $preview['window']->scheduled_start->toIso8601String() : null,
             'execution_end' => $preview ? $preview['window']->scheduled_end->toIso8601String() : null,
             'estimated_finish' => $preview ? now()->addMinutes($resources->durationMinutes($wo, $wo->mold))->toIso8601String() : null,
+            'next_refresh_at' => app(ProductionReadinessRefreshAt::class)
+                ->nextAt($wo, $slot, $crew, $preview['window'] ?? null)?->toIso8601String(),
             'requires_late_production_approval' => $requiresDeadlineApproval,
             'presence' => $presence, 'expected_crew_id' => $crew?->hash_id,
             'schedule' => $slot ? $crews->serializeSchedule($slot) : null];
@@ -708,6 +718,7 @@ class WorkOrderService
             $wo->update(['production_released_at' => now()]);
             app(ActivityFeedService::class)->record('production.work_order', 'resources_released', $wo,
                 'Paused resources released for '.$wo->wo_number.'.', ['reason' => trim($reason)], actorUserId: $releasedBy);
+            app(ChainBroadcaster::class)->refreshWorkOrder($wo);
 
             return $this->show($wo->fresh());
         });
@@ -904,7 +915,7 @@ class WorkOrderService
         $wo->assertProcessQualityReleased();
         app(WorkOrderMaterialHandoverService::class)->assertForCompletion($wo);
 
-        $incompleteOps = WoOperation::query()
+        $incompleteOps = config('production.routing_execution_enabled', true) && WoOperation::query()
             ->where('work_order_id', $wo->id)
             ->whereNotIn('status', [
                 WoOperationStatus::Completed->value,
@@ -990,12 +1001,15 @@ class WorkOrderService
             // stop blocking machine capacity in future planning runs. Runs
             // after the WO transition so the immutability guard on started
             // schedules (in_progress/paused) does not fire.
-            ProductionSchedule::where('work_order_id', $lockedWo->id)
+            $schedules = ProductionSchedule::where('work_order_id', $lockedWo->id)
                 ->whereIn('status', [
                     ProductionScheduleStatus::Pending->value,
                     ProductionScheduleStatus::Confirmed->value,
                 ])
-                ->update(['status' => ProductionScheduleStatus::Executed->value]);
+                ->lockForUpdate()->get();
+            foreach ($schedules as $schedule) {
+                $schedule->update(['status' => ProductionScheduleStatus::Executed->value]);
+            }
 
             $completed = $this->show($lockedWo->fresh());
             app(OutboxService::class)->recordForChain(
@@ -1178,12 +1192,15 @@ class WorkOrderService
             }
             // M050 — a cancelled work order releases its reserved machine
             // window so the scheduler can replan the slot.
-            ProductionSchedule::where('work_order_id', $lockedWo->id)
+            $schedules = ProductionSchedule::where('work_order_id', $lockedWo->id)
                 ->whereIn('status', [
                     ProductionScheduleStatus::Pending->value,
                     ProductionScheduleStatus::Confirmed->value,
                 ])
-                ->update(['status' => ProductionScheduleStatus::Superseded->value]);
+                ->lockForUpdate()->get();
+            foreach ($schedules as $schedule) {
+                $schedule->update(['status' => ProductionScheduleStatus::Superseded->value]);
+            }
 
             $cancelled = $this->show($lockedWo->fresh());
             $this->recordStatusChange($cancelled, $from, WorkOrderStatus::Cancelled->value, $reason);
@@ -1256,6 +1273,7 @@ class WorkOrderService
             }
             app(ProductionResourceService::class)->releaseReservation($lockedWo);
             $lockedWo->delete();
+            app(ChainBroadcaster::class)->refreshWorkOrder($lockedWo);
         });
     }
 
@@ -1281,6 +1299,7 @@ class WorkOrderService
                 idempotencyKey: 'production:work-order:restore:'.$locked->id.':'.hash('sha256', $deletedAt),
                 actorUserId: $restoredBy,
             );
+            app(ChainBroadcaster::class)->refreshWorkOrder($locked);
 
             return $this->show($locked->fresh());
         });
@@ -1418,8 +1437,22 @@ class WorkOrderService
             return;
         }
 
+        $actorId = auth()->id();
+        $actorHashId = $actorId === null ? null : (string) app('hashids')->encode((int) $actorId);
+        $parentWorkOrderHashId = $wo->parent_wo_id === null
+            ? null
+            : $wo->parent()->first()?->hash_id;
+
         app(OutboxService::class)->recordForChain(
-            new WorkOrderStatusChanged($wo, $from, $to, $reason),
+            new WorkOrderStatusChanged(
+                workOrder: $wo,
+                from: $from,
+                to: $to,
+                reason: $reason,
+                recipientUserHashIds: app(AssignedWorkOrderAudience::class)->userHashIdsFor($wo),
+                actorHashId: $actorHashId,
+                parentWorkOrderHashId: $parentWorkOrderHashId,
+            ),
             $wo,
             'o2c',
             'work_order',
@@ -1433,9 +1466,6 @@ class WorkOrderService
             $to,
             auth()->user(),
         );
-        DB::afterCommit(static function (): void {
-            ProductionDashboardService::forgetCache();
-        });
     }
 
     /**

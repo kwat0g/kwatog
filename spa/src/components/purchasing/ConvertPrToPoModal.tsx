@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
+import { purchaseOrderQueryKeys } from '@/lib/queryKeys/purchasing';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
@@ -39,6 +41,11 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
     setVendorMap({});
   }, [prId]);
 
+  const currentRequest = useQuery({
+    queryKey: ['purchasing', 'purchase-requests', prId],
+    queryFn: ({ signal }) => purchaseRequestsApi.show(prId!, signal),
+    enabled: !!prId,
+  });
   const sourcing = useQuery({
     queryKey: ['purchasing', 'purchase-requests', prId, 'sourcing'],
     queryFn: () => purchaseRequestsApi.sourcing(prId!),
@@ -61,6 +68,9 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
 
   const assignedCount = lines.filter((line) => effective[line.id]).length;
   const remaining = lines.length - assignedCount;
+  const canConvert = currentRequest.data?.actions?.can_convert === true;
+  const canSubmit = canConvert && !currentRequest.isFetching && !currentRequest.isError &&
+    !sourcing.isFetching && !sourcing.isError;
 
   const convert = useMutation({
     mutationFn: () => {
@@ -72,14 +82,17 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
     },
     onSuccess: (orders) => {
       qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
-      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+      qc.invalidateQueries({ queryKey: purchaseOrderQueryKeys.lists });
       onClose();
       const count = orders.length;
       toast.success(`${count} purchase order${count === 1 ? '' : 's'} created.`);
       if (count === 1) nav(`/purchasing/purchase-orders/${orders[0].id}`);
       else nav('/purchasing/purchase-orders');
     },
-    onError: (e) => reportMutationError(e, 'Failed to convert PR.'),
+    onError: (e) => {
+      if (prId) void invalidateRealtimeChange(qc, { entityType: 'purchase_request', entityId: prId });
+      reportMutationError(e, 'Failed to convert PR.');
+    },
   });
 
   const allVendors = vendors.data?.data ?? [];
@@ -94,18 +107,23 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
       title={`Convert ${purchaseRequest?.pr_number ?? 'PR'} to purchase order`}
       size="lg"
     >
-      {sourcing.isLoading ? (
-        <div className="py-4">
+      <div className="py-4 space-y-3">
+        {currentRequest.isFetching || sourcing.isFetching ? (
+          <p role="status" className="text-sm text-muted">Checking the latest purchase request and sourcing status…</p>
+        ) : currentRequest.isError || sourcing.isError ? (
+          <p role="alert" className="text-sm text-danger-fg">The latest purchase request status could not be checked. Refresh before converting.</p>
+        ) : !canConvert ? (
+          <p role="alert" className="text-sm text-warning-fg">This purchase request is no longer available for conversion. Close this dialog and refresh the list.</p>
+        ) : sourcing.isLoading ? (
           <SkeletonTable rows={3} columns={4} />
-        </div>
-      ) : (
-        <div className="py-4 space-y-3">
+        ) : (
+          <>
           <p className="text-sm text-muted">
             Assign a supplier per line. Each vendor becomes its own purchase order. Lines left
             unassigned stay on the request and can be converted later.
           </p>
           <p className="text-sm text-muted">
-            Needed by: <span className="font-medium text-primary">{formatDate(purchaseRequest?.required_delivery_date)}</span>
+            Needed by: <span className="font-medium text-primary">{formatDate(currentRequest.data?.required_delivery_date ?? purchaseRequest?.required_delivery_date)}</span>
             {' '}<span className="text-xs">(from purchase request)</span>
           </p>
           {lines.map((line) => {
@@ -168,28 +186,31 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
               {remaining} line{remaining === 1 ? '' : 's'} will remain unconverted.
             </div>
           )}
-          <ModalFooter>
-            <Button variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              loading={convert.isPending}
-              disabled={assignedCount === 0 || convert.isPending}
-              onClick={() => convert.mutate()}
-            >
-              {remaining > 0 && assignedCount > 0 ? (
-                <>
-                  Convert {assignedCount} line{assignedCount === 1 ? '' : 's'}{' '}
-                  <Chip variant="warning" className="ml-1">partial</Chip>
-                </>
-              ) : (
-                `Create purchase order${assignedCount === 1 ? '' : 's'}`
-              )}
-            </Button>
-          </ModalFooter>
-        </div>
-      )}
+          </>
+        )}
+        <ModalFooter>
+          <Button variant="secondary" onClick={onClose} disabled={convert.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            loading={convert.isPending}
+            disabled={assignedCount === 0 || convert.isPending || !canSubmit}
+            onClick={() => {
+              if (assignedCount > 0 && !convert.isPending && canSubmit) convert.mutate();
+            }}
+          >
+            {remaining > 0 && assignedCount > 0 ? (
+              <>
+                Convert {assignedCount} line{assignedCount === 1 ? '' : 's'}{' '}
+                <Chip variant="warning" className="ml-1">partial</Chip>
+              </>
+            ) : (
+              `Create purchase order${assignedCount === 1 ? '' : 's'}`
+            )}
+          </Button>
+        </ModalFooter>
+      </div>
     </Modal>
   );
 }

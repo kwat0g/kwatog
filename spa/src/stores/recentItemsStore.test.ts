@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuthUser } from '@/api/auth';
 import { useRecentItemsStore } from './recentItemsStore';
 import { useAuthStore } from './authStore';
 
@@ -9,7 +10,19 @@ function envelope(items: unknown[], ownerId: string | null = 'user-a') {
   return JSON.stringify({ state: { items, ownerId }, version: 1 });
 }
 
-const row = { url: '/hr/employees/abc', label: 'OGM-2026-0142', ts: 1_700_000_000_000 };
+const row = { url: '/hr/employees/abc', label: 'OGM-2026-0142', ts: Date.now() };
+
+function authUser(id: string): AuthUser {
+  return {
+    id,
+    role: { id: 'role-1', slug: 'operator', name: 'Operator' },
+    employee: null,
+    is_active: true,
+    permissions: [],
+    delegated_approvals: [],
+    features: [],
+  } as unknown as AuthUser;
+}
 
 describe('recentItemsStore persistence', () => {
   beforeEach(() => {
@@ -61,24 +74,24 @@ describe('recentItemsStore ownership', () => {
   });
 
   it('discards a list claimed by a different user', () => {
-    useRecentItemsStore.setState({ items: [row], ownerId: 'user-a' });
+    useRecentItemsStore.setState({ items: [row], ownerId: 'user-a', scopeKey: 'scope-a' });
 
-    useRecentItemsStore.getState().claim('user-b');
+    useRecentItemsStore.getState().claim('user-b', 'scope-b');
 
     expect(useRecentItemsStore.getState().items).toEqual([]);
     expect(useRecentItemsStore.getState().ownerId).toBe('user-b');
   });
 
   it('keeps the list when the same user re-bootstraps', () => {
-    useRecentItemsStore.setState({ items: [row], ownerId: 'user-a' });
+    useRecentItemsStore.setState({ items: [row], ownerId: 'user-a', scopeKey: 'scope-a' });
 
-    useRecentItemsStore.getState().claim('user-a');
+    useRecentItemsStore.getState().claim('user-a', 'scope-a');
 
     expect(useRecentItemsStore.getState().items).toHaveLength(1);
   });
 
   it('clears the list when a signed-in session ends', () => {
-    useAuthStore.setState({ user: { id: 'user-a' } as never });
+    useAuthStore.setState({ user: authUser('user-a') });
     useRecentItemsStore.setState({ items: [row], ownerId: 'user-a' });
 
     useAuthStore.setState({ user: null });
@@ -87,12 +100,12 @@ describe('recentItemsStore ownership', () => {
   });
 
   it('clears the list when a different account takes over the terminal', () => {
-    useAuthStore.setState({ user: { id: 'user-a' } as never });
+    useAuthStore.setState({ user: authUser('user-a') });
     useRecentItemsStore.setState({ items: [row], ownerId: 'user-a' });
 
     // The 401 path hard-navigates without ever calling logout(), so claiming on
     // sign-in — not only clearing on sign-out — is what closes the hole.
-    useAuthStore.setState({ user: { id: 'user-b' } as never });
+    useAuthStore.setState({ user: authUser('user-b') });
 
     expect(useRecentItemsStore.getState().items).toEqual([]);
     expect(useRecentItemsStore.getState().ownerId).toBe('user-b');

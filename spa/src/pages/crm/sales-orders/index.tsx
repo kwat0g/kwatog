@@ -12,11 +12,13 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatPeso } from '@/lib/formatNumber';
 import { salesOrderStatusVariant } from '@/lib/statusVariants';
 import type { SalesOrder } from '@/types/crm';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 const DEFAULT_FILTERS: SalesOrderListParams = {
   page: 1,
@@ -26,17 +28,20 @@ const DEFAULT_FILTERS: SalesOrderListParams = {
 };
 
 export default function SalesOrdersListPage() {
+  useRealtimeList('sales_order', 'visible');
   const navigate = useNavigate();
   const { can } = usePermission();
   const canCreate = can('crm.sales_orders.create');
   // Bound to the URL so dashboard drill-downs (?status=confirmed) arrive
   // pre-filtered and the browser back button restores the previous view.
   const [filters, setFilters] = useUrlFilters<SalesOrderListParams>(DEFAULT_FILTERS);
+  const listQueryKey = ['crm', 'sales-orders', filters] as const;
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['crm', 'sales-orders', filters],
+    queryKey: listQueryKey,
     queryFn: () => salesOrdersApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? prev : undefined,
   });
   const { data: salesOrderOptions } = useQuery({
     queryKey: ['crm', 'sales-orders', 'options'],

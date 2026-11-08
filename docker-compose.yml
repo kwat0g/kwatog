@@ -9,8 +9,10 @@ services:
     volumes:
       - ./api:/var/www
       - ./scripts:/var/www/scripts:ro
+      - ./docs/realtime:/var/docs/realtime:ro
     environment:
       - APP_ENV=${APP_ENV:-local}
+      - PRODUCTION_ROUTING_EXECUTION_ENABLED=${PRODUCTION_ROUTING_EXECUTION_ENABLED:-false}
       # Fail closed by default. Set APP_DEBUG=true explicitly for local
       # debugging; never inherit a debug-enabled default into a shared host.
       - APP_DEBUG=${APP_DEBUG:-false}
@@ -19,6 +21,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      redis-cache:
+        condition: service_healthy
     networks: [ogami-net]
 
   spa:
@@ -102,8 +106,26 @@ services:
     image: redis:7-alpine
     container_name: ogami-redis
     restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "${REDIS_QUEUE_MAXMEMORY:-256mb}", "--maxmemory-policy", "noeviction"]
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [ogami-net]
+
+  redis-cache:
+    image: redis:7-alpine
+    container_name: ogami-redis-cache
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "${REDIS_CACHE_MAXMEMORY:-96mb}", "--maxmemory-policy", "volatile-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     networks: [ogami-net]
 
   reverb:
@@ -117,6 +139,10 @@ services:
       - ./api:/var/www
       - ./scripts:/var/www/scripts:ro
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    develop:
+      watch:
+        - action: restart
+          path: ./api/config
     ports:
       # Browser connects directly via ws://<host>:8080/app/<key>.
       # pusher-js does not support a path prefix, so we cannot proxy
@@ -148,6 +174,14 @@ services:
       - ./api:/var/www
       - ./scripts:/var/www/scripts:ro
     command: php artisan horizon
+    develop:
+      watch:
+        - action: restart
+          path: ./api/app
+        - action: restart
+          path: ./api/config
+        - action: restart
+          path: ./api/bootstrap
     # A worker finishes the job it holds; let it drain instead of SIGKILLing a
     # running payroll computation or backup.
     stop_grace_period: 60s
@@ -172,6 +206,15 @@ services:
       - ./api:/var/www
       - ./scripts:/var/www/scripts:ro
     command: php artisan queue:work --queue=mail --tries=3 --timeout=1800 --sleep=3
+    stop_grace_period: 60s
+    develop:
+      watch:
+        - action: restart
+          path: ./api/app
+        - action: restart
+          path: ./api/config
+        - action: restart
+          path: ./api/bootstrap
     depends_on:
       - api
       - redis

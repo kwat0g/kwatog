@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Modules\Inventory\Support\StockCountAvailableActions;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -30,6 +31,7 @@ class StockCountSessionResource extends JsonResource
             ]),
             'status' => $this->status?->value,
             'status_label' => $this->status?->label(),
+            'available_actions' => StockCountAvailableActions::forSession($this->resource, $request->user()),
             'total_locations' => $this->total_locations,
             'counted_locations' => $this->counted_locations,
             'variance_count' => $this->variance_count,

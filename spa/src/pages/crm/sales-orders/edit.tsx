@@ -27,6 +27,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { customersApi } from '@/api/accounting/customers';
 import { productsApi } from '@/api/crm/products';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import type { UpdateSalesOrderData } from '@/types/crm';
 import type { Incoterm } from '@/types/supplyChain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -150,10 +151,15 @@ export default function EditSalesOrderPage() {
  return salesOrdersApi.update(id!, payload);
  },
  onSuccess: (so) => {
- qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
- qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
+ reconcileRealtimeMutationResponse(
+ qc,
+ { entityType: 'sales_order', entityId: so.id },
+ ['crm', 'sales-orders', 'detail', so.id],
+ so,
+ );
  toast.success(`Sales order ${so.so_number} updated.`);
- navigate(`/crm/sales-orders/${so.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/crm/sales-orders/${so.id}`);
  },
  onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
  if (e.response?.status === 422 && e.response.data.errors) {

@@ -6,6 +6,7 @@ import { ncrsApi } from '@/api/quality/ncrs';
 import NcrEffectivenessPage from './effectiveness';
 
 vi.mock('@/api/quality/ncrs', () => ({ ncrsApi: { due: vi.fn() } }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeList: vi.fn() }));
 
 afterEach(() => vi.clearAllMocks());
 

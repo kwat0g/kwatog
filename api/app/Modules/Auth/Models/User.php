@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Models;
 
+use App\Common\Support\FailOpenCache;
 use App\Common\Traits\HasHashId;
+use App\Modules\Auth\Services\RolePermissionCacheGeneration;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,6 +14,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class User extends Authenticatable
 {
@@ -103,8 +108,9 @@ class User extends Authenticatable
      *
      * Effective permission set = role permissions + grants - revokes.
      *
-     * Caching strategy: the ROLE permission set is cached by role_id (300s)
-     * because role-permission sync is rare. Overrides carry expires_at and
+     * Caching strategy: the ROLE permission set is cached by restore namespace,
+     * role_id, and permissions_version (300s) because role-permission sync is
+     * rare. Overrides carry expires_at and
      * therefore CANNOT be cached at the resolved-slug level — a Grant cached
      * at t=0 with expiry t=60s would otherwise keep acting granted for the
      * full 300s TTL. Overrides are read fresh per call so expiry is honored
@@ -128,11 +134,23 @@ class User extends Authenticatable
             return $this->resolvedPermissionSlugs = [];
         }
 
+        $role = $this->role;
+        $permissionsVersion = $role->getAttribute('permissions_version');
+        if ($permissionsVersion === null) {
+            // Some read paths eager-load only role identity fields. Resolve the
+            // version explicitly so those partial relations cannot fall back
+            // to a stale, unversioned permission snapshot.
+            $permissionsVersion = DB::table('roles')->where('id', $this->role_id)->value('permissions_version');
+        }
+        $permissionsVersion = (int) ($permissionsVersion ?? 1);
+
         /** @var array<int, string> $rolePerms */
-        $rolePerms = Cache::remember(
-            "auth:role_perms:{$this->role_id}",
+        $rolePerms = FailOpenCache::remember(
+            Cache::store(),
+            app(RolePermissionCacheGeneration::class)->keyFor((int) $this->role_id, $permissionsVersion),
             300,
-            fn () => $this->role->permissions()->pluck('permissions.slug', 'permissions.id')->all(),
+            fn () => $role->permissions()->pluck('permissions.slug', 'permissions.id')->all(),
+            'auth.role_permissions',
         );
 
         $overrideRows = \App\Modules\Admin\Models\UserPermissionOverride::query()
@@ -173,11 +191,26 @@ class User extends Authenticatable
     public function flushPermissionsCache(): void
     {
         $this->resolvedPermissionSlugs = null;
-        // Legacy per-user key — kept until all callers/deployments roll over.
-        Cache::forget("auth:permissions:{$this->id}");
-        if ($this->role_id) {
-            Cache::forget("auth:role_perms:{$this->role_id}");
-        }
+        $userId = $this->id;
+        $roleId = $this->role_id;
+
+        DB::afterCommit(static function () use ($userId, $roleId): void {
+            try {
+                // Legacy keys — new role permission snapshots use the database
+                // version in their key, so a late pre-commit fill is unreachable.
+                Cache::forget("auth:permissions:{$userId}");
+                if ($roleId) {
+                    Cache::forget("auth:role_perms:{$roleId}");
+                }
+            } catch (Throwable $exception) {
+                // Do not let cache cleanup suppress later access-refresh signals
+                // for this committed user/role mutation.
+                Log::warning('Permission cache cleanup failed after commit.', [
+                    'user_scope_hash' => hash('sha256', (string) $userId),
+                    'exception' => $exception::class,
+                ]);
+            }
+        });
     }
 
     public function isLocked(): bool

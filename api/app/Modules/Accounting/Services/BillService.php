@@ -6,16 +6,20 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
-use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\ChainBroadcaster;
+use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
-use App\Modules\Accounting\Enums\BillStatus;
-use App\Modules\Accounting\Enums\BillPaymentStatus;
 use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Enums\BillPaymentStatus;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Exceptions\BillPaymentStateConflictException;
+use App\Modules\Accounting\Exceptions\BillStateConflictException;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Enums\WithholdingTaxType;
 use App\Modules\Accounting\Models\Account;
@@ -27,7 +31,6 @@ use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
-use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -40,11 +43,11 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class BillService
 {
     private const THREE_WAY_OVERRIDE_PERMISSION = 'accounting.bills.three_way_override';
+
     private const PAYMENT_VOID_PERMISSION = 'accounting.bills.void_payment';
 
     /** AP control account code. */
@@ -56,8 +59,8 @@ class BillService
         private readonly TaxPolicyService $taxPolicy,
         private readonly AccountingAccountPolicyService $accounts,
         private readonly PostingAccountResolver $postingAccounts,
-        private readonly \App\Common\Services\DocumentSequenceService $sequences,
-        private readonly \App\Common\Services\SettingsService $settings,
+        private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
         private readonly ApprovalService $approvals,
     ) {}
 
@@ -65,7 +68,10 @@ class BillService
     {
         $q = Bill::query()
             ->with(['vendor:id,name', 'supplierInvoice:id,number,date,submitted_at'])
-            ->withExists(['payments as payment_approval_pending' => fn ($query) => $query->where('status', BillPaymentStatus::PendingApproval)]);
+            ->withExists(['payments as payment_approval_pending' => fn ($query) => $query->where('status', BillPaymentStatus::PendingApproval)])
+            ->withSum([
+                'payments as pending_payment_amount' => fn ($query) => $query->where('status', BillPaymentStatus::PendingApproval),
+            ], 'amount');
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -322,7 +328,10 @@ class BillService
                 $this->postBillToGl($bill, $vendor, $items, $isVatable, $vat, $total, $by);
             }
 
-            return $this->show($bill->fresh());
+            $fresh = $bill->fresh();
+            app(ChainBroadcaster::class)->broadcastFor($fresh, (string) $fresh->status?->value, $by, action: 'created');
+
+            return $this->show($fresh);
         });
     }
 
@@ -515,7 +524,15 @@ class BillService
                 BillItem::create(array_merge($row, ['bill_id' => $bill->id]));
             }
 
-            return $this->show($bill->fresh());
+            $fresh = $bill->fresh();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                (string) $fresh->status?->value,
+                $by,
+                action: $existingDraftBill !== null ? 'updated' : 'created',
+            );
+
+            return $this->show($fresh);
         });
     }
 
@@ -536,7 +553,7 @@ class BillService
                 ->lockForUpdate()
                 ->findOrFail($bill->id);
             if ($lockedBill->status !== BillStatus::Draft) {
-                throw new BusinessRuleException('Only draft bills can be posted.');
+                throw new BillStateConflictException('This bill is no longer a draft. Refresh and review its current status.');
             }
             $this->assertSupplierInvoiceReady($lockedBill);
             $this->assertPersistedBillProvenance($lockedBill);
@@ -680,7 +697,10 @@ class BillService
                 'cancelled_by' => $by->id,
             ]);
 
-            return $lockedBill->fresh();
+            $fresh = $lockedBill->fresh();
+            app(ChainBroadcaster::class)->broadcastFor($fresh, (string) $fresh->status?->value, $by);
+
+            return $fresh;
         });
     }
 
@@ -711,6 +731,11 @@ class BillService
                 $bill->supplier_invoice_submitted_at = null;
                 $bill->supplier_invoice_portal_user_id = null;
                 $bill->save();
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $bill->fresh(),
+                    (string) $bill->status?->value,
+                    $by,
+                );
             }
             $locked->update([
                 'voided_at' => now(),
@@ -849,6 +874,12 @@ class BillService
                 return $this->postApprovedPayment($lockedBill, $payment, $by);
             }
 
+            app(ChainBroadcaster::class)->broadcastFor(
+                $lockedBill->fresh(),
+                (string) $lockedBill->status?->value,
+                $by,
+            );
+
             return $payment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
         });
     }
@@ -866,10 +897,10 @@ class BillService
             // race-proof backstop, re-reading the locked row after each
             // chain step).
             if ($lockedBill->status === BillStatus::Cancelled) {
-                throw new BusinessRuleException('Cannot approve a payment on a cancelled bill.');
+                throw new BillPaymentStateConflictException('This bill can no longer accept payment approval. Refresh and review its current status.');
             }
             if ($lockedPayment->status !== BillPaymentStatus::PendingApproval) {
-                throw new BusinessRuleException('Only pending payment requests can be approved.');
+                throw new BillPaymentStateConflictException('This bill payment is no longer awaiting approval. Refresh and review its current status.');
             }
 
             $this->assertSupplierInvoiceReady($lockedBill);
@@ -879,6 +910,12 @@ class BillService
             }
             $lockedPayment->refresh();
             if (! $this->approvals->isFullyApproved($lockedPayment)) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $lockedBill->fresh(),
+                    (string) $lockedBill->status?->value,
+                    $by,
+                );
+
                 return $lockedPayment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
             }
 
@@ -899,7 +936,7 @@ class BillService
             $lockedPayment = BillPayment::query()->lockForUpdate()->findOrFail($payment->id);
             $this->assertPaymentBelongsToBill($lockedPayment, $lockedBill);
             if ($lockedPayment->status !== BillPaymentStatus::PendingApproval) {
-                throw new BusinessRuleException('Only pending payment requests can be rejected.');
+                throw new BillPaymentStateConflictException('This bill payment is no longer awaiting approval. Refresh and review its current status.');
             }
             if (trim($remarks) === '') {
                 throw new BusinessRuleException('A rejection reason is required.');
@@ -907,6 +944,11 @@ class BillService
 
             $this->approvals->reject($lockedPayment, $by, $remarks);
             $lockedPayment->forceFill(['status' => BillPaymentStatus::Rejected])->save();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $lockedBill->fresh(),
+                (string) $lockedBill->status?->value,
+                $by,
+            );
 
             return $lockedPayment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
         });
@@ -1075,7 +1117,7 @@ class BillService
                 ->lockForUpdate()
                 ->findOrFail($payment->getKey());
             if ($lockedPayment->status !== BillPaymentStatus::Posted) {
-                throw new BusinessRuleException('Only posted payments can be voided.');
+                throw new BillPaymentStateConflictException('This bill payment is no longer posted. Refresh and review its current status.');
             }
             if ((int) $lockedPayment->created_by === (int) $by->id) {
                 throw new ForbiddenActionException('A different authorized user must void this payment.');

@@ -199,6 +199,79 @@ class AnalyticsLayerTest extends TestCase
         $this->assertNotSame($second['meta']['cache_key'], $third['meta']['cache_key']);
     }
 
+    public function test_returns_pipeline_cache_separates_customer_only_from_company_scope(): void
+    {
+        $customerService = $this->userWithRole('customer_service_officer');
+        $warehouse = $this->userWithRole('warehouse_staff');
+        $today = Carbon::now();
+        $this->insertReturn('RMA-C-'.substr(uniqid(), -5), 'pending_approval', $today, 'customer_return');
+        $this->insertReturn('RMA-S-'.substr(uniqid(), -5), 'pending_approval', $today, 'supplier_return');
+
+        $period = AnalyticsPeriod::preset('month');
+        $customerPayload = app(AnalyticsService::class)->resolve('returns.pipeline', $customerService, $period);
+        $companyPayload = app(AnalyticsService::class)->resolve('returns.pipeline', $warehouse, $period);
+
+        $this->assertSame(1, $customerPayload['data']['value']['total']);
+        $this->assertSame(2, $companyPayload['data']['value']['total']);
+        $this->assertNotSame($customerPayload['meta']['cache_key'], $companyPayload['meta']['cache_key']);
+        $this->assertSame('company:customer-only', $customerPayload['meta']['scope']);
+        $this->assertSame('company', $companyPayload['meta']['scope']);
+        $this->assertFalse($companyPayload['meta']['cached']);
+    }
+
+    public function test_analytics_fill_lock_contention_returns_a_fresh_uncached_fallback(): void
+    {
+        $cache = app(AnalyticsCache::class);
+        $definition = app(MetricRegistry::class)->get('returns.pipeline');
+        $this->assertInstanceOf(MetricDefinition::class, $definition);
+        $filters = ['from' => '2026-10-01', 'to' => '2026-10-31'];
+        $key = $cache->key($definition, 'company', $filters);
+        $lock = Cache::lock('dash:an:fill:'.config('app.env').':'.hash('sha256', $key), 30);
+        $this->assertTrue($lock->get());
+        $computes = 0;
+
+        $fallback = $cache->remember($definition, 'company', $filters, function () use (&$computes): array {
+            $computes++;
+
+            return ['total' => 3];
+        });
+
+        $this->assertSame(1, $computes);
+        $this->assertFalse($fallback['cached']);
+        $this->assertSame(['total' => 3], $fallback['value']);
+        $this->assertFalse(Cache::has($key), "A contended fallback must not overwrite the lock owner's cache fill.");
+
+        $lock->release();
+        Cache::put($key, ['total' => 9], 60);
+        $ownerResult = $cache->remember($definition, 'company', $filters, static function (): array {
+            throw new \RuntimeException('A completed owner fill must be reused.');
+        });
+
+        $this->assertTrue($ownerResult['cached']);
+        $this->assertSame(['total' => 9], $ownerResult['value']);
+    }
+
+    public function test_analytics_generation_markers_expire_with_a_new_unique_generation(): void
+    {
+        $cache = app(AnalyticsCache::class);
+        $registry = app(MetricRegistry::class);
+        $definition = $registry->get('returns.pipeline');
+        $this->assertInstanceOf(MetricDefinition::class, $definition);
+
+        $before = $cache->key($definition, 'company');
+        $cache->flush('returns.pipeline');
+        $after = $cache->key($definition, 'company');
+        $this->assertNotSame($before, $after);
+
+        $versionKey = 'dash:an:ver:testing:returns.pipeline';
+        $this->assertTrue(Cache::has($versionKey));
+        $this->travel(8)->days();
+        $this->assertFalse(Cache::has($versionKey));
+
+        $cache->flush('returns.pipeline');
+        $this->assertNotSame($after, $cache->key($definition, 'company'));
+    }
+
     public function test_cache_key_is_scoped_by_scope_and_filters(): void
     {
         $registry = app(MetricRegistry::class);
@@ -418,11 +491,11 @@ class AnalyticsLayerTest extends TestCase
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 
-    private function insertReturn(string $number, string $status, Carbon $returnDate): void
+    private function insertReturn(string $number, string $status, Carbon $returnDate, string $type = 'customer_return'): void
     {
         DB::table('return_requests')->insert([
             'rma_number' => $number,
-            'type' => 'customer_return',
+            'type' => $type,
             'status' => $status,
             'return_date' => $returnDate->toDateString(),
             'created_at' => $returnDate,

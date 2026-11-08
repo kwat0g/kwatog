@@ -19,8 +19,11 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { MaintenanceSchedule } from '@/types/maintenance';
 import { reportMutationError } from '@/lib/formErrors';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { maintenanceScheduleQueryKeys } from '@/lib/queryKeys/maintenanceSchedules';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 export default function MaintenanceSchedulesListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
@@ -29,6 +32,8 @@ const [filters, setFilters] = useUrlFilters<ScheduleListParams>({ page: 1, per_p
  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
+
+ useRealtimeList('maintenance_schedule', can('maintenance.view') ? 'visible' : undefined);
 
  const handleDelete = async (scheduleId: string) => {
   try {
@@ -54,13 +59,15 @@ const [filters, setFilters] = useUrlFilters<ScheduleListParams>({ page: 1, per_p
   }
  };
 
- const { data, isLoading, isError, refetch } = useQuery({
-  queryKey: ['maintenance', 'schedules', scope, filters],
+  const queryKey = maintenanceScheduleQueryKeys.list(scope, filters);
+  const { data, isLoading, isError, refetch } = useQuery({
+   queryKey,
   queryFn: () => schedulesApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
-  placeholderData: (prev) => prev,
+   placeholderData: (previous, previousQuery) =>
+     sameQueryExceptPage(previousQuery?.queryKey, queryKey, 4) ? previous : undefined,
  });
  const { data: scheduleOptions } = useQuery({
- queryKey: ['maintenance', 'schedules', 'options'],
+ queryKey: maintenanceScheduleQueryKeys.options,
  queryFn: schedulesApi.options,
  staleTime: 5 * 60 * 1000,
  });

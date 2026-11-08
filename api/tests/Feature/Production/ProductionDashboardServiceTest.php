@@ -15,7 +15,6 @@ use App\Modules\Production\Models\WorkOrderDefect;
 use App\Modules\Production\Models\WorkOrderOutput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Mockery;
 use Tests\TestCase;
 
@@ -31,7 +30,7 @@ class ProductionDashboardServiceTest extends TestCase
 
     public function test_dashboard_payload_calculates_all_machine_oee_once(): void
     {
-        Cache::forget('dashboard:production');
+        ProductionDashboardService::forgetCache();
         app(SettingsService::class)->set('production.dashboard.defect_history_days', 7);
         app(SettingsService::class)->set('production.oee.world_class_ratio', 0.85);
         app(SettingsService::class)->set('production.oee.on_track_ratio', 0.70);

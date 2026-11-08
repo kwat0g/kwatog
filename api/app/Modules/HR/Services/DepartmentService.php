@@ -105,16 +105,29 @@ class DepartmentService
 
     public function delete(Department $department): void
     {
-        if ($department->positions()->exists()) {
-            throw new BusinessRuleException('Cannot delete department: positions exist.');
-        }
-        if ($department->employees()->exists()) {
-            throw new BusinessRuleException('Cannot delete department: employees assigned.');
-        }
-        if ($department->children()->exists()) {
-            throw new BusinessRuleException('Cannot delete department: child departments exist.');
-        }
-        $department->delete();
+        DB::transaction(function () use ($department): void {
+            $locked = Department::query()->lockForUpdate()->findOrFail($department->id);
+
+            if ($locked->positions()->exists()) {
+                throw new BusinessRuleException('Cannot delete department: positions exist.');
+            }
+            if ($locked->employees()->exists()) {
+                throw new BusinessRuleException('Cannot delete department: employees assigned.');
+            }
+            if ($locked->children()->exists()) {
+                throw new BusinessRuleException('Cannot delete department: child departments exist.');
+            }
+
+            $locked->delete();
+        });
+    }
+
+    public function restore(Department $department): void
+    {
+        DB::transaction(function () use ($department): void {
+            $locked = Department::withTrashed()->lockForUpdate()->findOrFail($department->id);
+            $locked->restore();
+        });
     }
 
     /** @param array<string, mixed> $data */

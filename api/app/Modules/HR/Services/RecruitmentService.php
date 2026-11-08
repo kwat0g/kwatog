@@ -13,6 +13,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Enums\InterviewOutcome;
 use App\Modules\HR\Enums\JobPostingStatus;
+use App\Modules\HR\Exceptions\RecruitmentStateConflictException;
 use App\Modules\HR\Mail\ApplicationReceivedMail;
 use App\Modules\HR\Mail\ApplicationStatusUpdatedMail;
 use App\Modules\HR\Mail\InterviewDetailsUpdatedMail;
@@ -59,10 +60,11 @@ class RecruitmentService
         });
     }
 
-    public function updatePosting(JobPosting $posting, array $data): JobPosting
+    public function updatePosting(JobPosting $posting, array $data, ?string $expectedVersion = null): JobPosting
     {
-        return DB::transaction(function () use ($posting, $data): JobPosting {
+        return DB::transaction(function () use ($posting, $data, $expectedVersion): JobPosting {
             $locked = JobPosting::query()->lockForUpdate()->findOrFail($posting->id);
+            $this->assertPostingVersion($locked, $expectedVersion);
             $locked->update($data);
 
             return $locked->fresh();
@@ -72,12 +74,14 @@ class RecruitmentService
     public function changePostingStatus(
         JobPosting $posting,
         JobPostingStatus $newStatus,
+        ?string $expectedVersion = null,
     ): void {
-        DB::transaction(function () use ($posting, $newStatus): void {
+        DB::transaction(function () use ($posting, $newStatus, $expectedVersion): void {
             // The bound model may be stale by the time an HR action arrives.
             // The transition decision must be made from the row locked in this
             // transaction, not from a request-time snapshot.
             $locked = JobPosting::withTrashed()->lockForUpdate()->findOrFail($posting->id);
+            $this->assertPostingVersion($locked, $expectedVersion);
 
             RecruitmentPostingStateMachine::assertCanTransition($locked->status, $newStatus);
 
@@ -89,10 +93,11 @@ class RecruitmentService
         });
     }
 
-    public function restorePosting(JobPosting $posting): void
+    public function restorePosting(JobPosting $posting, ?string $expectedVersion = null): void
     {
-        DB::transaction(function () use ($posting): void {
+        DB::transaction(function () use ($posting, $expectedVersion): void {
             $locked = JobPosting::withTrashed()->lockForUpdate()->findOrFail($posting->id);
+            $this->assertPostingVersion($locked, $expectedVersion);
             if (! $locked->trashed()) {
                 throw new BusinessRuleException('Job posting is already active.');
             }
@@ -101,23 +106,40 @@ class RecruitmentService
         });
     }
 
-    public function archivePosting(JobPosting $posting): void
+    public function archivePosting(JobPosting $posting, ?string $expectedVersion = null): void
     {
-        DB::transaction(function () use ($posting): void {
+        DB::transaction(function () use ($posting, $expectedVersion): void {
             // Locking the parent row serializes this check with inserts that
             // satisfy the job_applications foreign key on PostgreSQL.
             $locked = JobPosting::query()->lockForUpdate()->findOrFail($posting->id);
+            $this->assertPostingVersion($locked, $expectedVersion);
 
             if ($locked->status !== JobPostingStatus::Draft) {
                 throw new BusinessRuleException('Only draft postings can be deleted.');
             }
 
             if ($locked->applications()->exists()) {
+                if ($expectedVersion !== null) {
+                    throw new RecruitmentStateConflictException(
+                        'This posting now has applications and can no longer be archived. Refresh and review its current actions.',
+                    );
+                }
+
                 throw new BusinessRuleException('Cannot delete a posting that has applications.');
             }
 
             $locked->delete();
         });
+    }
+
+    private function assertPostingVersion(JobPosting $posting, ?string $expectedVersion): void
+    {
+        if ($expectedVersion !== null
+            && $posting->updated_at?->format('Y-m-d\\TH:i:s.uP') !== $expectedVersion) {
+            throw new RecruitmentStateConflictException(
+                'This job posting changed after you opened it. Refresh and review the latest posting before continuing.',
+            );
+        }
     }
 
     public function submitApplication(JobPosting $posting, array $data, UploadedFile $resume): JobApplication
@@ -229,14 +251,20 @@ class RecruitmentService
         JobApplication $application,
         ?array $interviewData = null,
         ?User $actor = null,
+        ?ApplicationStage $expectedStage = null,
     ): void {
         $actor ??= app()->bound('request') && request()->user() instanceof User
             ? request()->user()
             : null;
 
-        $transition = DB::transaction(function () use ($application, $interviewData, $actor): array {
+        $transition = DB::transaction(function () use ($application, $interviewData, $actor, $expectedStage): array {
             $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
             $previousStage = $locked->stage;
+            if ($expectedStage !== null && $expectedStage !== $previousStage) {
+                throw new RecruitmentStateConflictException(
+                    "This application changed from {$expectedStage->label()} to {$previousStage->label()}. Refresh and review the current stage.",
+                );
+            }
             $next = $previousStage->next();
             if (! $next) {
                 throw new BusinessRuleException("Cannot advance from terminal stage: {$previousStage->value}");
@@ -309,10 +337,16 @@ class RecruitmentService
         JobApplication $application,
         ?string $reason = null,
         ?User $actor = null,
+        ?ApplicationStage $expectedStage = null,
     ): void {
-        $previousStage = DB::transaction(function () use ($application, $reason, $actor): ApplicationStage {
+        $previousStage = DB::transaction(function () use ($application, $reason, $actor, $expectedStage): ApplicationStage {
             $locked = JobApplication::query()->lockForUpdate()->findOrFail($application->id);
             $previousStage = $locked->stage;
+            if ($expectedStage !== null && $expectedStage !== $previousStage) {
+                throw new RecruitmentStateConflictException(
+                    "This application changed from {$expectedStage->label()} to {$previousStage->label()}. Refresh and review the current stage.",
+                );
+            }
             if ($previousStage->isTerminal()) {
                 throw new BusinessRuleException("Cannot reject from terminal stage: {$previousStage->value}");
             }

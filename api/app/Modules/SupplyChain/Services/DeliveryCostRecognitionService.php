@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -18,6 +19,7 @@ use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\SupplyChain\Enums\DeliveryCostHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryAttemptOutcome;
 use App\Modules\SupplyChain\Models\DeliveryAttemptOutcomeItem;
@@ -166,14 +168,34 @@ class DeliveryCostRecognitionService
                 $allocations = $this->customerCostAllocations($locked);
                 $target = $this->sumAmounts($allocations);
                 $fingerprint = $this->fingerprint(self::HANDOFF_COGS, $locked, $target, $allocations);
-                return $this->postHandoff($locked, self::HANDOFF_COGS, strtolower($requestKey), $fingerprint,
+                $before = DeliveryCostHandoff::query()
+                    ->where('request_key', strtolower($requestKey))
+                    ->lockForUpdate()
+                    ->first();
+                $handoff = $this->postHandoff($locked, self::HANDOFF_COGS, strtolower($requestKey), $fingerprint,
                     $target, $target, $allocations, $by, true, existing: null);
+                if ($this->costHandoffChanged($before, $handoff)) {
+                    $this->broadcastDeliveryRefresh($locked, $by);
+                }
+
+                return $handoff;
             }, 3);
         }
         if ($kind === self::HANDOFF_LOSS) {
             $outcome = DeliveryAttemptOutcome::query()->where('delivery_id', $delivery->id)->first();
             if (! $outcome) throw new BusinessRuleException('This delivery has no reconciled exception to reconcile.');
-            return $this->reconcileUnaccounted($outcome, $requestKey, $by);
+
+            return DB::transaction(function () use ($delivery, $outcome, $requestKey, $by): ?DeliveryCostHandoff {
+                $key = strtolower($requestKey);
+                $before = DeliveryCostHandoff::query()->where('request_key', $key)->first();
+                $handoff = $this->reconcileUnaccounted($outcome, $key, $by);
+                if ($handoff && $this->costHandoffChanged($before, $handoff)) {
+                    $locked = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+                    $this->broadcastDeliveryRefresh($locked, $by);
+                }
+
+                return $handoff;
+            }, 3);
         }
         throw new BusinessRuleException('Choose a supported delivery cost handoff.');
     }
@@ -525,6 +547,30 @@ class DeliveryCostRecognitionService
         }
 
         return $handoff->fresh();
+    }
+
+    private function costHandoffChanged(?DeliveryCostHandoff $before, DeliveryCostHandoff $after): bool
+    {
+        if ($before === null) {
+            return true;
+        }
+
+        foreach (['status', 'message', 'journal_entry_id', 'target_amount', 'delta_amount', 'attempted_at'] as $field) {
+            if ((string) $before->getRawOriginal($field) !== (string) $after->getRawOriginal($field)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function broadcastDeliveryRefresh(Delivery $delivery, ?User $by): void
+    {
+        $status = $delivery->status instanceof DeliveryStatus
+            ? $delivery->status
+            : DeliveryStatus::from((string) $delivery->status);
+
+        app(ChainBroadcaster::class)->broadcastFor($delivery, $status->value, $by);
     }
 
     private function postJournal(Delivery $delivery, string $type, string $delta, User $by): int

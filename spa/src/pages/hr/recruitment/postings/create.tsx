@@ -113,10 +113,12 @@ export default function PostingCreatePage() {
 
  const mutation = useMutation({
  mutationFn: (data: FormData) => recruitmentApi.createPosting(data as Parameters<typeof recruitmentApi.createPosting>[0]),
- onSuccess: (res: { data: { data: { id: string } } }) => {
+ onSuccess: (res) => {
  toast.success('Job posting created.');
+  queryClient.setQueryData(['recruitment-posting', res.data.data.id], res.data.data);
  queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
- navigate(`/hr/recruitment/postings/${res.data.data.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/hr/recruitment/postings/${res.data.data.id}`);
  },
  onError: (err: AxiosError<{ errors?: Record<string, string[]> }>) => {
  toast.error('Failed to create posting.');

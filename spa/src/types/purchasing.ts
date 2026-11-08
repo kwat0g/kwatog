@@ -199,7 +199,9 @@ export interface RequestForQuote {
   quotes: SupplierQuote[];
   awards: RfqAward[];
   documents: RfqDocument[];
-  actions: RfqActions;
+  available_actions: RfqActions;
+  /** @deprecated Use available_actions. Kept for existing API consumers. */
+  actions?: RfqActions;
 }
 
 /** Supplier view of RFQ (portal API response). */
@@ -274,6 +276,8 @@ export interface PurchaseOrderResponse {
   resolved_at: string | null;
   resolution_notes: string | null;
   items: PurchaseOrderResponseItem[];
+  /** Viewer-specific decision controls returned by the PO API. */
+  available_actions?: { accept: boolean; reject: boolean };
 }
 
 /** Payload for the PR → PO conversion endpoint. */
@@ -306,6 +310,21 @@ export interface PurchaseRequestItem {
   purpose: string | null;
   suggested_vendor?: { id: string; name: string } | null;
   suggested_vendor_id?: string | null;
+}
+
+export interface PurchaseRequestActions {
+  can_view: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  can_submit: boolean;
+  can_cancel: boolean;
+  can_approve: boolean;
+  can_reject: boolean;
+  can_acknowledge_budget: boolean;
+  can_convert: boolean;
+  can_start_rfq?: boolean;
+  can_set_sourcing_method?: boolean;
+  can_print: boolean;
 }
 
 export interface PurchaseRequest {
@@ -345,20 +364,10 @@ export interface PurchaseRequest {
     level: string;
   } | null;
   total_estimated_amount: string;
-  actions?: {
-    can_view: boolean;
-    can_update: boolean;
-    can_delete: boolean;
-    can_submit: boolean;
-    can_cancel: boolean;
-    can_approve: boolean;
-    can_reject: boolean;
-    can_acknowledge_budget: boolean;
-    can_convert: boolean;
-    can_start_rfq?: boolean;
-    can_set_sourcing_method?: boolean;
-    can_print: boolean;
-  };
+  /** Detail responses include the full map; lists project only row actions they render. */
+  available_actions?: Partial<PurchaseRequestActions> | null;
+  /** @deprecated Use available_actions. Kept for existing API consumers. */
+  actions?: PurchaseRequestActions;
   requester: { id: string; name: string } | null;
   department: { id: string; name: string; code: string } | null;
   template: { id: string; name: string } | null;
@@ -483,6 +492,21 @@ export interface RfqCommercialCharges {
   other_charges: string | null;
 }
 
+export interface PurchaseOrderActions {
+  can_view: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  can_submit: boolean;
+  can_approve: boolean;
+  can_reject: boolean;
+  can_send: boolean;
+  can_cancel: boolean;
+  can_close: boolean;
+  can_short_close?: boolean;
+  can_print: boolean;
+  approve_blocked_by_vendor_sod?: boolean;
+}
+
 export interface PurchaseOrder {
   id: string;
   /** Header-level supplier-quoted charges; included in subtotal, not in any line total. */
@@ -536,19 +560,9 @@ export interface PurchaseOrder {
   can_short_close?: boolean;
   pending_change?: { response_id: string; current_total: string; proposed_total: string } | null;
   /** PU-13 — server-computed actions (detail responses only, null on lists). */
-  actions?: {
-    can_view: boolean;
-    can_update: boolean;
-    can_delete: boolean;
-    can_submit: boolean;
-    can_approve: boolean;
-    can_reject: boolean;
-    can_send: boolean;
-    can_cancel: boolean;
-    can_close: boolean;
-    can_print: boolean;
-    approve_blocked_by_vendor_sod?: boolean;
-  } | null;
+  available_actions?: PurchaseOrderActions | null;
+  /** @deprecated Use available_actions. Kept for existing API consumers. */
+  actions?: PurchaseOrderActions | null;
   vendor: { id: string; name: string; contact_person: string | null; email: string | null } | null;
   purchase_request: { id: string; pr_number: string } | null;
   items?: PurchaseOrderItem[];
@@ -632,6 +646,8 @@ export interface SupplierItemListing {
   submitted_at: string | null;
   reviewed_at: string | null;
   reviewer?: { id: string; name: string } | null;
+  permissions?: { view: boolean; review: boolean };
+  available_actions?: { approve: boolean; reject: boolean };
 }
 
 /* ─── ADV5 — Procurement Chain Overview ─────────────────────────── */

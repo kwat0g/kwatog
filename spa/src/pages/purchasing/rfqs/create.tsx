@@ -12,7 +12,12 @@ import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import type { RfqSupplierOption, RfqWrite } from '@/types/purchasing';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import {
+  invalidateRealtimeChange,
+  reconcileRealtimeMutationResponse,
+} from '@/lib/realtime/invalidationMap';
+import type { RequestForQuote, RfqSupplierOption, RfqWrite } from '@/types/purchasing';
 
 const errMsg = (e: unknown, fallback: string) =>
   (e instanceof AxiosError ? e.response?.data?.message : undefined) ??
@@ -64,6 +69,7 @@ export default function CreateRfqPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { id: rfqId } = useParams<{ id?: string }>();
+  useRealtimeRecord('request_for_quote', rfqId);
   const [params] = useSearchParams();
   const isEdit = !!rfqId;
 
@@ -179,26 +185,36 @@ export default function CreateRfqPage() {
     specifications: Object.fromEntries(Object.entries(specs).filter(([, value]) => value.trim())),
   });
 
-  const onSaved = async (id: string, message: string) => {
-    await qc.invalidateQueries({ queryKey: ['purchasing', 'rfqs'] });
-    if (prId) await qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests', prId] });
+  const onSaved = async (saved: RequestForQuote, message: string) => {
+    await reconcileRealtimeMutationResponse(
+      qc,
+      { entityType: 'request_for_quote', entityId: saved.id },
+      ['purchasing', 'rfqs', saved.id],
+      saved,
+    );
     toast.success(message);
-    navigate(`/purchasing/rfqs/${id}`);
+    navigate(`/purchasing/rfqs/${saved.id}`);
   };
 
   const create = useMutation({
     mutationFn: (publish: boolean) => rfqsApi.createFromPr(prId, { ...body(), publish }),
     onSuccess: (created, publish) =>
       onSaved(
-        created.id,
+        created,
         publish ? 'RFQ published to the invited suppliers.' : 'RFQ saved as a draft.',
       ),
     onError: (e) => toast.error(errMsg(e, 'The RFQ could not be saved.')),
   });
   const update = useMutation({
     mutationFn: () => rfqsApi.update(rfqId!, body()),
-    onSuccess: (saved) => onSaved(saved.id, 'RFQ draft updated.'),
-    onError: (e) => toast.error(errMsg(e, 'The RFQ could not be updated.')),
+    onSuccess: (saved) => onSaved(saved, 'RFQ draft updated.'),
+    onError: (e) => {
+      const code = e instanceof AxiosError ? e.response?.data?.code : undefined;
+      if (e instanceof AxiosError && e.response?.status === 409 && code === 'request_for_quote_state_conflict') {
+        void invalidateRealtimeChange(qc, { entityType: 'request_for_quote', entityId: rfqId! });
+      }
+      toast.error(errMsg(e, 'The RFQ could not be updated.'));
+    },
   });
   const pending = create.isPending || update.isPending;
 
@@ -237,15 +253,7 @@ export default function CreateRfqPage() {
       />
     );
   }
-  if (isEdit && rfq.data?.status !== 'draft') {
-    return (
-      <EmptyState
-        icon="lock"
-        title="Only draft RFQs can be edited"
-        action={<Button onClick={() => navigate(`/purchasing/rfqs/${rfqId}`)}>Back to RFQ</Button>}
-      />
-    );
-  }
+  const canEditRfq = !isEdit || !!rfq.data?.available_actions.can_edit;
 
   const prNumber = isEdit ? rfq.data?.purchase_request?.pr_number : pr.data?.pr_number;
 
@@ -259,6 +267,14 @@ export default function CreateRfqPage() {
       />
 
       <div className="min-w-0 w-full px-5 py-4 space-y-4">
+        {isEdit && !canEditRfq && (
+          <div className="rounded-md border border-default bg-subtle px-4 py-3 text-sm" role="status">
+            This RFQ is no longer editable. Your entered changes are preserved for review and cannot be saved.
+            <Button className="ml-2" variant="secondary" onClick={() => navigate(`/purchasing/rfqs/${rfqId}`)}>
+              Back to RFQ
+            </Button>
+          </div>
+        )}
         <Panel title="Details">
           <div className="space-y-3">
             <Input
@@ -400,7 +416,7 @@ export default function CreateRfqPage() {
         <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant="secondary"
-            disabled={pending}
+            disabled={pending || rfq.isFetching}
             onClick={() =>
               navigate(
                 isEdit ? `/purchasing/rfqs/${rfqId}` : `/purchasing/purchase-requests/${prId}`,
@@ -412,17 +428,17 @@ export default function CreateRfqPage() {
           {isEdit ? (
             <Button
               variant="primary"
-              disabled={!ready || pending}
-              loading={update.isPending}
+              disabled={!ready || pending || rfq.isFetching || !canEditRfq}
+              loading={update.isPending || rfq.isFetching}
               onClick={() => update.mutate()}
             >
-              {update.isPending ? 'Saving…' : 'Save changes'}
+              {update.isPending ? 'Saving…' : rfq.isFetching ? 'Refreshing…' : 'Save changes'}
             </Button>
           ) : (
             <>
               <Button
                 variant="secondary"
-                disabled={!ready || pending}
+                disabled={!ready || pending || pr.isFetching || suppliers.isFetching}
                 loading={create.isPending && create.variables === false}
                 onClick={() => create.mutate(false)}
               >
@@ -430,7 +446,7 @@ export default function CreateRfqPage() {
               </Button>
               <Button
                 variant="primary"
-                disabled={!ready || pending}
+                disabled={!ready || pending || pr.isFetching || suppliers.isFetching}
                 loading={create.isPending && create.variables === true}
                 onClick={() => create.mutate(true)}
               >

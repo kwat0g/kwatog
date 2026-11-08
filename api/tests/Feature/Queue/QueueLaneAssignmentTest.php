@@ -6,6 +6,7 @@ namespace Tests\Feature\Queue;
 
 use App\Common\Enums\ExportFormat;
 use App\Common\Jobs\CreateBackupJob;
+use App\Common\Jobs\DispatchOutboxMessage;
 use App\Common\Jobs\RestoreBackupJob;
 use App\Common\Mail\EmailIntegrationTestMail;
 use App\Common\Mail\NotificationDigestMail;
@@ -52,7 +53,7 @@ use Tests\TestCase;
 final class QueueLaneAssignmentTest extends TestCase
 {
     /** Every queue name that has a Horizon supervisor behind it. */
-    private const LANES = ['high', 'default', 'mail', 'automation', 'bulk', 'dss'];
+    private const LANES = ['high', 'broadcasts', 'default', 'mail', 'automation', 'bulk', 'dss'];
 
     public function test_every_lane_has_exactly_one_supervisor_and_a_lease_above_its_timeout(): void
     {
@@ -121,6 +122,67 @@ final class QueueLaneAssignmentTest extends TestCase
         }
     }
 
+    public function test_local_outbox_lane_keeps_two_warm_workers_for_realtime_bursts(): void
+    {
+        $local = config('horizon.environments.local.supervisor-high');
+
+        $this->assertSame(2, $local['minProcesses']);
+        $this->assertGreaterThanOrEqual($local['minProcesses'], $local['maxProcesses']);
+    }
+
+    public function test_broadcast_lane_uses_shared_queue_storage_with_a_short_blocking_interval(): void
+    {
+        $broadcastConnection = (string) config('horizon.defaults.supervisor-broadcasts.connection');
+
+        $this->assertSame('redis_broadcasts', $broadcastConnection);
+        $this->assertSame('redis', config("queue.connections.{$broadcastConnection}.driver"));
+        $this->assertSame(0, config('horizon.defaults.supervisor-broadcasts.sleep'));
+        $this->assertSame(
+            config('queue.connections.redis.connection'),
+            config("queue.connections.{$broadcastConnection}.connection"),
+        );
+        $this->assertSame(1, config("queue.connections.{$broadcastConnection}.block_for"));
+        $this->assertGreaterThan(
+            (int) config('horizon.defaults.supervisor-broadcasts.timeout'),
+            (int) config("queue.connections.{$broadcastConnection}.retry_after"),
+        );
+
+        $outboxConnection = (string) config('horizon.defaults.supervisor-high.connection');
+        $this->assertSame('redis_broadcasts', $outboxConnection);
+        $this->assertSame(0, config('horizon.defaults.supervisor-high.sleep'));
+        $this->assertSame(
+            config('queue.connections.redis_broadcasts.connection'),
+            config("queue.connections.{$outboxConnection}.connection"),
+        );
+        $outboxJob = new DispatchOutboxMessage('lane-contract-test');
+        $this->assertSame('redis_broadcasts', $outboxJob->connection);
+        $this->assertSame('high', $outboxJob->queue);
+    }
+
+    public function test_each_horizon_supervised_lane_has_an_explicit_long_wait_threshold(): void
+    {
+        $waitThresholds = (array) config('horizon.waits');
+
+        foreach ((array) config('horizon.defaults') as $supervisor => $definition) {
+            $connection = (string) ($definition['connection'] ?? config('horizon.use'));
+            foreach ((array) ($definition['queue'] ?? []) as $queue) {
+                $key = $connection.':'.$queue;
+                $this->assertArrayHasKey(
+                    $key,
+                    $waitThresholds,
+                    "Horizon supervisor [{$supervisor}] serves [{$key}] without a long-wait threshold.",
+                );
+                $this->assertGreaterThan(
+                    0,
+                    (int) $waitThresholds[$key],
+                    "Horizon wait monitoring must be enabled for [{$key}].",
+                );
+            }
+        }
+
+        $this->assertSame(15, $waitThresholds['redis_broadcasts:high']);
+    }
+
     public function test_the_plain_queue_connection_lease_covers_the_longest_worker_timeout(): void
     {
         // config/queue.php's retry_after is per CONNECTION and applying even
@@ -187,7 +249,7 @@ final class QueueLaneAssignmentTest extends TestCase
         $this->assertSame('mail', (new EmployeeWelcomeNotification('https://app.ogamiph.test/reset-password?token=setup-token', 60))->queue);
         $this->assertSame('mail', (new EmployeePasswordResetNotification('https://app.ogamiph.test/reset-password?token=reset-token', 60))->queue);
         $this->assertSame('mail', (new EmailIntegrationTestMail)->queue);
-        $this->assertSame('mail', (new NotificationDigestMail(null, [], 0))->queue);
+        $this->assertSame('mail', (new NotificationDigestMail(null, 0, 0))->queue);
         $this->assertSame('mail', (new UserNotificationMail('test.type', ['title' => 'Test', 'message' => 'Test']))->queue);
         $this->assertSame('mail', (new ScheduledExportMail('Test', 'hr.employees', 'test.csv', 'test', ExportFormat::Csv))->queue);
     }

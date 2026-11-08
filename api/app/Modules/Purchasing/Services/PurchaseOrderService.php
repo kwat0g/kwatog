@@ -24,6 +24,7 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Exceptions\PurchaseOrderStateConflictException;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
@@ -57,6 +58,7 @@ class PurchaseOrderService
         private readonly TaxPolicyService $taxPolicy,
         private readonly SettingsService $settings,
         private readonly SupplierDispatchService $supplierDispatches,
+        private readonly SupplierCatalogRealtimeService $supplierCatalogRealtime,
         private readonly PurchaseOrderAccessPolicy $visibility,
         private readonly VendorSourcingService $sourcing,
     ) {}
@@ -139,7 +141,7 @@ class PurchaseOrderService
             $q = $this->visibility->visibleTo($q, $user);
         }
 
-        return $q->orderByDesc('date')->orderByDesc('id')
+        return $q->orderByDesc('created_at')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
@@ -276,7 +278,10 @@ class PurchaseOrderService
                 $this->syncConversionStatus($sourcePr);
             }
 
-            return $this->show($po);
+            $fresh = $this->show($po->fresh());
+            $this->broadcastChain($fresh, $by, 'created');
+
+            return $fresh;
         });
     }
 
@@ -583,17 +588,14 @@ class PurchaseOrderService
                 'po_conversion_status' => PurchaseRequestConversionStatus::Converted,
                 'po_conversion_note' => null,
                 'po_conversion_at' => now(),
-            ])->save();
+            ]);
+            $refreshNeeded = $pr->isDirty(['status', 'po_conversion_status', 'po_conversion_note']);
+            $pr->save();
 
-            // The PR chain's terminal step (§7.5): conversion completes the
-            // PR's own journey; the downstream stages live on the PO/GRN/Bill
-            // chains. Idempotent — syncConversionStatus is also the reopen
-            // path, but a re-converted PR is still 'converted' so a replay
-            // re-stages an identical (deduped) event at worst.
-            app(ChainBroadcaster::class)->broadcastFor(
-                $pr->fresh(),
-                PurchaseRequestStatus::Converted->value,
-            );
+            // Conversion state is part of the PR detail and determines whether
+            // a viewer can create more POs. Signal only a visible state change;
+            // this method is also called on idempotent retry paths.
+            $this->broadcastPurchaseRequestConversion($pr, $refreshNeeded);
 
             return;
         }
@@ -603,7 +605,11 @@ class PurchaseOrderService
                 'status' => PurchaseRequestStatus::Approved,
                 'po_conversion_status' => PurchaseRequestConversionStatus::Partial,
                 'po_conversion_at' => now(),
-            ])->save();
+            ]);
+            $refreshNeeded = $pr->isDirty(['status', 'po_conversion_status', 'po_conversion_note']);
+            $pr->save();
+
+            $this->broadcastPurchaseRequestConversion($pr, $refreshNeeded);
 
             return;
         }
@@ -613,7 +619,11 @@ class PurchaseOrderService
             'po_conversion_status' => PurchaseRequestConversionStatus::NotStarted,
             'po_conversion_note' => null,
             'po_conversion_at' => null,
-        ])->save();
+        ]);
+        $refreshNeeded = $pr->isDirty(['status', 'po_conversion_status', 'po_conversion_note']);
+        $pr->save();
+
+        $this->broadcastPurchaseRequestConversion($pr, $refreshNeeded);
     }
 
     /** @return array<int, PurchaseOrder> */
@@ -707,13 +717,16 @@ class PurchaseOrderService
                 ])->save();
             }
 
-            return $this->show($locked->fresh());
+            $fresh = $this->show($locked->fresh());
+            $this->broadcastChain($fresh, $by, 'updated');
+
+            return $fresh;
         });
     }
 
     public function submit(PurchaseOrder $po, ?User $by = null): PurchaseOrder
     {
-        if ($by !== null && ! $this->visibility->canManageDraft($by, $po)) {
+        if ($by !== null && ! $this->visibility->canManagePurchaseOrder($by, $po)) {
             throw new ForbiddenActionException('You do not have permission to submit this purchase order.');
         }
 
@@ -725,7 +738,7 @@ class PurchaseOrderService
                 ->lockForUpdate()
                 ->findOrFail($po->id);
             if ($locked->status !== PurchaseOrderStatus::Draft) {
-                throw new BusinessRuleException('Only draft POs can be submitted.');
+                throw new PurchaseOrderStateConflictException('This purchase order is no longer a draft. Refresh and review its current status.');
             }
             if ($by !== null && ! $this->visibility->canManageDraft($by, $locked)) {
                 throw new ForbiddenActionException('You do not have permission to submit this purchase order.');
@@ -743,6 +756,7 @@ class PurchaseOrderService
                 'purchase_order',
                 PurchaseOrderStatus::PendingApproval->value,
             );
+            $this->broadcastChain($fresh, $by);
 
             return $fresh;
         });
@@ -754,7 +768,18 @@ class PurchaseOrderService
             throw new ForbiddenActionException('You do not have permission to acknowledge this purchase order budget warning.');
         }
 
-        return $this->budget->acknowledge($po, $by);
+        return DB::transaction(function () use ($po, $by): PurchaseOrder {
+            $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->getKey());
+            if (! $this->visibility->canAcknowledgeBudget($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to acknowledge this purchase order budget warning.');
+            }
+
+            /** @var PurchaseOrder $fresh */
+            $fresh = $this->budget->acknowledge($locked, $by);
+            $this->broadcastChain($fresh, $by, 'updated');
+
+            return $fresh;
+        });
     }
 
     public function approve(PurchaseOrder $po, User $by, ?string $remarks = null): PurchaseOrder
@@ -819,7 +844,7 @@ class PurchaseOrderService
             // evaluate isFullyApproved and duplicate the approval outbox event.
             $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->getKey());
             if ($locked->status !== PurchaseOrderStatus::PendingApproval) {
-                throw new BusinessRuleException('PO is not in an approvable state.');
+                throw new PurchaseOrderStateConflictException('This purchase order is no longer pending approval. Refresh and review its current status.');
             }
 
             $this->approvals->approve($locked, $by, $remarks);
@@ -960,6 +985,9 @@ class PurchaseOrderService
      */
     private function recordSupplierItemLinks(PurchaseOrder $po): void
     {
+        $changed = false;
+        $created = false;
+
         foreach ($po->items()->get() as $line) {
             if ($line->item_id === null) {
                 continue;
@@ -973,6 +1001,7 @@ class PurchaseOrderService
             if ($existing !== null) {
                 // Never demote a qualified link; just refresh the price.
                 $existing->update(['last_price' => $line->unit_price, 'last_price_at' => now()]);
+                $changed = true;
 
                 continue;
             }
@@ -984,6 +1013,12 @@ class PurchaseOrderService
                 'last_price' => $line->unit_price,
                 'last_price_at' => now(),
             ]);
+            $changed = true;
+            $created = true;
+        }
+
+        if ($changed) {
+            $this->supplierCatalogRealtime->changed($created ? 'created' : 'updated');
         }
     }
 
@@ -1037,7 +1072,7 @@ class PurchaseOrderService
             // approval that concurrently committed.
             $locked = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->getKey());
             if ($locked->status !== PurchaseOrderStatus::PendingApproval) {
-                throw new BusinessRuleException('PO is not in an approvable state.');
+                throw new PurchaseOrderStateConflictException('This purchase order is no longer pending approval. Refresh and review its current status.');
             }
 
             $this->approvals->reject($locked, $by, $reason);
@@ -1069,8 +1104,9 @@ class PurchaseOrderService
                 $this->supplierDispatches->cancelForPurchaseOrder(
                     $fresh,
                     'Purchase order was rejected; supplier dispatch is no longer actionable.',
+                    emitRefresh: false,
                 );
-                $this->reopenSourcePrIfLastLink($fresh);
+                $this->syncSourcePrConversionStatus($fresh);
                 // Rejection is a cancellation from the downstream chain's point
                 // of view. Keep it on the same durable outbox path as an explicit
                 // cancellation so future listeners cannot miss this transition.
@@ -1116,7 +1152,7 @@ class PurchaseOrderService
             // This does not send a document; it records that the operator
             // confirmed the external transmission before changing the PO to
             // `sent`.
-            $this->supplierDispatches->confirmSent($fresh, $dispatchChannel);
+            $this->supplierDispatches->confirmSent($fresh, $dispatchChannel, emitRefresh: false);
 
             // Stage the expected GRN through the durable outbox. It is
             // recorded atomically with the sent transition and published after
@@ -1174,13 +1210,17 @@ class PurchaseOrderService
 
     public function cancel(PurchaseOrder $po, string $reason, ?User $by = null): PurchaseOrder
     {
+        if ($by !== null && ! $this->visibility->canManagePurchaseOrder($by, $po)) {
+            throw new ForbiddenActionException('You do not have permission to cancel this purchase order.');
+        }
+
         $fresh = DB::transaction(function () use ($po, $reason, $by) {
             // Route-bound models may be stale when receiving or closing races
             // cancellation. Re-read and lock the authoritative row before
             // evaluating guards or applying the terminal transition.
             $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
             if (in_array($row->status, [PurchaseOrderStatus::Received, PurchaseOrderStatus::Closed], true)) {
-                throw new BusinessRuleException('Cannot cancel a fully received or closed PO.');
+                throw new PurchaseOrderStateConflictException('This purchase order can no longer be cancelled. Refresh and review its current status.');
             }
             // Cancelling an already-cancelled PO used to succeed. It is not
             // harmless: it appends a second "Cancelled: …" block to remarks and
@@ -1188,7 +1228,7 @@ class PurchaseOrderService
             // double-submit published one logical cancellation twice to every
             // downstream chain listener.
             if ($row->status === PurchaseOrderStatus::Cancelled) {
-                throw new BusinessRuleException('This purchase order is already cancelled.');
+                throw new PurchaseOrderStateConflictException('This purchase order is already cancelled. Refresh and review its current status.');
             }
             if ($by !== null && ! $this->visibility->canCancel($by, $row)) {
                 throw new ForbiddenActionException('You do not have permission to cancel this purchase order.');
@@ -1239,8 +1279,9 @@ class PurchaseOrderService
             $this->supplierDispatches->cancelForPurchaseOrder(
                 $fresh,
                 'Purchase order was cancelled: '.$reason,
+                emitRefresh: false,
             );
-            $this->reopenSourcePrIfLastLink($fresh);
+            $this->syncSourcePrConversionStatus($fresh);
             app(OutboxService::class)->recordForChain(
                 new PurchaseOrderCancelled($fresh),
                 $fresh,
@@ -1335,10 +1376,21 @@ class PurchaseOrderService
     }
 
     /** Series C — Task C4. Stage durable chain progress for the owning write. */
-    private function broadcastChain(PurchaseOrder $po, ?User $actor): void
+    private function broadcastChain(PurchaseOrder $po, ?User $actor, string $action = 'status_changed'): void
     {
         app(ChainBroadcaster::class)
-            ->broadcastFor($po, $po->status?->value ?? '', $actor ?? auth()->user());
+            ->broadcastFor($po, $po->status?->value ?? '', $actor ?? auth()->user(), action: $action);
+    }
+
+    private function broadcastPurchaseRequestConversion(PurchaseRequest $pr, bool $visibleStateChanged): void
+    {
+        if (! $visibleStateChanged) {
+            return;
+        }
+
+        $fresh = $pr->fresh();
+        app(ChainBroadcaster::class)
+            ->broadcastFor($fresh, $fresh->status?->value ?? '', action: 'updated');
     }
 
     public function delete(PurchaseOrder $po, ?User $by = null): void
@@ -1359,8 +1411,9 @@ class PurchaseOrderService
 
             $prId = $locked->purchase_request_id;
             $locked->delete();
+            $this->broadcastChain($locked, $by, 'deleted');
             if ($prId !== null) {
-                $this->reopenSourcePrIfLastLinkFor($prId);
+                $this->syncSourcePrConversionStatusFor($prId);
             }
         });
     }
@@ -1380,31 +1433,31 @@ class PurchaseOrderService
                 throw new ForbiddenActionException('You do not have permission to restore this purchase order.');
             }
 
+            $sourcePrId = $locked->purchase_request_id;
             $locked->restore();
+            if ($sourcePrId !== null) {
+                $this->syncSourcePrConversionStatusFor($sourcePrId);
+            }
+            $fresh = $locked->fresh();
+            $this->broadcastChain($fresh, $by, 'restored');
 
-            return $locked->fresh();
+            return $fresh;
         });
     }
 
-    /**
-     * When the PO being closed out was the LAST live PO sourced from a
-     * `converted` PR, flip the PR back to `approved` so it can be converted
-     * again (e.g. an auto-PO whose draft was cancelled, or a PO rejected in
-     * review). The PR keeps its approval history — only its status returns.
-     */
-    private function reopenSourcePrIfLastLink(PurchaseOrder $po): void
+    /** Recompute the source PR's status from current, live PO line coverage. */
+    private function syncSourcePrConversionStatus(PurchaseOrder $po): void
     {
         if ($po->purchase_request_id === null) {
             return;
         }
-        $this->reopenSourcePrIfLastLinkFor($po->purchase_request_id);
+        $this->syncSourcePrConversionStatusFor($po->purchase_request_id);
     }
 
-    private function reopenSourcePrIfLastLinkFor(int $prId): void
+    private function syncSourcePrConversionStatusFor(int $prId): void
     {
-        // Cancellation, rejection, and deletion call this inside their
-        // transaction. Lock the source PR so it cannot be reopened between
-        // the converter's status check and PO creation.
+        // Callers hold the PO lifecycle transaction; this row lock keeps the
+        // source coverage snapshot consistent with concurrent conversions.
         $pr = PurchaseRequest::query()
             ->lockForUpdate()
             ->find($prId);

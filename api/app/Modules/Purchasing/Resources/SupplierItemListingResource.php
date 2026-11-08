@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Resources;
 
+use App\Common\Models\ApprovalDelegation;
+use App\Modules\Auth\Models\User;
+use App\Modules\Purchasing\Enums\SupplierListingStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,6 +14,11 @@ class SupplierItemListingResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $canView = $user instanceof User && $user->hasPermission('purchasing.supplier_listings.view');
+        $canReview = $user instanceof User && $this->canReviewListings($request, $user);
+        $isPending = $this->status === SupplierListingStatus::Pending;
+
         return [
             'id' => $this->hash_id,
             'item' => $this->whenLoaded('item', fn () => [
@@ -38,6 +46,27 @@ class SupplierItemListingResource extends JsonResource
                 'id' => $this->reviewer->hash_id,
                 'name' => $this->reviewer->name,
             ] : null),
+            'permissions' => [
+                'view' => $canView,
+                'review' => $canReview,
+            ],
+            'available_actions' => [
+                'approve' => $isPending && $canReview,
+                'reject' => $isPending && $canReview,
+            ],
         ];
+    }
+
+    private function canReviewListings(Request $request, User $user): bool
+    {
+        $key = 'supplier_listings.review.'.(string) $user->getAuthIdentifier();
+        if (! $request->attributes->has($key)) {
+            $request->attributes->set(
+                $key,
+                ApprovalDelegation::canActForPermission($user, 'purchasing.supplier_listings.review'),
+            );
+        }
+
+        return (bool) $request->attributes->get($key);
     }
 }

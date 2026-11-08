@@ -6,7 +6,7 @@ const PASSWORD = 'password';
 const BASE_URL = baseUrl();
 const runErrors: string[] = [];
 const abortedApiGets: Array<{ page: Page; url: string }> = [];
-const successfulApiGets: Array<{ page: Page; url: string }> = [];
+const successfulApiGets: Array<{ page: Page; url: string; at: number }> = [];
 let automationActorRecovery: { page: Page; context: BrowserContext; roles: unknown[] } | null = null;
 
 test.beforeEach(() => {
@@ -66,7 +66,11 @@ async function newContext(browser: Browser): Promise<{ context: BrowserContext; 
   page.on('pageerror', (error) => runErrors.push(`page error: ${error.message}`));
   page.on('console', (message) => {
     const text = message.text();
-    if (message.type() === 'error' && !(text.includes('401') && text.includes('Unauthorized'))) {
+    // Browser resource errors omit the response URL. API responses are
+    // checked with their URL in the response handler below, which already
+    // permits only the initial guest /auth/user 401. Do not report Chromium's
+    // URL-less rendering of that same expected response as a second error.
+    if (message.type() === 'error' && !(text.includes('401') && text.includes('Failed to load resource'))) {
       runErrors.push(`console error: ${text}`);
     }
   });
@@ -82,9 +86,15 @@ async function newContext(browser: Browser): Promise<{ context: BrowserContext; 
   page.on('response', (response) => {
     const url = response.url();
     if (response.request().method() === 'GET' && url.includes('/api/') && response.status() < 400) {
-      successfulApiGets.push({ page, url });
+      successfulApiGets.push({ page, url, at: Date.now() });
     }
-    if (!url.includes('/api/') || response.status() < 400) return;
+    if (response.status() < 400) return;
+    if (!url.includes('/api/')) {
+      if (response.status() === 401) {
+        runErrors.push(`non-API response ${response.status()}: ${response.request().method()} ${new URL(url).pathname}`);
+      }
+      return;
+    }
     if (response.status() === 401 && url.includes('/api/v1/auth/user')) return;
     runErrors.push(`API response ${response.status()}: ${response.request().method()} ${url}`);
   });
@@ -330,7 +340,9 @@ async function createCatalogPrToSentPo(browser: Browser): Promise<{ poUrl: strin
       await convertButton.click();
       const conversion = purchasing.page.getByRole('dialog');
       await expect(conversion).toContainText('Assign a supplier per line');
-      await conversion.getByLabel('Supplier').selectOption({ label: 'Audit E2E Resin Supplier' });
+      const supplier = conversion.getByLabel('Supplier');
+      await expect.poll(() => supplier.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
+      await supplier.selectOption({ index: 1 });
       const createOrders = conversion.getByRole('button', { name: /Create purchase order/ });
       await expect(createOrders).toBeEnabled();
       await createOrders.click();
@@ -1000,6 +1012,191 @@ test.describe('Live procurement runbook', () => {
     }
   });
 
+  test('creating a draft Purchase Request refreshes another role list without reload', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const actor = await newContext(browser);
+    const viewer = await newContext(browser);
+    let listChannelReady = false;
+    let chainRefreshAt: number | null = null;
+    let listRefetchAt: number | null = null;
+    const viewerEvents: string[] = [];
+
+    try {
+      await login(viewer.page, 'admin@ogami.test');
+      viewer.page.on('websocket', (socket) => {
+        socket.on('framereceived', (frame) => {
+          try {
+            const message = JSON.parse(String(frame.payload)) as { event?: unknown; channel?: unknown };
+            if (typeof message.event !== 'string') return;
+            viewerEvents.push(message.event);
+            if (message.event === 'chain.refresh' && chainRefreshAt === null) chainRefreshAt = Date.now();
+            if (message.event === 'pusher_internal:subscription_succeeded'
+              && message.channel === 'private-entity.purchase_request.visible') {
+              listChannelReady = true;
+            }
+          } catch {
+            // Pusher heartbeat frames are not JSON event envelopes.
+          }
+        });
+      });
+      viewer.page.on('response', (response) => {
+        if (chainRefreshAt === null || response.request().method() !== 'GET') return;
+        if (new URL(response.url()).pathname === '/api/v1/purchasing/purchase-requests') {
+          listRefetchAt ??= Date.now();
+        }
+      });
+      await viewer.page.goto('/purchasing/purchase-requests?per_page=100');
+      await expect(viewer.page.getByRole('status', { name: /Real-time updates: Live/ })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(() => listChannelReady, { timeout: 20_000 }).toBe(true);
+
+      await login(actor.page, 'purchasing@ogami.test');
+      await actor.page.goto('/purchasing/purchase-requests/create');
+      await expect(actor.page.getByRole('heading', { name: 'New purchase request' })).toBeVisible();
+      await actor.page.getByLabel('Priority').selectOption('normal');
+      await actor.page.getByLabel('Sourcing method').selectOption('direct_po');
+      await selectDepartment(actor.page);
+      await actor.page.getByLabel('Reason').fill(`Live E2E draft realtime check ${Date.now()}`);
+      await actor.page.getByLabel('Quantity').fill('1');
+      await actor.page.getByLabel('Description').fill('Realtime draft PR create check');
+      await actor.page.getByRole('textbox', { name: 'Unit', exact: true }).fill('pcs');
+      await actor.page.getByLabel('Estimated unit price').fill('120.00');
+
+      const createResponsePromise = actor.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().endsWith('/api/v1/purchasing/purchase-requests'),
+      );
+      const createStartedAt = Date.now();
+      await actor.page.getByRole('button', { name: 'Save draft', exact: true }).click();
+      const createResponse = await createResponsePromise;
+      const createResponseAt = Date.now();
+      expect(createResponse.status()).toBe(201);
+      await actor.page.waitForURL(/\/purchasing\/purchase-requests\/(?!create$)[^/]+$/, { timeout: 20_000 });
+      const createdPayload = await createResponse.json() as { data?: { pr_number?: string } };
+      const requestNumber = createdPayload.data?.pr_number;
+      expect(requestNumber).toBeTruthy();
+      await expect(actor.page.getByText('Draft', { exact: true }).first()).toBeVisible();
+
+      const viewerRow = viewer.page.getByRole('row').filter({ hasText: requestNumber! });
+      console.log(`[realtime-e2e] draft_pr_create_list_ready=${listChannelReady}`);
+      console.log(`[realtime-e2e] draft_pr_create_viewer_events=${viewerEvents.join(',')}`);
+      await expect(viewerRow).toBeVisible({ timeout: 8_000 });
+      const viewerRowRenderedAt = Date.now();
+      expect(chainRefreshAt).not.toBeNull();
+      expect(listRefetchAt).not.toBeNull();
+      console.log(`[realtime-e2e] draft_pr_create_status=${createResponse.status()}`);
+      console.log(`[realtime-e2e] draft_pr_actor_api_ms=${createResponseAt - createStartedAt}`);
+      console.log(`[realtime-e2e] draft_pr_event_after_api_ms=${chainRefreshAt! - createResponseAt}`);
+      console.log(`[realtime-e2e] draft_pr_list_get_after_api_ms=${listRefetchAt! - createResponseAt}`);
+      console.log(`[realtime-e2e] draft_pr_viewer_render_after_api_ms=${viewerRowRenderedAt - createResponseAt}`);
+    } finally {
+      await viewer.context.close();
+      await actor.context.close();
+    }
+  });
+
+  test('creating a draft Sales Order refreshes another role list without reload', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const sales = await newContext(browser);
+    const viewer = await newContext(browser);
+    const viewerEvents: string[] = [];
+    let listChannelReady = false;
+    let chainRefreshSeen = false;
+    let chainRefreshAt: number | null = null;
+    let listRefetchAt: number | null = null;
+
+    try {
+      await login(viewer.page, 'admin@ogami.test');
+      viewer.page.on('websocket', (socket) => {
+        socket.on('framereceived', (frame) => {
+          try {
+            const message = JSON.parse(String(frame.payload)) as { event?: unknown; channel?: unknown };
+            if (typeof message.event !== 'string') return;
+            viewerEvents.push(message.event);
+            if (message.event === 'chain.refresh' && chainRefreshAt === null) {
+              chainRefreshAt = Date.now();
+              chainRefreshSeen = true;
+            }
+            if (message.event === 'pusher_internal:subscription_succeeded'
+              && message.channel === 'private-entity.sales_order.visible') {
+              listChannelReady = true;
+            }
+          } catch {
+            // Pusher heartbeat frames are not JSON event envelopes.
+          }
+        });
+      });
+      viewer.page.on('response', (response) => {
+        if (!chainRefreshSeen || response.request().method() !== 'GET') return;
+        const url = new URL(response.url());
+        if (url.pathname === '/api/v1/crm/sales-orders') listRefetchAt ??= Date.now();
+      });
+      await viewer.page.goto('/crm/sales-orders?per_page=100');
+      await expect(viewer.page.getByRole('status', { name: /Real-time updates: Live/ })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(() => listChannelReady, { timeout: 20_000 }).toBe(true);
+
+      await login(sales.page, 'crm@ogami.test');
+      await sales.page.goto('/crm/sales-orders/create');
+      await expect(sales.page.getByRole('heading', { name: 'New sales order' })).toBeVisible();
+
+      const customer = sales.page.locator('select[name="customer_id"]');
+      await expect.poll(() => customer.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
+      const customerOptions = await customer.locator('option').evaluateAll((nodes) =>
+        nodes.map((node) => ({ value: (node as HTMLOptionElement).value, text: node.textContent ?? '' })),
+      );
+      const customerChoice = customerOptions.find((option) => option.text.includes('Honda'))
+        ?? customerOptions.find((option) => option.value !== '');
+      if (!customerChoice?.value) throw new Error('No active customer was available.');
+      await customer.selectOption(customerChoice.value);
+
+      const product = sales.page.locator('select[name="items.0.product_id"]');
+      await expect.poll(() => product.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
+      const productOptions = await product.locator('option').evaluateAll((nodes) =>
+        nodes.map((node) => ({ value: (node as HTMLOptionElement).value, text: node.textContent ?? '' })),
+      );
+      const productChoice = productOptions.find((option) => option.text.includes('WB-002'))
+        ?? productOptions.find((option) => option.value !== '');
+      if (!productChoice?.value) throw new Error('No active product was available.');
+      await product.selectOption(productChoice.value);
+      await sales.page.locator('input[name="items.0.quantity"]').fill('1');
+      await sales.page.locator('input[name="items.0.delivery_date"]').fill(futureDate(30));
+
+      const createResponsePromise = sales.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().endsWith('/api/v1/crm/sales-orders'),
+      );
+      const createStartedAt = Date.now();
+      await sales.page.getByRole('button', { name: 'Save as draft', exact: true }).click();
+      const createResponse = await createResponsePromise;
+      const createResponseAt = Date.now();
+      expect(createResponse.status()).toBe(201);
+      await sales.page.waitForURL(/\/crm\/sales-orders\/(?!create$)[^/]+$/, { timeout: 30_000 });
+      const createdPayload = await createResponse.json() as {
+        data?: { so_number?: string };
+        so_number?: string;
+      };
+      const soNumber = createdPayload.data?.so_number ?? createdPayload.so_number;
+      expect(soNumber).toBeTruthy();
+      await expect(sales.page.getByText(soNumber!, { exact: false }).first()).toBeVisible();
+      await expect(sales.page.getByText('Draft', { exact: true }).first()).toBeVisible();
+
+      const viewerRow = viewer.page.getByRole('row').filter({ hasText: soNumber! });
+      await expect(viewerRow).toBeVisible({ timeout: 10_000 });
+      const viewerRenderedAt = Date.now();
+      expect(viewerEvents).toContain('chain.refresh');
+      expect(chainRefreshAt).not.toBeNull();
+      expect(listRefetchAt).not.toBeNull();
+      console.log(`[realtime-e2e] draft_so_create_http_status=${createResponse.status()}`);
+      console.log(`[realtime-e2e] draft_so_api_response_to_chain_refresh=${chainRefreshAt! - createResponseAt}ms`);
+      console.log(`[realtime-e2e] draft_so_api_response_to_list_refetch_response=${listRefetchAt! - createResponseAt}ms`);
+      console.log(`[realtime-e2e] draft_so_api_response_to_viewer_render=${viewerRenderedAt - createResponseAt}ms`);
+      console.log(`[realtime-e2e] draft_so_viewer_events=${viewerEvents.join(',')}`);
+      console.log(`[realtime-e2e] draft_so_actor_create_duration=${createResponseAt - createStartedAt}ms`);
+    } finally {
+      await viewer.context.close();
+      await sales.context.close();
+    }
+  });
+
   test('Sales Order confirmation creates an MRP plan and auto-PR handoff', async ({ browser }) => {
     test.setTimeout(180_000);
     const sales = await newContext(browser);
@@ -1081,11 +1278,221 @@ test.describe('Live procurement runbook', () => {
     });
     try {
       await expect(created.page.getByText('Finance', { exact: true })).toBeVisible();
+      await expect(created.page.getByText('Pending', { exact: true }).first()).toBeVisible();
+      await expect(created.page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+
+      const requestNumber = (await created.page.locator('h1').first().innerText()).match(/PR-\S+/)?.[0];
+      expect(requestNumber).toBeTruthy();
+      const listPage = await created.context.newPage();
+      await listPage.goto('/purchasing/purchase-requests');
+      const row = listPage.getByRole('row').filter({ hasText: requestNumber! });
+      await expect(row.getByText('Pending', { exact: true })).toBeVisible({ timeout: 20_000 });
+
       await approvePr(browser, 'finance@ogami.test', created.url);
-      await created.page.reload();
+      // The purchaser's already-open detail and list are separate live viewers
+      // of the Finance mutation. Neither page reloads here.
       await expect(created.page.getByText('Approved', { exact: true }).first()).toBeVisible();
+      await expect(created.page.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
+      await expect(row.getByText('Approved', { exact: true })).toBeVisible({ timeout: 20_000 });
       await expect(created.page.getByLabel('Approval timeline').getByText('Skipped', { exact: true })).toBeVisible();
     } finally {
+      await created.context.close();
+    }
+  });
+
+  test('submitting a PO refreshes a Finance viewer detail and list without reload', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const created = await createManualPr(browser, {
+      description: 'Realtime PO submission viewer check',
+      quantity: '1',
+      unitPrice: '120.00',
+      itemCode: 'RM-001',
+    });
+    const viewer = await newContext(browser);
+    const receivedEvents: string[] = [];
+    const detailSubscribedChannels = new Set<string>();
+    const eventReceiptTimes: Array<{ page: 'detail' | 'list'; at: number }> = [];
+    const subscriptionAckTimes = new Map<string, number>();
+    let releaseDetailAuth!: () => void;
+    let detailAuthRequested = false;
+    let detailAuthRequestedAt = 0;
+    let detailAuthReleasedAt = 0;
+    const detailAuthGate = new Promise<void>((resolve) => {
+      releaseDetailAuth = resolve;
+    });
+
+    try {
+      await approvePr(browser, 'finance@ogami.test', created.url);
+      const convertButton = created.page.getByRole('button', { name: 'Convert to PO', exact: true });
+      const linkedPo = created.page.locator('a[href*="/purchasing/purchase-orders/"]').first();
+      await expect(convertButton.or(linkedPo).first()).toBeVisible({ timeout: 45_000 });
+      if (await convertButton.count() > 0 && await convertButton.isVisible()) {
+        await convertButton.click();
+        const conversion = created.page.getByRole('dialog');
+        await expect(conversion).toContainText('Assign a supplier per line');
+        const supplier = conversion.getByLabel('Supplier');
+        await expect.poll(() => supplier.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
+        await supplier.selectOption({ index: 1 });
+        await conversion.getByRole('button', { name: /Create purchase order/ }).click();
+      } else {
+        await linkedPo.click();
+      }
+      await created.page.waitForURL(/\/purchasing\/purchase-orders\/[^/]+$/, { timeout: 20_000 });
+
+      const poUrl = created.page.url();
+      const poId = poUrl.split('/').pop()!;
+      const poDetailChannel = `private-chain.purchase_order.${poId}`;
+      const poListChannel = 'private-entity.purchase_order.visible';
+      await expect(created.page.getByRole('heading').filter({ hasText: /PO-/ })).toBeVisible({ timeout: 20_000 });
+      const poNumber = (await created.page.locator('h1').first().innerText()).match(/PO-\S+/)?.[0];
+      expect(poNumber).toBeTruthy();
+      await expect(created.page.getByRole('button', { name: 'Submit', exact: true })).toBeVisible();
+
+      // Hold only the detail channel authorization so the actor's mutation and
+      // the list event can complete before this viewer subscribes. Once auth is
+      // released, the detail hook must catch up from the authorized API read.
+      await viewer.context.route('**/api/v1/broadcasting/auth', async (route) => {
+        const body = route.request().postDataJSON() as { channel_name?: string } | null;
+        if (body?.channel_name !== poDetailChannel) {
+          await route.continue();
+          return;
+        }
+
+        detailAuthRequested = true;
+        detailAuthRequestedAt = Date.now();
+        await detailAuthGate;
+        await route.continue();
+      });
+
+      viewer.page.on('websocket', (socket) => {
+        socket.on('framereceived', (frame) => {
+          try {
+            const message = JSON.parse(String(frame.payload)) as { event?: unknown; channel?: unknown };
+            if (typeof message.event === 'string') {
+              receivedEvents.push(message.event);
+              if (message.event === 'pusher_internal:subscription_succeeded' && typeof message.channel === 'string') {
+                detailSubscribedChannels.add(message.channel);
+                subscriptionAckTimes.set(message.channel, Date.now());
+              }
+              if (message.event === 'chain.refresh') eventReceiptTimes.push({ page: 'detail', at: Date.now() });
+            }
+          } catch {
+            // Pusher heartbeat frames are not JSON event envelopes.
+          }
+        });
+      });
+      await login(viewer.page, 'finance2@ogami.test');
+      const viewerIdentityResponse = await viewer.page.request.get(`${BASE_URL}/api/v1/auth/user`, {
+        headers: await apiHeaders(viewer.context),
+      });
+      expect(viewerIdentityResponse.status()).toBe(200);
+      expect((await viewerIdentityResponse.json()).data.role.slug).toBe('finance_officer');
+      await viewer.page.goto(poUrl);
+      await expect(viewer.page.getByRole('heading').filter({ hasText: poNumber! })).toBeVisible();
+      await expect(viewer.page.getByRole('status', { name: /Real-time updates: Reconnecting/ })).toBeVisible({ timeout: 20_000 });
+      await expect(viewer.page.getByText('Draft', { exact: true }).first()).toBeVisible();
+      await expect.poll(() => detailAuthRequested, { timeout: 20_000 }).toBe(true);
+
+      const viewerList = await viewer.context.newPage();
+      const receivedListEvents: string[] = [];
+      const listSubscribedChannels = new Set<string>();
+      viewerList.on('pageerror', (error) => runErrors.push(`page error: ${error.message}`));
+      viewerList.on('response', (response) => {
+        if (response.request().method() === 'GET' && response.url().includes('/api/') && response.status() < 400) {
+          successfulApiGets.push({ page: viewerList, url: response.url(), at: Date.now() });
+        }
+      });
+      viewerList.on('websocket', (socket) => {
+        socket.on('framereceived', (frame) => {
+          try {
+            const message = JSON.parse(String(frame.payload)) as { event?: unknown; channel?: unknown };
+            if (typeof message.event === 'string') {
+              receivedListEvents.push(message.event);
+              if (message.event === 'pusher_internal:subscription_succeeded' && typeof message.channel === 'string') {
+                listSubscribedChannels.add(message.channel);
+                subscriptionAckTimes.set(message.channel, Date.now());
+              }
+              if (message.event === 'chain.refresh') eventReceiptTimes.push({ page: 'list', at: Date.now() });
+            }
+          } catch {
+            // Pusher heartbeat frames are not JSON event envelopes.
+          }
+        });
+      });
+      await viewerList.goto('/purchasing/purchase-orders');
+      await expect(viewerList.getByRole('status', { name: /Real-time updates: Live/ })).toBeVisible({ timeout: 20_000 });
+      const viewerRow = viewerList.getByRole('row').filter({ hasText: poNumber! });
+      await expect(viewerRow.getByText('Draft', { exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(() => listSubscribedChannels.has(poListChannel), { timeout: 20_000 }).toBe(true);
+
+      const submitResponsePromise = created.page.waitForResponse((response) =>
+        response.request().method() === 'PATCH'
+        && response.url().endsWith(`/api/v1/purchasing/purchase-orders/${poId}/submit`),
+      );
+      const submitStartedAt = Date.now();
+      await created.page.getByRole('button', { name: 'Submit', exact: true }).click();
+      const submitDialog = created.page.getByRole('dialog');
+      await expect(submitDialog).toBeVisible();
+      await submitDialog.getByRole('button', { name: 'Submit', exact: true }).click();
+      const submitResponse = await submitResponsePromise;
+      const submitResponseAt = Date.now();
+      expect(submitResponse.status()).toBe(200);
+      await expect(created.page.getByText('Pending approval', { exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect(viewerRow.getByText('Pending approval', { exact: true })).toBeVisible({ timeout: 5_000 });
+      expect(receivedListEvents).toContain('chain.refresh');
+      // The held record-channel authorization leaves this detail page in
+      // Reconnecting. Its visibility-aware fallback must still fetch the
+      // authorized API response and update the status before auth is released.
+      await expect(viewer.page.getByText('Pending approval', { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+      const detailFallbackRenderedAt = Date.now();
+      const detailPath = `/api/v1/purchasing/purchase-orders/${poId}`;
+      const fallbackGets = successfulApiGets.filter((entry) =>
+        entry.page === viewer.page
+        && entry.at >= submitResponseAt
+        && new URL(entry.url).pathname === detailPath,
+      );
+      expect(fallbackGets.length).toBeGreaterThan(0);
+      expect(detailSubscribedChannels.has(poDetailChannel)).toBe(false);
+      expect(receivedEvents).not.toContain('chain.refresh');
+
+      detailAuthReleasedAt = Date.now();
+      releaseDetailAuth();
+      await expect.poll(() => detailSubscribedChannels.has(poDetailChannel), { timeout: 20_000 }).toBe(true);
+      await expect(viewer.page.getByRole('status', { name: /Real-time updates: Live/ })).toBeVisible({ timeout: 10_000 });
+      await expect(viewer.page.getByText('Pending approval', { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+      const detailRenderedAt = Date.now();
+      const detailSubscriptionAckAt = subscriptionAckTimes.get(poDetailChannel);
+      expect(detailSubscriptionAckAt).toBeTruthy();
+      console.log(`[realtime-e2e] delayed_detail_auth_hold=${detailAuthReleasedAt - detailAuthRequestedAt}ms`);
+      console.log(`[realtime-e2e] po_submit_response_to_degraded_detail_catchup=${detailFallbackRenderedAt - submitResponseAt}ms`);
+      console.log(`[realtime-e2e] detail_auth_release_to_subscription_ack=${detailSubscriptionAckAt! - detailAuthReleasedAt}ms`);
+      console.log(`[realtime-e2e] detail_auth_release_to_current_render=${detailRenderedAt - detailAuthReleasedAt}ms`);
+      expect(receivedEvents).not.toContain('chain.refresh');
+      console.log(`[realtime-e2e] po_submit_response_to_finance_detail_and_list=${Date.now() - submitResponseAt}ms`);
+      for (const [pageName, page, baseline] of [
+        ['detail', viewer.page, submitStartedAt],
+        ['list', viewerList, submitStartedAt],
+      ] as const) {
+        const expectedPath = pageName === 'detail'
+          ? `/api/v1/purchasing/purchase-orders/${poId}`
+          : '/api/v1/purchasing/purchase-orders';
+        const pageGets = successfulApiGets.filter((entry) => entry.page === page && entry.at >= baseline);
+        const firstRefetch = pageGets.find((entry) => new URL(entry.url).pathname === expectedPath);
+        const eventAt = eventReceiptTimes.find((entry) => entry.page === pageName)?.at;
+        if (eventAt !== undefined) {
+          console.log(`[realtime-e2e] po_submit_response_to_${pageName}_event=${eventAt - submitResponseAt}ms`);
+        }
+        if (firstRefetch) {
+          console.log(`[realtime-e2e] po_submit_response_to_${pageName}_refetch_response=${firstRefetch.at - submitResponseAt}ms`);
+          console.log(`[realtime-e2e] ${pageName}_post_submit_get_count=${pageGets.length}`);
+        }
+        for (const entry of pageGets) {
+          console.log(`[realtime-e2e] ${pageName}_get ${new URL(entry.url).pathname} +${entry.at - submitStartedAt}ms`);
+        }
+      }
+    } finally {
+      releaseDetailAuth();
+      await viewer.context.close();
       await created.context.close();
     }
   });

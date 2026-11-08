@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Common\Support\SearchOperator;
-use App\Modules\HR\Enums\JobPostingStatus;
-use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\ApplicationStage;
+use App\Modules\HR\Enums\EmploymentType;
+use App\Modules\HR\Enums\JobPostingStatus;
+use App\Modules\HR\Exceptions\RecruitmentStateConflictException;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Requests\StoreJobPostingRequest;
 use App\Modules\HR\Requests\UpdateJobPostingRequest;
@@ -101,7 +102,9 @@ class RecruitmentPostingController
             $request->validated() + ['created_by' => $request->user()->id]
         );
 
-        return new JobPostingResource($posting->load(['department', 'position']));
+        return new JobPostingResource(
+            $posting->load(['department', 'position', 'createdBy'])->loadCount('applications')
+        );
     }
 
     public function show(JobPosting $jobPosting): JobPostingResource
@@ -112,31 +115,77 @@ class RecruitmentPostingController
         );
     }
 
-    public function update(UpdateJobPostingRequest $request, JobPosting $jobPosting): JobPostingResource
+    public function update(UpdateJobPostingRequest $request, JobPosting $jobPosting): JobPostingResource|JsonResponse
     {
-        $posting = $this->service->updatePosting($jobPosting, $request->validated());
-        return new JobPostingResource($posting->load(['department', 'position']));
+        $data = $request->validated();
+        $expectedVersion = $data['expected_version'] ?? null;
+        unset($data['expected_version']);
+
+        try {
+            $posting = $this->service->updatePosting($jobPosting, $data, $expectedVersion);
+        } catch (RecruitmentStateConflictException $exception) {
+            return $this->stateConflictResponse($exception);
+        }
+
+        return new JobPostingResource(
+            $posting->load(['department', 'position', 'createdBy'])->loadCount('applications')
+        );
     }
 
-    public function destroy(JobPosting $jobPosting): JsonResponse
+    public function destroy(Request $request, JobPosting $jobPosting): JsonResponse
     {
-        $this->service->archivePosting($jobPosting);
+        $validated = $request->validate(['expected_version' => ['sometimes', 'string', 'max:64']]);
+
+        try {
+            $this->service->archivePosting($jobPosting, $validated['expected_version'] ?? null);
+        } catch (RecruitmentStateConflictException $exception) {
+            return $this->stateConflictResponse($exception);
+        }
+
         return response()->json(null, 204);
     }
 
-    public function restore(JobPosting $jobPosting): JsonResponse
+    public function restore(Request $request, JobPosting $jobPosting): JsonResponse
     {
-        $this->service->restorePosting($jobPosting);
+        $validated = $request->validate(['expected_version' => ['sometimes', 'string', 'max:64']]);
+
+        try {
+            $this->service->restorePosting($jobPosting, $validated['expected_version'] ?? null);
+        } catch (RecruitmentStateConflictException $exception) {
+            return $this->stateConflictResponse($exception);
+        }
+
         return response()->json(['message' => 'Job posting restored.']);
     }
 
-    public function changeStatus(Request $request, JobPosting $jobPosting): JobPostingResource
+    public function changeStatus(Request $request, JobPosting $jobPosting): JobPostingResource|JsonResponse
     {
-        $request->validate(['status' => ['required', Rule::enum(JobPostingStatus::class)] ]);
-        $this->service->changePostingStatus(
-            $jobPosting,
-            JobPostingStatus::from($request->input('status')),
+        $validated = $request->validate([
+            'status' => ['required', Rule::enum(JobPostingStatus::class)],
+            'expected_version' => ['sometimes', 'string', 'max:64'],
+        ]);
+
+        try {
+            $this->service->changePostingStatus(
+                $jobPosting,
+                JobPostingStatus::from($validated['status']),
+                $validated['expected_version'] ?? null,
+            );
+        } catch (RecruitmentStateConflictException $exception) {
+            return $this->stateConflictResponse($exception);
+        }
+
+        return new JobPostingResource(
+            $jobPosting->fresh()->load(['department', 'position', 'createdBy'])->loadCount('applications')
         );
-        return new JobPostingResource($jobPosting->fresh()->load(['department', 'position']));
+    }
+
+    private function stateConflictResponse(RecruitmentStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
     }
 }

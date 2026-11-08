@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
@@ -12,6 +13,7 @@ use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -66,14 +68,35 @@ class DeliveryUploadTest extends TestCase
         ]);
     }
 
+    public function test_receipt_upload_after_delivery_stages_a_refresh_signal(): void
+    {
+        $user = $this->makeUser();
+        $delivery = $this->seedDelivery($user, 'delivered');
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
+
+        $this->svc->uploadReceiptPhoto($delivery, UploadedFile::fake()->image('receipt.jpg'), $user);
+
+        $this->assertSame(
+            $initialSignals + 1,
+            DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count(),
+            'A proof upload that does not change status still changes the delivery detail and must stage one refresh.',
+        );
+    }
+
     public function test_receipt_upload_while_in_transit_records_arrival_and_stores_evidence(): void
     {
         $user = $this->makeUser();
         $delivery = $this->seedDelivery($user, 'in_transit');
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
 
         $result = $this->svc->uploadReceiptPhoto($delivery, UploadedFile::fake()->image('receipt.jpg'), $user);
 
         $this->assertSame('delivered', $result->status->value);
+        $this->assertSame(
+            $initialSignals + 1,
+            DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count(),
+            'The delivery status transition owns the single refresh signal for a receipt upload that records arrival.',
+        );
         $this->assertNotNull($result->delivered_at);
         Storage::disk('local')->assertExists($result->receipt_photo_path);
         $this->assertDatabaseHas('delivery_proofs', ['delivery_id' => $delivery->id, 'proof_type' => 'photo']);

@@ -6,24 +6,25 @@ namespace App\Modules\Leave\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
-use App\Modules\Auth\Models\User;
-use App\Modules\Leave\Enums\LeaveRequestStatus;
-use App\Modules\Leave\Enums\LeaveHalfDayPeriod;
-use App\Modules\HR\Models\Employee;
-use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Attendance\Services\HolidayService;
+use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
+use App\Modules\Leave\Enums\LeaveHalfDayPeriod;
+use App\Modules\Leave\Enums\LeaveRequestStatus;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Requests\ApproveLeaveRequest;
 use App\Modules\Leave\Requests\RejectLeaveRequest;
 use App\Modules\Leave\Requests\StoreLeaveRequestRequest;
 use App\Modules\Leave\Resources\LeaveRequestResource;
 use App\Modules\Leave\Services\LeaveApprovalPolicy;
 use App\Modules\Leave\Services\LeaveRequestService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Carbon\CarbonImmutable;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaveRequestController
 {
@@ -81,25 +82,23 @@ class LeaveRequestController
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return (new LeaveRequestResource($req))->response()->setStatusCode(201);
+        return $this->resourceForCurrentActor($req, $request)->response()->setStatusCode(201);
     }
 
     public function show(LeaveRequest $leaveRequest, Request $request): LeaveRequestResource
     {
         $this->authorizeView($leaveRequest, $request->user());
-        $user = $request->user();
-        $leaveRequest->setAttribute('can_approve', $user !== null && $this->approvalPolicy->canApprove($leaveRequest, $user));
 
-        return new LeaveRequestResource($leaveRequest->load([
+        return $this->resourceForCurrentActor($leaveRequest->load([
             'employee',
             'leaveType',
             'deptApprover',
             'hrApprover',
             'canceller',
-        ]));
+        ]), $request);
     }
 
-    public function downloadDocument(LeaveRequest $leaveRequest, Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function downloadDocument(LeaveRequest $leaveRequest, Request $request): StreamedResponse
     {
         $this->authorizeView($leaveRequest, $request->user());
         $path = $leaveRequest->document_path;
@@ -129,38 +128,30 @@ class LeaveRequestController
 
     public function approveDept(ApproveLeaveRequest $request, LeaveRequest $leaveRequest): LeaveRequestResource
     {
-        try {
-            $req = $this->service->approveDept($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (BusinessRuleException $e) {
-            abort(422, $e->getMessage());
-        }
+        $req = $this->service->approveDept($leaveRequest, $request->user(), $request->input('remarks'));
 
-        return new LeaveRequestResource($req);
+        return $this->resourceForCurrentActor($req, $request);
     }
 
     public function approveHR(ApproveLeaveRequest $request, LeaveRequest $leaveRequest): LeaveRequestResource
     {
-        try {
-            $req = $this->service->approveHR($leaveRequest, $request->user(), $request->input('remarks'));
-        } catch (BusinessRuleException $e) {
-            abort(422, $e->getMessage());
-        }
+        $req = $this->service->approveHR($leaveRequest, $request->user(), $request->input('remarks'));
 
-        return new LeaveRequestResource($req);
+        return $this->resourceForCurrentActor($req, $request);
     }
 
     public function reject(RejectLeaveRequest $request, LeaveRequest $leaveRequest): LeaveRequestResource
     {
         $req = $this->service->reject($leaveRequest, $request->user(), $request->input('reason'));
 
-        return new LeaveRequestResource($req);
+        return $this->resourceForCurrentActor($req, $request);
     }
 
     public function cancel(Request $request, LeaveRequest $leaveRequest): LeaveRequestResource
     {
         $req = $this->service->cancel($leaveRequest, $request->user());
 
-        return new LeaveRequestResource($req);
+        return $this->resourceForCurrentActor($req, $request);
     }
 
     /**
@@ -187,7 +178,7 @@ class LeaveRequestController
 
         return response()->json([
             'data' => [
-                'approved' => array_map(fn ($r) => (new LeaveRequestResource($r))->toArray($request), $results['approved']),
+                'approved' => array_map(fn ($r) => $this->resourceForCurrentActor($r, $request, false)->toArray($request), $results['approved']),
                 'failed' => $results['failed'],
             ],
         ]);
@@ -216,9 +207,23 @@ class LeaveRequestController
 
         return response()->json([
             'data' => [
-                'approved' => array_map(fn ($r) => (new LeaveRequestResource($r))->toArray($request), $results['approved']),
+                'approved' => array_map(fn ($r) => $this->resourceForCurrentActor($r, $request, false)->toArray($request), $results['approved']),
                 'failed' => $results['failed'],
             ],
         ]);
+    }
+
+    private function resourceForCurrentActor(
+        LeaveRequest $leaveRequest,
+        Request $request,
+        bool $resolveApproval = true,
+    ): LeaveRequestResource {
+        $actor = $request->user();
+        $leaveRequest->setAttribute(
+            'can_approve',
+            $resolveApproval && $actor !== null && $this->approvalPolicy->canApprove($leaveRequest, $actor),
+        );
+
+        return new LeaveRequestResource($leaveRequest);
     }
 }

@@ -7,6 +7,7 @@ namespace App\Common\Services;
 use App\Common\Models\ActivityEvent;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
+use App\Modules\Admin\Services\ActivityFeedRealtimeService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -88,7 +89,11 @@ class ActivityFeedService
                 $insertPayload = $payload;
                 // Query-builder inserts bypass Eloquent's JSON cast.
                 $insertPayload['detail'] = json_encode($detail, JSON_THROW_ON_ERROR);
-                ActivityEvent::query()->insertOrIgnore([$insertPayload]);
+                $inserted = ActivityEvent::query()->insertOrIgnore([$insertPayload]);
+
+                if ($inserted > 0) {
+                    app(ActivityFeedRealtimeService::class)->stage();
+                }
 
                 return ActivityEvent::query()
                     ->where('idempotency_key', $idempotencyKey)

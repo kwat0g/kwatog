@@ -45,13 +45,13 @@ export const productsApi = {
       standard_cost: string;
       notes: string;
     },
-  ) => client.post(`/crm/products/${id}/financial-proposal`, data),
+  ) => client.post<ApiSuccess<Product>>(`/crm/products/${id}/financial-proposal`, data).then((r) => r.data.data),
   decideFinancial: (
     id: string,
     proposal_id: string,
     decision: 'approve' | 'reject',
     notes: string,
-  ) => client.post(`/crm/products/${id}/financial-decision`, { proposal_id, decision, notes }),
+  ) => client.post<ApiSuccess<Product>>(`/crm/products/${id}/financial-decision`, { proposal_id, decision, notes }).then((r) => r.data.data),
   delete: (id: string) => client.delete(`/crm/products/${id}`),
   restore: (id: string) => client.patch(`/crm/products/${id}/restore`),
 };

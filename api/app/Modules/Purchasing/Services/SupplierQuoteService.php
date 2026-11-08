@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteResponseStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteStatus;
 use App\Modules\Purchasing\Enums\VatTreatment;
+use App\Modules\Purchasing\Exceptions\SupplierQuoteStateConflictException;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RequestForQuoteInvitation;
 use App\Modules\Purchasing\Models\RfqDocument;
@@ -33,7 +34,10 @@ class SupplierQuoteService
 {
     public const SUPPLIER_DOCUMENT_TYPES = ['quotation_pdf', 'certificate_of_analysis', 'resin_datasheet', 'safety_document'];
 
-    public function __construct(private readonly RfqCommercialCalculator $calculator) {}
+    public function __construct(
+        private readonly RfqCommercialCalculator $calculator,
+        private readonly RequestForQuoteRealtimeService $realtime,
+    ) {}
 
     public function list(int $vendorId, array $filters): LengthAwarePaginator
     {
@@ -77,6 +81,7 @@ class SupplierQuoteService
         $invitation = $this->findInvitation($vendorId, $rfq);
         if ($invitation->viewed_at === null && $invitation->status === RfqInvitationStatus::Invited) {
             $invitation->forceFill(['viewed_at' => now(), 'status' => RfqInvitationStatus::Viewed])->save();
+            $this->realtime->changed($rfq, 'updated');
         }
 
         return $invitation->load([
@@ -108,7 +113,6 @@ class SupplierQuoteService
     {
         return DB::transaction(function () use ($rfq, $vendorId, $data, $submit, $portalUser, $capturedBy): SupplierQuote {
             $locked = RequestForQuote::query()->lockForUpdate()->with('items')->findOrFail($rfq->id);
-            $this->assertAcceptingQuotes($locked);
             $invitation = RequestForQuoteInvitation::query()
                 ->where('request_for_quote_id', $locked->id)
                 ->where('vendor_id', $vendorId)
@@ -117,6 +121,7 @@ class SupplierQuoteService
             if (! $invitation) {
                 throw new BusinessRuleException('This supplier is not invited to the RFQ.');
             }
+            $this->assertAcceptingQuotes($locked);
             $quote = SupplierQuote::query()
                 ->where('request_for_quote_id', $locked->id)
                 ->where('vendor_id', $vendorId)
@@ -128,7 +133,7 @@ class SupplierQuoteService
                 throw new BusinessRuleException('This supplier entered its own quotation in the portal. Ask the supplier to update it there.');
             }
             if (! $submit && $quote?->status === SupplierQuoteStatus::Submitted) {
-                throw new BusinessRuleException('This quotation is already submitted. Submit your changes, or withdraw it first to keep working on a draft.');
+                throw new SupplierQuoteStateConflictException('This quotation is already submitted. Refresh and review its current status before saving a draft.');
             }
 
             $quote ??= new SupplierQuote([
@@ -164,6 +169,8 @@ class SupplierQuoteService
                 $invitation->forceFill(['status' => RfqInvitationStatus::Submitted])->save();
             }
 
+            $this->realtime->changed($locked, $submit ? 'status_changed' : 'updated', $capturedBy);
+
             return $quote->fresh(['items', 'documents', 'vendor:id,name']);
         });
     }
@@ -173,6 +180,14 @@ class SupplierQuoteService
     {
         return DB::transaction(function () use ($rfq, $vendorId): SupplierQuote {
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
+            $invitation = RequestForQuoteInvitation::query()
+                ->where('request_for_quote_id', $locked->id)
+                ->where('vendor_id', $vendorId)
+                ->lockForUpdate()
+                ->first();
+            if (! $invitation) {
+                throw new BusinessRuleException('This supplier is not invited to the RFQ.');
+            }
             $this->assertAcceptingQuotes($locked);
             $quote = SupplierQuote::query()
                 ->where('request_for_quote_id', $locked->id)
@@ -180,13 +195,14 @@ class SupplierQuoteService
                 ->lockForUpdate()
                 ->first();
             if (! $quote || $quote->status !== SupplierQuoteStatus::Submitted) {
-                throw new BusinessRuleException('There is no submitted quotation to withdraw.');
+                throw new SupplierQuoteStateConflictException('There is no submitted quotation to withdraw. Refresh and review its current status.');
             }
             $quote->forceFill(['status' => SupplierQuoteStatus::Draft, 'submitted_at' => null])->save();
             RequestForQuoteInvitation::query()
                 ->where('request_for_quote_id', $locked->id)
                 ->where('vendor_id', $vendorId)
                 ->update(['status' => RfqInvitationStatus::Viewed->value]);
+            $this->realtime->changed($locked, 'status_changed');
 
             return $quote->fresh(['items', 'documents', 'vendor:id,name']);
         });
@@ -196,13 +212,18 @@ class SupplierQuoteService
     {
         return DB::transaction(function () use ($rfq, $vendorId, $portalUser, $file, $documentType): RfqDocument {
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
-            $this->assertAcceptingQuotes($locked);
-            if (! RequestForQuoteInvitation::query()->where('request_for_quote_id', $locked->id)->where('vendor_id', $vendorId)->exists()) {
+            $invitation = RequestForQuoteInvitation::query()
+                ->where('request_for_quote_id', $locked->id)
+                ->where('vendor_id', $vendorId)
+                ->lockForUpdate()
+                ->first();
+            if (! $invitation) {
                 throw new BusinessRuleException('This supplier is not invited to the RFQ.');
             }
+            $this->assertAcceptingQuotes($locked);
             $path = $file->store('rfqs/'.$locked->hash_id.'/'.$vendorId, 'local');
             try {
-                return RfqDocument::create([
+                $document = RfqDocument::create([
                     'request_for_quote_id' => $locked->id,
                     'supplier_quote_id' => SupplierQuote::query()->where('request_for_quote_id', $locked->id)->where('vendor_id', $vendorId)->value('id'),
                     'vendor_id' => $vendorId,
@@ -213,6 +234,9 @@ class SupplierQuoteService
                     'size_bytes' => (int) $file->getSize(),
                     'file_path' => $path,
                 ]);
+                $this->realtime->changed($locked, 'updated');
+
+                return $document;
             } catch (\Throwable $e) {
                 Storage::disk('local')->delete($path);
                 throw $e;
@@ -237,7 +261,7 @@ class SupplierQuoteService
     private function assertAcceptingQuotes(RequestForQuote $rfq): void
     {
         if ($rfq->status !== RfqStatus::Open || ! $rfq->closes_at->isFuture()) {
-            throw new BusinessRuleException('This RFQ is no longer accepting quotations.');
+            throw new SupplierQuoteStateConflictException('This RFQ is no longer accepting quotations. Refresh and review its current status.');
         }
     }
 

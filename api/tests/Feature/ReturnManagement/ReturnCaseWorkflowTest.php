@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\ReturnManagement;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -22,6 +23,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -422,6 +424,16 @@ class ReturnCaseWorkflowTest extends TestCase
         $items[0]->salesOrderItem->product->update(['is_active' => true]);
         $draft = app(\App\Modules\CRM\Services\SalesOrderService::class)->createNoChargeReplacement(ReturnCase::findOrFail(ReturnCase::tryDecodeHash($case['id'])), $checker->id);
         $this->assertSame(SalesOrderStatus::Draft, $draft->status);
+        $draftRefresh = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->first(function (object $event) use ($draft): bool {
+                $payload = json_decode($event->payload, true, 512, JSON_THROW_ON_ERROR);
+
+                return ($payload['entityHashId'] ?? null) === $draft->hash_id
+                    && ($payload['newStatus'] ?? null) === SalesOrderStatus::Draft->value;
+            });
+        $this->assertNotNull($draftRefresh, 'Replacement creation should stage the parent sales-order refresh.');
         $this->postJson($path.'/actions', ['action' => 'create_replacement'])->assertOk()
             ->assertJsonPath('data.replacement_order.id', $draft->hash_id)->assertJsonPath('data.replacement_order.status', 'confirmed');
         $this->assertSame(1, SalesOrder::query()->where('return_case_id', ReturnCase::tryDecodeHash($case['id']))->count());

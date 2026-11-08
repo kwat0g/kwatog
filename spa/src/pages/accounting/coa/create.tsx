@@ -70,7 +70,8 @@ export default function CreateAccountPage() {
  onSuccess: (account) => {
  qc.invalidateQueries({ queryKey: ['accounting', 'accounts'] });
  toast.success(`Account ${account.code} created.`);
- navigate('/accounting/coa');
+  safety.allowNavigationAfterSave();
+navigate('/accounting/coa');
  },
  onError: (err) => {
    applyServerValidationErrors(err, setError, 'Failed to create account.');

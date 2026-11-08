@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import type { ApiValidationError } from '@/types';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { manilaIsoDate, tomorrowIsoDate } from '@/lib/formatDate';
@@ -22,6 +23,7 @@ import { manilaIsoDate, tomorrowIsoDate } from '@/lib/formatDate';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 // Keep the estimate aligned with LeaveRequestService::businessDaysInclusive.
 function businessDaysBetween(start: string, end: string): number {
@@ -68,6 +70,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateLeavePage() {
+ useRealtimeList('leave_type', 'visible');
  const navigate = useNavigate();
  const qc = useQueryClient();
  const user = useAuthStore((s) => s.user);
@@ -143,10 +146,13 @@ export default function CreateLeavePage() {
  reason: d.reason || undefined,
  document: d.document?.[0],
  }),
- onSuccess: (req) => {
- qc.invalidateQueries({ queryKey: ['leaves'] });
+ onSuccess: async (req) => {
+ const detailKey = ['leaves', 'request', req.id] as const;
+ qc.setQueryData(detailKey, req);
+ await invalidateRealtimeChange(qc, { entityType: 'leave_request', entityId: req.id }, [], [detailKey]);
  toast.success(`Leave request ${req.leave_request_no} submitted.`);
- navigate(`/hr/leaves/${req.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/hr/leaves/${req.id}`);
  },
  onError: (e: AxiosError<ApiValidationError>) => {
  applyServerValidationErrors(e, setError, 'Failed to submit leave request.');

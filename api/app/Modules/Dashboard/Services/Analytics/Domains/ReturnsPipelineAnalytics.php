@@ -30,6 +30,15 @@ final class ReturnsPipelineAnalytics extends DomainMetric
         return 'returns.pipeline';
     }
 
+    public function scopeLabel(User $user): string
+    {
+        $scope = parent::scopeLabel($user);
+
+        return ReturnManagementAccess::customerReturnsOnly($user)
+            ? $scope.':customer-only'
+            : $scope;
+    }
+
     protected function build(User $user, AnalyticsPeriod $period, array $filters): array
     {
         if (! Schema::hasTable('return_requests')) {

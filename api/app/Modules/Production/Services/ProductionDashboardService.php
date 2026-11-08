@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Production\Services;
 
 use App\Common\Services\SettingsService;
+use App\Common\Support\CacheGeneration;
+use App\Common\Support\FailOpenCache;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Models\Machine;
@@ -16,18 +18,25 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Sprint 6 — Task 58. Plant-manager dashboard payload.
  *
  * Composes existing services (no new business logic). Cached for 30s in
- * Redis (or array driver in tests). Writers invalidate the key after commit;
- * the TTL remains a recovery fallback.
+ * Redis (or array driver in tests). Writers rotate the generation after
+ * commit, so an older in-flight cache fill cannot become current again; the
+ * TTL remains a recovery fallback.
  */
 class ProductionDashboardService
 {
     private const CACHE_KEY = 'dashboard:production';
+
+    private const VERSION_KEY = 'dashboard:production:version';
+
+    private const VERSION_TTL_SECONDS = 604800;
 
     private const CACHE_TTL_SECONDS = 30;
 
@@ -38,12 +47,55 @@ class ProductionDashboardService
 
     public static function forgetCache(): void
     {
-        Cache::forget(self::CACHE_KEY);
+        $nextVersion = (string) Str::uuid();
+
+        DB::afterCommit(static function () use ($nextVersion): void {
+            CacheGeneration::rotateDefault(
+                self::VERSION_KEY,
+                self::VERSION_TTL_SECONDS,
+                'production.dashboard',
+                $nextVersion,
+            );
+
+            try {
+                // Retire the fixed legacy key after the active generation has
+                // moved. Cleanup failure must not keep new reads on old data.
+                Cache::forget(self::CACHE_KEY);
+            } catch (Throwable $exception) {
+                Log::warning('Production dashboard legacy cache cleanup failed after commit.', [
+                    'exception' => $exception::class,
+                ]);
+            }
+        });
+    }
+
+    /** Retire the generation and legacy payload after the database is replaced. */
+    public static function invalidateForDatabaseRestore(): bool
+    {
+        $rotated = CacheGeneration::rotateDefault(
+            self::VERSION_KEY,
+            self::VERSION_TTL_SECONDS,
+            'production.dashboard.database_restore',
+        );
+
+        try {
+            Cache::forget(self::CACHE_KEY);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        return $rotated;
     }
 
     public function payload(): array
     {
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL_SECONDS, function () {
+        $version = CacheGeneration::currentDefault(
+            self::VERSION_KEY,
+            self::VERSION_TTL_SECONDS,
+            'production.dashboard',
+        );
+
+        return FailOpenCache::remember(Cache::store(), $this->cacheKey($version), self::CACHE_TTL_SECONDS, function () {
             $today = Carbon::today();
             $start = $today->copy();
             $end = $today->copy()->endOfDay();
@@ -60,7 +112,12 @@ class ProductionDashboardService
                 'defect_pareto' => $this->defectPareto($start->copy()->subDays($defectHistoryDays), $end),
                 'generated_at' => Carbon::now()->toIso8601String(),
             ];
-        });
+        }, 'production.dashboard');
+    }
+
+    private function cacheKey(string $version): string
+    {
+        return self::CACHE_KEY.':v'.$version;
     }
 
     private function displayPolicy(): array

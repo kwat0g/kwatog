@@ -16,6 +16,7 @@ const posting: JobPosting = {
   requirements: '', employment_type: 'regular', salary_range_min: null, salary_range_max: null,
   show_salary: false, status: 'open', status_label: 'Open', slots: 2, posted_at: '2026-10-20T01:00:00Z',
   closes_at: null, department: { id: 'department-1', name: 'Production' }, application_count: 8,
+  version: '2026-10-20T01:00:00.000000+00:00', permissions: { view: true, manage: true }, available_actions: ['edit', 'close'],
   created_at: '2026-10-20T01:00:00Z', updated_at: '2026-10-20T01:00:00Z',
 };
 

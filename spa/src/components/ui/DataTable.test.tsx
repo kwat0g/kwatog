@@ -20,8 +20,9 @@ describe('DataTable row emphasis and actions', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Preview Ada Lovelace' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Preview Ada Lovelace' }).tabIndex).toBe(0);
+    const previewButtons = screen.getAllByRole('button', { name: 'Preview Ada Lovelace' });
+    expect(previewButtons).toHaveLength(2); // Compact cards and the desktop table are both rendered for responsive layout.
+    expect(previewButtons.every((button) => button.tabIndex === 0)).toBe(true);
     expect(screen.getByRole('cell', { name: 'Ada Lovelace' })).toHaveClass('font-medium', 'text-primary');
   });
 

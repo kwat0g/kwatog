@@ -24,6 +24,8 @@ class DssRecommendation extends Model
 
     protected $table = 'dss_recommendations';
 
+    protected $attributes = ['version' => 1];
+
     protected $fillable = [
         'detector_id',
         'detector_version',
@@ -62,6 +64,7 @@ class DssRecommendation extends Model
     ];
 
     protected $casts = [
+        'version' => 'integer',
         'priority_score' => 'decimal:4',
         'impact_estimate' => 'decimal:2',
         'impact_is_estimate' => 'boolean',
@@ -81,6 +84,13 @@ class DssRecommendation extends Model
         'source_observed_at' => 'datetime',
         'business_due_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(static function (self $recommendation): void {
+            $recommendation->version = ((int) $recommendation->getRawOriginal('version')) + 1;
+        });
+    }
 
     public function subject(): MorphTo
     {

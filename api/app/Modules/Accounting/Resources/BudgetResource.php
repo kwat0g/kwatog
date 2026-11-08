@@ -7,11 +7,21 @@ namespace App\Modules\Accounting\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Modules\Accounting\Enums\BudgetStatus;
+use App\Modules\Accounting\Services\BudgetService;
+use App\Modules\Auth\Models\User;
 
 class BudgetResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $actor = $request->user();
+        $service = app(BudgetService::class);
+        $availableActions = $actor instanceof User
+            ? $service->availableActionsFor($this->resource, $actor)
+            : [];
+        $canView = $actor instanceof User
+            && ($actor->hasPermission('budgeting.view') || $service->canReview($this->resource, $actor));
+
         return [
             'id'               => $this->hash_id,
             'fiscal_year_id'   => $this->fiscal_year_id === null ? null : app('hashids')->encode((int) $this->fiscal_year_id),
@@ -31,7 +41,13 @@ class BudgetResource extends JsonResource
             'utilization_pct'  => $this->utilization_percent,
             'status'           => $this->status,
             'status_label'     => BudgetStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
-            'can_approve'      => (bool) $this->can_approve,
+            'can_approve'      => in_array('approve', $availableActions, true),
+            'available_actions' => $availableActions,
+            'permissions' => [
+                'view' => $canView,
+                'manage' => $actor instanceof User && $actor->hasPermission('budgeting.manage'),
+                'approve' => in_array('approve', $availableActions, true),
+            ],
             'submitted_by'     => $this->whenLoaded('submittedBy', fn () => [
                 'id'   => $this->submittedBy?->hash_id,
                 'name' => $this->submittedBy?->name,
@@ -51,6 +67,7 @@ class BudgetResource extends JsonResource
             'line_items'       => BudgetLineItemResource::collection($this->whenLoaded('lineItems')),
             'created_at'       => $this->created_at,
             'updated_at'       => $this->updated_at,
+            'version'          => $this->updated_at?->toISOString(),
         ];
     }
 }

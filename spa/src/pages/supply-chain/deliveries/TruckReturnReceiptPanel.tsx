@@ -91,6 +91,7 @@ export function TruckReturnReceiptPanel({ deliveryId, lines, outcome, canReceive
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] }), qc.invalidateQueries({ queryKey: ['driver'] }),
         qc.invalidateQueries({ queryKey: ['inventory'] }), qc.invalidateQueries({ queryKey: ['return-request'] }),
+        ...(!late ? [qc.invalidateQueries({ queryKey: ['supply-chain', 'vehicles'] })] : []),
       ]);
     },
     onError: (error) => {

@@ -182,6 +182,7 @@ class CoCService
         $cocNumber = $this->cocNumber($inspection);
         $payload = [
             'counted_capture' => $inspection->counted_capture,
+            'quantity_result' => $inspection->quantity_result,
             'evidence_method' => $confirmedChecks ? 'confirmed_checks' : null,
             'measurement_disclosure' => $confirmedChecks ? 'Numeric measurements were not recorded for this inspection.' : null,
             'confirmed_requirements' => $confirmedRequirements,
@@ -209,7 +210,7 @@ class CoCService
             // OGAMI-008 — data-driven result + measurement table.
             'inspection_result' => $resultLabel,
             'inspection_passed' => $status === InspectionStatus::Passed,
-            'critical_measurements' => $confirmedChecks || ($inspection->usesChecklistCapture() && ! $inspection->counted_capture) ? [] : $criticalMeasurements,
+            'critical_measurements' => $inspection->quantity_result || $confirmedChecks || ($inspection->usesChecklistCapture() && ! $inspection->counted_capture) ? [] : $criticalMeasurements,
             // ADV3 traceability fields (rendered conditionally by the blade).
             'batch_number' => $batchNumber,
             'lot_number' => $lotNumber,
@@ -299,15 +300,21 @@ class CoCService
 
             return;
         }
+        if ($inspection->quantity_result && ! $inspection->counted_capture) {
+            if (! $inspection->coverage_confirmed_at || bccomp($inspection->quantity_result['defective_quantity'], '0', 3) !== 0 || $inspection->inspected_quantity !== $inspection->batch_quantity) {
+                throw new InspectionCertificateException('Complete quantity inspection evidence is required.', 'COC_EVIDENCE_INCOMPLETE');
+            }
+
+            return;
+        }
         if ($inspection->counted_capture) {
             $rows = $inspection->measurements()->get();
             if (($inspection->counted_capture['version'] ?? null) !== 1
                 || ($inspection->counted_capture['result_policy'] ?? null) !== 'zero_defects'
-                || ($inspection->counted_capture['required_quantity'] ?? null) !== $inspection->batch_quantity
                 || ! $inspection->coverage_confirmed_at || $inspection->sample_defect_count !== 0 || $inspection->critical_defect
-                || $inspection->inspected_quantity !== ($inspection->counted_capture['required_quantity'] ?? null)
+                || $inspection->inspected_quantity !== $inspection->batch_quantity
                 || $rows->isEmpty() || $rows->contains(fn ($row) => trim((string) $row->acceptance_criterion) === ''
-                    || ($row->requiresSizeReading() && ($row->measured_value === null || $row->evaluate() !== true)))) {
+                    || (! $inspection->quantity_result && $row->requiresSizeReading() && ($row->measured_value === null || $row->evaluate() !== true)))) {
                 throw new InspectionCertificateException('CoC requires complete counted coverage, zero defective pieces and all required passing size readings.', 'COC_EVIDENCE_INCOMPLETE');
             }
 

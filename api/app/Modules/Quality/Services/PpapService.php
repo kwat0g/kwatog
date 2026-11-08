@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Quality\Enums\PpapElementStatus;
 use App\Modules\Quality\Enums\PpapElementType;
 use App\Modules\Quality\Enums\PpapStatus;
+use App\Modules\Quality\Exceptions\PpapStateConflictException;
 use App\Modules\Quality\Models\PpapElement;
 use App\Modules\Quality\Models\PpapSubmission;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -29,7 +30,11 @@ class PpapService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = PpapSubmission::query()->with(['vendor:id,name', 'item:id,code,name', 'elements']);
+        $q = PpapSubmission::query()->with([
+            'vendor:id,name',
+            'item:id,code,name',
+            'elements.submission:id,status',
+        ]);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -54,7 +59,7 @@ class PpapService
         return $ppap->load([
             'vendor:id,name', 'item:id,code,name', 'product:id,name',
             'purchaseOrder:id,po_number', 'submitter:id,name', 'reviewer:id,name',
-            'approver:id,name', 'elements',
+            'approver:id,name', 'elements.submission:id,status',
         ]);
     }
 
@@ -90,47 +95,59 @@ class PpapService
 
     public function update(PpapSubmission $ppap, array $data): PpapSubmission
     {
-        if ($ppap->status->isTerminal() || $ppap->status === PpapStatus::Approved) {
-            throw new BusinessRuleException('Cannot edit a finalized PPAP submission.');
-        }
-        $ppap->update(array_filter([
-            'ppap_level' => $data['ppap_level'] ?? null,
-            'product_id' => $data['product_id'] ?? null,
-            'notes'      => $data['notes'] ?? null,
-        ], fn ($v) => $v !== null));
+        return DB::transaction(function () use ($ppap, $data): PpapSubmission {
+            $locked = $this->lockSubmission($ppap);
+            if ($locked->status->isTerminal() || $locked->status === PpapStatus::Approved) {
+                throw new BusinessRuleException('Cannot edit a finalized PPAP submission.');
+            }
 
-        return $this->show($ppap);
+            $locked->update(array_filter([
+                'ppap_level' => $data['ppap_level'] ?? null,
+                'product_id' => $data['product_id'] ?? null,
+                'notes'      => $data['notes'] ?? null,
+            ], fn ($v) => $v !== null));
+
+            return $this->show($locked);
+        });
     }
 
     public function submit(PpapSubmission $ppap): PpapSubmission
     {
-        if ($ppap->status !== PpapStatus::Draft) {
-            throw new BusinessRuleException('Only draft PPAP submissions can be submitted.');
-        }
-        if ($ppap->elements()->count() < 1) {
-            throw new BusinessRuleException('PPAP submission requires at least one element.');
-        }
-        $ppap->update([
-            'status'          => PpapStatus::Submitted->value,
-            'submission_date' => now()->toDateString(),
-        ]);
-        return $this->show($ppap);
+        return DB::transaction(function () use ($ppap): PpapSubmission {
+            $locked = $this->lockSubmission($ppap);
+            if ($locked->status !== PpapStatus::Draft) {
+                throw new BusinessRuleException('Only draft PPAP submissions can be submitted.');
+            }
+            if ($locked->elements()->count() < 1) {
+                throw new BusinessRuleException('PPAP submission requires at least one element.');
+            }
+            $locked->update([
+                'status'          => PpapStatus::Submitted->value,
+                'submission_date' => now()->toDateString(),
+            ]);
+
+            return $this->show($locked);
+        });
     }
 
     public function review(PpapSubmission $ppap, User $by): PpapSubmission
     {
-        if (! in_array($ppap->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
-            throw new BusinessRuleException('Only submitted PPAP submissions can be reviewed.');
-        }
-        if ((int) $ppap->submitted_by === (int) $by->id) {
-            throw new ForbiddenActionException('You cannot review a PPAP you submitted.');
-        }
-        $ppap->update([
-            'status'      => PpapStatus::UnderReview->value,
-            'reviewed_by' => $by->id,
-            'reviewed_at' => now(),
-        ]);
-        return $this->show($ppap);
+        return DB::transaction(function () use ($ppap, $by): PpapSubmission {
+            $locked = $this->lockSubmission($ppap);
+            if (! in_array($locked->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
+                throw new BusinessRuleException('Only submitted PPAP submissions can be reviewed.');
+            }
+            if ((int) $locked->submitted_by === (int) $by->id) {
+                throw new ForbiddenActionException('You cannot review a PPAP you submitted.');
+            }
+            $locked->update([
+                'status'      => PpapStatus::UnderReview->value,
+                'reviewed_by' => $by->id,
+                'reviewed_at' => now(),
+            ]);
+
+            return $this->show($locked);
+        });
     }
 
     /**
@@ -139,40 +156,48 @@ class PpapService
      */
     public function approve(PpapSubmission $ppap, User $by): PpapSubmission
     {
-        if (! in_array($ppap->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
-            throw new BusinessRuleException('Only submitted/under-review PPAP submissions can be approved.');
-        }
-        if ((int) $ppap->submitted_by === (int) $by->id) {
-            throw new ForbiddenActionException('You cannot approve a PPAP you submitted.');
-        }
-        $unresolved = $ppap->elements()
-            ->whereNotIn('status', [PpapElementStatus::Accepted->value, PpapElementStatus::NotApplicable->value])
-            ->count();
-        if ($unresolved > 0) {
-            throw new BusinessRuleException("Cannot approve: {$unresolved} element(s) not yet accepted.");
-        }
+        return DB::transaction(function () use ($ppap, $by): PpapSubmission {
+            $locked = $this->lockSubmission($ppap);
+            if (! in_array($locked->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
+                throw new BusinessRuleException('Only submitted/under-review PPAP submissions can be approved.');
+            }
+            if ((int) $locked->submitted_by === (int) $by->id) {
+                throw new ForbiddenActionException('You cannot approve a PPAP you submitted.');
+            }
+            $unresolved = $locked->elements()
+                ->whereNotIn('status', [PpapElementStatus::Accepted->value, PpapElementStatus::NotApplicable->value])
+                ->count();
+            if ($unresolved > 0) {
+                throw new BusinessRuleException("Cannot approve: {$unresolved} element(s) not yet accepted.");
+            }
 
-        $ppap->update([
-            'status'      => PpapStatus::Approved->value,
-            'approved_by' => $by->id,
-            'approved_at' => now(),
-            'expires_at'  => now()->addYears($this->settings->requiredInt('quality.ppap.approval_validity_years', 1)),
-        ]);
-        return $this->show($ppap);
+            $locked->update([
+                'status'      => PpapStatus::Approved->value,
+                'approved_by' => $by->id,
+                'approved_at' => now(),
+                'expires_at'  => now()->addYears($this->settings->requiredInt('quality.ppap.approval_validity_years', 1)),
+            ]);
+
+            return $this->show($locked);
+        });
     }
 
     public function reject(PpapSubmission $ppap, string $reason, User $by): PpapSubmission
     {
-        if ($ppap->status->isTerminal() || $ppap->status === PpapStatus::Approved) {
-            throw new BusinessRuleException('PPAP submission is already finalized.');
-        }
-        $ppap->update([
-            'status'           => PpapStatus::Rejected->value,
-            'rejection_reason' => $reason,
-            'reviewed_by'      => $by->id,
-            'reviewed_at'      => now(),
-        ]);
-        return $this->show($ppap);
+        return DB::transaction(function () use ($ppap, $reason, $by): PpapSubmission {
+            $locked = $this->lockSubmission($ppap);
+            if ($locked->status->isTerminal() || $locked->status === PpapStatus::Approved) {
+                throw new BusinessRuleException('PPAP submission is already finalized.');
+            }
+            $locked->update([
+                'status'           => PpapStatus::Rejected->value,
+                'rejection_reason' => $reason,
+                'reviewed_by'      => $by->id,
+                'reviewed_at'      => now(),
+            ]);
+
+            return $this->show($locked);
+        });
     }
 
     /**
@@ -188,22 +213,46 @@ class PpapService
      * place or must be superseded by a new revision is an open policy question, so that
      * path is deliberately left as it was rather than guessed at.
      */
-    public function updateElement(PpapElement $element, array $data): PpapElement
+    public function updateElement(PpapElement $element, array $data, ?PpapSubmission $submissionSnapshot = null): PpapElement
     {
-        $submission = $element->submission;
-        if ($submission && $submission->status === PpapStatus::Approved) {
-            throw new BusinessRuleException(
-                'Cannot change evidence on an approved PPAP submission. Raise a new revision instead.'
-            );
+        $submissionSnapshot ??= $element->submission;
+        $expectedStatus = $submissionSnapshot?->status;
+
+        return DB::transaction(function () use ($element, $data, $expectedStatus): PpapElement {
+            $submission = PpapSubmission::query()
+                ->lockForUpdate()
+                ->findOrFail($element->ppap_submission_id);
+            if ($expectedStatus !== null && $submission->status !== $expectedStatus) {
+                throw new PpapStateConflictException('This PPAP submission changed. Refresh and review its current status.');
+            }
+            if ($submission->status === PpapStatus::Approved) {
+                throw new BusinessRuleException(
+                    'Cannot change evidence on an approved PPAP submission. Raise a new revision instead.'
+                );
+            }
+
+            $lockedElement = PpapElement::query()
+                ->where('ppap_submission_id', $submission->id)
+                ->lockForUpdate()
+                ->findOrFail($element->id);
+            $lockedElement->update(array_filter([
+                'status'        => $data['status'] ?? null,
+                'document_path' => $data['document_path'] ?? null,
+                'notes'         => $data['notes'] ?? null,
+            ], fn ($v) => $v !== null));
+
+            return $lockedElement->fresh('submission');
+        });
+    }
+
+    private function lockSubmission(PpapSubmission $snapshot): PpapSubmission
+    {
+        $locked = PpapSubmission::query()->lockForUpdate()->findOrFail($snapshot->id);
+        if ($locked->status !== $snapshot->status) {
+            throw new PpapStateConflictException('This PPAP submission changed. Refresh and review its current status.');
         }
 
-        $element->update(array_filter([
-            'status'        => $data['status'] ?? null,
-            'document_path' => $data['document_path'] ?? null,
-            'notes'         => $data['notes'] ?? null,
-        ], fn ($v) => $v !== null));
-
-        return $element->fresh();
+        return $locked;
     }
 
     /** Mark approved-but-expired submissions as expired. Returns count. */

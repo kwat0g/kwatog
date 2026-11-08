@@ -13,17 +13,20 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { invoiceStatusVariant } from '@/lib/statusVariants';
 import type { Invoice } from '@/types/accounting';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 const DEFAULT_FILTERS: InvoiceListParams = {
  page: 1, per_page: 25, status: '',
 };
 
 export default function InvoicesPage() {
+ useRealtimeList('invoice', 'visible');
  const navigate = useNavigate();
  const { can } = usePermission();
  // Bound to the URL so dashboard drill-downs (?status=finalized) arrive
@@ -34,10 +37,12 @@ export default function InvoicesPage() {
  const dateFromParam = searchParams.get('date_from') ?? undefined;
  const [filters, setFilters] = useUrlFilters<InvoiceListParams>({ ...DEFAULT_FILTERS, from: dateFromParam });
 
+ const queryKey = ['accounting', 'invoices', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['accounting', 'invoices', filters],
+ queryKey,
  queryFn: () => invoicesApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: invoiceOptions } = useQuery({
  queryKey: ['accounting', 'invoices', 'options'],
  queryFn: invoicesApi.options,
