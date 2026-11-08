@@ -15,17 +15,19 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class InventoryDashboardService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly InventoryDashboardCache $cache,
+    ) {}
 
     public function summary(): array
     {
-        return Cache::remember('inv:dashboard:summary', 30, fn () => $this->compute());
+        return $this->cache->remember(fn () => $this->compute());
     }
 
     private function compute(): array

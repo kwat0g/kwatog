@@ -136,6 +136,7 @@ class SupplierPortalService
             ->count();
 
         return [
+            'generated_at' => now()->toIso8601String(),
             'open_po_count' => $openPoCount,
             'open_rfq_count' => $openRfqCount,
             'pending_delivery_count' => $pendingDeliveryCount,

@@ -20,7 +20,8 @@ export default function SupplierDeliverySchedulesPage() {
   const schedules = useQuery({
     queryKey: ['portal', 'supplier', 'delivery-schedules', purchaseOrderId, page, perPage],
     queryFn: () => supplierPortalApi.listDeliverySchedules({ page, per_page: perPage, purchase_order_id: purchaseOrderId }),
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[3] === purchaseOrderId ? previous : undefined,
   });
 
   return (

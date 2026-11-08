@@ -4,20 +4,27 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Loans;
 
+use App\Common\Models\OutboxMessage;
 use App\Common\Services\ApprovalBoardService;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Loans\Events\EmployeeLoanChanged;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Services\LoanService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
-use Database\Seeders\ChartOfAccountsSeeder;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -71,17 +78,17 @@ class LoanApprovalChainTest extends TestCase
             $order++;
             DB::table('approval_records')->insert([
                 'approvable_type' => $loan->getMorphClass(),
-                'approvable_id'   => $loan->id,
-                'step_order'      => $order,
-                'role_slug'       => $step['role'],
-                'action'          => $step['action'] ?? 'pending',
-                'is_current'      => true,
-                'created_at'      => now()->subHour(),
+                'approvable_id' => $loan->id,
+                'step_order' => $order,
+                'role_slug' => $step['role'],
+                'action' => $step['action'] ?? 'pending',
+                'is_current' => true,
+                'created_at' => now()->subHour(),
             ]);
         }
     }
 
-    private function approve(EmployeeLoan $loan, User $user): \Illuminate\Testing\TestResponse
+    private function approve(EmployeeLoan $loan, User $user): TestResponse
     {
         return $this->actingAs($user, 'sanctum')
             ->patchJson('/api/v1/loans/'.$loan->hash_id.'/approve', ['remarks' => 'ok']);
@@ -128,6 +135,43 @@ class LoanApprovalChainTest extends TestCase
 
         $this->assertSame('approved', $this->stepAction($loan, 2));
         $this->assertSame(LoanStatus::Pending, $loan->fresh()->status);
+    }
+
+    public function test_intermediate_approval_stages_a_private_loan_refresh(): void
+    {
+        $loan = $this->pendingLoan();
+        $borrower = User::factory()->create(['employee_id' => $loan->employee_id]);
+        $this->seedChain($loan, [
+            ['role' => 'department_head'],
+            ['role' => 'production_manager'],
+        ]);
+        $head = $this->user('department_head', $this->deptA->id);
+
+        $this->approve($loan, $head)->assertOk();
+
+        $message = OutboxMessage::query()
+            ->where('event_type', EmployeeLoanChanged::class)
+            ->firstOrFail();
+        $event = app(OutboxEventCodec::class)->decode($message->event_type, $message->payload);
+        $channels = array_map(
+            static fn (PrivateChannel $channel): string => $channel->name,
+            $event->broadcastOn(),
+        );
+
+        $this->assertInstanceOf(ShouldBroadcast::class, $event);
+        $this->assertInstanceOf(ShouldDispatchAfterCommit::class, $event);
+        $this->assertSame([
+            "private-employee-loan.{$loan->hash_id}",
+            'private-entity.employee_loan.visible',
+            "private-loan.user.{$borrower->hash_id}",
+        ], $channels);
+        $this->assertSame([
+            'refresh', 'event_id', 'entity_type', 'action', 'version', 'timestamp',
+        ], array_keys($event->broadcastWith()));
+        $this->assertSame('employee_loan', $event->broadcastWith()['entity_type']);
+        $this->assertSame('status_changed', $event->broadcastWith()['action']);
+        $this->assertSame(LoanStatus::Pending, $loan->fresh()->status);
+        $this->assertSame('approved', $this->stepAction($loan, 1));
     }
 
     public function test_full_company_loan_chain_completes_end_to_end(): void

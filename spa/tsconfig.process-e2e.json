@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["e2e-process", "playwright.process.config.ts", "../scripts/e2e/environment-guard.d.mts"],
+  "compilerOptions": { "noEmit": true }
+}

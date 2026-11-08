@@ -7,6 +7,7 @@ namespace App\Modules\ReturnManagement\Resources;
 use App\Common\Services\ApprovalService;
 use App\Common\Support\HashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,6 +15,58 @@ class ReturnRequestResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $actionFields = [];
+        if ($this->relationLoaded('approvalRecords')) {
+            $user = $request->user();
+            $canDecide = $this->canDecide($user);
+            $service = app(ReturnRequestService::class);
+            $canManage = $user?->hasPermission('return_management.manage') === true;
+            $qcSupplierReturn = $this->type?->value === 'supplier_return'
+                && str_starts_with((string) $this->source_key, 'grn-rejection:');
+            $items = $this->relationLoaded('items') ? $this->items : collect();
+            $isQcReturnPurchaser = in_array($user?->role?->slug, ['purchasing_officer', 'system_admin'], true);
+            $decisionActions = [
+                'can_approve' => $canDecide,
+                'can_reject' => $canDecide,
+                'can_cancel' => $user?->hasPermission('return_management.manage') === true
+                    && $service->canCancelState($this->resource),
+                'can_submit' => $canManage && $this->status?->value === 'draft'
+                    && $this->delivery_attempt_outcome_id === null
+                    && (! $qcSupplierReturn || $isQcReturnPurchaser),
+                'can_edit' => $canManage && (bool) $this->is_editable,
+                'can_receive' => $user?->hasPermission('return_management.receive') === true
+                    && $this->status?->value === 'approved' && ! $qcSupplierReturn,
+                'can_inspect' => $user?->hasPermission('return_management.inspect') === true
+                    && $this->status?->value === 'received',
+                'can_retry_inspection_handoff' => $user?->hasPermission('return_management.inspect') === true
+                    && $this->inspection_handoff_status?->value === 'manual_required'
+                    && in_array($this->status?->value, ['received', 'inspected'], true),
+                'can_dispose' => $user?->hasPermission('return_management.dispose') === true
+                    && $this->disposition_status !== 'disposed'
+                    && ($qcSupplierReturn
+                        ? $isQcReturnPurchaser
+                            && in_array($this->status?->value, ['approved', 'inspected'], true)
+                            && $items->isNotEmpty()
+                            && $items->every(fn ($item): bool => $item->reusedIncomingInspection() !== null)
+                        : $this->status?->value === 'inspected'
+                            && ! $this->hasPendingReturnInspection($items)),
+                'can_complete' => $user?->hasPermission('return_management.complete') === true
+                    && $service->canCompleteState($this->resource),
+                'can_split' => $user?->hasPermission('return_management.dispose') === true
+                    && in_array($this->status?->value, ['received', 'inspected'], true)
+                    && $this->disposition_status !== 'disposed'
+                    && ! (bool) $this->finance_only
+                    && $this->delivery_attempt_outcome_id === null
+                    && $this->credit_note_id === null
+                    && $this->credit_memo_id === null,
+            ];
+            $actionFields = [
+                'available_actions' => $decisionActions,
+                // Kept for older clients that consume only approval controls.
+                'actions' => array_intersect_key($decisionActions, array_flip(['can_approve', 'can_reject', 'can_cancel'])),
+            ];
+        }
+
         return [
             'id' => $this->hash_id,
             'rma_number' => $this->rma_number,
@@ -168,8 +221,22 @@ class ReturnRequestResource extends JsonResource
                 'status' => $this->ncr->status?->value,
             ] : null),
 
-            'items' => $this->whenLoaded('items', fn () => ReturnRequestItemResource::collection($this->items)
-            ),
+            'items' => $this->whenLoaded('items', fn () => $this->items->map(function ($item) use ($request, $actionFields): array {
+                $canSplitLine = ($actionFields['available_actions']['can_split'] ?? false) === true
+                    && ! $item->disposition
+                    && ! $item->split_parent_item_id
+                    && ! $this->items->contains(fn ($candidate): bool => (int) $candidate->split_parent_item_id === (int) $item->id)
+                    && ! $item->ncr_id
+                    && ! $item->quarantine_release_movement_id
+                    && ! $item->stock_movement_id
+                    && bccomp((string) ($item->stock_movement_quantity ?? '0'), '0', 3) <= 0
+                    && ! $item->serial_number
+                    && bccomp((string) $item->quantity, (string) $item->returned_quantity, 3) === 0
+                    && bccomp((string) $item->returned_quantity, '0', 3) > 0
+                    && (! $item->relationLoaded('materialReviewRecord') || ! $item->materialReviewRecord);
+
+                return (new ReturnRequestItemResource($item, ['can_split' => $canSplitLine]))->resolve($request);
+            })->values()),
 
             'item_count' => (int) ($this->items_count ?? $this->items?->count() ?? 0),
 
@@ -187,11 +254,7 @@ class ReturnRequestResource extends JsonResource
                 'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
 
-            'actions' => $this->whenLoaded('approvalRecords', function () use ($request): array {
-                $canDecide = $this->canDecide($request->user());
-
-                return ['can_approve' => $canDecide, 'can_reject' => $canDecide];
-            }),
+            ...$actionFields,
 
             'creator' => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id' => $this->creator->hash_id,
@@ -256,5 +319,37 @@ class ReturnRequestResource extends JsonResource
 
         return ! $records->contains(fn ($record) => (int) $record->approver_id === (int) $user->id
             && in_array($record->action, ['approved', 'rejected'], true));
+    }
+
+    private function hasPendingReturnInspection($items): bool
+    {
+        if ($this->disposition_status === 'disposed'
+            || (bool) $this->finance_only
+            || $this->inspection_handoff_status?->value === 'not_required') {
+            return false;
+        }
+
+        $inspections = $this->relationLoaded('inspections') ? $this->inspections : collect();
+
+        foreach ($items as $item) {
+            if ($item->reusedIncomingInspection() !== null || (! $item->product_id && ! $item->item_id)) {
+                continue;
+            }
+
+            $matching = $inspections->filter(static fn ($inspection): bool => (int) $inspection->return_request_item_id === (int) $item->id
+                || ($item->product_id && (int) $inspection->product_id === (int) $item->product_id)
+                || ($item->item_id && (int) $inspection->item_id === (int) $item->item_id)
+            );
+
+            if ($matching->isEmpty() || $matching->contains(static function ($inspection): bool {
+                $status = $inspection->status?->value ?? (string) $inspection->status;
+
+                return ! in_array($status, ['passed', 'failed'], true);
+            })) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

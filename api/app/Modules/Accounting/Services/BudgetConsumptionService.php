@@ -118,23 +118,26 @@ final class BudgetConsumptionService
      */
     public function refreshHeadersForFiscalYear(int $fiscalYearId): int
     {
-        $budgets = Budget::query()
-            ->with('lineItems')
-            ->where('fiscal_year_id', $fiscalYearId)
-            ->whereIn('status', self::LIVE_STATUSES)
-            ->get();
+        return DB::transaction(function () use ($fiscalYearId): int {
+            $budgets = Budget::query()
+                ->with(['lineItems', 'fiscalYear', 'submittedBy'])
+                ->where('fiscal_year_id', $fiscalYearId)
+                ->whereIn('status', self::LIVE_STATUSES)
+                ->get();
 
-        $this->hydrate($budgets);
-        foreach ($budgets as $budget) {
-            DB::table('budgets')->where('id', $budget->getKey())->update([
-                'total_allocated' => $budget->total_allocated,
-                'total_spent' => $budget->total_spent,
-                'total_committed' => $budget->total_committed,
-                'updated_at' => now(),
-            ]);
-        }
+            $this->hydrate($budgets);
+            foreach ($budgets as $budget) {
+                // Save through Eloquent so the registered realtime observer
+                // records a durable refresh in this same transaction.
+                $budget->forceFill([
+                    'total_allocated' => $budget->total_allocated,
+                    'total_spent' => $budget->total_spent,
+                    'total_committed' => $budget->total_committed,
+                ])->save();
+            }
 
-        return $budgets->count();
+            return $budgets->count();
+        });
     }
 
     /** @return array{allocated: string, spent: string, committed: string, available: string, utilization_pct: float} */

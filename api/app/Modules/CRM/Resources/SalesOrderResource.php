@@ -39,6 +39,19 @@ class SalesOrderResource extends JsonResource
             )) ? SalesOrderStatus::Delivered : SalesOrderStatus::PartiallyDelivered;
         }
 
+        $internalViewer = $request->user() instanceof User ? $request->user() : null;
+        $isCancellable = $this->resource->relationLoaded('workOrders')
+            ? app(SalesOrderService::class)->canCancel($this->resource)
+            : (bool) $this->resource->is_cancellable;
+        $canEdit = $internalViewer?->hasPermission('crm.sales_orders.update') === true
+            && (bool) $this->resource->is_editable
+            && $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal;
+        $canCancel = $internalViewer?->hasPermission('crm.sales_orders.cancel') === true
+            && $isCancellable;
+        $canConfirm = $internalViewer?->hasPermission('crm.sales_orders.confirm') === true
+            && $this->status->isBeforeConfirmation()
+            && ! $awaitingDelivery;
+
         return [
             'id'                 => $this->hash_id,
             'so_number'          => $this->so_number,
@@ -76,6 +89,11 @@ class SalesOrderResource extends JsonResource
             'customer_confirmation_requested_at' => optional($this->customer_confirmation_requested_at)->toIso8601String(),
             'latest_response'    => $this->latestResponseBlock(),
             'delivery_negotiations' => $this->whenLoaded('deliveryNegotiations', fn () => SalesOrderResponseResource::collection($this->deliveryNegotiations)),
+            'available_actions' => [
+                'can_edit' => $canEdit,
+                'can_cancel' => $canCancel,
+                'can_confirm' => $canConfirm,
+            ],
             'capabilities'       => [
                 'can_propose_delivery' => $this->submission_source === SalesOrderSubmissionSource::CustomerPortal
                     && $this->status->isBeforeConfirmation()
@@ -89,9 +107,7 @@ class SalesOrderResource extends JsonResource
                 'can_confirm' => $this->isOpenToCustomerResponse(),
             ],
             'is_editable'        => (bool) $this->is_editable && $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal,
-            'is_cancellable'     => $this->resource->relationLoaded('workOrders')
-                ? app(SalesOrderService::class)->canCancel($this->resource)
-                : (bool) $this->is_cancellable,
+            'is_cancellable'     => $isCancellable,
             'item_count'         => (int) ($this->items_count ?? $this->items?->count() ?? 0),
             'customer'           => $this->whenLoaded('customer', fn () => [
                 'id'   => $this->customer?->hash_id,

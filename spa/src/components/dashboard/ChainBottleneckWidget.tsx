@@ -16,6 +16,9 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
+import { formatDateTime } from '@/lib/formatDate';
 import type { ChainAutomationSummary, ChainBottleneckGroup, ChainBottleneckRow } from '@/types/chain';
 
 interface Props {
@@ -29,11 +32,19 @@ interface Props {
 export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', hideWhenEmpty = false }: Props) {
  const userId = useAuthStore((state) => state.user?.id ?? 'anonymous');
  const roleSlug = useAuthStore((state) => state.user?.role?.slug ?? 'unknown');
+ const { can } = usePermission();
+ useRealtimeSignal(
+ 'chain_bottlenecks_changed',
+ can('dashboard.view_bottlenecks') ? 'dashboard.chain-bottlenecks' : '',
+ '.chain.bottlenecks.changed',
+ );
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['chain-bottlenecks', userId, roleSlug, audience ?? 'own-audience'],
  queryFn: () => chainApi.bottlenecks(audience),
+ // Bottlenecks can become overdue as time passes without a record write.
+ // Keep this periodic dashboard freshness check alongside immediate signals.
  refetchInterval: 60_000,
- staleTime: 60_000,
+ staleTime: 0,
  });
 
  // ─── LOADING ───
@@ -69,12 +80,15 @@ export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', h
  const groups = (data?.groups ?? []).filter((g): g is ChainBottleneckGroup => g.count > 0);
  const automation = data?.automation;
  const automationNeedsAttention = automation?.status === 'attention' || automation?.status === 'unavailable';
+ const freshnessMeta = data?.generated_at
+ ? `As of ${formatDateTime(data.generated_at)} · Refreshes every 60s`
+ : 'Refreshes every 60s';
 
  // ─── EMPTY (nothing stuck — good news) ───
  if (groups.length === 0) {
  if (hideWhenEmpty && !automationNeedsAttention) return null;
  return (
- <Panel title={title} meta="Refreshes every 60s">
+ <Panel title={title} meta={freshnessMeta}>
  {automationNeedsAttention ? (
  <AutomationStatus summary={automation} />
  ) : (
@@ -93,7 +107,7 @@ export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', h
  return (
  <Panel
  title={title}
- meta={`${total} stuck`}
+ meta={`${total} stuck · ${freshnessMeta}`}
  bodyClassName="p-0"
  >
  <ul>

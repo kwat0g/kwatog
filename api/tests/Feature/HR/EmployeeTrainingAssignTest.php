@@ -124,6 +124,29 @@ class EmployeeTrainingAssignTest extends TestCase
             ->assertJsonPath('data.status', EmployeeTrainingStatus::Cancelled->value);
     }
 
+    public function test_stale_training_completion_returns_conflict_instead_of_applying_again(): void
+    {
+        $employee = $this->makeEmployee();
+        $training = Training::create(['name' => 'Forklift', 'is_active' => true]);
+        $record = EmployeeTraining::create([
+            'employee_id' => $employee->id,
+            'training_id' => $training->id,
+            'scheduled_for' => '2026-06-01',
+        ]);
+        $record->forceFill([
+            'status' => EmployeeTrainingStatus::Completed,
+            'completed_at' => '2026-06-01',
+        ])->save();
+
+        $this->actingAs($this->admin())
+            ->patchJson("/api/v1/hr/employee-trainings/{$record->hash_id}/complete", [
+                'completed_at' => '2026-06-02',
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(EmployeeTrainingStatus::Completed, $record->refresh()->status);
+    }
+
     public function test_unscheduled_duplicate_assignment_is_rejected(): void
     {
         $emp = $this->makeEmployee();

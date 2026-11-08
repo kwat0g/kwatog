@@ -16,6 +16,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatDateTime } from '@/lib/formatDate';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 export default function BomDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,12 +27,13 @@ export default function BomDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  useRealtimeRecord('bom', id);
 
   const recalculate = useMutation({
     mutationFn: () => bomsApi.recalculate(id!),
     onSuccess: (bom) => {
       qc.setQueryData(['mrp', 'boms', 'detail', id], bom);
-      qc.invalidateQueries({ queryKey: ['mrp', 'boms'] });
+      void invalidateRealtimeChange(qc, { entityType: 'bom', entityId: bom.id });
       toast.success('BOM cost recalculated.');
     },
     onError: (error) => reportMutationError(error, 'Failed to recalculate BOM cost.'),
@@ -46,7 +49,7 @@ export default function BomDetailPage() {
     setDeleting(true);
     try {
       await bomsApi.delete(id!);
-      qc.invalidateQueries({ queryKey: ['mrp', 'boms'] });
+      void invalidateRealtimeChange(qc, { entityType: 'bom', entityId: id! });
       toast.success('BOM archived.');
       navigate('/mrp/boms');
     } catch {
@@ -58,8 +61,9 @@ export default function BomDetailPage() {
   const handleRestore = async () => {
     setRestoring(true);
     try {
-      await bomsApi.restore(id!);
-      qc.invalidateQueries({ queryKey: ['mrp', 'boms'] });
+      const bom = await bomsApi.restore(id!);
+      qc.setQueryData(['mrp', 'boms', 'detail', id], bom);
+      void invalidateRealtimeChange(qc, { entityType: 'bom', entityId: id! });
       toast.success('BOM restored.');
     } catch {
       toast.error('Failed to restore BOM.');

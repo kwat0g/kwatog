@@ -28,6 +28,8 @@ import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 export default function MobileWorkOrderDetail() {
   const { id: mwoId } = useParams<{ id: string }>();
@@ -35,19 +37,19 @@ export default function MobileWorkOrderDetail() {
   const selfService = useLocation().pathname.startsWith('/self-service/');
   const isSupervisor = useAuthStore((state) => state.user?.role.slug === 'maintenance_supervisor');
   const queryClient = useQueryClient();
+  useRealtimeRecord('maintenance_work_order', mwoId);
 
   // ── Fetch MWO details ──────────────────────────────────
   const {
     data: wo,
     isLoading,
+    isFetching,
     error,
     refetch,
   } = useQuery({
     queryKey: ['maintenance', 'work-order', mwoId],
     queryFn: () => workOrdersApi.show(mwoId!),
     enabled: !!mwoId,
-    refetchInterval: 15_000,
-    refetchOnWindowFocus: true,
   });
 
   // ── Form state ─────────────────────────────────────────
@@ -61,11 +63,11 @@ export default function MobileWorkOrderDetail() {
   // ── Start mutation ─────────────────────────────────────
   const startMutation = useMutation({
     mutationFn: () => workOrdersApi.start(mwoId!),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       setConfirmingStart(false);
       toast.success('Work order started');
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      queryClient.setQueryData(['maintenance', 'work-order', mwoId], updated);
+      void invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: mwoId! });
     },
     onError: (error) => reportMutationError(error, 'Failed to start work order.'),
   });
@@ -76,15 +78,20 @@ export default function MobileWorkOrderDetail() {
       workOrdersApi.complete(mwoId!, {
         remarks: remarks.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Work order completed');
       setConfirmingComplete(false);
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      queryClient.setQueryData(['maintenance', 'work-order', mwoId], updated);
+      void invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: mwoId! });
     },
-    onError: () => {
-      toast.error('Failed to complete work order.');
+    onError: async (error) => {
       setConfirmingComplete(false);
+      if ((error as { response?: { status?: number; data?: { message?: string } } })?.response?.status === 409) {
+        await queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId], exact: true });
+        toast.error((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'The work order changed. Review its current status.');
+        return;
+      }
+      reportMutationError(error, 'Failed to complete work order.');
     },
   });
 
@@ -100,16 +107,16 @@ export default function MobileWorkOrderDetail() {
           inspection_reason: inspectionReason.trim(),
         });
         queryClient.setQueryData(['maintenance', 'work-order', mwoId], updated);
-        void queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
+        void invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: mwoId! });
       }
       return workOrdersApi.cancel(mwoId!, reason);
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Work order cancelled');
       setCancelOpen(false);
       setInspectionReason('');
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      queryClient.setQueryData(['maintenance', 'work-order', mwoId], updated);
+      void invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: mwoId! });
     },
     onError: (error) => reportMutationError(error, 'Failed to cancel work order.'),
   });
@@ -146,8 +153,8 @@ export default function MobileWorkOrderDetail() {
   const isTerminal = wo.status === 'completed' || wo.status === 'cancelled';
   const canStart = actions.includes('start') && canAny('maintenance.wo.complete', 'maintenance.wo.assign');
   const canAssign = wo.status !== 'in_progress' && actions.includes('assign') && can('maintenance.wo.assign');
-  const canEditParts = wo.can_record_work ?? ((actions.includes('complete') || actions.includes('submit_repair')) && can('maintenance.wo.complete'));
-  const canRecordWork = canEditParts && !wo.repair_submitted_at;
+  const canEditParts = wo.can_record_work === true;
+  const canRecordWork = wo.can_record_work === true && !wo.repair_submitted_at;
   const canCloseWork = wo.closure_readiness?.can_close_work ?? false;
   const canCloseParts = wo.parts_readiness?.can_close_parts ?? wo.spare_parts?.length === 0;
   const canComplete = !wo.verification_required && actions.includes('complete') && canCloseWork && canCloseParts && canAny('maintenance.wo.complete', 'maintenance.wo.assign');
@@ -420,6 +427,7 @@ export default function MobileWorkOrderDetail() {
         confirmLabel={completeLabel || 'Yes, complete it'}
         variant="primary"
         pending={completeMutation.isPending}
+        disabled={isFetching || !canComplete}
         className="sm:max-w-xl"
       >
         <p>
@@ -428,6 +436,11 @@ export default function MobileWorkOrderDetail() {
           {wo.maintainable?.name ? ` on ${wo.maintainable.name}` : ''}.
         </p>
         <p>Machine downtime is calculated from the recorded start and completion times.</p>
+        {(isFetching || !canComplete) && (
+          <p className="text-sm text-warning" role="status">
+            {isFetching ? 'Refreshing the current work order status…' : 'This work order changed and can no longer be completed from its current state.'}
+          </p>
+        )}
         <Textarea
           label="Remarks (optional)"
           value={remarks}

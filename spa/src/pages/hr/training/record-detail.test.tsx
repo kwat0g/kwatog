@@ -13,6 +13,7 @@ vi.mock('@/api/hr/employee-trainings', () => ({
 vi.mock('@/api/self-service', () => ({
   selfServiceApi: { training: vi.fn() },
 }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeRecord: vi.fn() }));
 
 const record: EmployeeTraining = {
   id: 'training-record-hash',
@@ -28,6 +29,9 @@ const record: EmployeeTraining = {
   last_alert_level: null,
   last_alert_at: null,
   created_at: '2026-10-01T00:00:00.000Z',
+  version: '2026-10-01T00:00:00.000000+00:00',
+  permissions: { view: true, manage: false },
+  available_actions: [],
 };
 
 beforeEach(() => {

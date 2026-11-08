@@ -25,6 +25,15 @@ export const schedulerApi = {
       machine_id: machineId,
       mold_id: moldId,
     }),
+  move: (scheduleId: string, scheduledStart: string, expectedUpdatedAt: string) =>
+    client
+      .patch<{
+        data: { scheduled_start: string; scheduled_end: string; updated_at: string };
+      }>(`/mrp/scheduler/${scheduleId}/move`, {
+        scheduled_start: scheduledStart,
+        expected_updated_at: expectedUpdatedAt,
+      })
+      .then((response) => response.data.data),
   snapshot: (from?: string, to?: string) =>
     client
       .get<{ data: GanttSnapshot }>('/mrp/scheduler/snapshot', { params: { from, to } })

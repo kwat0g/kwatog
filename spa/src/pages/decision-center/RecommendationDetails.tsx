@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { reportMutationError } from '@/lib/formErrors';
 import { formatDateTime } from '@/lib/formatDate';
@@ -14,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { formatImpact, severityVariant } from './helpers';
 import DecisionEvidence from './DecisionEvidence';
 import MasterHygieneAffectedRecords from './MasterHygieneAffectedRecords';
@@ -36,6 +38,7 @@ export default function RecommendationDetails({
 }: RecommendationDetailsProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  useRealtimeSignal('dss_changed', 'dss.refresh', '.dss.changed');
   const [outcomeNote, setOutcomeNote] = useState('');
   const [mode, setMode] = useState<'dismiss' | 'snooze' | null>(null);
   const [reason, setReason] = useState('');
@@ -88,8 +91,10 @@ export default function RecommendationDetails({
       dssApi.act(recommendation.id, args.action, {
         reason: args.reason,
         snoozed_until: args.snoozed_until,
+        expected_version: recommendation.version,
       }),
-    onSuccess: (_, args) => {
+    onSuccess: (updated, args) => {
+      queryClient.setQueryData(['dss', 'recommendations', updated.id], updated);
       toast.success(
         args.action === 'accept'
           ? 'Recommendation accepted'
@@ -104,12 +109,22 @@ export default function RecommendationDetails({
       setMode(null);
       invalidate();
     },
-    onError: (error) => reportMutationError(error, 'Failed to update recommendation'),
+    onError: async (error) => {
+      if (error instanceof AxiosError && error.response?.status === 409
+        && error.response.data?.code === 'dss_recommendation_state_conflict') {
+        const refresh = invalidate();
+        reportMutationError(error, 'Failed to update recommendation');
+        await refresh;
+        return;
+      }
+      reportMutationError(error, 'Failed to update recommendation');
+    },
   });
 
   const saveOutcome = useMutation({
     mutationFn: () => dssApi.outcome(recommendation.id, { note: outcomeNote }),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['dss', 'recommendations', updated.id], updated);
       toast.success('Outcome recorded');
       setOutcomeNote('');
       invalidate();
@@ -117,23 +132,7 @@ export default function RecommendationDetails({
     onError: (error) => reportMutationError(error, 'Failed to record outcome'),
   });
 
-  const snoozeReturn = recommendation.snoozed_until
-    ? new Date(recommendation.snoozed_until)
-    : null;
-  const futureSnooze =
-    recommendation.status === 'snoozed' &&
-    snoozeReturn !== null &&
-    !Number.isNaN(snoozeReturn.getTime()) &&
-    snoozeReturn.getTime() > Date.now();
-  const dueSnooze =
-    recommendation.status === 'snoozed' &&
-    snoozeReturn !== null &&
-    !Number.isNaN(snoozeReturn.getTime()) &&
-    snoozeReturn.getTime() <= Date.now();
-  const expired = recommendation.expires_at !== null && new Date(recommendation.expires_at).getTime() <= Date.now();
-  const canDecide = !expired && (['open', 'in_progress'].includes(recommendation.status) || futureSnooze || dueSnooze);
-  const canAccept = canDecide && (['open', 'in_progress'].includes(recommendation.status) || dueSnooze);
-  const canRecordOutcome = ['accepted', 'executed', 'dismissed'].includes(recommendation.status);
+  const availableActions = recommendation.available_actions;
 
   return (
     <div className="min-w-0">
@@ -167,9 +166,9 @@ export default function RecommendationDetails({
           <Panel title="Recommendation" meta="Advisory">
             <p className="max-w-3xl break-words text-sm text-secondary">{view.summary}</p>
 
-            {(canDecide || recommendation.status === 'accepted') && (
+            {(availableActions.accept || availableActions.dismiss || availableActions.snooze || availableActions.execute || availableActions.start_follow_up) && (
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-default pt-3">
-                {canDecide && ['open', 'snoozed'].includes(recommendation.status) && (
+                {availableActions.start_follow_up && (
                   <Button
                     size="sm"
                     variant="secondary"
@@ -179,7 +178,7 @@ export default function RecommendationDetails({
                     {recommendation.status === 'snoozed' ? 'Resume follow-up' : 'Start follow-up'}
                   </Button>
                 )}
-                {canAccept && (
+                {availableActions.accept && (
                   <>
                     <Button
                       size="sm"
@@ -191,7 +190,7 @@ export default function RecommendationDetails({
                     </Button>
                   </>
                 )}
-                {canDecide && (
+                {availableActions.dismiss && (
                   <Button
                     size="sm"
                     variant="secondary"
@@ -201,17 +200,17 @@ export default function RecommendationDetails({
                     Dismiss
                   </Button>
                 )}
-                {canDecide && ['open', 'in_progress'].includes(recommendation.status) && (
+                {availableActions.snooze && (
                   <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={act.isPending}
-                      onClick={() => setMode(mode === 'snooze' ? null : 'snooze')}
-                    >
-                      Snooze
+                    size="sm"
+                    variant="secondary"
+                    disabled={act.isPending}
+                    onClick={() => setMode(mode === 'snooze' ? null : 'snooze')}
+                  >
+                    Snooze
                   </Button>
                 )}
-                {recommendation.status === 'accepted' && (
+                {availableActions.execute && (
                   <Button
                     variant="primary"
                     size="sm"
@@ -224,7 +223,7 @@ export default function RecommendationDetails({
               </div>
             )}
 
-            {canDecide && mode === 'dismiss' && (
+            {availableActions.dismiss && mode === 'dismiss' && (
               <form
                 className="mt-4 grid grid-cols-1 items-end gap-2 border-t border-default pt-3 sm:grid-cols-[minmax(0,1fr)_auto]"
                 onSubmit={(event) => {
@@ -250,7 +249,7 @@ export default function RecommendationDetails({
                 </Button>
               </form>
             )}
-            {canDecide && ['open', 'in_progress'].includes(recommendation.status) && mode === 'snooze' && (
+            {availableActions.snooze && mode === 'snooze' && (
               <form
                 className="mt-4 grid grid-cols-1 items-end gap-2 border-t border-default pt-3 sm:grid-cols-[minmax(0,1fr)_auto]"
                 onSubmit={(event) => {
@@ -293,7 +292,7 @@ export default function RecommendationDetails({
               </form>
             )}
 
-            {canRecordOutcome && (
+            {availableActions.record_outcome && (
               <form
                 className="mt-4 flex flex-col gap-2 border-t border-default pt-3 sm:flex-row sm:items-end"
                 onSubmit={(event) => {
@@ -399,7 +398,7 @@ export default function RecommendationDetails({
                   </dd>
                 </div>
               )}
-              {recommendation.status === 'snoozed' && snoozeReturn && (
+              {recommendation.status === 'snoozed' && recommendation.snoozed_until && (
                 <div className="flex items-start justify-between gap-4 py-2">
                   <dt className="text-xs text-muted">Snoozed until</dt>
                   <dd className="text-right text-sm text-primary">{formatDateTime(recommendation.snoozed_until)}</dd>

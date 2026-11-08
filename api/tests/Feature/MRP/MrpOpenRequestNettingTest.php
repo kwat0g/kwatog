@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\MRP;
 
+use App\Common\Events\ChainStepAdvanced;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\Item;
-use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\MRP\Events\MrpPlanGenerated;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Services\MrpEngineService;
@@ -20,6 +23,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -32,32 +36,36 @@ class MrpOpenRequestNettingTest extends TestCase
     use RefreshDatabase;
 
     private MrpEngineService $engine;
+
     private User $user;
+
     private Product $product;
+
     private Item $material;
+
     private WarehouseLocation $location;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Event::fake([\App\Modules\MRP\Events\MrpPlanGenerated::class]);
+        Event::fake([MrpPlanGenerated::class]);
 
         $this->engine = app(MrpEngineService::class);
         $this->user = User::factory()->create();
 
         $this->product = Product::create([
-            'part_number'     => 'TEST-001',
-            'name'            => 'Test Product',
+            'part_number' => 'TEST-001',
+            'name' => 'Test Product',
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => '10.00',
-            'is_active'       => true,
+            'standard_cost' => '10.00',
+            'is_active' => true,
         ]);
 
         $this->material = Item::factory()->create([
-            'code'            => 'RM-TEST-001',
+            'code' => 'RM-TEST-001',
             'unit_of_measure' => 'pcs',
-            'lead_time_days'  => 7,
-            'standard_cost'   => '5.00',
+            'lead_time_days' => 7,
+            'standard_cost' => '5.00',
         ]);
 
         $this->location = WarehouseLocation::factory()->create();
@@ -67,17 +75,17 @@ class MrpOpenRequestNettingTest extends TestCase
     {
         $bom = Bom::create([
             'product_id' => $this->product->id,
-            'version'    => 1,
-            'is_active'  => true,
+            'version' => 1,
+            'is_active' => true,
         ]);
 
         BomItem::create([
-            'bom_id'            => $bom->id,
-            'item_id'           => $this->material->id,
+            'bom_id' => $bom->id,
+            'item_id' => $this->material->id,
             'quantity_per_unit' => $qtyPerUnit,
-            'unit'              => 'pcs',
-            'waste_factor'      => '0.00',
-            'sort_order'        => 0,
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+            'sort_order' => 0,
         ]);
 
         return $bom;
@@ -86,24 +94,24 @@ class MrpOpenRequestNettingTest extends TestCase
     private function createConfirmedSo(int $lineQty, int $daysAhead = 30): SalesOrder
     {
         $so = SalesOrder::create([
-            'so_number'          => 'SO-' . now()->format('Ym') . '-' . rand(1000, 9999),
-            'customer_id'        => $this->createCustomer(),
-            'date'               => now()->format('Y-m-d'),
-            'subtotal'           => $lineQty * 10,
-            'vat_amount'         => 0,
-            'total_amount'       => $lineQty * 10,
-            'status'             => 'confirmed',
+            'so_number' => 'SO-'.now()->format('Ym').'-'.rand(1000, 9999),
+            'customer_id' => $this->createCustomer(),
+            'date' => now()->format('Y-m-d'),
+            'subtotal' => $lineQty * 10,
+            'vat_amount' => 0,
+            'total_amount' => $lineQty * 10,
+            'status' => 'confirmed',
             'payment_terms_days' => 30,
-            'created_by'         => $this->user->id,
+            'created_by' => $this->user->id,
         ]);
 
         $deliveryDate = now()->addDays($daysAhead)->format('Y-m-d');
         $total = $lineQty * 10;
         $so->items()->create([
-            'product_id'    => $this->product->id,
-            'quantity'      => $lineQty,
-            'unit_price'    => '10.00',
-            'total'         => $total,
+            'product_id' => $this->product->id,
+            'quantity' => $lineQty,
+            'unit_price' => '10.00',
+            'total' => $total,
             'delivery_date' => $deliveryDate,
         ]);
 
@@ -112,7 +120,7 @@ class MrpOpenRequestNettingTest extends TestCase
 
     private function createCustomer()
     {
-        return \App\Modules\Accounting\Models\Customer::factory()->create()->id;
+        return Customer::factory()->create()->id;
     }
 
     /**
@@ -127,23 +135,23 @@ class MrpOpenRequestNettingTest extends TestCase
 
         // Create an unplanned (reorder-point) PR for 100 units, Approved status.
         $unplannedPr = PurchaseRequest::create([
-            'pr_number'         => 'PR-202601-0001',
-            'requested_by'      => $this->user->id,
-            'department_id'     => null,
-            'mrp_plan_id'       => null, // No MRP plan = unplanned
-            'date'              => now()->toDateString(),
-            'reason'            => 'Auto-reorder',
-            'priority'          => 'normal',
+            'pr_number' => 'PR-202601-0001',
+            'requested_by' => $this->user->id,
+            'department_id' => null,
+            'mrp_plan_id' => null, // No MRP plan = unplanned
+            'date' => now()->toDateString(),
+            'reason' => 'Auto-reorder',
+            'priority' => 'normal',
             'is_auto_generated' => true,
         ]);
         $unplannedPr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
 
         PurchaseRequestItem::create([
-            'purchase_request_id'  => $unplannedPr->id,
-            'item_id'              => $this->material->id,
-            'description'          => $this->material->name,
-            'quantity'             => '100.000',
-            'unit'                 => 'pcs',
+            'purchase_request_id' => $unplannedPr->id,
+            'item_id' => $this->material->id,
+            'description' => $this->material->name,
+            'quantity' => '100.000',
+            'unit' => 'pcs',
             'estimated_unit_price' => '5.00',
         ]);
 
@@ -191,6 +199,19 @@ class MrpOpenRequestNettingTest extends TestCase
             ->firstOrFail();
         // MRP creates PRs in Draft status; they move to Approved only via workflow.
         $this->assertSame('draft', $autoPr->status->value);
+        $this->assertDatabaseHas('chain_step_runs', [
+            'entity_type' => 'purchase_request',
+            'entity_id' => $autoPr->id,
+            'step' => 'draft',
+            'event_type' => ChainStepAdvanced::class,
+        ]);
+        $payload = DB::table('chain_step_runs')
+            ->join('event_outbox', 'event_outbox.id', '=', 'chain_step_runs.outbox_id')
+            ->where('chain_step_runs.entity_type', 'purchase_request')
+            ->where('chain_step_runs.entity_id', $autoPr->id)
+            ->where('chain_step_runs.event_type', ChainStepAdvanced::class)
+            ->value('event_outbox.payload');
+        $this->assertSame('created', json_decode((string) $payload, true, flags: JSON_THROW_ON_ERROR)['action']);
 
         // Manually approve the PR to simulate workflow completion.
         $autoPr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
@@ -199,23 +220,23 @@ class MrpOpenRequestNettingTest extends TestCase
 
         // Manually convert 60 units to a PO (simulate a partial conversion).
         $po = PurchaseOrder::create([
-            'po_number'           => 'PO-202601-0001',
+            'po_number' => 'PO-202601-0001',
             'purchase_request_id' => $autoPr->id,
-            'vendor_id'           => $this->createVendor(),
-            'date'                => now()->format('Y-m-d'),
+            'vendor_id' => $this->createVendor(),
+            'date' => now()->format('Y-m-d'),
         ]);
         $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
 
         PurchaseOrderItem::create([
-            'purchase_order_id'      => $po->id,
+            'purchase_order_id' => $po->id,
             'purchase_request_item_id' => $prLine->id,
-            'item_id'                => $this->material->id,
-            'description'            => $this->material->name,
-            'quantity'               => '60.000', // Partial: only 60 of 100
-            'quantity_received'      => '0.000',
-            'unit'                   => 'pcs',
-            'unit_price'             => '5.00',
-            'total'                  => '300.00', // 60 * 5.00
+            'item_id' => $this->material->id,
+            'description' => $this->material->name,
+            'quantity' => '60.000', // Partial: only 60 of 100
+            'quantity_received' => '0.000',
+            'unit' => 'pcs',
+            'unit_price' => '5.00',
+            'total' => '300.00', // 60 * 5.00
         ]);
 
         // Now run MRP again for the same SO (a rerun scenario).
@@ -243,23 +264,23 @@ class MrpOpenRequestNettingTest extends TestCase
 
         // Create an unplanned PR, then cancel it.
         $cancelledPr = PurchaseRequest::create([
-            'pr_number'         => 'PR-202601-0002',
-            'requested_by'      => $this->user->id,
-            'department_id'     => null,
-            'mrp_plan_id'       => null,
-            'date'              => now()->toDateString(),
-            'reason'            => 'Auto-reorder',
-            'priority'          => 'normal',
+            'pr_number' => 'PR-202601-0002',
+            'requested_by' => $this->user->id,
+            'department_id' => null,
+            'mrp_plan_id' => null,
+            'date' => now()->toDateString(),
+            'reason' => 'Auto-reorder',
+            'priority' => 'normal',
             'is_auto_generated' => true,
         ]);
         $cancelledPr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
 
         PurchaseRequestItem::create([
-            'purchase_request_id'  => $cancelledPr->id,
-            'item_id'              => $this->material->id,
-            'description'          => $this->material->name,
-            'quantity'             => '100.000',
-            'unit'                 => 'pcs',
+            'purchase_request_id' => $cancelledPr->id,
+            'item_id' => $this->material->id,
+            'description' => $this->material->name,
+            'quantity' => '100.000',
+            'unit' => 'pcs',
             'estimated_unit_price' => '5.00',
         ]);
 
@@ -285,6 +306,6 @@ class MrpOpenRequestNettingTest extends TestCase
 
     private function createVendor()
     {
-        return \App\Modules\Accounting\Models\Vendor::factory()->create()->id;
+        return Vendor::factory()->create()->id;
     }
 }

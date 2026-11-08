@@ -111,7 +111,8 @@ class CountedBatchInspectionTest extends TestCase
         $inspection = $this->inspection();
         $url = '/api/v1/quality/inspections/'.$inspection->hash_id.'/batch-result';
         $this->actingAs($this->maker)->postJson($url, $this->payload(['result' => 'passed']))->assertUnprocessable();
-        $this->postJson($url, $this->payload(['expected_result_version' => 9]))->assertUnprocessable();
+        $this->postJson($url, $this->payload(['expected_result_version' => 9]))
+            ->assertStatus(409)->assertJsonPath('code', 'inspection_state_conflict');
     }
 
     public function test_requirement_failure_at_zero_defects_and_incomplete_coverage(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\SettingsService;
 use App\Modules\Admin\Services\RoleService;
 use App\Modules\Auth\Models\Permission;
@@ -11,6 +12,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Events\GoodsReceiptNoteChanged;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
@@ -329,6 +331,17 @@ class GrnGlPostingTest extends TestCase
         $accepted = $this->grnSvc->accept($grn, $this->user);
         $this->assertNull($accepted->journal_entry_id);
 
+        $priorRefreshIds = DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteChanged::class)
+            ->get()
+            ->filter(static function ($row) use ($accepted): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['grnHashId'] ?? null) === (string) $accepted->hash_id;
+            })
+            ->pluck('id');
+        DB::table('event_outbox')->whereIn('id', $priorRefreshIds)->delete();
+
         $this->enableAccounting(true);
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/inventory/grn/'.$accepted->hash_id.'/retry-gl');
@@ -343,6 +356,27 @@ class GrnGlPostingTest extends TestCase
             1,
             DB::table('journal_entries')->where('reference_type', 'goods_receipt_note')->where('reference_id', $accepted->id)->count(),
             'Retry must post the accepted receipt exactly once.',
+        );
+
+        $refresh = DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteChanged::class)
+            ->get()
+            ->first(static function ($row) use ($accepted): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['grnHashId'] ?? null) === (string) $accepted->hash_id;
+            });
+
+        $this->assertNotNull($refresh, 'GL retry must stage a peer GRN refresh.');
+        $this->assertSame('updated', json_decode($refresh->payload, true, flags: JSON_THROW_ON_ERROR)['action']);
+        $event = app(OutboxEventCodec::class)->decode(
+            (string) $refresh->event_type,
+            json_decode((string) $refresh->payload, true, 512, JSON_THROW_ON_ERROR),
+        );
+        $this->assertContains(
+            'private-dashboard.finance',
+            array_map(static fn ($channel): string => $channel->name, $event->broadcastOn()),
+            'Finance bottleneck viewers need the GRN handoff refresh through their authorized private channel.',
         );
     }
 

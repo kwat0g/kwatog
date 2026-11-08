@@ -58,11 +58,16 @@ class SupplierPerformanceService
 
     public function __construct(private readonly SettingsService $settings) {}
 
-    public function compute(Vendor $vendor, int $year, int $month): SupplierPerformanceSnapshot
+    public function compute(
+        Vendor $vendor,
+        int $year,
+        int $month,
+        bool $publishRefresh = true,
+    ): SupplierPerformanceSnapshot
     {
         $this->validatePeriod($year, $month);
 
-        $snapshot = DB::transaction(function () use ($vendor, $year, $month) {
+        $snapshot = DB::transaction(function () use ($vendor, $year, $month, $publishRefresh) {
             $start = Carbon::create($year, $month, 1)->startOfDay();
             $end = $start->copy()->endOfMonth()->endOfDay();
 
@@ -133,6 +138,15 @@ class SupplierPerformanceService
                 ->where('period_year', $year)
                 ->where('period_month', $month)
                 ->firstOrFail();
+            // upsert() bypasses Eloquent observers; explicitly retire the
+            // dependent snapshots after this write commits. The scheduled
+            // batch defers its single viewer signal until all vendors finish.
+            $realtime = app(SupplierPerformanceRealtimeService::class);
+            if ($publishRefresh) {
+                $realtime->stageSnapshot($vendor, $snapshot);
+            } else {
+                $realtime->invalidateSnapshotCaches();
+            }
             app(OutboxService::class)->record(new SupplierPerformanceComputed($snapshot));
 
             return $snapshot;
@@ -211,7 +225,7 @@ class SupplierPerformanceService
         Vendor::query()->orderBy('id')->chunk(100, function ($vendors) use (&$count, &$failed, $year, $month) {
             foreach ($vendors as $vendor) {
                 try {
-                    $this->compute($vendor, $year, $month);
+                    $this->compute($vendor, $year, $month, publishRefresh: false);
                     $count++;
                 } catch (\Throwable $e) {
                     // The failure collection is captured by reference below;
@@ -229,6 +243,10 @@ class SupplierPerformanceService
                 }
             }
         });
+
+        if ($count > 0) {
+            app(SupplierPerformanceRealtimeService::class)->stageBatch($year, $month);
+        }
 
         return ['computed' => $count, 'failed' => $failed];
     }

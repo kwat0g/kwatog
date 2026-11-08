@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Modules\DSS\Services\DssRealtimeService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -197,6 +198,8 @@ class ArchiveDssRecommendationEvents extends Command
                 if ($deleted !== count($expected)) {
                     throw new RuntimeException('Source deletion count did not match verified archive.');
                 }
+
+                app(DssRealtimeService::class)->stage('deleted');
             });
 
             return true;

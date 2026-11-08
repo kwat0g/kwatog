@@ -8,9 +8,9 @@
  * when unread
  * - "View all" footer link to /notifications
  *
- * Delivery is BOTH: polls every 30s while mounted AND subscribes to Reverb via
- * useNotificationRealtime() (private user.{id} channel, notification.created) —
- * the websocket pops a toast + invalidates the query; the poll is the fallback.
+ * Internal delivery subscribes to Reverb via useNotificationRealtime() (private
+ * user.{id} channel, create and change signals); the shared provider owns
+ * reconnect/focus/degraded catch-up for internal and portal variants.
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { LuBell } from '@/lib/icons';
@@ -28,7 +28,6 @@ import { focusRingInset } from '@/lib/focus';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 import { notificationLinkTo } from '@/lib/notificationLink';
 
-const POLL_MS = 60_000;
 const PEEK_COUNT = 8;
 
 const DEFAULT_QUERY_KEY = ['notifications'];
@@ -37,12 +36,16 @@ interface NotificationBellProps {
  api?: typeof notificationsApi;
  queryKey?: QueryKey;
  inboxPath?: string;
- realtime?: boolean;
+ realtimeChannel?: string;
  linkPrefix?: string;
 }
 
-export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QUERY_KEY, inboxPath = '/notifications', realtime = true, linkPrefix }: NotificationBellProps = {}) {
- useNotificationRealtime(realtime);
+export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QUERY_KEY, inboxPath = '/notifications', realtimeChannel, linkPrefix }: NotificationBellProps = {}) {
+ useNotificationRealtime({
+  channel: realtimeChannel,
+  queryKey,
+  showToast: realtimeChannel === undefined,
+ });
  const [open, setOpen] = useState(false);
  const containerRef = useRef<HTMLDivElement | null>(null);
  const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -54,8 +57,6 @@ export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QU
  const { data, isError, refetch } = useQuery({
  queryKey: [...queryKey, 'peek'],
  queryFn: () => api.list({ per_page: PEEK_COUNT }),
- refetchInterval: POLL_MS,
- refetchIntervalInBackground: false,
  });
 
  const markRead = useMutation({

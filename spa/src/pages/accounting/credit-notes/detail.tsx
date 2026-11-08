@@ -21,7 +21,8 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
@@ -46,7 +47,7 @@ type ApplyFormValues = z.infer<typeof applySchema>;
 export default function CreditNoteDetailPage() {
  const { id = '' } = useParams();
  const qc = useQueryClient();
- const { can } = usePermission();
+ useRealtimeRecord('credit_note', id);
  const [applyOpen, setApplyOpen] = useState(false);
  const [operationKey, setOperationKey] = useState(() => createRequestKey());
 
@@ -56,6 +57,14 @@ export default function CreditNoteDetailPage() {
  });
 
  const isCustomer = cn?.type === 'customer';
+ const canFinalize = cn?.available_actions?.can_finalize === true;
+ const canApply = cn?.available_actions?.can_apply === true;
+ const handleCreditNoteError = async (error: AxiosError<ApiValidationError>, fallback: string) => {
+   if (error.response?.status === 409) {
+     await invalidateRealtimeChange(qc, { entityType: 'credit_note', entityId: id });
+   }
+   toast.error(error.response?.data?.message ?? fallback);
+ };
 
  // Open documents to apply against (only load when the modal is relevant).
  const {
@@ -78,11 +87,12 @@ export default function CreditNoteDetailPage() {
 
  const finalize = useMutation({
  mutationFn: () => creditNotesApi.finalize(id),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['accounting', 'credit-notes'] });
+    onSuccess: (updated) => {
+      qc.setQueryData(['accounting', 'credit-notes', id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'credit_note', entityId: id });
  toast.success('Credit note finalized and posted to the GL.');
  },
- onError: (e: AxiosError<ApiValidationError>) => toast.error(e.response?.data?.message ?? 'Failed to finalize.'),
+ onError: (e: AxiosError<ApiValidationError>) => handleCreditNoteError(e, 'Failed to finalize.'),
  });
 
  const { register, handleSubmit, reset, formState: { errors } } = useForm<z.input<typeof applySchema>, unknown, ApplyFormValues>({
@@ -95,20 +105,19 @@ export default function CreditNoteDetailPage() {
  amount: String(v.amount),
  ...(isCustomer ? { invoice_id: v.document_id } : { bill_id: v.document_id }),
  }),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['accounting', 'credit-notes'] });
+ onSuccess: (updated) => {
+ qc.setQueryData(['accounting', 'credit-notes', id], updated);
+ void invalidateRealtimeChange(qc, { entityType: 'credit_note', entityId: id });
  setApplyOpen(false);
  reset();
  setOperationKey(createRequestKey());
  toast.success('Credit applied.');
  },
- onError: (e: AxiosError<ApiValidationError>) => toast.error(e.response?.data?.message ?? 'Failed to apply credit.'),
+ onError: (e: AxiosError<ApiValidationError>) => handleCreditNoteError(e, 'Failed to apply credit.'),
  });
 
  if (isLoading) return <SkeletonDetail />;
  if (isError || !cn) return <div className="px-5 py-4 text-danger-fg">Credit note not found.</div>;
-
- const canManage = can('accounting.credit_notes.manage');
 
  return (
  <div>
@@ -119,12 +128,12 @@ export default function CreditNoteDetailPage() {
  subtitle={<Chip variant={CN_STATUS_CHIP[cn.status]}>{cn.status_label}</Chip>}
  actions={
  <div className="flex gap-1.5">
- {canManage && cn.status === 'draft' && (
+ {canFinalize && (
  <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} loading={finalize.isPending} onClick={() => finalize.mutate()}>
  Finalize + post
  </Button>
  )}
- {canManage && cn.status === 'finalized' && Number(cn.balance) > 0 && (
+ {canApply && (
  <Button variant="primary" size="sm" icon={<LuLink2 size={14} />} onClick={() => { setOperationKey(createRequestKey()); setApplyOpen(true); }}>
  Apply to {isCustomer ? 'invoice' : 'bill'}
  </Button>
@@ -188,7 +197,9 @@ export default function CreditNoteDetailPage() {
  </div>
 
  <Modal isOpen={applyOpen} onClose={() => setApplyOpen(false)} title={`Apply credit to ${isCustomer ? 'invoice' : 'bill'}`}>
- {openDocsLoading ? (
+ {!canApply ? (
+ <p role="status" className="text-sm text-muted">This credit is no longer available to apply. Refresh and review its current status.</p>
+ ) : openDocsLoading ? (
  <p role="status" className="text-sm text-muted">Loading eligible documents…</p>
  ) : openDocsError ? (
  <div role="alert" className="space-y-3 text-sm text-danger-fg">
@@ -211,7 +222,7 @@ export default function CreditNoteDetailPage() {
  helper={`Credit balance available: ${formatPeso(cn.balance)}`} />
  <div className="flex justify-end gap-2 pt-2">
  <Button type="button" variant="secondary" onClick={() => setApplyOpen(false)}>Cancel</Button>
- <Button type="submit" variant="primary" loading={apply.isPending}>Apply</Button>
+ <Button type="submit" variant="primary" loading={apply.isPending} disabled={!canApply}>Apply</Button>
  </div>
  </form>
  )}

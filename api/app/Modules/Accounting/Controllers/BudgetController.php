@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Support\HashIdFilter;
-use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
@@ -142,7 +141,7 @@ class BudgetController extends Controller
             $request->merge(['signal' => 'awaiting_my_approval']);
         }
 
-        $query = Budget::with(['fiscalYear', 'department']);
+        $query = Budget::with(['fiscalYear', 'department', 'submittedBy']);
         if ($request->filled('fiscal_year_id')) {
             $query->byFiscalYear((int) $request->input('fiscal_year_id'));
         }
@@ -188,11 +187,7 @@ class BudgetController extends Controller
     public function show(Request $request, Budget $budget): JsonResponse
     {
         $actor = $request->user();
-        $canApprove = $actor instanceof User
-            && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $budget->submitted_by])
-            && $budget->status === 'submitted'
-            && (int) $budget->submitted_by !== (int) $actor->id
-            && $this->budgetService->hasDifferentRoleFromSubmitter($budget, $actor);
+        $canApprove = $actor instanceof User && $this->budgetService->canReview($budget, $actor);
         abort_unless($actor instanceof User && ($actor->hasPermission('budgeting.view') || $canApprove), 403);
 
         $budget->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy', 'rejectedBy']);
@@ -271,7 +266,12 @@ class BudgetController extends Controller
             'line_items.*.nov' => ['sometimes', 'numeric', 'min:0', 'decimal:0,2'],
             'line_items.*.dec' => ['sometimes', 'numeric', 'min:0', 'decimal:0,2'],
         ]);
-        $budget = $this->budgetService->updateDraft($budget, $validated, array_key_exists('line_items', $validated) ? $validated['line_items'] : null);
+        $budget = $this->budgetService->updateDraft(
+            $budget,
+            $validated,
+            array_key_exists('line_items', $validated) ? $validated['line_items'] : null,
+            $request->header('If-Match'),
+        );
 
         return response()->json([
             'success' => true,

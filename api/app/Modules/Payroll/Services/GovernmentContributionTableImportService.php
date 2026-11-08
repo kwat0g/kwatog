@@ -5,15 +5,20 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\CacheGeneration;
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Models\GovernmentContributionTable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 class GovernmentContributionTableImportService
 {
+    private const CACHE_VERSION_TTL = 604800;
+
     private const REQUIRED_HEADER = ['bracket_min', 'bracket_max', 'ee_amount', 'er_amount', 'effective_date'];
 
     /**
@@ -82,7 +87,7 @@ class GovernmentContributionTableImportService
                         'row' => $rowNum,
                         'payload' => $this->normalizeRow($row, $idx),
                     ];
-                } catch (\Throwable $e) {
+                } catch (Throwable $e) {
                     $errors[] = ['row' => $rowNum, 'message' => $e->getMessage()];
                 }
             }
@@ -98,12 +103,12 @@ class GovernmentContributionTableImportService
             // the file was applied, including otherwise valid rows.
             if ($errors !== []) {
                 return [
-                    'total'             => $total,
-                    'imported'          => 0,
-                    'updated'           => 0,
-                    'skipped'           => $total,
+                    'total' => $total,
+                    'imported' => 0,
+                    'updated' => 0,
+                    'skipped' => $total,
                     'deactivated_prior' => 0,
-                    'errors'            => $errors,
+                    'errors' => $errors,
                 ];
             }
 
@@ -160,22 +165,39 @@ class GovernmentContributionTableImportService
                         ->update(['is_active' => false]);
                 }
 
-                return [
+                $result = [
                     'imported' => $imported,
                     'updated' => $updated,
                     'deactivated_prior' => $deactivatedPrior,
                 ];
+
+                DB::afterCommit(function () use ($agency): void {
+                    try {
+                        $this->bustCache($agency);
+                    } catch (Throwable $exception) {
+                        // Keep the later durable payroll-table refresh callback
+                        // runnable after this already-committed import.
+                        Log::warning('Government contribution cache invalidation failed after commit.', [
+                            'agency' => $agency->value,
+                            'exception' => $exception::class,
+                        ]);
+                    }
+                });
+                app(GovernmentTableRealtimeService::class)->stage(
+                    'updated',
+                    now()->format('Y-m-d\TH:i:s.uP'),
+                );
+
+                return $result;
             });
 
-            $this->bustCache($agency);
-
             return [
-                'total'             => $total,
-                'imported'          => $result['imported'],
-                'updated'           => $result['updated'],
-                'skipped'           => 0,
+                'total' => $total,
+                'imported' => $result['imported'],
+                'updated' => $result['updated'],
+                'skipped' => 0,
                 'deactivated_prior' => $result['deactivated_prior'],
-                'errors'            => [],
+                'errors' => [],
             ];
         } finally {
             fclose($stream);
@@ -183,8 +205,8 @@ class GovernmentContributionTableImportService
     }
 
     /**
-     * @param array<int, mixed> $row
-     * @param array<string, int> $idx
+     * @param  array<int, mixed>  $row
+     * @param  array<string, int>  $idx
      * @return array{bracket_min:string, bracket_max:string, ee_amount:string, er_amount:string, effective_date:string}
      */
     private function normalizeRow(array $row, array $idx): array
@@ -210,7 +232,7 @@ class GovernmentContributionTableImportService
         }
         try {
             $parsedDate = Carbon::createFromFormat('!Y-m-d', $effectiveDate);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             throw new BusinessRuleException('effective_date is not a valid calendar date.');
         }
         if (! $parsedDate || $parsedDate->format('Y-m-d') !== $effectiveDate) {
@@ -227,8 +249,8 @@ class GovernmentContributionTableImportService
     }
 
     /**
-     * @param array<int, array{row:int, payload:array{bracket_min:string, bracket_max:string, ee_amount:string, er_amount:string, effective_date:string}}> $rows
-     * @param array<int, array{row:int, message:string}> $errors
+     * @param  array<int, array{row:int, payload:array{bracket_min:string, bracket_max:string, ee_amount:string, er_amount:string, effective_date:string}}>  $rows
+     * @param  array<int, array{row:int, message:string}>  $errors
      */
     private function validateSchedule(array $rows, ContributionAgency $agency, array &$errors): void
     {
@@ -304,8 +326,12 @@ class GovernmentContributionTableImportService
     private function bustCache(ContributionAgency $agency): void
     {
         $key = $agency->value;
+        CacheGeneration::rotateDefault(
+            "gov_table:{$key}:ver",
+            self::CACHE_VERSION_TTL,
+            'payroll.government_tables.import.'.$key,
+        );
         Cache::forget("gov_table:{$key}:active");
-        Cache::put("gov_table:{$key}:ver", ((int) Cache::get("gov_table:{$key}:ver", 1)) + 1, 86400);
     }
 
     /** @return array{total:int, imported:int, updated:int, skipped:int, deactivated_prior:int, errors:array<int, array{row:int, message:string}>} */

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
-use App\Modules\Dashboard\Exceptions\DashboardLayoutConflictException;
 use App\Modules\Dashboard\Enums\RenderKind;
+use App\Modules\Dashboard\Exceptions\DashboardLayoutConflictException;
 use App\Modules\Dashboard\Models\DashboardLayout;
 use App\Modules\Dashboard\Models\DashboardWidget;
 use Illuminate\Support\Collection;
@@ -28,6 +28,7 @@ class DashboardLayoutService
 {
     public function __construct(
         private readonly WidgetAnalyticsService $analytics,
+        private readonly DashboardLayoutRealtimeService $realtime,
     ) {}
 
     /**
@@ -116,6 +117,7 @@ class DashboardLayoutService
         if (! $user->role_id) {
             return collect();
         }
+
         return DashboardLayout::query()
             ->where('owner_type', DashboardLayout::OWNER_ROLE)
             ->where('owner_id', $user->role_id)
@@ -159,12 +161,12 @@ class DashboardLayoutService
             $now = now();
             $insert = $roleRows->map(fn (DashboardLayout $r) => [
                 'owner_type' => DashboardLayout::OWNER_USER,
-                'owner_id'   => $user->id,
+                'owner_id' => $user->id,
                 'widget_key' => $r->widget_key,
                 'position_x' => $r->position_x,
                 'position_y' => $r->position_y,
-                'width'      => $r->width,
-                'height'     => $r->height,
+                'width' => $r->width,
+                'height' => $r->height,
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all();
@@ -190,41 +192,44 @@ class DashboardLayoutService
                 ->where('owner_id', $user->id)
                 ->delete();
 
-            if (empty($widgets)) {
-                return;
-            }
+            if (! empty($widgets)) {
+                $allowed = DashboardWidget::query()
+                    ->get()
+                    ->filter(fn (DashboardWidget $widget): bool => $this->canSeeWidget($widget, $user))
+                    ->keyBy('key');
+                $now = now();
+                $rows = [];
+                $seen = [];
+                foreach ($widgets as $i => $w) {
+                    $key = (string) ($w['key'] ?? '');
+                    if ($key === '' || isset($seen[$key]) || ! $allowed->has($key)) {
+                        continue;
+                    }
 
-            $allowed = DashboardWidget::query()
-                ->get()
-                ->filter(fn (DashboardWidget $widget): bool => $this->canSeeWidget($widget, $user))
-                ->keyBy('key');
-            $now = now();
-            $rows = [];
-            $seen = [];
-            foreach ($widgets as $i => $w) {
-                $key = (string) ($w['key'] ?? '');
-                if ($key === '' || isset($seen[$key]) || ! $allowed->has($key)) {
-                    continue;
+                    $seen[$key] = true;
+                    $width = max(1, min(12, (int) ($w['w'] ?? $allowed->get($key)->default_w ?? 4)));
+                    $height = max(1, min(24, (int) ($w['h'] ?? $allowed->get($key)->default_h ?? 4)));
+                    $positionX = max(0, min(12 - $width, (int) ($w['x'] ?? 0)));
+                    $rows[] = [
+                        'owner_type' => DashboardLayout::OWNER_USER,
+                        'owner_id' => $user->id,
+                        'widget_key' => $key,
+                        'position_x' => $positionX,
+                        'position_y' => max(0, min(65535, (int) ($w['y'] ?? $i))),
+                        'width' => $width,
+                        'height' => $height,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
                 }
-
-                $seen[$key] = true;
-                $width = max(1, min(12, (int) ($w['w'] ?? $allowed->get($key)->default_w ?? 4)));
-                $height = max(1, min(24, (int) ($w['h'] ?? $allowed->get($key)->default_h ?? 4)));
-                $positionX = max(0, min(12 - $width, (int) ($w['x'] ?? 0)));
-                $rows[] = [
-                    'owner_type' => DashboardLayout::OWNER_USER,
-                    'owner_id'   => $user->id,
-                    'widget_key' => $key,
-                    'position_x' => $positionX,
-                    'position_y' => max(0, min(65535, (int) ($w['y'] ?? $i))),
-                    'width'      => $width,
-                    'height'     => $height,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
+                if (! empty($rows)) {
+                    DashboardLayout::insert($rows);
+                }
             }
-            if (! empty($rows)) {
-                DashboardLayout::insert($rows);
+
+            $updatedVersion = $this->userLayoutVersion($user);
+            if (! hash_equals($currentVersion, $updatedVersion)) {
+                $this->realtime->stage($user, 'updated');
             }
         });
     }
@@ -242,6 +247,11 @@ class DashboardLayoutService
                 ->where('owner_type', DashboardLayout::OWNER_USER)
                 ->where('owner_id', $user->id)
                 ->delete();
+
+            $updatedVersion = $this->userLayoutVersion($user);
+            if (! hash_equals($currentVersion, $updatedVersion)) {
+                $this->realtime->stage($user, 'reset');
+            }
         });
     }
 
@@ -277,16 +287,16 @@ class DashboardLayoutService
             ->get()
             ->filter(fn (DashboardWidget $w): bool => $this->canSeeWidget($w, $user))
             ->map(fn (DashboardWidget $w) => [
-                'key'            => $w->key,
-                'name'           => $w->name,
-                'description'    => $w->description,
-                'module'         => $w->module,
-                'permission'     => $w->permission,
+                'key' => $w->key,
+                'name' => $w->name,
+                'description' => $w->description,
+                'module' => $w->module,
+                'permission' => $w->permission,
                 'permission_any' => $w->permission_any,
-                'render_kind'    => $w->render_kind->value,
-                'link_path'      => $w->link_path,
-                'default_w'      => (int) $w->default_w,
-                'default_h'      => (int) $w->default_h,
+                'render_kind' => $w->render_kind->value,
+                'link_path' => $w->link_path,
+                'default_w' => (int) $w->default_w,
+                'default_h' => (int) $w->default_h,
             ])
             ->values()
             ->all();
@@ -297,7 +307,7 @@ class DashboardLayoutService
      * Keeping this in one helper makes the plain and rich layout paths share
      * the exact same visibility boundary.
      *
-     * @param Collection<int, DashboardLayout> $layout
+     * @param  Collection<int, DashboardLayout>  $layout
      * @return array<int, array{key: string, name: string, description: ?string, module: string, permission: ?string, permission_any: list<string>|null, render_kind: string, link_path: ?string, x: int, y: int, w: int, h: int, source: string}>
      */
     private function hydrateVisibleLayout(User $user, Collection $layout, string $source): array
@@ -320,21 +330,21 @@ class DashboardLayoutService
             }
 
             $rows[] = [
-                'key'            => $widget->key,
-                'name'           => $widget->name,
-                'description'    => $widget->description,
-                'module'         => $widget->module,
-                'permission'     => $widget->permission,
+                'key' => $widget->key,
+                'name' => $widget->name,
+                'description' => $widget->description,
+                'module' => $widget->module,
+                'permission' => $widget->permission,
                 'permission_any' => $widget->permission_any,
-                'render_kind'    => $widget->render_kind->value,
+                'render_kind' => $widget->render_kind->value,
                 // The widget's own "Open →" target. Previously a hard-coded map
                 // in the SPA with nothing binding it to this table.
-                'link_path'   => $widget->link_path,
-                'x'           => (int) $row->position_x,
-                'y'           => (int) $row->position_y,
-                'w'           => (int) $row->width,
-                'h'           => (int) $row->height,
-                'source'      => $source,
+                'link_path' => $widget->link_path,
+                'x' => (int) $row->position_x,
+                'y' => (int) $row->position_y,
+                'w' => (int) $row->width,
+                'h' => (int) $row->height,
+                'source' => $source,
             ];
         }
 

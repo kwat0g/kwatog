@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\TemporaryPasswordGenerator;
+use App\Common\Services\UserAccessRefreshService;
 use App\Common\Support\SearchOperator;
 use App\Modules\Admin\Models\LoginHistory;
 use App\Modules\Admin\Support\CreatedUser;
@@ -19,6 +20,7 @@ use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Services\EmployeeRealtimeService;
 use App\Modules\HR\Services\UserProvisioningService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -26,7 +28,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Throwable;
 
 /**
  * U2 — central user-management service for the Admin > Users surface.
@@ -326,6 +330,13 @@ class UserAdminService
             $updated = $locked->fresh(['role']);
             $this->audit->record($updated, 'deactivated', $oldValues, $this->userSnapshot($updated), $actor, 'Admin account deactivation');
 
+            $accessRefresh = app(UserAccessRefreshService::class);
+            $userId = (int) $updated->getKey();
+            $accessRefresh->stageForUsers([
+                $userId,
+                ...$accessRefresh->delegateIdsForDelegators([$userId]),
+            ]);
+
             return $updated;
         });
     }
@@ -342,6 +353,9 @@ class UserAdminService
 
             $updated = $locked->fresh(['role']);
             $this->audit->record($updated, 'activated', $oldValues, $this->userSnapshot($updated), $actor, 'Admin account activation');
+
+            $accessRefresh = app(UserAccessRefreshService::class);
+            $accessRefresh->stageForUsers($accessRefresh->delegateIdsForDelegators([(int) $updated->getKey()]));
 
             return $updated;
         });
@@ -385,7 +399,15 @@ class UserAdminService
             }
 
             $locked->update(['role_id' => $newRole->id]);
-            Cache::forget("auth:role_perms:{$oldRoleId}");
+            DB::afterCommit(static function () use ($oldRoleId): void {
+                try {
+                    Cache::forget("auth:role_perms:{$oldRoleId}");
+                } catch (Throwable $exception) {
+                    Log::warning('Legacy role permission cache cleanup failed after commit.', [
+                        'exception' => $exception::class,
+                    ]);
+                }
+            });
             $locked->flushPermissionsCache();
             BadgeService::touch();
 
@@ -398,6 +420,12 @@ class UserAdminService
                 $actor,
                 trim($reason) ?: 'Admin role assignment',
             );
+
+            $accessRefresh = app(UserAccessRefreshService::class);
+            $accessRefresh->stageForUsers([
+                (int) $updated->getKey(),
+                ...$accessRefresh->delegateIdsForDelegators([(int) $updated->getKey()]),
+            ]);
 
             return $updated;
         });
@@ -494,12 +522,32 @@ class UserAdminService
             $changedOldRoleIds = array_intersect_key($oldRoleIds, array_flip($writable));
             User::query()
                 ->whereIn('id', $writable)
-                ->update(['role_id' => $newRole->id]);
+                ->update(['role_id' => $newRole->id, 'updated_at' => now()]);
 
             foreach ($users as $userRow) {
                 if (in_array($userRow->id, $writable, true)) {
-                    Cache::forget("auth:role_perms:{$userRow->role_id}");
+                    $userRow->refresh();
                     $userRow->flushPermissionsCache();
+                    app(AdminUserRealtimeService::class)->stage($userRow, 'status_changed');
+                }
+            }
+
+            $changedLinkedEmployeeIds = $users
+                ->filter(fn (User $userRow): bool => in_array($userRow->id, $writable, true)
+                    && array_key_exists($userRow->id, $changedOldRoleIds)
+                    && (int) $changedOldRoleIds[$userRow->id] !== (int) $newRole->id
+                    && $userRow->employee_id !== null)
+                ->pluck('employee_id')
+                ->unique()
+                ->values();
+            foreach ($changedLinkedEmployeeIds as $employeeId) {
+                $employee = Employee::query()->find((int) $employeeId);
+                if ($employee !== null) {
+                    app(EmployeeRealtimeService::class)->stage(
+                        $employee,
+                        'updated',
+                        refreshAdminUserDirectory: false,
+                    );
                 }
             }
 
@@ -521,6 +569,14 @@ class UserAdminService
                     'ip_address' => request()?->ip(),
                     'user_agent' => request()?->userAgent(),
                     'created_at' => now(),
+                ]);
+            }
+
+            if ($writable !== []) {
+                $accessRefresh = app(UserAccessRefreshService::class);
+                $accessRefresh->stageForUsers([
+                    ...$writable,
+                    ...$accessRefresh->delegateIdsForDelegators($writable),
                 ]);
             }
             BadgeService::touch();

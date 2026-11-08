@@ -7,15 +7,14 @@ namespace Tests\Feature\Accounting;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ChainStepRun;
 use App\Modules\Accounting\Enums\CreditNoteStatus;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
-use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
-use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Services\CreditNoteService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -81,12 +80,12 @@ class CreditNoteTest extends TestCase
         $customer = Customer::create(['name' => 'Acme', 'payment_terms_days' => 30]);
 
         $cn = $this->svc->create([
-            'type'        => 'customer',
-            'date'        => now()->toDateString(),
-            'is_vatable'  => true,
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'is_vatable' => true,
             'customer_id' => $customer->id,
-            'reason'      => 'Price dispute',
-            'lines'       => [
+            'reason' => 'Price dispute',
+            'lines' => [
                 ['account_id' => $this->revenueAccountId(), 'description' => 'Overbilled units', 'amount' => '1000.00'],
             ],
         ], $by);
@@ -102,7 +101,7 @@ class CreditNoteTest extends TestCase
         $this->assertNotNull($finalized->journal_entry_id);
 
         // The posted JE must be balanced (debit == credit).
-        $je = \App\Modules\Accounting\Models\JournalEntry::find($finalized->journal_entry_id);
+        $je = JournalEntry::find($finalized->journal_entry_id);
         $this->assertNotNull($je);
         $this->assertSame((string) $je->total_debit, (string) $je->total_credit, 'Credit-note JE must balance');
         // DR revenue (1000) + DR VAT output (120) = CR AR (1120).
@@ -440,6 +439,33 @@ class CreditNoteTest extends TestCase
         $this->assertSame('applied', $cn->status->value);
     }
 
+    public function test_partial_invoice_refreshes_when_credit_changes_balance_without_changing_status(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Partial credit customer', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-PARTIAL-'.substr(uniqid(), -5), 'customer_id' => $customer->id,
+            'status' => 'partial', 'subtotal' => '1000.00', 'vat_amount' => '0.00',
+            'total_amount' => '1000.00', 'amount_paid' => '200.00', 'balance' => '800.00',
+            'date' => now()->toDateString(), 'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id, 'created_by' => $by->id,
+        ]);
+        $credit = $this->svc->finalize($this->svc->create([
+            'type' => 'customer', 'date' => now()->toDateString(), 'is_vatable' => false,
+            'customer_id' => $customer->id, 'invoice_id' => $invoice->id,
+            'lines' => [['account_id' => $this->revenueAccountId(), 'description' => 'Partial credit', 'amount' => '50.00']],
+        ], $by), $by);
+        $before = ChainStepRun::query()
+            ->where('chain', 'o2c')->where('entity_type', 'invoice')->where('entity_id', $invoice->id)->count();
+
+        $this->svc->apply($credit, ['amount' => '50.00', 'invoice_id' => $invoice->id], $by);
+
+        $this->assertSame('partial', $invoice->fresh()->status->value);
+        $this->assertSame('750.00', (string) $invoice->fresh()->balance);
+        $this->assertSame($before + 1, ChainStepRun::query()
+            ->where('chain', 'o2c')->where('entity_type', 'invoice')->where('entity_id', $invoice->id)->count());
+    }
+
     public function test_fully_applying_customer_credit_promotes_linked_sales_order_to_paid(): void
     {
         $by = $this->admin();
@@ -609,6 +635,34 @@ class CreditNoteTest extends TestCase
             ->getJson("/api/v1/accounting/credit-notes/{$cn->hash_id}")
             ->assertStatus(200)
             ->assertJsonPath('data.total_amount', '336.00')
-            ->assertJsonPath('data.customer.name', 'Acme');
+            ->assertJsonPath('data.customer.name', 'Acme')
+            ->assertJsonPath('data.available_actions.can_finalize', false)
+            ->assertJsonPath('data.available_actions.can_apply', true);
+    }
+
+    public function test_repeated_credit_note_finalize_returns_a_state_conflict(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Concurrent credit', 'payment_terms_days' => 30]);
+        $cn = $this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'lines' => [[
+                'account_id' => $this->revenueAccountId(),
+                'description' => 'Returned goods',
+                'amount' => '100.00',
+            ]],
+        ], $by);
+
+        $this->actingAs($by)
+            ->postJson("/api/v1/accounting/credit-notes/{$cn->hash_id}/finalize")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'finalized');
+
+        $this->actingAs($by)
+            ->postJson("/api/v1/accounting/credit-notes/{$cn->hash_id}/finalize")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'credit_note_state_conflict');
     }
 }

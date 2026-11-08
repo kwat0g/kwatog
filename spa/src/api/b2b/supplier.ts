@@ -18,6 +18,7 @@ import type {
   PortalBulkListingResult,
   RespondToPurchaseOrderPayload,
 } from '@/types/b2b';
+import type { PurchaseOrderResponse } from '@/types/purchasing';
 import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
 
@@ -126,19 +127,23 @@ export const supplierPortalApi = {
   },
 
   acknowledgePo: async (id: string) => {
-    const { data } = await portalClient.post<{ message: string }>(
+    const { data } = await portalClient.post<{
+      data: PurchaseOrderResponse;
+      purchase_order: PortalPoDetail;
+      message: string;
+    }>(
       `/b2b/supplier/purchase-orders/${id}/acknowledge`,
     );
-    return data;
+    return { response: data.data, purchase_order: data.purchase_order, message: data.message };
   },
 
-  /** Accept, counter-propose or decline a PO. Returns the updated supplier PO. */
+  /** Accept, counter-propose or decline a PO; includes the refreshed PO for the acting supplier. */
   respondToPurchaseOrder: async (id: string, payload: RespondToPurchaseOrderPayload) => {
-    const { data } = await portalClient.post<{ data: PortalPoDetail }>(
+    const { data } = await portalClient.post<{ data: PurchaseOrderResponse; purchase_order: PortalPoDetail }>(
       `/b2b/supplier/purchase-orders/${id}/respond`,
       payload,
     );
-    return data.data;
+    return { response: data.data, purchase_order: data.purchase_order };
   },
 
   // ── Shipments ──────────────────────────────────────

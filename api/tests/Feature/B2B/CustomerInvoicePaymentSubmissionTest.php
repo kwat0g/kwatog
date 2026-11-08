@@ -102,6 +102,10 @@ class CustomerInvoicePaymentSubmissionTest extends TestCase
         $this->actingAs($portal, 'customer_portal')->post($url.'/payment-submissions', [...$payload, 'status' => 'verified'], ['Accept' => 'application/json'])->assertUnprocessable();
         $response = $this->post($url.'/payment-submissions', $payload, ['Accept' => 'application/json'])->assertCreated();
         $id = $response->json('data.id');
+        $this->actingAs($portal, 'customer_portal')->getJson($url)
+            ->assertOk()
+            ->assertJsonPath('data.payment_submissions.0.available_actions.verify', false)
+            ->assertJsonPath('data.payment_submissions.0.available_actions.reject', false);
         $this->get($url.'/payment-submissions/'.$id.'/proof')->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff');
         $foreign = Invoice::factory()->create(['status' => 'finalized']);
         $this->getJson('/api/v1/b2b/customer/invoices/'.$foreign->hash_id.'/payment-submissions/'.$id.'/proof')->assertNotFound();
@@ -109,11 +113,26 @@ class CustomerInvoicePaymentSubmissionTest extends TestCase
         $review = '/api/v1/invoices/'.$invoice->hash_id.'/payment-submissions/'.$id;
         $bank = \App\Modules\Accounting\Models\Account::where('code', '1020')->firstOrFail()->hash_id;
         auth()->shouldUse('web');
-        $this->actingAs($finance, 'web')->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', ['amount' => '19600.00'])->assertForbidden();
+        $this->actingAs($finance, 'web')->getJson('/api/v1/invoices/'.$invoice->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.review_payment', true)
+            ->assertJsonPath('data.payment_submissions.0.available_actions.verify', true)
+            ->assertJsonPath('data.payment_submissions.0.available_actions.reject', true);
+        $this->actingAs($finance, 'web')->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', [
+            'cash_account_id' => $bank,
+            'collection_date' => now()->toDateString(),
+            'amount' => '19600.00',
+            'payment_method' => 'cash',
+            'idempotency_key' => 'portal-test-unauthorized-collection',
+        ])->assertForbidden();
         $this->postJson($review.'/verify', ['cash_account_id' => $bank, 'funds_received_confirmed' => false])->assertUnprocessable();
         $this->postJson($review.'/verify', ['cash_account_id' => $bank, 'funds_received_confirmed' => true, 'amount' => '1.00'])->assertUnprocessable();
         $this->postJson($review.'/reject', ['reason' => '  '])->assertUnprocessable();
-        $this->postJson($review.'/verify', ['cash_account_id' => $bank, 'funds_received_confirmed' => true])->assertOk()->assertJsonPath('data.status', 'verified');
+        $this->postJson($review.'/verify', ['cash_account_id' => $bank, 'funds_received_confirmed' => true])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'verified')
+            ->assertJsonPath('data.available_actions.verify', false)
+            ->assertJsonPath('data.available_actions.reject', false);
         $this->postJson($review.'/verify', ['cash_account_id' => $bank, 'funds_received_confirmed' => true])->assertOk();
         $this->assertSame(1, Collection::count());
         $this->assertSame('0.00', (string) $invoice->fresh()->balance);

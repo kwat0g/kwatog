@@ -22,21 +22,25 @@ import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 export default function ProductsListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('crm.products.manage');
  const canViewCosts = can('inventory.costs.review') || can('inventory.costs.approve');
- const [filters, setFilters] = useUrlFilters<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
+ const [filters, setFilters] = useUrlFilters<ProductListParams>({ page: 1, per_page: 25, is_active: '' });
  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
  const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
+ const listQueryKey = ['crm', 'products', filters, { trashed: archiveToTrashed(scope) }] as const;
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['crm', 'products', filters, { trashed: archiveToTrashed(scope) }],
+ queryKey: listQueryKey,
  queryFn: () => productsApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev });
+ placeholderData: (prev, previousQuery) =>
+  sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? prev : undefined,
+ });
 
  const del = useMutation({
  mutationFn: (id: string) => productsApi.delete(id),

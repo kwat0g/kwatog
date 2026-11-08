@@ -2,6 +2,14 @@ export type JobPostingStatus = 'draft' | 'open' | 'closed' | 'filled';
 export type ApplicationStage = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
 export type InterviewOutcome = 'pending' | 'passed' | 'failed';
 export type EmploymentType = 'regular' | 'probationary' | 'contractual' | 'project_based';
+export type RecruitmentPostingAction = 'edit' | 'publish' | 'close' | 'archive' | 'restore';
+export type RecruitmentApplicationAction =
+ | 'advance'
+ | 'reject'
+ | 'schedule_interview'
+ | 'update_interview_outcome'
+ | 'add_note'
+ | 'convert_to_employee';
 
 export interface JobPosting {
  id: string;
@@ -23,6 +31,9 @@ export interface JobPosting {
  department?: { id: string; name: string } | null;
  created_by?: { id: string; name: string } | null;
  application_count?: number;
+ version: string | null;
+ permissions: { view: boolean; manage: boolean };
+ available_actions: RecruitmentPostingAction[];
  created_at: string;
  updated_at: string;
  deleted_at?: string | null;
@@ -54,6 +65,9 @@ export interface JobApplication {
  cover_letter: string | null;
  stage: ApplicationStage;
  stage_label: string;
+ version: string | null;
+ permissions: { view: boolean; manage_applications: boolean; hire: boolean };
+ available_actions: RecruitmentApplicationAction[];
  rejected_at_stage: string | null;
  rejection_reason: string | null;
  applied_at: string;

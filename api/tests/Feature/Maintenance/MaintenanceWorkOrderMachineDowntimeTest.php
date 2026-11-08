@@ -24,7 +24,7 @@ use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\OeeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -241,10 +241,8 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
 
     // ─── MT-02: transitions emit MachineStatusChanged ────────────────
 
-    public function test_machine_status_changed_is_dispatched_for_start_complete_and_cancel(): void
+    public function test_machine_status_domain_events_are_recorded_for_start_complete_and_cancel(): void
     {
-        Event::fake([MachineStatusChanged::class]);
-
         $machine = Machine::factory()->create(['status' => MachineStatus::Idle->value]);
         $wo = $this->machineMwo(MaintenanceWorkOrderStatus::Open, $machine);
         $this->svc->start($wo, $this->tech);
@@ -257,10 +255,22 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         $this->recordPassed($wo2);
         $this->svc->cancel($wo2, null, $this->tech);
 
-        Event::assertDispatched(MachineStatusChanged::class, fn (MachineStatusChanged $e): bool => $e->machine->id === $machine->id && $e->from === 'idle' && $e->to === 'maintenance');
-        Event::assertDispatched(MachineStatusChanged::class, fn (MachineStatusChanged $e): bool => $e->machine->id === $machine->id && $e->from === 'maintenance' && $e->to === 'idle');
-        Event::assertDispatched(MachineStatusChanged::class, fn (MachineStatusChanged $e): bool => $e->machine->id === $machine2->id && $e->from === 'idle' && $e->to === 'maintenance');
-        Event::assertDispatched(MachineStatusChanged::class, fn (MachineStatusChanged $e): bool => $e->machine->id === $machine2->id && $e->from === 'maintenance' && $e->to === 'idle');
+        $transitions = DB::table('event_outbox')
+            ->where('event_type', MachineStatusChanged::class)
+            ->get()
+            ->map(static function ($row): string {
+                $payload = json_decode((string) $row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return $payload['from'].'→'.$payload['to'];
+            })
+            ->all();
+
+        $this->assertEqualsCanonicalizing([
+            'idle→maintenance',
+            'maintenance→idle',
+            'idle→maintenance',
+            'maintenance→idle',
+        ], $transitions);
     }
 
     public function test_corrective_mwo_reuses_and_closes_the_breakdown_downtime_row(): void

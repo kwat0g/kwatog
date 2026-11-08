@@ -1,5 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { AuthUser } from '@/api/auth';
+import { pruneExpiredFormDrafts } from '@/lib/formDraftStorage';
+import { useAuthStore } from '@/stores/authStore';
 import { __TEST_ONLY__, useFormDraftAutosave } from './useFormDraftAutosave';
 
 const { stripSensitive, STORAGE_PREFIX } = __TEST_ONLY__;
@@ -7,10 +10,36 @@ const { stripSensitive, STORAGE_PREFIX } = __TEST_ONLY__;
 afterEach(() => {
  if (typeof window !== 'undefined') {
  Object.keys(window.localStorage)
- .filter((k) => k.startsWith(STORAGE_PREFIX))
+ .filter((k) => k.startsWith('ogami:formdraft:'))
  .forEach((k) => window.localStorage.removeItem(k));
  }
+ useAuthStore.setState({
+  user: null,
+  permissions: new Set(),
+  features: new Set(),
+  isAuthenticated: false,
+  isLoading: true,
+  bootstrapError: null,
+  retryAt: 0,
+ });
 });
+
+function makeDraftUser(roleId: string, slug: string, permission: string): AuthUser {
+ return {
+  id: 'user-1',
+  name: 'Draft User',
+  email: 'draft@example.test',
+  is_active: true,
+  must_change_password: false,
+  theme_mode: 'light',
+  sidebar_collapsed: false,
+  role: { id: roleId, name: slug, slug },
+  employee: null,
+  permissions: [permission],
+  delegated_approvals: [],
+  features: ['quality'],
+ };
+}
 
 describe('stripSensitive', () => {
  it('drops fields matching default sensitive patterns', () => {
@@ -65,12 +94,70 @@ describe('stripSensitive', () => {
 });
 
 it('never recreates a draft on unmount after a successful save disables recovery', () => {
+ useAuthStore.getState().applyUser(makeDraftUser('role-qc', 'quality_manager', 'quality.inspections.manage'));
  const options = { formKey: 'inspection:1', userId: 'user-1', getValues: () => ({ value: '10.2' }), setValues: () => {}, enabled: true };
  const hook = renderHook(props => useFormDraftAutosave(props), { initialProps: options });
  hook.result.current.saveNow();
- expect(localStorage.getItem(`${STORAGE_PREFIX}user-1:inspection:1`)).not.toBeNull();
+ const persistedKey = Object.keys(localStorage).find((key) => key.startsWith(`${STORAGE_PREFIX}user-1:scope-`));
+ expect(persistedKey).toBeDefined();
+ expect(localStorage.getItem(persistedKey!)).not.toBeNull();
  hook.result.current.discard();
  hook.rerender({ ...options, enabled: false });
  hook.unmount();
- expect(localStorage.getItem(`${STORAGE_PREFIX}user-1:inspection:1`)).toBeNull();
+ expect(localStorage.getItem(persistedKey!)).toBeNull();
+});
+
+it('removes scoped drafts and retry payloads when the same user returns under a different access scope', () => {
+ const originalUser = makeDraftUser('role-qc', 'quality_manager', 'quality.inspections.manage');
+ useAuthStore.getState().applyUser(originalUser);
+
+ const original = renderHook(() => useFormDraftAutosave({
+  formKey: 'inspection:1',
+  userId: originalUser.id,
+  getValues: () => ({ remarks: 'Restricted draft from old access' }),
+  setValues: () => {},
+ }));
+ original.result.current.saveNow();
+ original.unmount();
+
+ const persistedKey = Object.keys(localStorage).find((key) => key.startsWith(STORAGE_PREFIX));
+ expect(persistedKey).toBeDefined();
+ const pendingJournalKey = 'ogami:formdraft:delivery-submission:user-1';
+ localStorage.setItem(pendingJournalKey, JSON.stringify({ key: 'delivery-once', data: { notes: 'ambiguous request' } }));
+
+ // A full reload starts with no prior in-memory identity, so applyUser must
+ // still retire this account's old-scope draft before the form can read it.
+ useAuthStore.setState({
+  user: null,
+  permissions: new Set(),
+  features: new Set(),
+  isAuthenticated: false,
+ });
+ useAuthStore.getState().applyUser(
+  makeDraftUser('role-production', 'production_operator', 'production.work_orders.view'),
+ );
+
+ expect(localStorage.getItem(persistedKey!)).toBeNull();
+ expect(localStorage.getItem(pendingJournalKey)).toBeNull();
+
+ const current = renderHook(() => useFormDraftAutosave({
+  formKey: 'inspection:1',
+  userId: 'user-1',
+  getValues: () => ({}),
+  setValues: () => {},
+ }));
+ expect(current.result.current.hasDraft).toBe(false);
+ current.unmount();
+});
+
+it('purges recognized drafts from the legacy unscoped cache namespace at startup', () => {
+ const legacyKey = 'ogami:formdraft:route:purchase-orders:create';
+ const pendingJournalKey = 'ogami:formdraft:delivery-submission:user-1';
+ localStorage.setItem(legacyKey, JSON.stringify({ ts: Date.now(), values: { supplier: 'old draft' } }));
+ localStorage.setItem(pendingJournalKey, JSON.stringify({ key: 'delivery-once', data: { notes: 'ambiguous request' } }));
+
+ pruneExpiredFormDrafts();
+
+ expect(localStorage.getItem(legacyKey)).toBeNull();
+ expect(localStorage.getItem(pendingJournalKey)).not.toBeNull();
 });

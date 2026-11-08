@@ -13,11 +13,13 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import type { GoodsReceiptNote } from '@/types/inventory';
 import { grnStatusVariant } from '@/lib/statusVariants';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 interface GrnListParams extends ListParams {
   status?: string;
@@ -33,9 +35,11 @@ const DEFAULT_FILTERS: GrnListParams = {
 };
 
 export default function GrnListPage() {
+  useRealtimeList('grn', 'visible');
   const navigate = useNavigate();
   const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<GrnListParams>(DEFAULT_FILTERS);
+ const listQueryKey = ['inventory', 'grn', 'list', filters] as const;
 
   // Dashboard KPI links to ?status=pending but the backend status value is
   // pending_qc — normalize once at mount so the drill-down actually filters.
@@ -46,9 +50,11 @@ export default function GrnListPage() {
   }, [filters.status, setFilters]);
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['inventory', 'grn', filters],
+ queryKey: listQueryKey,
  queryFn: () => grnApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (prev, previousQuery) =>
+  sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? prev : undefined,
+ });
  const { data: grnOptions } = useQuery({
  queryKey: ['inventory', 'grn', 'options'],
  queryFn: grnApi.options,

@@ -54,9 +54,19 @@ async function buildEcho() {
     // carries both the session cookie and the current CSRF token.
     authorizer: (channel: { name: string }) => ({
       authorize: (socketId: string, callback: (error: boolean, data: unknown) => void) => {
+        const authEndpoint = channel.name.startsWith('private-customer.account.')
+          || channel.name.startsWith('private-customer.order.')
+          || channel.name.startsWith('private-customer.invoice.')
+          || channel.name.startsWith('private-customer.delivery-schedule.')
+          || channel.name.startsWith('private-portal.customer.')
+          ? '/api/v1/b2b/customer/broadcasting/auth'
+          : channel.name.startsWith('private-supplier.vendor.')
+          || channel.name.startsWith('private-portal.supplier.')
+          ? '/api/v1/b2b/supplier/broadcasting/auth'
+          : '/api/v1/broadcasting/auth';
         axios
           .post(
-            '/api/v1/broadcasting/auth',
+            authEndpoint,
             { socket_id: socketId, channel_name: channel.name },
             {
               withCredentials: true,
@@ -93,4 +103,14 @@ export function getEcho(): Promise<EchoClient> {
     });
   }
   return instance;
+}
+
+/** Disconnect the old session before listeners are rebound for a new identity. */
+export function resetEcho(): void {
+  const previous = instance;
+  instance = null;
+
+  if (previous) {
+    void previous.then((echo) => echo.disconnect()).catch(() => undefined);
+  }
 }

@@ -748,6 +748,7 @@ export default function ComponentGalleryPage() {
 
         <Demo name="FilterBar — active filters" hint="Searchable pickers, removable filter chips, and a live result count.">
           <FilterBar
+            savedViewsEnabled={false}
             filters={[
               { key: 'status', label: 'Status', type: 'select', options: [
                 { value: 'pending', label: 'Pending' },

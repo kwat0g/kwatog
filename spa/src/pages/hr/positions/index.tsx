@@ -30,6 +30,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { Position } from '@/types/hr';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { showUndoToast } from '@/lib/undoToast';
 const schema = z.object({
@@ -63,10 +64,12 @@ export default function PositionsPage() {
   queryFn: () => departmentsApi.tree(),
  });
 
- const { data, isLoading, isError, refetch } = useQuery({
-  queryKey: ['hr', 'positions', params],
+  const queryKey = ['hr', 'positions', params] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+   queryKey,
   queryFn: () => positionsApi.list(params),
-  placeholderData: (prev) => prev,
+   placeholderData: (previous, previousQuery) =>
+     sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
 
  const selected = useMemo(

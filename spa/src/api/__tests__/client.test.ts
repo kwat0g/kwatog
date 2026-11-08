@@ -15,9 +15,14 @@ vi.mock('react-hot-toast', () => ({
 
 // The 401 branch navigates; keep it inert and assert on the cache clear instead.
 vi.mock('@/lib/queryClient', () => ({ queryClient: { clear: vi.fn() } }));
+vi.mock('@/lib/authSessionSync', () => ({
+  clearAuthSessionDrafts: vi.fn(),
+  publishAuthSessionSignal: vi.fn(),
+}));
 
 import { client, sessionProbe, wasReportedGlobally } from '../client';
 import { queryClient } from '@/lib/queryClient';
+import { publishAuthSessionSignal } from '@/lib/authSessionSync';
 
 /** Drive the response interceptor directly — no network, no MSW. */
 function reject(opts: {
@@ -125,6 +130,13 @@ describe('response error interceptor', () => {
   it('does not mark what it left to the page', async () => {
     const err = await reject({ status: 422, method: 'post' }).catch((e) => e);
     expect(wasReportedGlobally(err)).toBe(false);
+  });
+
+  it('notifies peer tabs once after protected requests confirm the shared session is gone', async () => {
+    await expect(reject({ status: 401, url: '/things' })).rejects.toBeTruthy();
+    await expect(reject({ status: 401, url: '/other-things' })).rejects.toBeTruthy();
+    expect(publishAuthSessionSignal).toHaveBeenCalledWith('all', 'changed');
+    expect(publishAuthSessionSignal).toHaveBeenCalledOnce();
   });
 
   it('clears the query cache on 401 so no stale cross-user data survives', async () => {

@@ -59,6 +59,29 @@ class WorkOrderStartupTrialQualityTest extends TestCase
         $this->row = InspectionMeasurement::create(['inspection_id' => $this->inspection->id, 'sample_index' => 1, 'parameter_name' => 'Surface', 'parameter_type' => 'visual', 'acceptance_criterion' => 'No flash', 'is_critical' => false]);
     }
 
+
+    public function test_simple_startup_result_still_requires_actual_trial_output(): void
+    {
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('trial');
+        app(InspectionService::class)->recordBatchResult($this->inspection, [
+            'expected_result_version' => 0, 'quantity_result' => ['defective_quantity' => '0', 'descriptions' => []],
+        ], $this->maker);
+    }
+
+    public function test_simple_startup_pass_releases_only_the_recorded_trial_quantity(): void
+    {
+        $output = $this->capture();
+        $this->actingAs($this->maker)->postJson('/api/v1/quality/inspections/'.$this->inspection->hash_id.'/batch-result', [
+            'expected_result_version' => 0, 'quantity_result' => ['defective_quantity' => '0', 'descriptions' => []],
+        ])->assertSuccessful()->assertJsonPath('data.recorded_result', 'passed')
+            ->assertJsonPath('data.quantity_result.source_quantity', '3.000');
+        $this->assertSame(3, (int) $output->fresh()->good_count);
+        $this->assertSame(3, (int) $this->wo->fresh()->quantity_produced);
+        $this->assertNull($this->row->fresh()->is_pass);
+        $this->assertNotNull($output->fresh()->trial_settled_at);
+    }
+
     private function capture(): WorkOrderOutput
     {
         $output = WorkOrderOutput::create(['work_order_id' => $this->wo->id, 'recorded_by' => $this->maker->id, 'recorded_at' => now(), 'good_count' => 0, 'reject_count' => 0, 'batch_code' => 'TRIAL-TEST', 'trial_inspection_id' => $this->inspection->id, 'trial_quantity' => 3]);

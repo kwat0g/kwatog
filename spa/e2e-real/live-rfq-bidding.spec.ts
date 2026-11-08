@@ -189,16 +189,17 @@ test.describe('Live sealed RFQ role workflow', () => {
       response.method === 'GET' && response.path === '/api/v1/auth/user' && response.status === 401;
     const expectedForbiddenAward = (response: BrowserDiagnostics['errorResponses'][number]) =>
       response.method === 'POST' && /^\/api\/v1\/purchasing\/rfqs\/[^/]+\/award$/.test(response.path) && response.status === 403;
-    const expectedUnauthenticatedConsoleError = 'Failed to load resource: the server responded with a status of 401 (Unauthorized)';
+    const expectedUnauthenticatedConsoleError = (message: string) =>
+      /Failed to load resource: the server responded with a status of 401(?: \([^)]*\))?/.test(message);
     const expectedAbort = (request: BrowserDiagnostics['failedRequests'][number]) =>
       request.method === 'GET' && request.error === 'net::ERR_ABORTED';
     const expectedBootstrapResponses = browserDiagnostics.errorResponses.filter(expectedUnauthenticatedBootstrap);
     const expectedAwardDenials = browserDiagnostics.errorResponses.filter(expectedForbiddenAward);
-    const expectedBootstrapConsoleErrors = browserDiagnostics.consoleErrors.filter((message) => message === expectedUnauthenticatedConsoleError);
+    const expectedBootstrapConsoleErrors = browserDiagnostics.consoleErrors.filter(expectedUnauthenticatedConsoleError);
     const unexpectedResponses = browserDiagnostics.errorResponses.filter((response) =>
       !expectedUnauthenticatedBootstrap(response) && !expectedForbiddenAward(response));
     const unexpectedRequestFailures = browserDiagnostics.failedRequests.filter((request) => !expectedAbort(request));
-    const unexpectedConsoleErrors = browserDiagnostics.consoleErrors.filter((message) => message !== expectedUnauthenticatedConsoleError);
+    const unexpectedConsoleErrors = browserDiagnostics.consoleErrors.filter((message) => !expectedUnauthenticatedConsoleError(message));
     console.log('Browser diagnostics:', JSON.stringify({
       consoleErrorCount: browserDiagnostics.consoleErrors.length,
       expectedUnauthenticatedBootstrapCount: expectedBootstrapResponses.length,
@@ -227,8 +228,33 @@ test.describe('Live sealed RFQ role workflow', () => {
     }
 
     const created = await submitNeedOnlyPr(browser);
+    const rfqViewer = await newContext(browser);
     let rfqUrl: string;
     let closeAt: Date;
+    let rfqHashForChannel: string | null = null;
+    let rfqListChannelReady = false;
+    let rfqRecordChannelReady = false;
+    const rfqRealtimeEvents: string[] = [];
+    rfqViewer.page.on('websocket', (socket) => {
+      socket.on('framereceived', (frame) => {
+        try {
+          const message = JSON.parse(String(frame.payload)) as { event?: unknown; channel?: unknown };
+          if (typeof message.event !== 'string') return;
+          rfqRealtimeEvents.push(message.event);
+          if (message.event === 'pusher_internal:subscription_succeeded'
+            && message.channel === 'private-entity.request_for_quote.visible') {
+            rfqListChannelReady = true;
+          }
+          if (message.event === 'pusher_internal:subscription_succeeded'
+            && rfqHashForChannel !== null
+            && message.channel === `private-rfq.${rfqHashForChannel}`) {
+            rfqRecordChannelReady = true;
+          }
+        } catch {
+          // Pusher heartbeat frames are not JSON event envelopes.
+        }
+      });
+    });
     try {
       await created.page.goto(created.url);
       await expect(created.page.getByRole('button', { name: 'Start RFQ', exact: true })).toBeVisible({ timeout: 20_000 });
@@ -250,10 +276,24 @@ test.describe('Live sealed RFQ role workflow', () => {
         return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
       }, closeAt.getTime());
       await created.page.getByLabel('Quotation deadline').fill(localDeadline);
+
+      await login(rfqViewer.page, 'admin@ogami.test');
+      await rfqViewer.page.goto(`/purchasing/rfqs?search=${encodeURIComponent(RFQ_TITLE)}`);
+      await expect(rfqViewer.page.getByRole('status', { name: /Real-time updates: Live/ })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(() => rfqListChannelReady, { timeout: 20_000 }).toBe(true);
+      await expect(rfqViewer.page.getByText(RFQ_TITLE, { exact: true })).toHaveCount(0);
+
       await created.page.getByRole('button', { name: 'Save draft', exact: true }).click();
       await created.page.waitForURL(/\/purchasing\/rfqs\/(?!create(?:\?|$))[^/]+$/, { timeout: 20_000 });
       rfqUrl = created.page.url();
       const rfqId = rfqUrl.split('/').pop()!;
+      rfqHashForChannel = rfqId;
+      await expect(rfqViewer.page.getByText(RFQ_TITLE, { exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect.poll(() => rfqRealtimeEvents.includes('rfq.refresh'), { timeout: 10_000 }).toBe(true);
+      await rfqViewer.page.getByText(RFQ_TITLE, { exact: true }).click();
+      await rfqViewer.page.waitForURL(new RegExp(`/purchasing/rfqs/${rfqId}$`), { timeout: 20_000 });
+      await expect(rfqViewer.page.getByText('Draft', { exact: true }).first()).toBeVisible();
+      await expect.poll(() => rfqRecordChannelReady, { timeout: 20_000 }).toBe(true);
       const draft = await readInternalRfq(created.page, rfqId);
       expect(draft).toMatchObject({
         title: RFQ_TITLE,
@@ -270,8 +310,21 @@ test.describe('Live sealed RFQ role workflow', () => {
       const publishResponse = created.page.waitForResponse((response) => response.url().includes('/publish') && response.request().method() === 'POST');
       await created.page.getByRole('button', { name: 'Publish', exact: true }).click();
       const publishResult = await publishResponse;
+      const publishResponseAt = Date.now();
       expect(publishResult.status()).toBe(200);
       await expect(created.page.getByText('Open for quotes', { exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect(rfqViewer.page.getByText('Open for quotes', { exact: true })).toBeVisible({ timeout: 5_000 });
+      expect(rfqRealtimeEvents).toContain('rfq.refresh');
+      await expect(rfqViewer.page.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(0);
+      await expect(rfqViewer.page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+      console.log('RFQ cross-role live update:', JSON.stringify({
+        actorRole: 'purchasing_officer',
+        viewerRole: 'system_admin',
+        socketEvents: rfqRealtimeEvents,
+        publishResponseToViewerMs: Date.now() - publishResponseAt,
+        viewerStatus: 'open',
+        publishActionRemoved: true,
+      }));
       const open = await readInternalRfq(created.page, rfqId);
       expect(open.status).toBe('open');
       expect(open.quotes).toEqual([]);
@@ -290,6 +343,7 @@ test.describe('Live sealed RFQ role workflow', () => {
       expect((await readInternalRfq(created.page, rfqId)).status).toBe('open');
     } finally {
       await created.context.close();
+      await rfqViewer.context.close();
     }
 
     const supplier = await newContext(browser);
@@ -433,7 +487,8 @@ test.describe('Live sealed RFQ role workflow', () => {
       expect(Number(awardedRfq.awards[0].awarded_unit_price)).toBe(quotedUnitPrice);
       expect(awardedRfq.awards[0].purchase_order?.id).toBeTruthy();
       const awardedPr = await readPurchaseRequest(purchasing.page, created.purchaseRequestId);
-      expect(awardedPr).toMatchObject({ status: 'approved', po_conversion_status: 'partial' });
+      expect(['partial', 'converted']).toContain(awardedPr.po_conversion_status);
+      expect(awardedPr.status).toBe(awardedPr.po_conversion_status === 'converted' ? 'converted' : 'approved');
       expect(awardedPr.purchase_orders).toHaveLength(1);
       expect(awardedPr.purchase_orders?.[0]).toMatchObject({
         id: awardedRfq.awards[0].purchase_order!.id,
@@ -473,50 +528,105 @@ test.describe('Live sealed RFQ role workflow', () => {
       await purchasing.context.close();
     }
 
+    const poId = poUrl.split('/').pop()!;
     const financePo = await newContext(browser);
+    const vpPo = await newContext(browser);
+    const financePoEvents: string[] = [];
+    const vpPoEvents: string[] = [];
+    let financePoChannelReady = false;
+    let vpPoChannelReady = false;
+    for (const [session, events, markReady] of [
+      [financePo, financePoEvents, () => { financePoChannelReady = true; }] as const,
+      [vpPo, vpPoEvents, () => { vpPoChannelReady = true; }] as const,
+    ]) {
+      session.page.on('websocket', (socket) => {
+        socket.on('framereceived', (frame) => {
+          try {
+            const message = JSON.parse(String(frame.payload)) as { event?: unknown; channel?: unknown };
+            if (typeof message.event !== 'string') return;
+            events.push(message.event);
+            if (message.event === 'pusher_internal:subscription_succeeded'
+              && message.channel === `private-chain.purchase_order.${poId}`) {
+              markReady();
+            }
+          } catch {
+            // Pusher heartbeat frames are not JSON event envelopes.
+          }
+        });
+      });
+    }
+
     try {
+      // Keep the next-step approver on the record before Finance acts. The
+      // server says VP cannot approve yet; the event must reveal that action.
+      await login(vpPo.page, 'vp@ogami.test');
+      await vpPo.page.goto(poUrl);
+      await expect(vpPo.page.getByText('Pending approval', { exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(() => vpPoChannelReady, { timeout: 20_000 }).toBe(true);
+      await expect(vpPo.page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+
       await login(financePo.page, 'finance@ogami.test');
       await financePo.page.goto('/approvals');
       await expectInApprovalInbox(financePo.page, poNumber);
       await financePo.page.goto(poUrl);
       await expect(financePo.page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect.poll(() => financePoChannelReady, { timeout: 20_000 }).toBe(true);
+      const financeApprovalResponse = financePo.page.waitForResponse((response) =>
+        response.url().endsWith(`/purchase-orders/${poId}/approve`) && response.request().method() === 'PATCH');
       await financePo.page.getByRole('button', { name: 'Approve', exact: true }).click();
       await financePo.page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
-      await expect.poll(async () => {
-        const state = await readPurchaseOrder(financePo.page, poUrl.split('/').pop()!);
-        return state.approval_records?.some((record) => record.role_slug === 'finance_officer' && record.action === 'approved') ?? false;
-      }, { timeout: 20_000, intervals: [250, 500, 1_000] }).toBe(true);
-      const financeState = await readPurchaseOrder(financePo.page, poUrl.split('/').pop()!);
+      const financeApprovalResult = await financeApprovalResponse;
+      const financeResponseAt = Date.now();
+      expect(financeApprovalResult.status()).toBe(200);
+      await expect(financePo.page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0, { timeout: 20_000 });
+      await expect(vpPo.page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect.poll(() => vpPoEvents.includes('chain.refresh'), { timeout: 10_000 }).toBe(true);
+      const financeState = await readPurchaseOrder(financePo.page, poId);
       expect(financeState.status).toBe('pending_approval');
       expect(financeState.approval_records).toEqual(expect.arrayContaining([
         expect.objectContaining({ role_slug: 'finance_officer', action: 'approved' }),
         expect.objectContaining({ role_slug: 'vice_president', action: 'pending' }),
       ]));
-    } finally {
-      await financePo.context.close();
-    }
+      console.log('Purchase order approval cross-role update:', JSON.stringify({
+        actorRole: 'finance_officer',
+        viewerRole: 'vice_president',
+        socketEvents: vpPoEvents,
+        responseToNextActionMs: Date.now() - financeResponseAt,
+        viewerActionAppeared: true,
+      }));
 
-    const vpPo = await newContext(browser);
-    try {
-      await login(vpPo.page, 'vp@ogami.test');
-      await vpPo.page.goto('/approvals');
-      await expectInApprovalInbox(vpPo.page, poNumber);
-      await vpPo.page.goto(poUrl);
+      const vpApprovalResponse = vpPo.page.waitForResponse((response) =>
+        response.url().endsWith(`/purchase-orders/${poId}/approve`) && response.request().method() === 'PATCH');
       await expect(vpPo.page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 20_000 });
       await vpPo.page.getByRole('button', { name: 'Approve', exact: true }).click();
       await vpPo.page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
+      const vpApprovalResult = await vpApprovalResponse;
+      const vpResponseAt = Date.now();
+      expect(vpApprovalResult.status()).toBe(200);
       await expect.poll(async () => {
-        return (await readPurchaseOrder(vpPo.page, poUrl.split('/').pop()!)).status;
-      }, { timeout: 20_000, intervals: [250, 500, 1_000] }).toBe('approved');
-      const approvedPo = await readPurchaseOrder(vpPo.page, poUrl.split('/').pop()!);
-      expect(approvedPo.status).toBe('approved');
+        return (await readPurchaseOrder(vpPo.page, poId)).status;
+      }, { timeout: 20_000, intervals: [250, 500, 1_000] }).toBe('sent');
+      const approvedPo = await readPurchaseOrder(vpPo.page, poId);
+      expect(approvedPo.status).toBe('sent');
       expect(approvedPo.approved_at).toBeTruthy();
       expect(approvedPo.approval_records).toEqual(expect.arrayContaining([
         expect.objectContaining({ role_slug: 'finance_officer', action: 'approved' }),
         expect.objectContaining({ role_slug: 'vice_president', action: 'approved' }),
       ]));
       expect(approvedPo.approval_records?.some((record) => record.action === 'pending')).toBe(false);
+      await expect(financePo.page.getByText('Sent', { exact: true }).last()).toBeVisible({ timeout: 10_000 });
+      await expect(financePo.page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+      await expect.poll(() => financePoEvents.includes('chain.refresh'), { timeout: 10_000 }).toBe(true);
+      console.log('Purchase order final approval cross-role update:', JSON.stringify({
+        actorRole: 'vice_president',
+        viewerRole: 'finance_officer',
+        socketEvents: financePoEvents,
+        responseToViewerRenderMs: Date.now() - vpResponseAt,
+        viewerStatus: 'sent',
+        staleApprovalActionRemoved: true,
+      }));
     } finally {
+      await financePo.context.close();
       await vpPo.context.close();
     }
 

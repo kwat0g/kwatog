@@ -16,6 +16,8 @@ use App\Modules\HR\Enums\EmploymentChangeType;
 use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Attendance\Models\EmployeeShiftAssignment;
+use App\Modules\Attendance\Services\ShiftAssignmentRealtimeService;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Models\EmployeeSalaryHistory;
 use App\Modules\HR\Models\Position;
@@ -143,7 +145,7 @@ class EmployeeService
             $query->where('status', $filters['status']);
         }
 
-        $sort = $filters['sort'] ?? 'employee_no';
+        $sort = $filters['sort'] ?? 'date_hired';
         $dir = $filters['direction'] ?? 'desc';
         $allowed = ['employee_no', 'first_name', 'last_name', 'date_hired', 'status', 'created_at'];
         if (in_array($sort, $allowed, true)) {
@@ -237,12 +239,31 @@ class EmployeeService
                 }
             }
             if ($shiftId && Schema::hasTable('employee_shift_assignments')) {
-                DB::table('employee_shift_assignments')->insertOrIgnore([
+                $assignmentEffectiveDate = $employee->date_hired?->toDateString() ?? now()->toDateString();
+                $assignment = [
                     'employee_id'    => $employee->id,
                     'shift_id'       => $shiftId,
-                    'effective_date' => $employee->date_hired?->toDateString() ?? now()->toDateString(),
+                    'effective_date' => $assignmentEffectiveDate,
                     'created_at'     => now(),
-                ]);
+                ];
+                if (Schema::hasColumn('employee_shift_assignments', 'working_days')) {
+                    $assignment['working_days'] = json_encode(
+                        EmployeeShiftAssignment::DEFAULT_WORKING_DAYS,
+                        JSON_THROW_ON_ERROR,
+                    );
+                }
+                $inserted = DB::table('employee_shift_assignments')->insertOrIgnore($assignment);
+                if ($inserted > 0) {
+                    $assignment = EmployeeShiftAssignment::query()
+                        ->where('employee_id', $employee->id)
+                        ->where('shift_id', $shiftId)
+                        ->whereDate('effective_date', $assignmentEffectiveDate)
+                        ->latest('id')
+                        ->first();
+                    if ($assignment !== null) {
+                        app(ShiftAssignmentRealtimeService::class)->stage($assignment, 'created');
+                    }
+                }
             }
 
             // U4 — initialize onboarding tracker (auto-completes profile +

@@ -23,6 +23,7 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanPaymentType;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
+use App\Modules\Loans\Exceptions\LoanStateConflictException;
 use App\Modules\Loans\Events\LoanDecided;
 use App\Modules\Loans\Events\LoanSubmitted;
 use App\Modules\Loans\Models\EmployeeLoan;
@@ -226,7 +227,7 @@ class LoanService
                 new LoanSubmitted($loan->fresh(['employee'])),
             );
 
-            return $loan->load('employee');
+            return $loan->fresh(['employee']);
         });
     }
 
@@ -246,17 +247,26 @@ class LoanService
             ->contains(fn (User $head) => $head->hasPermission('loans.approve'));
     }
 
-    public function approve(EmployeeLoan $loan, User $user, ?string $remarks = null): EmployeeLoan
+    public function approve(EmployeeLoan $loan, User $user, ?string $remarks = null, ?string $expectedVersion = null): EmployeeLoan
     {
-        return DB::transaction(function () use ($loan, $user, $remarks) {
+        return DB::transaction(function () use ($loan, $user, $remarks, $expectedVersion) {
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             if ($authoritative->status !== LoanStatus::Pending) {
-                throw new BusinessRuleException('Only pending loans can be approved.');
+                throw new LoanStateConflictException('This loan is no longer pending. Reload it and review the current status.');
             }
             if (! $user->hasPermission('loans.approve') || ! $this->access->canDecide($user, $authoritative)) {
                 throw new BusinessRuleException('You do not have permission to decide this loan within your row scope.');
             }
-            $this->approvals->approve($authoritative, $user, $remarks);
+            try {
+                $this->approvals->approve($authoritative, $user, $remarks);
+            } catch (BusinessRuleException $e) {
+                if ($e->getMessage() === 'Nothing pending to approve.') {
+                    throw new LoanStateConflictException('The approval step has already changed. Reload the loan and review its current actions.');
+                }
+
+                throw $e;
+            }
 
             $isFinal = $this->approvals->isFullyApproved($authoritative);
             if ($isFinal) {
@@ -313,17 +323,26 @@ class LoanService
         return ['approved' => $approved, 'failed' => $failed];
     }
 
-    public function reject(EmployeeLoan $loan, User $user, string $reason): EmployeeLoan
+    public function reject(EmployeeLoan $loan, User $user, string $reason, ?string $expectedVersion = null): EmployeeLoan
     {
-        return DB::transaction(function () use ($loan, $user, $reason) {
+        return DB::transaction(function () use ($loan, $user, $reason, $expectedVersion) {
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             if ($authoritative->status !== LoanStatus::Pending) {
-                throw new BusinessRuleException('Only pending loans can be rejected.');
+                throw new LoanStateConflictException('This loan is no longer pending. Reload it and review the current status.');
             }
             if (! $user->hasPermission('loans.approve') || ! $this->access->canDecide($user, $authoritative)) {
                 throw new BusinessRuleException('You do not have permission to decide this loan within your row scope.');
             }
-            $this->approvals->reject($authoritative, $user, $reason);
+            try {
+                $this->approvals->reject($authoritative, $user, $reason);
+            } catch (BusinessRuleException $e) {
+                if ($e->getMessage() === 'Nothing pending to reject.') {
+                    throw new LoanStateConflictException('The approval step has already changed. Reload the loan and review its current actions.');
+                }
+
+                throw $e;
+            }
             $this->stateMachine->transition($authoritative, LoanStatus::Rejected);
             $authoritative->save();
             $loan = $authoritative->fresh(['employee']);
@@ -335,16 +354,17 @@ class LoanService
         });
     }
 
-    public function cancel(EmployeeLoan $loan, User $user): EmployeeLoan
+    public function cancel(EmployeeLoan $loan, User $user, ?string $expectedVersion = null): EmployeeLoan
     {
-        return DB::transaction(function () use ($loan, $user) {
+        return DB::transaction(function () use ($loan, $user, $expectedVersion) {
             if (! $user->hasPermission('loans.write_off') || ! $this->access->canDecide($user, $loan)) {
                 throw new BusinessRuleException('You do not have permission to cancel this loan within your row scope.');
             }
 
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             if ($authoritative->status !== LoanStatus::Pending) {
-                throw new BusinessRuleException('Active loans cannot be cancelled; use the approved write-off or settlement workflow.');
+                throw new LoanStateConflictException('This loan is no longer pending. Reload it and review the current status.');
             }
             if (! $this->access->canDecide($user, $authoritative)) {
                 throw new BusinessRuleException('You do not have permission to cancel this loan within your row scope.');
@@ -358,14 +378,15 @@ class LoanService
         });
     }
 
-    public function requestWriteOff(EmployeeLoan $loan, User $maker, string $reason, string $evidence): EmployeeLoan
+    public function requestWriteOff(EmployeeLoan $loan, User $maker, string $reason, string $evidence, ?string $expectedVersion = null): EmployeeLoan
     {
-        return DB::transaction(function () use ($loan, $maker, $reason, $evidence) {
+        return DB::transaction(function () use ($loan, $maker, $reason, $evidence, $expectedVersion) {
             if (! $maker->hasPermission('loans.write_off.request') || ! $this->access->canDecide($maker, $loan)) {
                 throw new BusinessRuleException('You do not have Finance permission to request this loan write-off within your row scope.');
             }
 
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             if (! $this->access->canDecide($maker, $authoritative)) {
                 throw new BusinessRuleException('You do not have permission to request this loan write-off within your row scope.');
             }
@@ -373,7 +394,7 @@ class LoanService
                 return $authoritative->fresh(['employee']);
             }
             if ($authoritative->status !== LoanStatus::Active) {
-                throw new BusinessRuleException('Only active loans can be submitted for write-off.');
+                throw new LoanStateConflictException('This loan is no longer active. Reload it and review the current status.');
             }
 
             $balance = $this->outstandingBalance($authoritative);
@@ -400,20 +421,21 @@ class LoanService
         });
     }
 
-    public function approveWriteOff(EmployeeLoan $loan, User $checker, ?string $remarks = null): EmployeeLoan
+    public function approveWriteOff(EmployeeLoan $loan, User $checker, ?string $remarks = null, ?string $expectedVersion = null): EmployeeLoan
     {
-        return DB::transaction(function () use ($loan, $checker, $remarks) {
+        return DB::transaction(function () use ($loan, $checker, $remarks, $expectedVersion) {
             if (! ApprovalDelegation::canActForPermission($checker, 'loans.write_off.approve', [(int) $loan->write_off_requested_by])
                 || ! $this->access->canDecide($checker, $loan)) {
                 throw new BusinessRuleException('You do not have Finance permission to approve this loan write-off within your row scope.');
             }
 
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             if ($authoritative->status === LoanStatus::WrittenOff) {
                 return $authoritative->fresh(['employee']);
             }
             if ($authoritative->status !== LoanStatus::WriteOffPending) {
-                throw new BusinessRuleException('Only pending loan write-offs can be approved.');
+                throw new LoanStateConflictException('This loan write-off is no longer pending. Reload it and review the current status.');
             }
             if ((int) $authoritative->write_off_requested_by === (int) $checker->id) {
                 throw new BusinessRuleException('The write-off maker cannot approve the same write-off.');
@@ -458,15 +480,16 @@ class LoanService
         });
     }
 
-    public function withdraw(EmployeeLoan $loan, Employee $employee): EmployeeLoan
+    public function withdraw(EmployeeLoan $loan, Employee $employee, ?string $expectedVersion = null): EmployeeLoan
     {
-        return DB::transaction(function () use ($loan, $employee) {
+        return DB::transaction(function () use ($loan, $employee, $expectedVersion) {
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             if ((int) $authoritative->employee_id !== (int) $employee->id) {
                 throw new BusinessRuleException('You may only withdraw your own loan request.');
             }
             if ($authoritative->status !== LoanStatus::Pending) {
-                throw new BusinessRuleException('Only pending loans can be withdrawn.');
+                throw new LoanStateConflictException('This loan is no longer pending. Reload it and review the current status.');
             }
 
             $this->retirePendingApprovalRecords($authoritative);
@@ -501,12 +524,13 @@ class LoanService
         ?int $clearanceId = null,
         ?string $idempotencyKey = null,
         ?User $actor = null,
+        ?string $expectedVersion = null,
     ): LoanPayment {
         if ($type === LoanPaymentType::FinalPay && $clearanceId !== null) {
             $idempotencyKey = 'final-pay-clearance-'.$clearanceId;
         }
 
-        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks, $paymentDate, $clearanceId, $idempotencyKey, $actor) {
+        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks, $paymentDate, $clearanceId, $idempotencyKey, $actor, $expectedVersion) {
             if ($type === LoanPaymentType::Manual && $payrollId === null && $clearanceId === null) {
                 $this->payrollPeriods->assertLoanPaymentMutable(
                     (int) $loan->employee_id,
@@ -519,6 +543,7 @@ class LoanService
             // holding that row lock, then commit the payment detail and loan
             // aggregate in this same transaction.
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->getKey());
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             if ($idempotencyKey !== null) {
                 $existing = $authoritative->payments()
                     ->where('idempotency_key', $idempotencyKey)
@@ -528,7 +553,7 @@ class LoanService
                 }
             }
             if ($authoritative->status !== LoanStatus::Active) {
-                throw new BusinessRuleException('Only active loans accept payments.');
+                throw new LoanStateConflictException('This loan no longer accepts payments. Reload it and review the current balance.');
             }
             $normalizedAmount = $this->normalizeMoneyAmount($amount, 'Payment');
             $ledgerPaid = (string) $authoritative->payments()->reorder()->sum('amount');
@@ -616,6 +641,19 @@ class LoanService
     {
         if (! $type->isSupported()) {
             throw new BusinessRuleException('Government loan types are not currently supported.');
+        }
+    }
+
+    private function assertExpectedVersion(EmployeeLoan $loan, ?string $expectedVersion): void
+    {
+        if ($expectedVersion === null || trim($expectedVersion) === '') {
+            return;
+        }
+
+        $expectedVersion = trim(trim($expectedVersion), '"');
+        $currentVersion = $loan->updated_at?->format('Y-m-d\\TH:i:s.uP');
+        if ($currentVersion === null || ! hash_equals($currentVersion, $expectedVersion)) {
+            throw new LoanStateConflictException('This loan changed since you loaded it. Reload the record and review its current actions.');
         }
     }
 

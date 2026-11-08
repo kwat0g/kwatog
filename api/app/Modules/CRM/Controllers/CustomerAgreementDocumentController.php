@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\CustomerAgreementDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class CustomerAgreementDocumentController
@@ -36,14 +37,14 @@ class CustomerAgreementDocumentController
         }
 
         try {
-            $document = CustomerAgreementDocument::query()->create([
+            $document = DB::transaction(fn (): CustomerAgreementDocument => CustomerAgreementDocument::query()->create([
                 'customer_id' => $customer->id,
                 'file_path' => $path,
                 'filename' => str_replace(["\"", "\r", "\n"], '_', basename(str_replace('\\', '/', $file->getClientOriginalName()))),
                 'size' => $file->getSize(),
                 'mime' => $file->getMimeType() ?: 'application/pdf',
                 'uploaded_by' => $request->user()->id,
-            ]);
+            ]));
         } catch (\Throwable $exception) {
             $disk->delete($path);
             throw $exception;

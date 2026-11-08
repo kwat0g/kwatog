@@ -154,7 +154,6 @@ export default function MachineHealthPage() {
   const { data: machines } = useQuery({
     queryKey: ['machines', 'list'],
     queryFn: () => machinesApi.list({ per_page: 500 }),
-    placeholderData: (prev) => prev,
   });
   const { data: metricOptions } = useQuery({
     queryKey: ['maintenance', 'condition-metric-options'],

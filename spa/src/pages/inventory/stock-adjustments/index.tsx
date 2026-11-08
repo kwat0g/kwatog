@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
+import { isAxiosError } from 'axios';
 import { stockAdjustmentsApi, type StockAdjustmentListParams } from '@/api/inventory/stock';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -15,11 +15,16 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
 import type { StockAdjustment } from '@/types/inventory';
+import type { PaginatedResponse } from '@/types';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'danger' | 'neutral'> = {
  pending: 'warning',
@@ -43,16 +48,60 @@ function statusDetail(row: StockAdjustment): string {
 export default function StockAdjustmentsPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
+ useRealtimeList('stock_adjustment', can('inventory.adjust') || can('inventory.adjust.approve') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<StockAdjustmentListParams>(DEFAULT_FILTERS);
- const [approveTarget, setApproveTarget] = useState<StockAdjustment | null>(null);
- const [rejectTarget, setRejectTarget] = useState<StockAdjustment | null>(null);
- const [withdrawTarget, setWithdrawTarget] = useState<StockAdjustment | null>(null);
+ const handleMutationError = (error: unknown, fallback: string, closeAction: () => void) => {
+  if (isAxiosError(error) && error.response?.status === 409) {
+   closeAction();
+  }
+  void refetch();
+  reportMutationError(error, fallback);
+ };
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['inventory', 'stock-adjustments', filters],
+ const queryKey = ['inventory', 'stock-adjustments', filters] as const;
+ const { data, isLoading, isFetching, isError, refetch } = useQuery({
+ queryKey,
  queryFn: () => stockAdjustmentsApi.list(filters),
- placeholderData: (prev) => prev,
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
+ const adjustmentRows = data?.data;
+ const approveActionTarget = useQueryRecordTarget(adjustmentRows, { isFetching, isError });
+ const rejectActionTarget = useQueryRecordTarget(adjustmentRows, { isFetching, isError });
+ const withdrawActionTarget = useQueryRecordTarget(adjustmentRows, { isFetching, isError });
+ const approveTarget = approveActionTarget.target;
+ const rejectTarget = rejectActionTarget.target;
+ const withdrawTarget = withdrawActionTarget.target;
+ const canApproveTarget = approveActionTarget.isFresh && approveTarget?.available_actions?.approve === true;
+ const canRejectTarget = rejectActionTarget.isFresh && rejectTarget?.available_actions?.reject === true;
+ const canWithdrawTarget = withdrawActionTarget.isFresh && withdrawTarget?.available_actions?.withdraw === true;
+ const reconcileAdjustmentResponse = (updated: StockAdjustment) => {
+  qc.setQueryData<PaginatedResponse<StockAdjustment>>(queryKey, (current) => {
+   if (!current || !current.data.some((row) => row.id === updated.id)) return current;
+   const remainsInCurrentFilter = !filters.status || filters.status === updated.status;
+   const rows = remainsInCurrentFilter
+    ? current.data.map((row) => row.id === updated.id ? updated : row)
+    : current.data.filter((row) => row.id !== updated.id);
+   const removed = rows.length < current.data.length;
+   const total = removed ? Math.max(0, current.meta.total - 1) : current.meta.total;
+   const from = rows.length > 0
+    ? (current.meta.current_page - 1) * current.meta.per_page + 1
+    : null;
+   const to = from === null ? null : from + rows.length - 1;
+   return {
+    ...current,
+    data: rows,
+    meta: {
+     ...current.meta,
+     total,
+     last_page: Math.max(1, Math.ceil(total / current.meta.per_page)),
+     from,
+     to,
+    },
+   };
+  });
+  void invalidateRealtimeChange(qc, { entityType: 'stock_adjustment', entityId: updated.id });
+ };
  const { data: options } = useQuery({
   queryKey: ['inventory', 'stock-adjustments', 'options'],
   queryFn: stockAdjustmentsApi.options,
@@ -69,31 +118,30 @@ export default function StockAdjustmentsPage() {
 
  const approve = useMutation({
  mutationFn: (id: string) => stockAdjustmentsApi.approve(id),
- onSuccess: () => {
+ onSuccess: (updated) => {
  toast.success('Adjustment approved — stock movement posted.');
- setApproveTarget(null);
- qc.invalidateQueries({ queryKey: ['inventory', 'stock-adjustments'] });
- qc.invalidateQueries({ queryKey: ['inventory', 'stock-levels'] });
+ approveActionTarget.close();
+ reconcileAdjustmentResponse(updated);
  },
- onError: (error) => reportMutationError(error, 'Could not approve the stock adjustment.'),
+ onError: (error) => handleMutationError(error, 'Could not approve the stock adjustment.', () => approveActionTarget.close()),
  });
  const reject = useMutation({
  mutationFn: ({ id, reason }: { id: string; reason: string }) => stockAdjustmentsApi.reject(id, reason),
- onSuccess: () => {
+ onSuccess: (updated) => {
  toast.success('Adjustment rejected. No stock movement was posted.');
- setRejectTarget(null);
- qc.invalidateQueries({ queryKey: ['inventory', 'stock-adjustments'] });
+ rejectActionTarget.close();
+ reconcileAdjustmentResponse(updated);
  },
- onError: (error) => reportMutationError(error, 'Could not reject the stock adjustment.'),
+ onError: (error) => handleMutationError(error, 'Could not reject the stock adjustment.', () => rejectActionTarget.close()),
  });
  const withdraw = useMutation({
  mutationFn: (id: string) => stockAdjustmentsApi.withdraw(id),
- onSuccess: () => {
+ onSuccess: (updated) => {
  toast.success('Adjustment withdrawn. No stock movement was posted.');
- setWithdrawTarget(null);
- qc.invalidateQueries({ queryKey: ['inventory', 'stock-adjustments'] });
+ withdrawActionTarget.close();
+ reconcileAdjustmentResponse(updated);
  },
- onError: (error) => reportMutationError(error, 'Could not withdraw the stock adjustment.'),
+ onError: (error) => handleMutationError(error, 'Could not withdraw the stock adjustment.', () => withdrawActionTarget.close()),
  });
 
  const columns: Column<StockAdjustment>[] = [
@@ -125,9 +173,9 @@ export default function StockAdjustmentsPage() {
  ...(can('inventory.adjust.approve') || can('inventory.adjust')
  ? [{ key: 'actions', header: 'Actions', className: 'w-[136px] min-w-[136px]', cell: (r: StockAdjustment) => r.status === 'pending' ? (
  <div className="flex flex-wrap justify-end gap-1">
- {r.can_approve && <Button size="xs" variant="primary" onClick={() => setApproveTarget(r)}>Approve</Button>}
- {r.can_reject && <Button size="xs" variant="danger" onClick={() => setRejectTarget(r)}>Reject</Button>}
- {r.can_withdraw && <Button size="xs" variant="secondary" onClick={() => setWithdrawTarget(r)}>Withdraw</Button>}
+ {r.available_actions?.approve === true && <Button size="xs" variant="primary" onClick={() => approveActionTarget.open(r)}>Approve</Button>}
+ {r.available_actions?.reject === true && <Button size="xs" variant="danger" onClick={() => rejectActionTarget.open(r)}>Reject</Button>}
+ {r.available_actions?.withdraw === true && <Button size="xs" variant="secondary" onClick={() => withdrawActionTarget.open(r)}>Withdraw</Button>}
  </div>
  ) : null,
  }]
@@ -193,36 +241,39 @@ export default function StockAdjustmentsPage() {
  )}
 
  <ConfirmDialog
- isOpen={approveTarget !== null}
- onClose={() => setApproveTarget(null)}
+ isOpen={approveActionTarget.targetId !== null}
+ onClose={approveActionTarget.close}
  title="Approve adjustment?"
- description={`Post a ${approveTarget?.direction === 'in' ? 'receipt' : 'issue'} of ${formatQuantity(approveTarget?.quantity)} for ${approveTarget?.item?.code ?? 'this item'}? The stock movement is posted immediately.`}
+ description={approveActionTarget.isChecking ? 'Checking the latest adjustment status and available actions…' : approveActionTarget.isUnverified ? 'The latest adjustment status could not be checked. Refresh the list before continuing.' : !canApproveTarget ? 'This adjustment is no longer available for approval.' : `Post a ${approveTarget?.direction === 'in' ? 'receipt' : 'issue'} of ${formatQuantity(approveTarget?.quantity)} for ${approveTarget?.item?.code ?? 'this item'}? The stock movement is posted immediately.`}
  confirmLabel="Approve"
  pending={approve.isPending}
-  onConfirm={() => { if (approveTarget) approve.mutate(approveTarget.id); }}
+ disabled={!canApproveTarget}
+ onConfirm={() => { if (approveTarget && canApproveTarget) approve.mutate(approveTarget.id); }}
  />
  <ReasonDialog
-  isOpen={rejectTarget !== null}
-  onClose={() => setRejectTarget(null)}
+  isOpen={rejectActionTarget.targetId !== null}
+  onClose={rejectActionTarget.close}
   title="Reject adjustment?"
-  description={`Reject the pending adjustment for ${rejectTarget?.item?.code ?? 'this item'} (${formatQuantity(rejectTarget?.quantity)})? No stock movement will be posted.`}
+  description={rejectActionTarget.isChecking ? 'Checking the latest adjustment status and available actions…' : rejectActionTarget.isUnverified ? 'The latest adjustment status could not be checked. Refresh the list before continuing.' : !canRejectTarget ? 'This adjustment is no longer available for rejection.' : `Reject the pending adjustment for ${rejectTarget?.item?.code ?? 'this item'} (${formatQuantity(rejectTarget?.quantity)})? No stock movement will be posted.`}
   reasonLabel="Rejection reason"
   reasonPlaceholder="Explain why Finance is rejecting this adjustment."
   minLength={1}
   maxLength={500}
   confirmLabel="Reject adjustment"
   pending={reject.isPending}
-  onConfirm={(reason) => { if (rejectTarget) reject.mutate({ id: rejectTarget.id, reason }); }}
+  disabled={!canRejectTarget}
+  onConfirm={(reason) => { if (rejectTarget && canRejectTarget) reject.mutate({ id: rejectTarget.id, reason }); }}
  />
  <ConfirmDialog
-  isOpen={withdrawTarget !== null}
-  onClose={() => setWithdrawTarget(null)}
+  isOpen={withdrawActionTarget.targetId !== null}
+  onClose={withdrawActionTarget.close}
   title="Withdraw adjustment?"
-  description={`Withdraw your pending adjustment of ${formatQuantity(withdrawTarget?.quantity)} for ${withdrawTarget?.item?.code ?? 'this item'}? It will close without posting a stock movement.`}
+  description={withdrawActionTarget.isChecking ? 'Checking the latest adjustment status and available actions…' : withdrawActionTarget.isUnverified ? 'The latest adjustment status could not be checked. Refresh the list before continuing.' : !canWithdrawTarget ? 'This adjustment is no longer available for withdrawal.' : `Withdraw your pending adjustment of ${formatQuantity(withdrawTarget?.quantity)} for ${withdrawTarget?.item?.code ?? 'this item'}? It will close without posting a stock movement.`}
   confirmLabel="Withdraw"
   variant="danger"
   pending={withdraw.isPending}
-  onConfirm={() => { if (withdrawTarget) withdraw.mutate(withdrawTarget.id); }}
+  disabled={!canWithdrawTarget}
+  onConfirm={() => { if (withdrawTarget && canWithdrawTarget) withdraw.mutate(withdrawTarget.id); }}
  />
  </PageShell>
  );

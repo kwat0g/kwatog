@@ -5,6 +5,7 @@ import { AssignmentReview, CrewPanel, SlotForm, WorkerScheduleStatus } from './C
 import { workOrdersApi } from '@/api/production/workOrders';
 import { crewValidation } from '@/lib/productionCrewValidation';
 import type { EmployeeOption } from '@/types/production-crew';
+import type { WorkOrder } from '@/types/production';
 import {
   offsetScheduleDate,
   productionInputDateTime,
@@ -254,11 +255,23 @@ function show(readOnly = false) {
 it('reviews paused production timing separately and submits offset timestamps', async () => {
   vi.mocked(workOrdersApi.crew).mockResolvedValue({ ...context, can_review_slot: true });
   vi.mocked(workOrdersApi.crewOptions).mockResolvedValue(members);
-  vi.mocked(workOrdersApi.reviewSlot).mockResolvedValue({} as never);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const detailKey = ['production', 'work-orders', 'detail', 'wo-1'];
+  const previous = { id: 'wo-1', status: 'paused', updated_at: 'old' } as WorkOrder;
+  const updated = { ...previous, updated_at: 'new' } as WorkOrder;
+  let resolveStaleRead!: (value: WorkOrder) => void;
+  const staleRead = new Promise<WorkOrder>((resolve) => {
+    resolveStaleRead = resolve;
+  });
+  client.setQueryData(detailKey, previous);
+  const staleFetch = client.fetchQuery({
+    queryKey: detailKey,
+    queryFn: () => staleRead,
+    staleTime: 0,
+  });
+  vi.mocked(workOrdersApi.reviewSlot).mockResolvedValue(updated);
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <CrewPanel woId="wo-1" status="paused" />
     </QueryClientProvider>,
   );
@@ -288,6 +301,11 @@ it('reviews paused production timing separately and submits offset timestamps', 
       undefined,
     ),
   );
+  await waitFor(() => expect(client.getQueryData(detailKey)).toEqual(updated));
+  resolveStaleRead(previous);
+  await staleFetch.catch(() => undefined);
+  expect(client.getQueryData(detailKey)).toEqual(updated);
+  client.clear();
 });
 
 describe('compact crew assignment', () => {

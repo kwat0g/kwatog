@@ -7,7 +7,7 @@ import { reportMutationError } from '@/lib/formErrors';
  * Backend scopes everything to the session employee (never sends employee_id).
  */
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -30,9 +30,28 @@ import { cn } from '@/lib/cn';
 import type { ApiValidationError } from '@/types';
 import type {
   SelfServiceOvertimeRequest,
+  SelfServiceOvertimeResponse,
   OvertimeStatus,
   ApplyOvertimePayload,
 } from '@/types/self-service';
+import { usePersonalOvertimeRealtime } from '@/hooks/useOvertimeRealtime';
+
+function reconcileOvertimeRequest(queryClient: QueryClient, updated: SelfServiceOvertimeRequest): void {
+  queryClient.setQueriesData<SelfServiceOvertimeResponse>(
+    { queryKey: ['self-service', 'overtime'] },
+    (current) => {
+      if (!current) return current;
+
+      const pending = current.pending.filter((request) => request.id !== updated.id);
+      const history = current.history.filter((request) => request.id !== updated.id);
+      const destination = updated.status === 'pending' ? pending : history;
+      destination.push(updated);
+      destination.sort((left, right) => (right.date ?? '').localeCompare(left.date ?? ''));
+
+      return { ...current, pending, history };
+    },
+  );
+}
 
 const STATUS_CHIP: Record<OvertimeStatus, 'success' | 'warning' | 'danger'> = {
   pending: 'warning',
@@ -41,8 +60,8 @@ const STATUS_CHIP: Record<OvertimeStatus, 'success' | 'warning' | 'danger'> = {
 };
 
 function requestColumns(
-  onCancel?: (id: string) => void,
-  onRestore?: (id: string) => void,
+  onCancel?: (request: SelfServiceOvertimeRequest) => void,
+  onRestore?: (request: SelfServiceOvertimeRequest) => void,
 ): Column<SelfServiceOvertimeRequest>[] {
   return [
     {
@@ -91,12 +110,12 @@ function requestColumns(
             header: '',
             align: 'right' as const,
             cell: (r: SelfServiceOvertimeRequest) =>
-              r.status === 'pending' ? (
+              r.available_actions?.cancel === true ? (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-danger-fg hover:bg-danger-bg"
-                  onClick={() => onCancel(r.id)}
+                  onClick={() => onCancel(r)}
                   aria-label="Cancel this overtime request"
                 >
                   Cancel
@@ -112,12 +131,12 @@ function requestColumns(
             header: '',
             align: 'right' as const,
             cell: (r: SelfServiceOvertimeRequest) =>
-              r.can_restore ? (
+              r.available_actions?.restore === true ? (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-accent-fg hover:bg-accent-bg"
-                  onClick={() => onRestore(r.id)}
+                  onClick={() => onRestore(r)}
                   aria-label="Restore this cancelled overtime request"
                 >
                   Restore
@@ -132,8 +151,9 @@ function requestColumns(
 export default function SelfServiceOvertimePage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  usePersonalOvertimeRealtime();
   const [modalOpen, setModalOpen] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<{ id: string; version?: number } | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['self-service', 'overtime', id],
@@ -144,21 +164,23 @@ export default function SelfServiceOvertimePage() {
   const selectedRequestMissing = Boolean(id && data && pendingRequests.length + historyRequests.length === 0);
 
   const cancel = useMutation({
-    mutationFn: (id: string) => selfServiceApi.cancelOvertime(id),
-    onSuccess: () => {
+    mutationFn: ({ id, version }: { id: string; version?: number }) => selfServiceApi.cancelOvertime(id, version),
+    onSuccess: (response) => {
+      reconcileOvertimeRequest(queryClient, response.data);
       toast.success('Overtime request cancelled.');
-      queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
     },
     onError: (error) => reportMutationError(error, 'Failed to cancel request.'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] }),
   });
 
   const restore = useMutation({
-    mutationFn: (id: string) => selfServiceApi.restoreOvertime(id),
-    onSuccess: () => {
+    mutationFn: ({ id, version }: { id: string; version?: number }) => selfServiceApi.restoreOvertime(id, version),
+    onSuccess: (response) => {
+      reconcileOvertimeRequest(queryClient, response.data);
       toast.success('Overtime request restored and resubmitted.');
-      queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
     },
     onError: (error) => reportMutationError(error, 'Only a request you cancelled can be restored.'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] }),
   });
 
   return (
@@ -224,7 +246,7 @@ export default function SelfServiceOvertimePage() {
               Pending · {pendingRequests.length}
             </h2>
             <DataTable
-              columns={requestColumns((id) => setConfirmCancel(id))}
+              columns={requestColumns((request) => setConfirmCancel({ id: request.id, version: request.version }))}
               data={pendingRequests}
               stickyHeader={false}
             />
@@ -237,7 +259,7 @@ export default function SelfServiceOvertimePage() {
               History · {historyRequests.length}
             </h2>
             <DataTable
-              columns={requestColumns(undefined, (id) => restore.mutate(id))}
+              columns={requestColumns(undefined, (request) => restore.mutate({ id: request.id, version: request.version }))}
               data={historyRequests}
               stickyHeader={false}
             />
@@ -253,7 +275,8 @@ export default function SelfServiceOvertimePage() {
             minimumHours={data.minimum_hours}
             maximumHours={data.maximum_hours}
             premiumMultiplier={data.premium_multiplier}
-            onApplied={() => {
+            onApplied={(request) => {
+              reconcileOvertimeRequest(queryClient, request);
               queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
               setModalOpen(false);
             }}
@@ -295,7 +318,7 @@ function ApplyOvertimeModal({
   minimumHours: number;
   maximumHours: number;
   premiumMultiplier: number;
-  onApplied: () => void;
+  onApplied: (request: SelfServiceOvertimeRequest) => void;
 }) {
   const [date, setDate] = useState(manilaIsoDate());
   const [dateError, setDateError] = useState<string | null>(null);
@@ -311,12 +334,12 @@ function ApplyOvertimeModal({
 
   const mutation = useMutation({
     mutationFn: (payload: ApplyOvertimePayload) => selfServiceApi.applyOvertime(payload),
-    onSuccess: () => {
+    onSuccess: (response) => {
       toast.success('Overtime request submitted for approval.');
       setReason('');
       setHours(minimumHours);
       setDate(manilaIsoDate());
-      onApplied();
+      onApplied(response.data);
     },
     onError: (err: AxiosError<ApiValidationError>) => {
       const data = err.response?.data;

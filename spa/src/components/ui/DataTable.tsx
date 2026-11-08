@@ -61,6 +61,7 @@ export interface BulkAction<T> {
   onClick: (rows: T[]) => void;
   variant?: 'primary' | 'secondary' | 'danger';
   icon?: ReactNode;
+  disabled?: boolean;
 }
 
 export interface DataTableProps<T> {
@@ -79,7 +80,11 @@ export interface DataTableProps<T> {
   /** Actions remain visible to keyboard and touch users; pointer hover only reveals them visually. */
   rowActions?: (row: T) => ReactNode;
   selectable?: boolean;
+  /** Per-row eligibility for bulk actions; unavailable rows cannot be selected. */
+  isRowSelectable?: (row: T) => boolean;
   bulkActions?: BulkAction<T>[];
+  /** Clear selected rows when the owning workflow invalidates its selection. */
+  selectionResetKey?: string | number;
   density?: TableDensity;
   onDensityChange?: (density: TableDensity) => void;
   /** Stable identifier per row for selection state. Defaults to `(row as any).id`. */
@@ -91,7 +96,7 @@ export interface DataTableProps<T> {
   // ─── Series X / Task X4 additions ────────────────────────────
 
   /**
-   * Stable key for persisting per-user preferences (density, hidden columns).
+   * Stable key for persisting per-user preferences (density, hidden columns, and widths).
    * When omitted, density uses an automatic route-scoped key; column visibility stays opt-in.
    */
   tableKey?: string;
@@ -113,10 +118,12 @@ export interface DataTableProps<T> {
   fixedColumnLayout?: boolean;
   /**
    * Render a "Customize columns" button next to the density toggle so the user
-   * can hide columns marked `togglable !== false`. Default true when `tableKey`
-   * is set.
+   * can hide columns marked `togglable !== false`. Defaults on when a table key
+   * is set or the table has at least five customizable columns.
    */
   enableColumnVisibilityToggle?: boolean;
+  /** Use labelled record cards below the desktop-table breakpoint. Defaults on. */
+  mobileCardView?: boolean;
   /**
    * Rendered inside the tbody when `data` is empty. Defaults to a compact
    * EmptyState so an empty table matches every other empty surface rather than
@@ -174,7 +181,9 @@ export function DataTable<T>({
   onRowClick,
   rowActions,
   selectable,
+  isRowSelectable,
   bulkActions,
+  selectionResetKey,
   density: densityProp,
   onDensityChange,
   getRowId,
@@ -188,10 +197,17 @@ export function DataTable<T>({
   fillHeight = false,
   fixedColumnLayout = false,
   enableColumnVisibilityToggle,
+  mobileCardView = true,
   emptyState,
 }: DataTableProps<T>) {
   // ─── Selection state ──────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const previousSelectionResetKey = useRef(selectionResetKey);
+  useEffect(() => {
+    if (Object.is(previousSelectionResetKey.current, selectionResetKey)) return;
+    previousSelectionResetKey.current = selectionResetKey;
+    setSelected(new Set());
+  }, [selectionResetKey]);
 
   // ─── Expanded rows ────────────────────────────────────────
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -321,7 +337,7 @@ export function DataTable<T>({
     const next = new Set(hiddenColumnKeys);
     if (next.has(colKey)) next.delete(colKey);
     else next.add(colKey);
-    if (tableKey) setStoreHidden(tableKey, Array.from(next));
+    setStoreHidden(preferenceKey, Array.from(next));
   };
 
   const idOf = useCallback(
@@ -340,8 +356,29 @@ export function DataTable<T>({
     () => columns.filter((c) => !hiddenColumnKeys.has(c.key)),
     [columns, hiddenColumnKeys],
   );
-  const pinnedColumns = visibleColumns.filter((c) => c.pinned === 'left');
-  const flowingColumns = visibleColumns.filter((c) => !c.pinned);
+  const mobilePrimaryColumn = visibleColumns.find((column) => column.primary && column.key !== 'actions')
+    ?? visibleColumns.find((column) => column.key !== 'actions');
+  const mobileDetailColumns = visibleColumns.filter((column) =>
+    column.key !== mobilePrimaryColumn?.key && column.key !== 'actions',
+  );
+  const mobileActionsColumn = visibleColumns.find((column) => column.key === 'actions');
+  const mobileLabel = (column: Column<T>) =>
+    typeof column.header === 'string' && column.header.trim()
+      ? column.header
+      : column.key.replace(/[_-]/g, ' ');
+  // Wide tables keep their primary identifier in view during horizontal scroll.
+  // A page-authored pin always wins; otherwise use an explicitly primary column
+  // or the first visible data column once the table is wide enough to need it.
+  const pinnedColumns = useMemo(() => {
+    const explicit = visibleColumns.filter((column) => column.pinned === 'left');
+    if (explicit.length > 0 || columns.length < 8) return explicit;
+
+    const autoPinned = visibleColumns.find((column) => column.primary && column.key !== 'actions')
+      ?? visibleColumns.find((column) => column.key !== 'actions');
+    return autoPinned ? [autoPinned] : [];
+  }, [visibleColumns, columns.length]);
+  const pinnedKeys = new Set(pinnedColumns.map((column) => column.key));
+  const flowingColumns = visibleColumns.filter((column) => !pinnedKeys.has(column.key));
   // Render pinned first, flowing after — same visual order as the array we
   // build here. Sticky positioning takes care of the "stay-on-screen" effect.
   const orderedColumns = [...pinnedColumns, ...flowingColumns];
@@ -359,8 +396,12 @@ export function DataTable<T>({
     return offsets;
   }, [pinnedColumns, selectable, renderExpanded, columnWidths]);
 
-  const allOnPageSelected = data.length > 0 && data.every((r) => selected.has(idOf(r)));
-  const selectedRows = data.filter((r) => selected.has(idOf(r)));
+  const selectableRows = useMemo(
+    () => data.filter((row) => isRowSelectable?.(row) ?? true),
+    [data, isRowSelectable],
+  );
+  const allOnPageSelected = selectableRows.length > 0 && selectableRows.every((r) => selected.has(idOf(r)));
+  const selectedRows = selectableRows.filter((r) => selected.has(idOf(r)));
 
   // Selection is scoped to what is on screen, because that is all a bulk action
   // can actually receive: `selectedRows` filters `data`, so ids retained from a
@@ -375,16 +416,32 @@ export function DataTable<T>({
     if (lastVisibleIds.current === visibleIds) return;
     lastVisibleIds.current = visibleIds;
     setSelected((prev) => (prev.size === 0 ? prev : new Set()));
-  }, [visibleIds]);
+  }, [visibleIds, idOf]);
 
-  const toggleAll = () => {
+  // A server action can disappear while the row ID and page stay the same.
+  // Prune only rows that lost eligibility so other valid selections survive.
+  const visibleEligibility = data
+    .map((row, index) => `${idOf(row, index)}:${isRowSelectable?.(row) ?? true}`)
+    .join('\u0000');
+  useEffect(() => {
+    const eligibleIds = new Set(
+      data.filter((row) => isRowSelectable?.(row) ?? true).map((row, index) => idOf(row, index)),
+    );
+    setSelected((previous) => {
+      const next = new Set([...previous].filter((id) => eligibleIds.has(id)));
+      const unchanged = next.size === previous.size && [...previous].every((id) => next.has(id));
+      return unchanged ? previous : next;
+    });
+  }, [data, idOf, isRowSelectable, visibleEligibility]);
+
+  const toggleAll = useCallback(() => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allOnPageSelected) data.forEach((r) => next.delete(idOf(r)));
-      else data.forEach((r) => next.add(idOf(r)));
+      if (allOnPageSelected) selectableRows.forEach((r) => next.delete(idOf(r)));
+      else selectableRows.forEach((r) => next.add(idOf(r)));
       return next;
     });
-  };
+  }, [allOnPageSelected, selectableRows, idOf]);
 
   const toggleOne = (id: string) => {
     setSelected((prev) => {
@@ -469,13 +526,19 @@ export function DataTable<T>({
       const target = e.target as HTMLElement;
       if (target.tagName !== 'TR') return;
 
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && selectable) {
+        e.preventDefault();
+        toggleAll();
+        return;
+      }
+
+      if (e.key === 'ArrowDown' || e.key === 'j' || e.key === 'ArrowUp' || e.key === 'k') {
         e.preventDefault();
         const rows = tbodyRef.current?.querySelectorAll<HTMLElement>('tr[tabindex]');
         if (!rows) return;
         const arr = Array.from(rows);
         const idx = arr.indexOf(target);
-        const next = e.key === 'ArrowDown' ? idx + 1 : idx - 1;
+        const next = e.key === 'ArrowDown' || e.key === 'j' ? idx + 1 : idx - 1;
         if (next >= 0 && next < arr.length) arr[next].focus();
       }
 
@@ -516,7 +579,7 @@ export function DataTable<T>({
         setCtxMenu({ x: box.left + 8, y: box.bottom, items });
       }
     },
-    [onRowClick, rowExpands, selectable, selected.size, rowContextMenu, rowForElement],
+    [onRowClick, rowExpands, selectable, selected.size, rowContextMenu, rowForElement, toggleAll],
   );
 
   return (
@@ -545,6 +608,7 @@ export function DataTable<T>({
                 size="sm"
                 variant={a.variant ?? 'secondary'}
                 icon={a.icon}
+                disabled={a.disabled}
                 onClick={() => a.onClick(selectedRows)}
               >
                 {a.label}
@@ -569,8 +633,140 @@ export function DataTable<T>({
         resetColumnWidths={resetColumnWidths}
       />
 
+      {mobileCardView && (
+        <div
+          role="list"
+          aria-label="Records"
+          aria-busy={loading}
+          className={cn('space-y-2 md:hidden', fillHeight && 'min-h-0 flex-1 overflow-y-auto')}
+        >
+          {loading ? (
+            Array.from({ length: 4 }, (_, index) => (
+              <div key={`mobile-skeleton-${index}`} aria-hidden="true" className="rounded-md border border-default bg-canvas p-3">
+                <SkeletonBlock className="h-3 w-2/5 rounded-sm" />
+                <SkeletonBlock className="mt-3 h-2.5 w-4/5 rounded-sm" />
+                <SkeletonBlock className="mt-2 h-2.5 w-3/5 rounded-sm" />
+              </div>
+            ))
+          ) : data.length === 0 ? (
+            <div role="listitem" className="rounded-md border border-default bg-canvas p-0">
+              {emptyState ?? (
+                <EmptyState
+                  size="compact"
+                  icon="search-x"
+                  title="No matching records"
+                  description="Try adjusting your search or filters."
+                />
+              )}
+            </div>
+          ) : (
+            data.map((row, index) => {
+              const rid = idOf(row, index);
+              const canSelect = isRowSelectable?.(row) ?? true;
+              const isSelected = rid ? canSelect && selected.has(rid) : false;
+              const isExpanded = rid ? expanded.has(rid) : false;
+              const contextItems = rowContextMenu?.(row) ?? [];
+              return (
+                <article
+                  key={rid}
+                  role="listitem"
+                  data-selected={isSelected || undefined}
+                  className={cn(
+                    'rounded-md border border-default bg-canvas p-3 transition-colors duration-fast motion-reduce:transition-none',
+                    isSelected && 'border-accent bg-accent/5',
+                    highlightedRowId && rid === highlightedRowId && 'outline outline-2 outline-accent/50',
+                    (onRowClick || rowExpands) && 'cursor-pointer hover:bg-surface',
+                  )}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest('input,button,a,label,select')) return;
+                    if (window.getSelection()?.toString().length) return;
+                    if (onRowClick) onRowClick(row);
+                    else if (rowExpands) toggleExpanded(rid);
+                  }}
+                  onContextMenu={rowContextMenu ? (event) => {
+                    if (contextItems.length === 0) return;
+                    event.preventDefault();
+                    setCtxMenu({ x: event.clientX, y: event.clientY, items: contextItems });
+                  } : undefined}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {selectable && (
+                      <Checkbox
+                        checked={isSelected}
+                        disabled={!canSelect}
+                        onChange={() => toggleOne(rid)}
+                        aria-label="Select record"
+                        className="mt-0.5 shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      {mobilePrimaryColumn && (
+                        <div className="break-words text-sm font-medium text-primary">
+                          {mobilePrimaryColumn.cell(row) ?? '—'}
+                        </div>
+                      )}
+                      {mobileDetailColumns.length > 0 && (
+                        <dl className="mt-2 space-y-1.5">
+                          {mobileDetailColumns.map((column) => (
+                            <div key={column.key} className="grid grid-cols-[minmax(5.5rem,0.7fr)_minmax(0,1.3fr)] gap-2 text-xs">
+                              <dt className="text-muted">{mobileLabel(column)}</dt>
+                              <dd className={cn('min-w-0 break-words text-primary', alignClass[column.align ?? 'left'])}>
+                                {column.cell(row) ?? '—'}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  </div>
+
+                  {(onRowClick || rowExpands || rowActions || mobileActionsColumn || (rowContextMenu && contextItems.length > 0)) && (
+                    <div className="mt-3 flex flex-wrap items-center justify-end gap-1.5 border-t border-subtle pt-2">
+                      {rowActions?.(row)}
+                      {mobileActionsColumn?.cell(row)}
+                      {renderExpanded && (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          aria-expanded={isExpanded}
+                          onClick={() => toggleExpanded(rid)}
+                        >
+                          {isExpanded ? 'Hide details' : 'Details'}
+                        </Button>
+                      )}
+                      {rowContextMenu && contextItems.length > 0 && (
+                        <Button
+                          size="xs"
+                          variant="secondary"
+                          aria-label={`Actions for ${mobilePrimaryColumn ? mobileLabel(mobilePrimaryColumn) : 'record'}`}
+                          onClick={(event) => {
+                            const box = event.currentTarget.getBoundingClientRect();
+                            setCtxMenu({ x: box.left, y: box.bottom, items: contextItems });
+                          }}
+                        >
+                          Actions
+                        </Button>
+                      )}
+                      {onRowClick && (
+                        <Button size="xs" variant="secondary" onClick={() => onRowClick(row)}>
+                          Open
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {renderExpanded && isExpanded && (
+                    <div className="mt-3 border-t border-subtle pt-3">{renderExpanded(row)}</div>
+                  )}
+                </article>
+              );
+            })
+          )}
+        </div>
+      )}
+
       <div
-        className={cn('scroll-edge-frame min-w-0', fillHeight && 'min-h-0 flex-1')}
+        className={cn('scroll-edge-frame min-w-0', mobileCardView && 'hidden md:block', fillHeight && 'min-h-0 flex-1')}
         data-more-left={scrollEdges.left}
         data-more-right={scrollEdges.right}
       >
@@ -604,6 +800,7 @@ export function DataTable<T>({
                 >
                   <Checkbox
                     checked={allOnPageSelected}
+                    disabled={selectableRows.length === 0}
                     onChange={toggleAll}
                     aria-label="Select all rows"
                   />
@@ -724,12 +921,14 @@ export function DataTable<T>({
             ) : (
               data.map((row, i) => {
                 const rid = idOf(row, i);
-                const isSelected = rid ? selected.has(rid) : false;
+                const canSelect = isRowSelectable?.(row) ?? true;
+                const isSelected = rid ? canSelect && selected.has(rid) : false;
                 const isExpanded = rid ? expanded.has(rid) : false;
                 return (
                   <Fragment key={rid}>
                     <tr
                       tabIndex={rowInteractive ? 0 : undefined}
+                      aria-keyshortcuts={rowInteractive ? 'j k ArrowDown ArrowUp Enter Space Control+A Meta+A' : undefined}
                       className={cn(
                         'border-b border-subtle transition-colors duration-fast motion-reduce:transition-none relative group',
                         rowInteractive && 'cursor-pointer active:scale-[0.998]',
@@ -765,6 +964,7 @@ export function DataTable<T>({
                         <td className={cn(cellPadding[density], 'align-middle')}>
                           <Checkbox
                             checked={isSelected}
+                            disabled={!canSelect}
                             onChange={() => toggleOne(rid)}
                             aria-label="Select row"
                           />

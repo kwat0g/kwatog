@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { useAuthStore } from '@/stores/authStore';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { LuLoaderCircle } from '@/lib/icons';
@@ -11,8 +13,10 @@ import {
   scheduleDateKey,
   offsetScheduleDate,
 } from '@/components/production/scheduleDates';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import type { WorkOrder } from '@/types/production';
 import {
   AssignmentForm,
   LateProductionApproval,
@@ -32,6 +36,16 @@ export function StartProductionDialog({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const canReadWorkOrder = useAuthStore((state) =>
+    state.features.has('production')
+      && state.permissions.has('production.view')
+      && state.permissions.has('production.work_orders.view'),
+  );
+  useRealtimeRecord(
+    'work_order',
+    canReadWorkOrder ? woId : undefined,
+    [['production', 'execution-readiness', woId], ['production', 'crew', woId]],
+  );
   const [presenceVersion, setPresenceVersion] = useState<string | null>(null);
   const [lateStartVersion, setLateStartVersion] = useState<string | null>(null);
   const [manual, setManual] = useState(false);
@@ -53,9 +67,16 @@ export function StartProductionDialog({
     queryKey: ['production', 'execution-readiness', woId],
     queryFn: () => workOrdersApi.executionReadiness(woId),
     staleTime: 0,
-    refetchInterval: rescheduling || changingWorkers || action === 'extend' ? false : 30_000,
-    refetchOnWindowFocus: action !== 'extend',
-    refetchOnReconnect: action !== 'extend',
+    refetchInterval: (query) => {
+      if (rescheduling || changingWorkers) return false;
+      const nextRefreshAt = query.state.data?.next_refresh_at;
+      if (!nextRefreshAt) return false;
+      const remaining = Date.parse(nextRefreshAt) - Date.now();
+      return Number.isFinite(remaining) ? Math.max(250, remaining) : false;
+    },
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     retry: false,
   });
   const suggestion = useQuery({
@@ -103,14 +124,20 @@ export function StartProductionDialog({
     void readiness.refetch();
     if (rescheduling && !manual) void suggestion.refetch();
   };
-  const refreshed = () => {
+  const refreshed = (updated?: WorkOrder) => {
     setManualPending(false);
     setRescheduling(false);
     setManual(false);
     setPresenceVersion(null);
     setError('');
-    void qc.invalidateQueries({ queryKey: ['production', 'crew', woId] });
-    void qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+    if (updated) {
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'work_order', entityId: woId },
+        ['production', 'work-orders', 'detail', woId],
+        updated,
+      );
+    }
     void readiness.refetch();
   };
   const approve = useMutation({
@@ -134,9 +161,9 @@ export function StartProductionDialog({
           : {}),
       });
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Schedule approved. Checking production readiness.');
-      refreshed();
+      refreshed(updated);
     },
     onError: reportError,
   });
@@ -176,8 +203,13 @@ export function StartProductionDialog({
                 }
               : {}),
           }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['production'] });
+    onSuccess: (updated) => {
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'work_order', entityId: woId },
+        ['production', 'work-orders', 'detail', woId],
+        updated,
+      );
       toast.success(
         action === 'extend'
           ? 'Run extended. Recorder access checked.'

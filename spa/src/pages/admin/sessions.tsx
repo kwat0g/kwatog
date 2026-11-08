@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 
 function parseUserAgent(ua: string | null): string {
  if (!ua) return '—';
@@ -61,6 +62,8 @@ const columns: Column<ActiveSession>[] = [
 export default function SessionsPage() {
  const queryClient = useQueryClient();
  const [terminateTarget, setTerminateTarget] = useState<ActiveSession | null>(null);
+
+ useRealtimeSignal('admin_sessions_changed', 'admin.sessions', '.admin.sessions.changed');
 
  const { data, isLoading, isError } = useQuery({
  queryKey: ['admin', 'sessions'],

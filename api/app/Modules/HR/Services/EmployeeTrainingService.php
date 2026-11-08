@@ -16,6 +16,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Throwable;
 
 class EmployeeTrainingService
@@ -48,11 +49,10 @@ class EmployeeTrainingService
                     'employee_id' => $lockedEmployee->id,
                     'training_id' => $training->id,
                     'scheduled_for' => $scheduledFor?->toDateString(),
+                    'status' => EmployeeTrainingStatus::Scheduled,
                     'notes' => $notes,
                     'created_by' => $by?->id,
                 ]);
-
-                $record->forceFill(['status' => EmployeeTrainingStatus::Scheduled])->save();
 
                 return $record->fresh(['employee', 'training']);
             });
@@ -85,6 +85,9 @@ class EmployeeTrainingService
                     ->lockForUpdate()
                     ->findOrFail($record->getKey());
                 EmployeeCompetenceScope::training($locked, $by);
+                if ($locked->status !== EmployeeTrainingStatus::Scheduled) {
+                    throw new ConflictHttpException('This training record has changed. Refresh and review its current status.');
+                }
                 $this->stateMachine->transition($locked, EmployeeTrainingStatus::Completed);
 
                 $training = $locked->training;
@@ -139,6 +142,9 @@ class EmployeeTrainingService
                 ->lockForUpdate()
                 ->findOrFail($record->getKey());
             EmployeeCompetenceScope::training($locked, $by);
+            if ($locked->status !== EmployeeTrainingStatus::Scheduled) {
+                throw new ConflictHttpException('This training record has changed. Refresh and review its current status.');
+            }
             $this->stateMachine->transition($locked, EmployeeTrainingStatus::Cancelled);
 
             $note = $reason

@@ -113,7 +113,7 @@ export const dssApi = {
   act: (
     id: string,
     action: RecommendationAction,
-    data?: { reason?: string; snoozed_until?: string },
+    data?: { reason?: string; snoozed_until?: string; expected_version?: number },
   ) =>
     client
       .post<{ data: Recommendation }>(`/dss/recommendations/${id}/actions`, { action, ...data })

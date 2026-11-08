@@ -107,6 +107,12 @@ class ChainListenerRunService
                 ->update($attributes);
 
             if ($updated > 0) {
+                app(ChainListenerRunRealtimeService::class)->stageForJob(
+                    $context['outbox_id'],
+                    $context['job_uuid'],
+                    'updated',
+                );
+
                 return;
             }
 
@@ -114,7 +120,7 @@ class ChainListenerRunService
             // restore removed its telemetry row. Recreate the in-flight row
             // so the explicit business disposition is not replaced by the
             // generic queue_completed fallback in markProcessed().
-            DB::table('chain_listener_runs')->insertOrIgnore([
+            $inserted = DB::table('chain_listener_runs')->insertOrIgnore([
                 'id' => (string) Str::uuid(),
                 'outbox_id' => $context['outbox_id'],
                 'job_uuid' => $context['job_uuid'],
@@ -133,6 +139,14 @@ class ChainListenerRunService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            if ($inserted > 0) {
+                app(ChainListenerRunRealtimeService::class)->stageForJob(
+                    $context['outbox_id'],
+                    $context['job_uuid'],
+                    'created',
+                );
+            }
         });
     }
 
@@ -162,7 +176,7 @@ class ChainListenerRunService
         // insertOrIgnore gives concurrent worker/retry notifications one
         // durable row; the update below then applies the latest lifecycle
         // state without relying on a race-prone firstOrCreate sequence.
-        DB::table('chain_listener_runs')->insertOrIgnore([
+        $inserted = DB::table('chain_listener_runs')->insertOrIgnore([
             'id' => (string) Str::uuid(),
             'outbox_id' => $metadata['outbox_id'],
             'job_uuid' => $metadata['job_uuid'],
@@ -261,6 +275,12 @@ class ChainListenerRunService
                     'updated_at' => $now,
                 ]);
         }
+
+        app(ChainListenerRunRealtimeService::class)->stageForJob(
+            $metadata['outbox_id'],
+            $metadata['job_uuid'],
+            $inserted > 0 ? 'created' : 'status_changed',
+        );
 
     }
 

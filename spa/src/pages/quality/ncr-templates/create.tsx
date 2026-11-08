@@ -1,6 +1,7 @@
 /**
  * ADV7 — NCR Template create / edit page.
  */
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -17,11 +18,12 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonForm } from '@/components/ui/Skeleton';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
-import type { CreateNcrTemplateData } from '@/types/quality';
+import type { CreateNcrTemplateData, NcrTemplate } from '@/types/quality';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 const schema = z.object({
   name: z.string().trim().min(1, 'Template name is required.').max(200),
   source: z.string().min(1, 'Source is required.'),
@@ -32,11 +34,24 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+function templateToFormValues(template: NcrTemplate): FormValues {
+  return {
+    name: template.name,
+    source: template.source,
+    severity: template.severity,
+    product_id: template.product?.id ?? '',
+    defect_description: template.defect_description ?? '',
+    notes: template.notes ?? '',
+  };
+}
+
 export default function NcrTemplateFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [remoteUpdatePending, setRemoteUpdatePending] = useState(false);
+  const hydratedTemplate = useRef<{ id: string; updatedAt: string } | null>(null);
 
   const { data: templateOptions } = useQuery({
     queryKey: ['quality', 'ncr-templates', 'options'],
@@ -44,7 +59,7 @@ export default function NcrTemplateFormPage() {
   });
 
   // Load existing template for edit mode
-  const { data: existing, isLoading: loadingExisting } = useQuery({
+  const { data: existing, isLoading: loadingExisting, isFetching: fetchingExisting, refetch: refetchExisting } = useQuery({
     queryKey: ['quality', 'ncr-templates', id],
     queryFn: () => ncrTemplatesApi.show(id!),
     enabled: isEdit,
@@ -65,24 +80,49 @@ export default function NcrTemplateFormPage() {
       defect_description: '',
       notes: '',
     },
-    values:
-      isEdit && existing
-        ? {
-            name: existing.name,
-            source: existing.source,
-            severity: existing.severity,
-            product_id: existing.product?.id ?? '',
-            defect_description: existing.defect_description ?? '',
-            notes: existing.notes ?? '',
-          }
-        : undefined,
   });
   const {
     register,
     handleSubmit,
     setError,
+    reset,
     formState: { errors, isSubmitting },
   } = form;
+  const isDirty = form.formState.isDirty;
+  const markRemoteChange = useCallback(() => {
+    if (isDirty) setRemoteUpdatePending(true);
+  }, [isDirty]);
+  useRealtimeRecord('ncr_template', isEdit ? id : undefined, [], markRemoteChange);
+
+  useEffect(() => {
+    if (!isEdit || !existing) return;
+
+    const current = { id: existing.id, updatedAt: existing.updated_at };
+    const previous = hydratedTemplate.current;
+    if (!previous || previous.id !== current.id) {
+      reset(templateToFormValues(existing));
+      hydratedTemplate.current = current;
+      setRemoteUpdatePending(false);
+      return;
+    }
+    if (previous.updatedAt === current.updatedAt) return;
+    if (isDirty) {
+      setRemoteUpdatePending(true);
+      return;
+    }
+
+    reset(templateToFormValues(existing));
+    hydratedTemplate.current = current;
+    setRemoteUpdatePending(false);
+  }, [existing, isDirty, isEdit, reset]);
+
+  const loadLatestTemplate = async (): Promise<void> => {
+    const result = await refetchExisting();
+    if (!result.data) return;
+    reset(templateToFormValues(result.data));
+    hydratedTemplate.current = { id: result.data.id, updatedAt: result.data.updated_at };
+    setRemoteUpdatePending(false);
+  };
 
   const createMut = useMutation({
     mutationFn: (data: FormValues) => {
@@ -99,7 +139,8 @@ export default function NcrTemplateFormPage() {
     onSuccess: () => {
       toast.success(isEdit ? 'Template updated' : 'Template created');
       queryClient.invalidateQueries({ queryKey: ['quality', 'ncr-templates'] });
-      navigate('/quality/ncr-templates');
+            safety.allowNavigationAfterSave();
+navigate('/quality/ncr-templates');
     },
     onError: (err) => {
       applyServerValidationErrors(err, setError, 'Failed to save the NCR template.');
@@ -119,8 +160,19 @@ export default function NcrTemplateFormPage() {
         backLabel="NCR templates"
       />
       <FormDraftBanner safety={safety} />
+      {isEdit && remoteUpdatePending && (
+        <div role="status" className="mx-5 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+          <span>This NCR template changed elsewhere. Your entries are preserved. Load the latest version before saving.</span>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void loadLatestTemplate()} disabled={fetchingExisting}>
+            Load latest
+          </Button>
+        </div>
+      )}
       <form
-        onSubmit={handleSubmit((d) => createMut.mutate(d), onFormInvalid<FormValues>())}
+        onSubmit={handleSubmit((d) => {
+          if (isEdit && remoteUpdatePending) return;
+          createMut.mutate(d);
+        }, onFormInvalid<FormValues>())}
         className="px-5 py-4"
       >
         <div className="min-w-0 w-full space-y-4">
@@ -211,7 +263,7 @@ export default function NcrTemplateFormPage() {
               variant="primary"
               type="submit"
               loading={isSubmitting || createMut.isPending}
-              disabled={isSubmitting || createMut.isPending}
+              disabled={isSubmitting || createMut.isPending || (isEdit && remoteUpdatePending)}
             >
               {isEdit ? 'Update template' : 'Create template'}
             </Button>

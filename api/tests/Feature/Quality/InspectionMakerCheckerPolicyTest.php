@@ -16,14 +16,14 @@ use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
-use App\Modules\SupplyChain\Services\DeliveryService;
-use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionOutcome;
+use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Resources\InspectionResource;
 use App\Modules\Quality\Services\InspectionService;
+use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -108,17 +108,47 @@ class InspectionMakerCheckerPolicyTest extends TestCase
         $outsider = User::factory()->create(['is_active' => true]);
 
         $inspection = $this->service->complete($this->makeInspection(InspectionStage::Incoming, true), $this->maker);
-        $canReview = function (User $user) use ($inspection): bool {
+        $resourceData = function (User $user) use ($inspection): array {
             $request = Request::create('/');
             $request->setUserResolver(fn () => $user);
 
-            return (new InspectionResource($inspection))->toArray($request)['can_review'];
+            return (new InspectionResource($inspection))->toArray($request);
         };
 
         // The maker holds the permission but the service refuses self-review.
-        $this->assertFalse($canReview($this->maker->fresh()));
-        $this->assertTrue($canReview($this->checker->fresh()));
-        $this->assertFalse($canReview($outsider));
+        $makerData = $resourceData($this->maker->fresh());
+        $checkerData = $resourceData($this->checker->fresh());
+        $outsiderData = $resourceData($outsider);
+
+        $this->assertFalse($makerData['can_review']);
+        $this->assertTrue($checkerData['can_review']);
+        $this->assertFalse($outsiderData['can_review']);
+        $this->assertSame([], $makerData['available_actions']);
+        $this->assertSame(['review_pass'], $checkerData['available_actions']);
+        $this->assertSame([], $outsiderData['available_actions']);
+    }
+
+    public function test_resource_projects_cancel_only_for_an_authorized_open_inspection(): void
+    {
+        $role = Role::create(['name' => 'QC Manager', 'slug' => 'qc-manager-'.uniqid(), 'is_system' => false]);
+        $role->permissions()->attach(Permission::firstOrCreate(
+            ['slug' => 'quality.inspections.manage'],
+            ['name' => 'Manage Inspections', 'module' => 'quality'],
+        ));
+        $manager = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $inspection = $this->makeInspection(InspectionStage::InProcess, true);
+        $resourceData = function (User $user) use ($inspection): array {
+            $request = Request::create('/');
+            $request->setUserResolver(fn () => $user);
+
+            return (new InspectionResource($inspection))->toArray($request);
+        };
+
+        $this->assertSame(['cancel'], $resourceData($manager)['available_actions']);
+        $this->assertSame([], $resourceData(User::factory()->create(['is_active' => true]))['available_actions']);
+
+        $inspection->forceFill(['status' => InspectionStatus::Cancelled])->save();
+        $this->assertSame([], $resourceData($manager)['available_actions']);
     }
 
     public function test_failed_checker_decision_requires_remarks_and_is_audited(): void

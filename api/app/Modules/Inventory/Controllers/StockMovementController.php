@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Exceptions\MaterialReturnConflictException;
+use App\Modules\Inventory\Exceptions\StockMovementStateConflictException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Requests\StoreMaterialReturnRequest;
@@ -107,6 +108,11 @@ class StockMovementController
     ): StockMovementResource|JsonResponse {
         try {
             $movement = $postings->retry($stockMovement);
+        } catch (StockMovementStateConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => $e->errorCode(),
+            ], 409);
         } catch (BusinessRuleException) {
             return response()->json(['message' => 'The stock movement could not be posted to the General Ledger.'], 422);
         }

@@ -126,7 +126,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/{invoice}/approve-prebill', [InvoiceController::class, 'approvePrebill'])->middleware('approval_permission:accounting.invoices.prebill_approve');
         Route::patch('/{invoice}/finalize', [InvoiceController::class, 'finalize'])->middleware('permission:accounting.invoices.create');
         Route::patch('/{invoice}/cancel', [InvoiceController::class, 'cancel'])->middleware('permission:accounting.invoices.update');
-        Route::post('/{invoice}/collections', [InvoiceController::class, 'recordCollection'])->middleware('permission:accounting.invoices.collect_manual');
+        Route::post('/{invoice}/collections', [InvoiceController::class, 'recordCollection']);
         Route::post('/{invoice}/payment-submissions/{paymentSubmission}/verify', [\App\Modules\Accounting\Controllers\InvoicePaymentSubmissionController::class, 'verify'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
         Route::post('/{invoice}/payment-submissions/{paymentSubmission}/reject', [\App\Modules\Accounting\Controllers\InvoicePaymentSubmissionController::class, 'reject'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
         Route::get('/{invoice}/payment-submissions/{paymentSubmission}/proof', [\App\Modules\Accounting\Controllers\InvoicePaymentSubmissionController::class, 'proof'])->middleware('permission:accounting.invoices.view');

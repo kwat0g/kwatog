@@ -17,6 +17,7 @@ use App\Modules\Purchasing\Imports\ApprovedSupplierImporter;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -36,10 +37,10 @@ class MasterDataImportService
 {
     /** @var array<string, class-string<EntityImporter>> */
     private const REGISTRY = [
-        'coa'       => AccountImporter::class,
-        'items'     => ItemImporter::class,
+        'coa' => AccountImporter::class,
+        'items' => ItemImporter::class,
         'customers' => CustomerImporter::class,
-        'vendors'   => VendorImporter::class,
+        'vendors' => VendorImporter::class,
         'employees' => EmployeeImporter::class,
         'approved_suppliers' => ApprovedSupplierImporter::class,
     ];
@@ -86,12 +87,13 @@ class MasterDataImportService
         if (! $class) {
             throw new BusinessRuleException("Unknown import entity '{$entityType}'. Supported: ".implode(', ', $this->entityTypes()));
         }
+
         return app($class);
     }
 
     private function safeError(Throwable $exception): string
     {
-        if ($exception instanceof BusinessRuleException || $exception instanceof \Illuminate\Validation\ValidationException) {
+        if ($exception instanceof BusinessRuleException || $exception instanceof ValidationException) {
             return $exception->getMessage();
         }
 
@@ -162,12 +164,12 @@ class MasterDataImportService
 
         return DB::transaction(function () use ($entityType, $file, $rows, $importer, $by) {
             $batch = ImportBatch::create([
-                'entity_type'   => $entityType,
-                'filename'      => $file->getClientOriginalName(),
-                'status'        => 'committed',
-                'total_rows'    => count($rows),
+                'entity_type' => $entityType,
+                'filename' => $file->getClientOriginalName(),
+                'status' => 'committed',
+                'total_rows' => count($rows),
                 'imported_rows' => 0,
-                'created_by'    => $by->id,
+                'created_by' => $by->id,
             ]);
 
             $errors = [];
@@ -178,7 +180,7 @@ class MasterDataImportService
                     ImportBatchRecord::create([
                         'import_batch_id' => $batch->id,
                         'recordable_type' => $model::class,
-                        'recordable_id'   => $model->getKey(),
+                        'recordable_id' => $model->getKey(),
                     ]);
                     $created[] = $model;
                 } catch (Throwable $e) {
@@ -189,10 +191,16 @@ class MasterDataImportService
             if (! empty($errors)) {
                 // All-or-nothing: abort the whole batch.
                 DB::rollBack();
+
                 return ['batch' => null, 'total' => count($rows), 'imported' => 0, 'errors' => $errors];
             }
 
+            if ($created !== [] && $importer instanceof BatchRefreshableImporter) {
+                $importer->stageBatchRefresh('created');
+            }
+
             $batch->update(['imported_rows' => count($created)]);
+
             return ['batch' => $batch->fresh(), 'total' => count($rows), 'imported' => count($created), 'errors' => []];
         });
     }
@@ -208,14 +216,23 @@ class MasterDataImportService
             throw new BusinessRuleException('Batch already rolled back.');
         }
 
-        DB::transaction(function () use ($batch, $by) {
+        $importer = $this->importer($batch->entity_type);
+
+        DB::transaction(function () use ($batch, $by, $importer) {
+            $deleted = 0;
             foreach ($batch->records()->get() as $rec) {
                 $model = $rec->recordable_type::find($rec->recordable_id);
+                $deleted += $model !== null ? 1 : 0;
                 $model?->delete();
                 $rec->delete();
             }
+
+            if ($deleted > 0 && $importer instanceof BatchRefreshableImporter) {
+                $importer->stageBatchRefresh('deleted');
+            }
+
             $batch->update([
-                'status'         => 'rolled_back',
+                'status' => 'rolled_back',
                 'rolled_back_at' => now(),
                 'rolled_back_by' => $by->id,
             ]);
@@ -260,6 +277,7 @@ class MasterDataImportService
                 }
                 $rows[] = $assoc;
             }
+
             return [$header, $rows];
         } finally {
             fclose($stream);

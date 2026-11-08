@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
@@ -37,8 +38,12 @@ class WarehouseDashboardService
 
     public function warehouse(User $user): array
     {
-        return Cache::remember("dashboard:warehouse:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+
+        $generation = DashboardCacheGeneration::current('dashboard:warehouse');
+        return FailOpenCache::remember(Cache::store(), "dashboard:warehouse:v4:{$generation}:{$user->id}:{$cacheScope}", self::CACHE_TTL, function () use ($user) {
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => $this->gate->kpis($user, [
                     ['inventory.view', fn () => $this->kpi('Pending GRNs', (string) $this->safeCount('goods_receipt_notes', fn ($q) => $q
                         ->whereNotIn('status', [GrnStatus::Accepted->value, GrnStatus::Rejected->value])), 'count')],
@@ -67,7 +72,7 @@ class WarehouseDashboardService
                     'zone_utilization' => ['inventory.view', fn () => $this->warehouseZoneUtilization()],
                 ]),
             ];
-        });
+        }, 'dashboard.warehouse');
     }
 
     private function lowStockItemCount(): int

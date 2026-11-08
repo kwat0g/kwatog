@@ -11,18 +11,19 @@ import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Textarea } from '@/components/ui/Textarea';
-import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
 import { payrollAdjustmentStatusVariant } from '@/lib/statusVariants';
 import type { PayrollAdjustment } from '@/types/payroll';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 
 export default function PayrollAdjustmentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  useRealtimeRecord('payroll_adjustment', id);
   const queryClient = useQueryClient();
-  const { canApprove } = usePermission();
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
@@ -34,7 +35,12 @@ export default function PayrollAdjustmentDetailPage() {
 
   const refresh = (updated: PayrollAdjustment) => {
     queryClient.setQueryData(['payroll-adjustment', id], updated);
-    queryClient.invalidateQueries({ queryKey: ['payroll-adjustments'] });
+    void invalidateRealtimeChange(
+      queryClient,
+      { entityType: 'payroll_adjustment', entityId: id! },
+      [],
+      [['payroll-adjustment', id!]],
+    );
   };
   const approveMutation = useMutation({
     mutationFn: () => adjustmentsApi.approve(id!),
@@ -63,15 +69,15 @@ export default function PayrollAdjustmentDetailPage() {
         subtitle={adjustment?.employee?.full_name}
         backTo="/payroll/adjustments"
         backLabel="Adjustments"
-        actions={adjustment?.status === 'pending' ? (
+        actions={adjustment?.available_actions.approve || adjustment?.available_actions.reject ? (
           <div className="flex items-center gap-1.5">
-            {canApprove('payroll.adjustments.approve') && (
-              <Button variant="primary" size="xs" onClick={() => setApproveOpen(true)}>
+            {adjustment.available_actions.approve && (
+              <Button variant="primary" size="xs" onClick={() => setApproveOpen(true)} disabled={approveMutation.isPending || rejectMutation.isPending}>
                 Approve
               </Button>
             )}
-            {canApprove('payroll.adjustments.reject') && (
-              <Button variant="secondary" size="xs" onClick={() => setRejectOpen(true)}>
+            {adjustment.available_actions.reject && (
+              <Button variant="secondary" size="xs" onClick={() => setRejectOpen(true)} disabled={approveMutation.isPending || rejectMutation.isPending}>
                 Reject
               </Button>
             )}

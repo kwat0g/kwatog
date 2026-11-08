@@ -6,6 +6,7 @@ namespace App\Modules\Admin\Controllers;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Admin\Requests\UpdateSettingRequest;
+use App\Modules\Admin\Services\AdminSystemHealthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -89,5 +90,10 @@ class SettingsController
             'timezone' => config('app.timezone'),
             'server_time' => now()->toIso8601String(),
         ]]);
+    }
+
+    public function systemHealth(AdminSystemHealthService $health): JsonResponse
+    {
+        return response()->json(['data' => $health->snapshot()]);
     }
 }

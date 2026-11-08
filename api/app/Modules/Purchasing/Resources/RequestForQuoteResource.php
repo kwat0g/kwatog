@@ -20,6 +20,10 @@ class RequestForQuoteResource extends JsonResource
         // everyone — including the buyer who runs it.
         $sealed = ! in_array($status, [RfqStatus::Closed, RfqStatus::Awarded], true)
             || ! ($user?->hasPermission('purchasing.rfq.view') || $user?->hasPermission('purchasing.rfq.manage'));
+        $availableActions = $this->when(
+            $user !== null && $this->relationLoaded('invitations'),
+            fn () => app(RequestForQuoteAccessPolicy::class)->actionsFor($user, $this->resource),
+        );
 
         return [
             'id' => $this->hash_id,
@@ -51,10 +55,9 @@ class RequestForQuoteResource extends JsonResource
             'documents' => $this->whenLoaded('documents', fn () => RfqDocumentResource::collection(
                 $this->documents->filter(fn ($document) => $document->document_type === 'requirement_document' || ! $sealed)->values(),
             )),
-            'actions' => $this->when(
-                $user !== null && $this->relationLoaded('invitations'),
-                fn () => app(RequestForQuoteAccessPolicy::class)->actionsFor($user, $this->resource),
-            ),
+            'available_actions' => $availableActions,
+            // Keep the established API field for existing integrations.
+            'actions' => $availableActions,
         ];
     }
 }

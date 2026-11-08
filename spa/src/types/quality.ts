@@ -105,7 +105,13 @@ export interface CountedInspectionSubmission {
   measurements: Array<{ id: string; measured_value: string }>;
 }
 
+export interface QuantityInspectionSubmission {
+  expected_result_version: number;
+  quantity_result: { defective_quantity: string; descriptions: string[] };
+}
+
 export interface Inspection {
+  quantity_result?: { defective_quantity: string; source_quantity: string; unit: string; descriptions: string[] } | null;
   final_work_order_id?: string | null;
   work_order_quality?: {
     state: 'checking' | 'awaiting_review' | 'failed' | 'released';
@@ -133,6 +139,8 @@ export interface Inspection {
   ncr?: { id: string; ncr_number: string; status: string; status_label: string; disposition: string | null; disposition_label: string | null; href: string | null } | null;
   incoming_acceptance?: { grn_item_id: string; grn_id: string; grn_number: string; quantity_received: string; quantity_accepted: string; unit: string; status: string; status_label: string } | null;
   can_replace_checklist?: boolean;
+  /** Viewer-scoped actions returned by the Inspection API resource. */
+  available_actions?: string[];
   replaces_inspection_id?: string | null;
   result_version?: number;
   source_quantity?: string | null;
@@ -229,6 +237,7 @@ export interface RecordInspectionItemResultsData {
 }
 
 export interface RecordInspectionMeasurementsData {
+  expected_result_version?: number;
   measurements: Array<{ id: string; measured_value: string | number | null }>;
 }
 
@@ -269,9 +278,14 @@ export interface NcrAction {
   verified_at: string | null;
   verifier?: { id: string; name: string } | null;
   ncr?: { id: string; ncr_number: string } | null;
+  permissions?: { verify_effectiveness: boolean };
+  available_actions?: { can_verify: boolean };
 }
 
 export interface Ncr {
+  available_actions?: {
+    can_cancel: boolean;
+  };
   full_piece_inspection?: boolean;
   startup_trial?: boolean;
   historical_held?: boolean;
@@ -418,6 +432,8 @@ export interface CalibrationRecord {
   status_label?: string;
   responsible: string | null;
   remarks: string | null;
+  permissions?: { view: boolean; manage: boolean };
+  available_actions?: { update: boolean; record_calibration: boolean };
   created_at: string | null;
   updated_at: string | null;
 }
@@ -480,6 +496,7 @@ export interface UpsertInspectionSpecData {
 }
 
 export interface RecordInspectionBatchResultData {
+  expected_result_version?: number;
   result: 'passed' | 'failed';
   coverage_confirmed: true;
   inspected_quantity: number;

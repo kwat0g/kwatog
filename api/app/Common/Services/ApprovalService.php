@@ -312,6 +312,35 @@ class ApprovalService
         return $this->userMayActFor($user, $roleSlug);
     }
 
+    /** @return list<'approve'|'reject'> */
+    public function availableActions(Model $approvable, User $user): array
+    {
+        $records = $approvable->relationLoaded('approvalRecords')
+            ? $approvable->getRelation('approvalRecords')
+            : $this->currentRecords($approvable)->get();
+        $next = $records->where('action', 'pending')->sortBy('step_order')->first();
+
+        if (! $next) {
+            return [];
+        }
+
+        $submitterId = $this->resolveSubmitterUserId($approvable);
+        if ($submitterId !== null && $submitterId === $user->id) {
+            return [];
+        }
+
+        $alreadyActed = $records
+            ->where('approver_id', $user->id)
+            ->whereIn('action', ['approved', 'rejected'])
+            ->isNotEmpty();
+
+        if ($alreadyActed || ! $this->userMayActFor($user, (string) $next->role_slug)) {
+            return [];
+        }
+
+        return ['approve', 'reject'];
+    }
+
     /**
      * Resolve the user id of whoever submitted this approvable, so approve()
      * and reject() can refuse self-action. Returns null if the submitter cannot

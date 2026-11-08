@@ -16,24 +16,27 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
 import type { MaintenanceWindowSuggestion } from '@/types/maintenance';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { maintenanceScheduleQueryKeys } from '@/lib/queryKeys/maintenanceSchedules';
 
 export default function MaintenanceScheduleDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
+ useRealtimeRecord('maintenance_schedule', id);
  const [deleting, setDeleting] = useState(false);
  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['maintenance', 'schedules', id],
+ queryKey: maintenanceScheduleQueryKeys.detail(id),
  queryFn: () => schedulesApi.show(id),
  enabled: !!id,
  });
  const canManage = can('maintenance.schedules.manage');
  const canAssign = can('maintenance.wo.assign');
  const windows = useQuery({
- queryKey: ['maintenance', 'schedules', id, 'window-suggestions'],
+ queryKey: maintenanceScheduleQueryKeys.windowSuggestions(id),
  queryFn: () => schedulesApi.windowSuggestions(id),
  enabled: !!id && canManage,
  });
@@ -42,7 +45,7 @@ export default function MaintenanceScheduleDetailPage() {
   planned_start_at: slot.planned_start_at, planned_end_at: slot.planned_end_at, employee_id: slot.technician.id,
  }),
  onSuccess: () => {
-  void qc.invalidateQueries({ queryKey: ['maintenance', 'schedules', id, 'window-suggestions'] });
+  void qc.invalidateQueries({ queryKey: maintenanceScheduleQueryKeys.windowSuggestions(id) });
   void qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
   toast.success('Window reserved and technician assigned.');
  },
@@ -56,7 +59,7 @@ export default function MaintenanceScheduleDetailPage() {
  setDeleting(true);
  try {
 await schedulesApi.destroy(id);
-  qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
+  qc.invalidateQueries({ queryKey: maintenanceScheduleQueryKeys.lists });
   toast.success('Schedule archived.');
   navigate('/maintenance/schedules');
  } catch (error) {

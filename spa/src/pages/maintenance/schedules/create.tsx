@@ -16,6 +16,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { maintenanceScheduleQueryKeys } from '@/lib/queryKeys/maintenanceSchedules';
 const schema = z.object({
   maintainable_type: z.string().min(1, 'Target type required'),
   maintainable_id: z.string().min(1, 'Target ID required'),
@@ -30,7 +31,7 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateMaintenanceSchedulePage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
- const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
+ const { data: options } = useQuery({ queryKey: maintenanceScheduleQueryKeys.options, queryFn: () => schedulesApi.options() });
   const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { maintainable_type: '', maintainable_id: '', interval_type: '', estimated_duration_minutes: 60, is_active: true },
@@ -48,10 +49,12 @@ export default function CreateMaintenanceSchedulePage() {
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) => schedulesApi.create(data as Parameters<typeof schedulesApi.create>[0]),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
+ onSuccess: (schedule) => {
+ qc.setQueryData(maintenanceScheduleQueryKeys.detail(schedule.id), schedule);
+ qc.invalidateQueries({ queryKey: maintenanceScheduleQueryKeys.lists });
  toast.success('Schedule created.');
- navigate('/maintenance/schedules');
+  safety.allowNavigationAfterSave();
+navigate('/maintenance/schedules');
  },
  onError: (err) => {
    applyServerValidationErrors(err, setError, 'Failed to create the maintenance schedule.');

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { LuArrowRight, LuCircleX, LuCircleCheck, LuCalendar, LuDownload, LuMessageSquare, LuUserPlus } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
@@ -24,10 +24,13 @@ import { usePermission } from '@/hooks/usePermission';
 import { localIsoDateTime, formatDate, formatDateTime } from '@/lib/formatDate';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import type {
  ApplicationStage,
  ApplicationInterview,
  InterviewOutcome,
+ JobApplication,
  RecruitmentApplicationEvent,
 } from '@/types/recruitment';
 
@@ -40,11 +43,29 @@ const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'suc
  rejected: 'danger',
 };
 
+function isRecruitmentStateConflict(error: unknown): boolean {
+ return error instanceof AxiosError
+  && error.response?.status === 409
+  && (error.response.data as { code?: string } | undefined)?.code === 'recruitment_state_conflict';
+}
+
+function invalidateRecruitmentApplicationQueries(queryClient: QueryClient, applicationId: string): void {
+ for (const queryKey of [
+  ['recruitment-application', applicationId],
+  ['recruitment-applications'],
+  ['recruitment-posting'],
+  ['recruitment-postings'],
+ ]) {
+  void queryClient.invalidateQueries({ queryKey });
+ }
+}
+
 export default function ApplicationDetailPage() {
  const { id } = useParams<{ id: string }>();
  const navigate = useNavigate();
  const queryClient = useQueryClient();
  const { can } = usePermission();
+ useRealtimeRecord('job_application', can('hr.recruitment.view') ? id : undefined);
 
  const [showRejectDialog, setShowRejectDialog] = useState(false);
  const [rejectionReason, setRejectionReason] = useState('');
@@ -58,6 +79,11 @@ export default function ApplicationDetailPage() {
  queryFn: () => recruitmentApi.showApplication(id!).then((r) => r.data.data),
  enabled: !!id,
  });
+ useRealtimeRecord(
+  'job_posting',
+  application?.job_posting?.id,
+  id ? [['recruitment-application', id]] : [],
+ );
  const { data: recruitmentOptions } = useQuery({
  queryKey: ['recruitment', 'options'],
  queryFn: () => recruitmentApi.options().then((r) => r.data.data),
@@ -65,43 +91,72 @@ export default function ApplicationDetailPage() {
  });
 
  const advanceMutation = useMutation({
- mutationFn: () => recruitmentApi.changeStage(id!, { action: 'advance' }),
- onSuccess: () => {
+ mutationFn: () => recruitmentApi.changeStage(id!, { action: 'advance', expected_stage: application?.stage }),
+ onSuccess: (res) => {
  setShowAdvanceConfirm(false);
  toast.success('Application advanced.');
- queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
- queryClient.invalidateQueries({ queryKey: ['recruitment-posting'] });
- queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
+ queryClient.setQueryData<JobApplication>(['recruitment-application', id], (current) => current ? { ...current, ...res.data.data } : res.data.data);
+ void invalidateRealtimeChange(
+  queryClient,
+  { entityType: 'job_application', entityId: id! },
+  [],
+  [['recruitment-application', id]],
+ );
  },
- onError: (error) => reportMutationError(error, 'Failed to advance.'),
+ onError: (error) => {
+  reportMutationError(error, 'Failed to advance.');
+  if (id && isRecruitmentStateConflict(error)) {
+   setShowAdvanceConfirm(false);
+   invalidateRecruitmentApplicationQueries(queryClient, id);
+  }
+ },
  });
 
  const rejectMutation = useMutation({
- mutationFn: (reason: string) => recruitmentApi.changeStage(id!, { action: 'reject', rejection_reason: reason }),
- onSuccess: () => {
+ mutationFn: (reason: string) => recruitmentApi.changeStage(id!, {
+  action: 'reject', expected_stage: application?.stage, rejection_reason: reason,
+ }),
+ onSuccess: (res) => {
  toast.success('Application rejected.');
  setShowRejectDialog(false);
- queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
+ queryClient.setQueryData<JobApplication>(['recruitment-application', id], (current) => current ? { ...current, ...res.data.data } : res.data.data);
+ void invalidateRealtimeChange(
+  queryClient,
+  { entityType: 'job_application', entityId: id! },
+  [],
+  [['recruitment-application', id]],
+ );
  },
- onError: (error) => reportMutationError(error, 'Failed to reject.'),
+ onError: (error) => {
+  reportMutationError(error, 'Failed to reject.');
+  if (id && isRecruitmentStateConflict(error)) invalidateRecruitmentApplicationQueries(queryClient, id);
+ },
  });
 
  const interviewOutcomeMutation = useMutation({
   mutationFn: ({ id: interviewId, outcome }: { id: string; outcome: InterviewOutcome }) =>
    recruitmentApi.updateInterview(interviewId, { outcome }),
-  onSuccess: () => {
+  onSuccess: (res) => {
    toast.success('Interview outcome saved.');
-   queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
+   queryClient.setQueryData<JobApplication>(['recruitment-application', id], (current) => current ? {
+    ...current,
+    interviews: current.interviews?.map((interview) => interview.id === res.data.data.id ? res.data.data : interview),
+   } : current);
+   void invalidateRealtimeChange(queryClient, { entityType: 'job_application', entityId: id! });
   },
   onError: (error) => reportMutationError(error, 'Failed to save interview outcome.'),
  });
 
  const noteMutation = useMutation({
  mutationFn: (body: string) => recruitmentApi.addNote(id!, body),
- onSuccess: () => {
+ onSuccess: (res) => {
  toast.success('Note added.');
  setNoteBody('');
- queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
+ queryClient.setQueryData<JobApplication>(['recruitment-application', id], (current) => current ? {
+  ...current,
+  notes: [...(current.notes ?? []), res.data.data],
+ } : current);
+ void invalidateRealtimeChange(queryClient, { entityType: 'job_application', entityId: id! });
  },
  onError: (error) => reportMutationError(error, 'Failed to add note.'),
  });
@@ -118,6 +173,9 @@ export default function ApplicationDetailPage() {
  }
 
  const isTerminal = application.stage === 'hired' || application.stage === 'rejected';
+ const hasAction = (action: JobApplication['available_actions'][number]) => application.available_actions.includes(action);
+ const canAdvance = hasAction('advance');
+ const canReject = hasAction('reject');
  const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
  const currentIdx = pipelineStages.findIndex((stage) => stage.value === (application.stage === 'rejected' ? application.rejected_at_stage : application.stage));
@@ -136,9 +194,9 @@ export default function ApplicationDetailPage() {
  backTo="/hr/recruitment/applications"
  backLabel="Applications"
  actions={
- can('hr.recruitment.applications') && !isTerminal ? (
+ canAdvance || canReject ? (
  <>
- <Button
+ {canAdvance && <Button
  variant="primary"
  size="sm"
  icon={<LuArrowRight size={12} />}
@@ -147,12 +205,12 @@ export default function ApplicationDetailPage() {
  loading={advanceMutation.isPending}
  >
  {nextStage ? `Move to ${stageLabel.get(nextStage) ?? nextStage}` : 'Advance'}
- </Button>
- <Button variant="danger" size="sm" icon={<LuCircleX size={12} />} onClick={() => setShowRejectDialog(true)}>
+ </Button>}
+ {canReject && <Button variant="danger" size="sm" icon={<LuCircleX size={12} />} onClick={() => setShowRejectDialog(true)}>
  Reject
- </Button>
+ </Button>}
  </>
- ) : application.stage === 'hired' && can('hr.recruitment.hire') && !application.converted_employee ? (
+ ) : hasAction('convert_to_employee') ? (
  <Button variant="primary" size="sm" icon={<LuUserPlus size={12} />} onClick={() => navigate(`/hr/employees/create?from_application=${id}`)}>
  Convert to Employee
  </Button>
@@ -228,7 +286,7 @@ export default function ApplicationDetailPage() {
  <Panel
  title={`Interviews (${application.interviews?.length ?? 0})`}
  actions={
- can('hr.recruitment.applications') && application.stage === 'interview' ? (
+ hasAction('schedule_interview') ? (
  <Button variant="ghost" size="sm" icon={<LuCalendar size={12} />} onClick={() => setInterviewMode('schedule')}>
  Schedule
  </Button>
@@ -245,7 +303,7 @@ export default function ApplicationDetailPage() {
  {iv.location && <p className="mt-1 text-xs text-muted break-words">{iv.location}</p>}
  </div>
  <div className="flex items-center gap-2">
- {can('hr.recruitment.applications') ? (
+ {hasAction('update_interview_outcome') ? (
   <Select
    fieldSize="sm"
    aria-label={'Outcome for interview with ' + iv.interviewer_name}
@@ -339,7 +397,7 @@ export default function ApplicationDetailPage() {
  </span>
  }
  >
- {can('hr.recruitment.applications') && (
+ {hasAction('add_note') && (
  <div className="mb-4 space-y-2">
  <Textarea
  label="Add a note"
@@ -385,6 +443,7 @@ export default function ApplicationDetailPage() {
 
  {interviewMode && <InterviewModal
  applicationId={id!}
+ expectedStage={application.stage}
  applicantName={application.full_name}
  mode={interviewMode}
  onClose={() => setInterviewMode(null)}
@@ -425,8 +484,9 @@ const interviewSchema = z.object({
 });
 type InterviewForm = z.infer<typeof interviewSchema>;
 
-function InterviewModal({ applicationId, applicantName, mode, onClose }: {
+function InterviewModal({ applicationId, expectedStage, applicantName, mode, onClose }: {
  applicationId: string;
+ expectedStage: ApplicationStage;
  applicantName: string;
  mode: 'advance' | 'schedule';
  onClose: () => void;
@@ -443,17 +503,40 @@ function InterviewModal({ applicationId, applicantName, mode, onClose }: {
     location: values.location || undefined,
     interviewer_name: values.interviewer_name,
    };
-   await (mode === 'advance'
-    ? recruitmentApi.changeStage(applicationId, { action: 'advance', interview })
+   const response = await (mode === 'advance'
+    ? recruitmentApi.changeStage(applicationId, { action: 'advance', expected_stage: expectedStage, interview })
     : recruitmentApi.scheduleInterview(applicationId, interview));
+   return response.data.data;
   },
-  onSuccess: () => {
+  onSuccess: (result) => {
    toast.success(mode === 'advance' ? 'Application advanced.' : 'Interview scheduled.');
-   queryClient.invalidateQueries({ queryKey: ['recruitment-application', applicationId] });
+   queryClient.setQueryData<JobApplication>(['recruitment-application', applicationId], (current) => {
+    if ('stage' in result) return current ? { ...current, ...result } : result;
+    if (!current) return current;
+    const interviews = current.interviews ?? [];
+    return { ...current, interviews: interviews.some((item) => item.id === result.id)
+     ? interviews.map((item) => item.id === result.id ? result : item)
+     : [...interviews, result] };
+   });
+   void invalidateRealtimeChange(
+    queryClient,
+    { entityType: 'job_application', entityId: applicationId },
+    [],
+    'stage' in result ? [['recruitment-application', applicationId]] : [],
+   );
    onClose();
   },
   onError: (error) => {
-   if (error instanceof AxiosError && error.response?.status === 422) {
+   if (isRecruitmentStateConflict(error)) {
+    invalidateRecruitmentApplicationQueries(queryClient, applicationId);
+    const body = error instanceof AxiosError
+     ? error.response?.data as { message?: string } | undefined
+     : undefined;
+    setError('root.server', {
+     type: 'server',
+     message: body?.message ?? 'The application changed. Review the current stage before continuing.',
+    });
+   } else if (error instanceof AxiosError && error.response?.status === 422) {
     const body = error.response.data as { errors?: Record<string, string[]>; message?: string };
     for (const [key, messages] of Object.entries(body.errors ?? {})) {
      const field = key.replace(/^interview\./, '');

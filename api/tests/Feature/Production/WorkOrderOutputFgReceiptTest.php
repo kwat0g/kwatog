@@ -6,6 +6,7 @@ namespace Tests\Feature\Production;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
@@ -424,6 +425,10 @@ class WorkOrderOutputFgReceiptTest extends TestCase
         $this->product->update(['standard_cost' => '60.00']);
         $recovered = $this->service->retryProductionReceipt($output, $this->user);
         $this->assertSame('60.0000', (string) StockMovement::findOrFail($recovered->production_receipt_movement_id)->unit_cost);
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => ChainStepAdvanced::class,
+            'status' => 'pending',
+        ]);
     }
 
     public function test_output_rejects_inventory_unit_mismatch_without_posting_stock(): void

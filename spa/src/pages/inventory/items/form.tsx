@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { numberInputProps } from '@/lib/numberInput';
 import { formatPeso } from '@/lib/formatNumber';
 import type { CreateItemData, ReorderMethod } from '@/types/inventory';
@@ -152,9 +153,18 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
       return mode === 'create' ? itemsApi.create(payload) : itemsApi.update(id, payload);
     },
     onSuccess: (item) => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'items'] });
+      // Reconcile the acting form from the authorized API response before
+      // navigating; this screen must not wait for its own WebSocket/refetch.
+      qc.setQueryData(['inventory', 'items', item.id], item);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'item', entityId: item.id },
+        [],
+        [['inventory', 'items', item.id]],
+      );
       toast.success(mode === 'create' ? 'Item created.' : 'Item updated.');
-      navigate(`/inventory/items/${item.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/inventory/items/${item.id}`);
     },
     onError: (error) => {
       applyServerValidationErrors(error, setError, 'Failed to save the item.');

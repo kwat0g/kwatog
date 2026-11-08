@@ -137,7 +137,7 @@ class WorkOrder extends Model
 
     public function assertFinishFirstRoutingCompatible(): void
     {
-        if (! $this->usesFinishFirstQc()) {
+        if (! config('production.routing_execution_enabled', true) || ! $this->usesFinishFirstQc()) {
             return;
         }
 
@@ -156,6 +156,10 @@ class WorkOrder extends Model
         if (($this->work_order_class ?: 'standard') !== 'standard'
             || $this->parent_wo_id !== null || $this->rework_source_output_id !== null) {
             return false;
+        }
+
+        if (! config('production.routing_execution_enabled', true)) {
+            return true;
         }
 
         return ! ProductRouting::query()

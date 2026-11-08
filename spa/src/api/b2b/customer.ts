@@ -37,8 +37,8 @@ type CustomerLoginResponse = {
 
 export const customerPortalApi = {
   priceRequests: (page = 1, request?: string) => portalClient.get<PaginatedResponse<PriceRequest>>('/b2b/customer/price-requests', { params: { page, request } }).then(r => r.data),
-  requestPrice: (data: { product_id: string; quantity: number; requested_price?: string; notes: string }) => portalClient.post('/b2b/customer/price-requests', data),
-  respondPrice: (id: string, decision: 'accept' | 'reject', version: number) => portalClient.post(`/b2b/customer/price-requests/${id}/respond`, { decision, version }),
+  requestPrice: (data: { product_id: string; quantity: number; requested_price?: string; notes: string }) => portalClient.post<{ data: PriceRequest }>('/b2b/customer/price-requests', data).then(r => r.data.data),
+  respondPrice: (id: string, decision: 'accept' | 'reject', version: number) => portalClient.post<{ data: PriceRequest }>(`/b2b/customer/price-requests/${id}/respond`, { decision, version }).then(r => r.data.data),
  // ── Auth ──────────────────────────────────────────
  login: async (email: string, password: string) => {
  await getPortalCsrf();

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -15,14 +15,39 @@ export function DeliveryStockCostPanel({ delivery }: { delivery: Delivery }) {
   const { can } = usePermission();
   const [failure, setFailure] = useState('');
   const userId = useAuthStore((state) => state.user?.id);
+  const recoveryStorageKey = useCallback(
+    (kind: string) => `ogami:delivery-recovery:${userId}:${delivery.id}:${kind}`,
+    [delivery.id, userId],
+  );
   const requestKey = (kind: string) => {
-    const storageKey = `ogami:delivery-recovery:${userId}:${delivery.id}:${kind}`;
     try {
+      const storageKey = recoveryStorageKey(kind);
       const existing = localStorage.getItem(storageKey);
       if (existing && /^[0-9a-f-]{36}$/i.test(existing)) return existing;
       const key = crypto.randomUUID(); localStorage.setItem(storageKey, key); return key;
     } catch { return crypto.randomUUID(); }
   };
+  const clearRequestKey = useCallback((kind: string) => {
+    try { localStorage.removeItem(recoveryStorageKey(kind)); } catch { /* Storage cleanup is best effort. */ }
+  }, [recoveryStorageKey]);
+  useEffect(() => {
+    if (delivery.stock_reservation_status && delivery.stock_reservation_status !== 'unreserved') {
+      clearRequestKey('reserve');
+    }
+    if (delivery.cogs_handoff && ['generated', 'not_required'].includes(delivery.cogs_handoff.status)) {
+      clearRequestKey('customer_cogs');
+    }
+    if (delivery.loss_handoff && ['generated', 'not_required'].includes(delivery.loss_handoff.status)) {
+      clearRequestKey('unaccounted_loss');
+    }
+  }, [
+    delivery.id,
+    delivery.stock_reservation_status,
+    delivery.cogs_handoff?.status,
+    delivery.loss_handoff?.status,
+    clearRequestKey,
+    userId,
+  ]);
   const refresh = () => qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
   const failed = (error: unknown) => {
     const message = isAxiosError(error) ? error.response?.data?.message : undefined;
@@ -32,11 +57,20 @@ export function DeliveryStockCostPanel({ delivery }: { delivery: Delivery }) {
   };
   const reserve = useMutation({
     mutationFn: () => deliveriesApi.reserveStock(delivery.id, requestKey('reserve')),
-    onSuccess: async () => { setFailure(''); await refresh(); toast.success('Approved stock reserved for this delivery.'); }, onError: failed,
+    onSuccess: async (updatedDelivery) => {
+      if (updatedDelivery.stock_reservation_status && updatedDelivery.stock_reservation_status !== 'unreserved') {
+        clearRequestKey('reserve');
+      }
+      setFailure(''); await refresh(); toast.success('Approved stock reserved for this delivery.');
+    }, onError: failed,
   });
   const retryCost = useMutation({
     mutationFn: (kind: 'customer_cogs' | 'unaccounted_loss') => deliveriesApi.retryCost(delivery.id, kind, requestKey(kind)),
-    onSuccess: async () => { setFailure(''); await refresh(); toast.success('Accounting handoff checked.'); }, onError: failed,
+    onSuccess: async (updatedDelivery, kind) => {
+      const handoff = kind === 'customer_cogs' ? updatedDelivery.cogs_handoff : updatedDelivery.loss_handoff;
+      if (handoff && ['generated', 'not_required'].includes(handoff.status)) clearRequestKey(kind);
+      setFailure(''); await refresh(); toast.success('Accounting handoff checked.');
+    }, onError: failed,
   });
   const costRow = (label: string, value: DeliveryCostHandoff | undefined, kind: 'customer_cogs' | 'unaccounted_loss') => value && <div className="space-y-2 border-t border-default pt-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium">{label}</span><Chip variant={chipVariantForStatus(value.status)}>{value.status.replace(/_/g, ' ')}</Chip></div>

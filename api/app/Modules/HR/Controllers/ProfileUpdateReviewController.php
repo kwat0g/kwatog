@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Modules\HR\Enums\ProfileUpdateStatus;
+use App\Modules\HR\Exceptions\ProfileUpdateRequestStateConflictException;
 use App\Modules\HR\Models\ProfileUpdateRequest;
 use App\Modules\HR\Requests\FinanceReviewProfileUpdateRequest;
-use App\Modules\HR\Enums\ProfileUpdateStatus;
 use App\Modules\HR\Requests\ReviewProfileUpdateRequest;
 use App\Modules\HR\Resources\ProfileUpdateRequestResource;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
@@ -43,13 +44,17 @@ class ProfileUpdateReviewController
     public function review(
         ReviewProfileUpdateRequest $request,
         ProfileUpdateRequest $profileUpdateRequest,
-    ): ProfileUpdateRequestResource {
+    ): JsonResponse|ProfileUpdateRequestResource {
         $action = $request->validated('action');
         $remarks = $request->validated('remarks');
 
-        $updated = $action === 'approve'
-            ? $this->service->approve($profileUpdateRequest, $request->user(), $remarks)
-            : $this->service->reject($profileUpdateRequest, $request->user(), $remarks);
+        try {
+            $updated = $action === 'approve'
+                ? $this->service->approve($profileUpdateRequest, $request->user(), $remarks)
+                : $this->service->reject($profileUpdateRequest, $request->user(), $remarks);
+        } catch (ProfileUpdateRequestStateConflictException $exception) {
+            return $this->stateConflictResponse($exception);
+        }
 
         return new ProfileUpdateRequestResource($updated);
     }
@@ -61,14 +66,27 @@ class ProfileUpdateReviewController
     public function financeReview(
         FinanceReviewProfileUpdateRequest $request,
         ProfileUpdateRequest $profileUpdateRequest,
-    ): ProfileUpdateRequestResource {
+    ): JsonResponse|ProfileUpdateRequestResource {
         $action = $request->validated('action');
         $remarks = $request->validated('remarks');
 
-        $updated = $action === 'approve'
-            ? $this->service->financeApprove($profileUpdateRequest, $request->user(), $remarks)
-            : $this->service->reject($profileUpdateRequest, $request->user(), $remarks);
+        try {
+            $updated = $action === 'approve'
+                ? $this->service->financeApprove($profileUpdateRequest, $request->user(), $remarks)
+                : $this->service->reject($profileUpdateRequest, $request->user(), $remarks);
+        } catch (ProfileUpdateRequestStateConflictException $exception) {
+            return $this->stateConflictResponse($exception);
+        }
 
         return new ProfileUpdateRequestResource($updated);
+    }
+
+    private function stateConflictResponse(ProfileUpdateRequestStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
     }
 }

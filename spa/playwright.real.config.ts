@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { assertE2EEnvironment } from '../scripts/e2e/environment-guard.mjs';
 
-const E2E_BASE_URL = process.env.E2E_BASE_URL;
-if (!E2E_BASE_URL) throw new Error('Set E2E_BASE_URL to the isolated test application.');
+// Apply the same fail-closed environment check used by the managed E2E runner.
+// This config is sometimes invoked directly, so a URL-only check is not enough.
+const { baseURL: E2E_BASE_URL } = assertE2EEnvironment(process.env);
 
 /**
  * REAL-backend E2E config (mission harness, Phase 1).
@@ -12,8 +14,8 @@ if (!E2E_BASE_URL) throw new Error('Set E2E_BASE_URL to the isolated test applic
  * serves the SPA and proxies /api/v1 to Laravel. Zero mocks — any page.route() call
  * in a spec under e2e-real/ is a harness violation.
  *
- * Run (headless, per mission):
- *   E2E_BASE_URL=http://localhost:18080 npx playwright test -c playwright.real.config.ts --project=real-chromium
+ * Run only inside the isolated E2E environment with its guarded identifiers
+ * and loopback HTTPS endpoint (https://127.0.0.1:18443 or https://localhost:18443).
  *
  * Notes:
  * - Auth throttle is 5 logins/min/IP, so specs log in via the API helper with
@@ -35,6 +37,9 @@ export default defineConfig({
   use: {
     baseURL: E2E_BASE_URL,
     headless: true,
+    // The disposable E2E Nginx endpoint uses a generated self-signed TLS cert.
+    // Match the process E2E config so both browser pages and page.request can use it.
+    ignoreHTTPSErrors: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',

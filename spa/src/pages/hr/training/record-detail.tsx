@@ -8,6 +8,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { formatDate } from '@/lib/formatDate';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 interface TrainingRecordDetailProps {
   selfService?: boolean;
@@ -15,11 +16,13 @@ interface TrainingRecordDetailProps {
 
 export default function TrainingRecordDetailPage({ selfService = false }: TrainingRecordDetailProps) {
   const { id } = useParams<{ id: string }>();
+  useRealtimeRecord('employee_training', id);
   const { data: record, isLoading, isError, refetch } = useQuery({
-    queryKey: ['employee-training', selfService ? 'self' : 'hr', id],
+    queryKey: ['employee-training', id, selfService ? 'self' : 'hr'],
     queryFn: () => selfService ? selfServiceApi.training(id!) : employeeTrainingsApi.show(id!),
     enabled: Boolean(id),
   });
+  useRealtimeRecord('training', record?.training?.id);
 
   const date = (value: string | null) => value ? formatDate(value) : 'Not recorded';
   const backTo = selfService ? '/self-service' : record?.employee?.id

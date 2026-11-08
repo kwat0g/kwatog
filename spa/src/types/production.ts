@@ -248,6 +248,7 @@ export interface WorkOrderMaterialLotReference {
 export interface WorkOrder {
   production_purpose?: 'stock' | 'order' | 'internal' | null;
   qc_workflow?: 'finish_first_v1' | string | null;
+  routing_execution_enabled?: boolean;
   produced_quantity?: number;
   qc_accepted_quantity?: number;
   qc_defective_quantity?: number;
@@ -366,6 +367,16 @@ export interface WorkOrder {
   actual_end: string | null;
   status: WorkOrderStatus;
   status_label: string;
+  available_actions?: {
+    confirm: boolean;
+    start: boolean;
+    pause: boolean;
+    resume: boolean;
+    complete: boolean;
+    close: boolean;
+    cancel: boolean;
+    record_output: boolean;
+  };
   next_statuses?: Array<{ value: string; label: string }>;
   pause_reason: string | null;
   priority: number;

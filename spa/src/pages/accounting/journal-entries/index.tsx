@@ -12,6 +12,8 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
@@ -19,6 +21,7 @@ import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import type { JournalEntry } from '@/types/accounting';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 const STATUS_VARIANT: Record<string, ChipVariant> = {
  draft: 'warning',
  posted: 'success',
@@ -36,15 +39,18 @@ export default function JournalEntriesPage() {
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<JournalEntryListParams>(DEFAULT_FILTERS);
  const [scope, setScope] = useState<ArchiveScope>('active');
+ useRealtimeList('journal_entry', can('accounting.journal.view') ? 'visible' : undefined);
 
+ const queryKey = ['accounting', 'journal-entries', filters, { trashed: archiveToTrashed(scope) }] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['accounting', 'journal-entries', filters, { trashed: archiveToTrashed(scope) }],
+ queryKey,
  queryFn: () => journalEntriesApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const restore = useMutation({
   mutationFn: (id: string) => journalEntriesApi.restore(id),
-  onSuccess: () => {
-   qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+  onSuccess: (_entry, id) => {
+   void invalidateRealtimeChange(qc, { entityType: 'journal_entry', entityId: id });
   },
  });
  const { data: options } = useQuery({

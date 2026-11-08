@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\SupplyChain;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Jobs\DispatchOutboxMessage;
 use App\Common\Models\ChainListenerRun;
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Services\OutboxEventCodec;
+use App\Common\Services\OutboxDispatcher;
 use App\Modules\Accounting\Listeners\NotifyFinanceOnDeliveryConfirmed;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
@@ -167,6 +170,13 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
             ->where('event_type', DeliveryInvoiceRequested::class)
             ->first();
         $this->assertNotNull($request, 'A failed invoice handoff must create a durable recovery request.');
+
+        // Outbox dispatch uses the dedicated Redis worker in every runtime,
+        // including tests. Execute the queued job explicitly here so this test
+        // verifies its listener outcome without depending on a worker process.
+        (new DispatchOutboxMessage((string) $request->id))->handle(app(OutboxDispatcher::class));
+        $request = DB::table('event_outbox')->where('id', $request->id)->firstOrFail();
+
         $this->assertSame('published', $request->status);
         $this->assertDatabaseHas('chain_step_runs', [
             'outbox_id' => $request->id,
@@ -281,6 +291,7 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
 
         $this->travel(2)->seconds();
         $this->svc->markInvoiceHandoffManual($confirmed->id);
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
 
         // Restore the exact accounting prerequisites that the original
         // attempt was missing, then replay only the handoff listener.
@@ -297,11 +308,17 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         $recovered = $confirmed->fresh();
         $this->assertNotNull($recovered->invoice_id);
         $this->assertSame(DeliveryInvoiceHandoffStatus::Generated, $recovered->invoice_handoff_status);
+        $this->assertSame(
+            $initialSignals + 1,
+            DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count(),
+            'Successful invoice recovery changes the delivery detail and must stage one refresh.',
+        );
         $invoiceCount = Invoice::count();
 
         // A second replay observes the link and must not create another draft.
         $listener->handle($event);
         $this->assertSame($invoiceCount, Invoice::count());
+        $this->assertSame($initialSignals + 1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
     }
 
     public function test_create_rejects_a_second_invoice_for_an_already_invoiced_delivery(): void

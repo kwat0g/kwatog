@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { metricsApi } from '@/api/metrics';
@@ -89,6 +89,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -154,6 +155,29 @@ describe('MetricPanel', () => {
     // Null figures and join keys are not rendered as if they were results.
     expect(screen.queryByText('Target hours')).not.toBeInTheDocument();
     expect(screen.queryByText('Machine id')).not.toBeInTheDocument();
+  });
+
+  it('does not poll live metrics while the shared realtime layer owns refresh', async () => {
+    vi.useFakeTimers();
+    vi.mocked(metricsApi.get).mockResolvedValue(
+      envelope(returnsDefinition, { total: 4, segments: [] }),
+    );
+
+    renderPanel();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(metricsApi.get).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+
+    expect(metricsApi.get).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('stale')).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it('shows the empty state when the window carries no observation', async () => {

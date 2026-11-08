@@ -20,12 +20,15 @@ import type { ChainStep } from '@/types/chain';
 import { clearanceStatusVariant } from '@/lib/statusVariants';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDateIso } from '@/lib/formatDate';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 export default function SeparationDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  useRealtimeRecord('clearance', id);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['clearance', id],
@@ -45,26 +48,28 @@ export default function SeparationDetailPage() {
 
   const sign = useMutation({
     mutationFn: (item_key: string) => separationsApi.signItem(id, item_key),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['clearance', id] });
+    onSuccess: (updated) => {
+      qc.setQueryData(['clearance', id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'clearance', entityId: id });
       toast.success('Item cleared.');
     },
     onError: (error) => reportMutationError(error, 'Failed to sign item.'),
   });
   const compute = useMutation({
     mutationFn: () => separationsApi.computeFinalPay(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['clearance', id] });
+    onSuccess: (updated) => {
+      qc.setQueryData(['clearance', id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'clearance', entityId: id });
       toast.success('Final pay computed.');
     },
     onError: (error) => reportMutationError(error, 'Failed to compute final pay.'),
   });
   const finalize = useMutation({
     mutationFn: () => separationsApi.finalize(id),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       setShowFinalizeConfirm(false);
-      qc.invalidateQueries({ queryKey: ['clearance', id] });
-      qc.invalidateQueries({ queryKey: ['hr', 'separations'] });
+      qc.setQueryData(['clearance', id], updated);
+      void invalidateRealtimeChange(qc, { entityType: 'clearance', entityId: id });
       toast.success('Separation finalized; JE posted.');
     },
     onError: (error) => reportMutationError(error, 'Failed to finalize.'),
@@ -107,7 +112,6 @@ export default function SeparationDetailPage() {
     },
   ];
 
-  const allItemsCleared = ['completed', 'finalized'].includes(data.status);
   const breakdownEntries = data.final_pay_breakdown ? Object.entries(data.final_pay_breakdown) : [];
   const grouped: Record<string, typeof data.clearance_items> = {};
   for (const item of data.clearance_items) (grouped[item.department] ??= []).push(item);
@@ -122,7 +126,7 @@ export default function SeparationDetailPage() {
         actions={
           <div className="flex gap-1.5 items-center">
             <Chip variant={clearanceStatusVariant[data.status]}>{statusLabel ?? data.status}</Chip>
-            {allItemsCleared && !data.final_pay_computed && can('hr.separation.finalize') && (
+            {data.available_actions?.includes('compute_final_pay') && (
               <Button
                 variant="primary"
                 size="sm"
@@ -132,9 +136,7 @@ export default function SeparationDetailPage() {
                 Compute final pay
               </Button>
             )}
-            {data.final_pay_computed &&
-              data.status !== 'finalized' &&
-              can('hr.separation.finalize') && (
+            {data.available_actions?.includes('finalize') && (
                 <Button
                   variant="primary"
                   size="sm"

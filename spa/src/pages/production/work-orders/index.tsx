@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuTriangleAlert, LuCirclePause, LuClock } from '@/lib/icons';
@@ -19,6 +20,7 @@ import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 import type { WorkOrder } from '@/types/production';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 const DEFAULT_FILTERS: WorkOrderListParams = {
   page: 1,
@@ -96,17 +98,19 @@ function reasonFor(w: WorkOrder, today: number): { kind: ReasonKind; text: strin
 }
 
 export default function WorkOrdersListPage() {
+  useRealtimeList('work_order', 'visible');
   const navigate = useNavigate();
   const { can } = usePermission();
   // Bound to the URL so dashboard drill-downs (?status=in_progress) arrive
   // pre-filtered and the browser back button restores the previous view.
   const [filters, setFilters] = useUrlFilters<WorkOrderListParams>(DEFAULT_FILTERS);
+  const listQueryKey = ['production', 'work-orders', filters] as const;
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['production', 'work-orders', filters],
+    queryKey: listQueryKey,
     queryFn: () => workOrdersApi.list(filters),
-    placeholderData: (prev) => prev,
-    refetchInterval: 60_000,
+    placeholderData: (prev, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? prev : undefined,
   });
   const { data: workOrderOptions } = useQuery({
     queryKey: ['production', 'work-orders', 'options'],

@@ -17,6 +17,7 @@ import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import type { DeliveryScheduleLine } from '@/types/b2b';
 import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 const MONTH_OPTIONS: string[] = [];
 const now = new Date();
@@ -34,10 +35,12 @@ export default function DeliverySchedulesPage() {
   ]);
   const [page, setPage] = useState(1);
 
+  const scheduleQueryKey = ['portal', 'customer', 'delivery-schedules', { page }] as const;
   const { data: schedulesPage, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'customer', 'delivery-schedules', { page }],
+    queryKey: scheduleQueryKey,
     queryFn: () => customerPortalApi.listDeliverySchedules({ page }),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, scheduleQueryKey, 3) ? previous : undefined,
   });
   const schedules = schedulesPage?.data ?? [];
 

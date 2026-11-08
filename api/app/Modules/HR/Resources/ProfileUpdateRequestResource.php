@@ -11,39 +11,68 @@ class ProfileUpdateRequestResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $user = $request->user();
+        $canReviewHr = $user !== null
+            && ($user->hasPermission('hr.employees.view') || $user->hasPermission('hr.employees.view_sensitive'))
+            && $user->hasPermission('hr.employees.edit');
+        $canReviewFinance = $user?->hasPermission('hr.profile_updates.finance_review') ?? false;
+        $isRequester = $user !== null && $this->requested_by !== null
+            && (int) $this->requested_by === (int) $user->id;
+        $hasHrReview = $this->reviewed_by !== null && $this->reviewed_at !== null;
+        $canReviewHr = (bool) $canReviewHr
+            && $this->status === ProfileUpdateStatus::Pending->value
+            && ! $isRequester;
+        $canReviewFinance = (bool) $canReviewFinance
+            && $this->status === ProfileUpdateStatus::PendingFinance->value
+            && (bool) $this->requires_finance
+            && $hasHrReview
+            && ! $isRequester;
+
         return [
-            'id'      => $this->hash_id,
-            'status'  => $this->status,
+            'id' => $this->hash_id,
+            'status' => $this->status,
             'status_label' => ProfileUpdateStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
             'requires_finance' => (bool) $this->requires_finance,
+            'permissions' => [
+                'review_hr' => (bool) ($user !== null
+                    && ($user->hasPermission('hr.employees.view') || $user->hasPermission('hr.employees.view_sensitive'))
+                    && $user->hasPermission('hr.employees.edit')),
+                'review_finance' => (bool) $user?->hasPermission('hr.profile_updates.finance_review'),
+            ],
+            'available_actions' => [
+                'can_review_hr' => $canReviewHr,
+                'can_approve_finance' => $canReviewFinance
+                    && (int) $this->reviewed_by !== (int) $user?->id,
+                'can_reject_finance' => $canReviewFinance,
+            ],
             'changes' => $this->redactedChanges($request),
-            'note'    => $this->note,
+            'note' => $this->note,
             'employee' => $this->relationLoaded('employee') && $this->employee ? [
-                'id'          => $this->employee->hash_id,
+                'id' => $this->employee->hash_id,
                 'employee_no' => $this->employee->employee_no,
-                'full_name'   => $this->employee->full_name,
-                'department'  => $this->employee->relationLoaded('department') && $this->employee->department
+                'full_name' => $this->employee->full_name,
+                'department' => $this->employee->relationLoaded('department') && $this->employee->department
                     ? ['id' => $this->employee->department->hash_id, 'name' => $this->employee->department->name]
                     : null,
             ] : null,
             'requester' => $this->relationLoaded('requester') && $this->requester ? [
-                'id'    => $this->requester->hash_id,
-                'name'  => $this->requester->name,
+                'id' => $this->requester->hash_id,
+                'name' => $this->requester->name,
                 'email' => $this->requester->email,
             ] : null,
             'reviewer' => $this->relationLoaded('reviewer') && $this->reviewer ? [
-                'id'    => $this->reviewer->hash_id,
-                'name'  => $this->reviewer->name,
+                'id' => $this->reviewer->hash_id,
+                'name' => $this->reviewer->name,
             ] : null,
-            'reviewed_at'    => optional($this->reviewed_at)->toIso8601String(),
+            'reviewed_at' => optional($this->reviewed_at)->toIso8601String(),
             'review_remarks' => $this->review_remarks,
             'finance_reviewer' => $this->relationLoaded('financeReviewer') && $this->financeReviewer ? [
-                'id'   => $this->financeReviewer->hash_id,
+                'id' => $this->financeReviewer->hash_id,
                 'name' => $this->financeReviewer->name,
             ] : null,
             'finance_reviewed_at' => optional($this->finance_reviewed_at)->toIso8601String(),
-            'finance_remarks'     => $this->finance_remarks,
-            'created_at'     => optional($this->created_at)->toIso8601String(),
+            'finance_remarks' => $this->finance_remarks,
+            'created_at' => optional($this->created_at)->toIso8601String(),
         ];
     }
 

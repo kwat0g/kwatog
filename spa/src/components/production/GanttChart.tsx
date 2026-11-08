@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { horizontalScrollEdges } from '@/lib/horizontalScrollEdges';
 import { focusRing } from '@/lib/focus';
-import type { GanttRow } from '@/types/mrp';
+import { LuPencil } from '@/lib/icons';
+import type { GanttBar, GanttRow } from '@/types/mrp';
 import { scheduleDateKey, scheduleDate, scheduleTime } from './scheduleDates';
 
 type ViewMode = 'Day' | 'Week' | 'Month';
@@ -15,6 +17,7 @@ interface Props {
   to?: string;
   timezone?: string;
   onBarClick?: (woId: string) => void;
+  onBarEdit?: (bar: GanttBar) => void;
   fillHeight?: boolean;
   className?: string;
 }
@@ -31,6 +34,7 @@ export function GanttChart({
   to,
   timezone = 'Asia/Manila',
   onBarClick,
+  onBarEdit,
   fillHeight = false,
   className,
 }: Props) {
@@ -159,8 +163,23 @@ export function GanttChart({
                   style={{ gridTemplateColumns: columns }}
                 >
                   <div className="sticky left-0 z-10 min-w-0 bg-canvas px-4 py-2">
-                    <div className="truncate font-mono text-sm" title={bar.wo_number ?? undefined}>
-                      {bar.wo_number ?? 'Work order unavailable'}
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <div className="truncate font-mono text-sm" title={bar.wo_number ?? undefined}>
+                        {bar.wo_number ?? 'Work order unavailable'}
+                      </div>
+                      {onBarEdit && bar.status === 'pending' && bar.wo_status === 'planned'
+                        && bar.reserves_capacity !== false && bar.updated_at && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          iconOnly
+                          className="min-h-11 min-w-11 shrink-0 p-0"
+                          aria-label={`Adjust schedule for ${bar.wo_number ?? 'work order'}`}
+                          title="Adjust schedule"
+                          icon={<LuPencil size={14} />}
+                          onClick={() => onBarEdit(bar)}
+                        />
+                      )}
                     </div>
                     <div
                       className="truncate text-caption text-secondary"

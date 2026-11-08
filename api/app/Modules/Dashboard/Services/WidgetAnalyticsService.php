@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Services\Analytics\ApprovalsWidgetAnalytics;
@@ -19,6 +20,7 @@ use App\Modules\Dashboard\Services\Analytics\KpiWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\LoanWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\ReturnWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\SupplyChainWidgetAnalytics;
+use App\Modules\Dashboard\Support\PanelGate;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -51,6 +53,7 @@ final class WidgetAnalyticsService
         private readonly CapacityWidgetAnalytics $capacity,
         private readonly AttendanceWidgetAnalytics $attendance,
         private readonly ExecutiveWidgetAnalytics $executive,
+        private readonly PanelGate $cacheScopes,
     ) {}
 
     /**
@@ -66,12 +69,9 @@ final class WidgetAnalyticsService
             return [];
         }
 
-        $cacheKey = "dashboard:widget:rich:{$user->id}:{$kind->value}:{$key}";
-        $missing = new \stdClass();
-        $cached = Cache::get($cacheKey, $missing);
-        if ($cached !== $missing) {
-            return $cached;
-        }
+        $cacheScope = $this->cacheScopes->cacheScope($user);
+        $version = DashboardCacheGeneration::current("widget-rich:{$key}");
+        $cacheKey = "dashboard:widget:rich:v3:{$version}:{$user->id}:{$cacheScope}:{$kind->value}:{$key}";
 
         foreach ($this->providers() as $provider) {
             if (! in_array($key, $provider->handles(), true)) {
@@ -79,10 +79,13 @@ final class WidgetAnalyticsService
             }
 
             try {
-                $payload = $provider->payload($key, $user);
-                Cache::put($cacheKey, $payload, self::CACHE_TTL_SECONDS);
-
-                return $payload;
+                return FailOpenCache::remember(
+                    Cache::store(),
+                    $cacheKey,
+                    self::CACHE_TTL_SECONDS,
+                    fn (): array => $provider->payload($key, $user),
+                    'dashboard.widget.rich',
+                );
             } catch (Throwable $e) {
                 $this->failedKeys[$key] = true;
                 Log::warning('dashboard widget analytics failed', [

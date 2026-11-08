@@ -11,6 +11,8 @@ import { transferOrderApi } from '@/api/inventory/warehouseWms';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { itemsApi } from '@/api/inventory/items';
 import { stockLevelsApi } from '@/api/inventory/stock';
+import { useInventoryStockRealtime } from '@/hooks/useInventoryStockRealtime';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -32,8 +34,10 @@ import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
 import { focusRingInset } from '@/lib/focus';
 import { showActionToast } from '@/lib/actionToast';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { TransferOrder } from '@/types/warehouse';
 import type { WarehouseLocation } from '@/types/inventory';
+import type { PaginatedResponse } from '@/types';
 
 const statusVariant: Record<string, 'warning' | 'success' | 'info' | 'danger' | 'neutral'> = {
   pending: 'warning',
@@ -64,9 +68,12 @@ async function listItemStock(itemId: string) {
 }
 
 export default function TransferOrdersPage() {
+  useInventoryStockRealtime();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const currentUserId = useAuthStore((state) => state.user?.id);
+  const currentUser = useAuthStore((state) => state.user);
+  const currentUserId = currentUser?.id;
+  const currentUserRole = currentUser?.role.slug;
   const navigate = useNavigate();
   const canManage = can('inventory.adjust');
 
@@ -85,17 +92,22 @@ export default function TransferOrdersPage() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['inventory', 'transfer-orders', transferPage],
+    queryKey: [
+      'inventory', 'transfer-orders', currentUserId ?? 'anonymous', currentUserRole ?? 'none', transferPage,
+    ],
     queryFn: () => transferOrderApi.page(transferPage),
   });
 
   const transfers = transferResponse?.data;
   const detailQuery = useQuery({
-    queryKey: ['inventory', 'transfer-order', activeId],
+    queryKey: [
+      'inventory', 'transfer-order', activeId, currentUserId ?? 'anonymous', currentUserRole ?? 'none',
+    ],
     queryFn: () => transferOrderApi.get(activeId!),
     enabled: !!activeId,
   });
   const { data: activeTransfer, refetch: refetchDetail } = detailQuery;
+  useRealtimeRecord('transfer_order', activeId ?? undefined);
 
   const locationsQuery = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
@@ -119,8 +131,40 @@ export default function TransferOrdersPage() {
     [activeLocations],
   );
 
-  const inv = () => {
-    qc.invalidateQueries({ queryKey: ['inventory', 'transfer-orders'] });
+  const applyTransferResponse = (transfer: TransferOrder) => {
+    const detailKey = [
+      'inventory', 'transfer-order', transfer.id, currentUserId ?? 'anonymous', currentUserRole ?? 'none',
+    ] as const;
+    qc.setQueryData(detailKey, transfer);
+    qc.setQueriesData<PaginatedResponse<TransferOrder>>(
+      {
+        queryKey: [
+          'inventory', 'transfer-orders', currentUserId ?? 'anonymous', currentUserRole ?? 'none',
+        ],
+      },
+      (current) => current
+        ? { ...current, data: current.data.map((row) => row.id === transfer.id ? transfer : row) }
+        : current,
+    );
+    void invalidateRealtimeChange(
+      qc,
+      { entityType: 'transfer_order', entityId: transfer.id },
+      [],
+      [detailKey],
+    );
+  };
+
+  const handleTransferMutationError = (
+    error: AxiosError<{ message?: string }>,
+    fallback: string,
+    closeAction: () => void,
+  ) => {
+    toast.error(error.response?.data?.message ?? fallback);
+    if (error.response?.status !== 409) return;
+
+    closeAction();
+    void refetch();
+    void refetchDetail();
   };
 
   const createForm = useForm<z.infer<typeof createSchema>>({
@@ -189,9 +233,18 @@ export default function TransferOrdersPage() {
   const createTransfer = useMutation({
     mutationFn: (d: z.infer<typeof createSchema>) => transferOrderApi.create(d),
     onSuccess: (t) => {
+      const detailKey = [
+        'inventory', 'transfer-order', t.id, currentUserId ?? 'anonymous', currentUserRole ?? 'none',
+      ] as const;
+      qc.setQueryData(detailKey, t);
       toast.success('Transfer order created.');
       setShowCreateModal(false);
-      inv();
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'transfer_order', entityId: t.id },
+        [],
+        [detailKey],
+      );
       setActiveId(t.id);
       createForm.reset();
     },
@@ -201,32 +254,28 @@ export default function TransferOrdersPage() {
 
   const executeTransfer = useMutation({
     mutationFn: (id: string) => transferOrderApi.execute(id),
-    onSuccess: () => {
+    onSuccess: (transfer) => {
+      applyTransferResponse(transfer);
       showActionToast({
         message: 'Transfer executed.',
         actionLabel: 'View movements',
         onAction: () => navigate('/inventory/stock-levels?view=movements&type=transfer'),
       });
-      refetch();
-      refetchDetail();
-      inv();
       setExecuteTarget(null);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to execute.'),
+      handleTransferMutationError(e, 'Failed to execute.', () => setExecuteTarget(null)),
   });
 
   const cancelTransfer = useMutation({
     mutationFn: (id: string) => transferOrderApi.cancel(id),
-    onSuccess: () => {
+    onSuccess: (_result, transferId) => {
       toast.success('Transfer cancelled.');
-      refetch();
-      refetchDetail();
-      inv();
+      void invalidateRealtimeChange(qc, { entityType: 'transfer_order', entityId: transferId });
       setCancelTarget(null);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
+      handleTransferMutationError(e, 'Failed to cancel.', () => setCancelTarget(null)),
   });
 
   return (
@@ -372,13 +421,10 @@ export default function TransferOrdersPage() {
                     meta={<span className="block truncate" title={activeTransfer.item?.name ?? ''}>{activeTransfer.item?.name ?? ''}</span>}
                   >
                     <div className="space-y-4">
-                      {activeTransfer.status === 'pending' && canManage && (
+                      {(activeTransfer.available_actions?.execute === true ||
+                        activeTransfer.available_actions?.cancel === true) && (
                         <div className="flex flex-wrap justify-end gap-1.5">
-                          {activeTransfer.created_by?.id === currentUserId ? (
-                            <p role="status" className="text-caption text-muted self-center">
-                              Another warehouse user must execute a transfer you created.
-                            </p>
-                          ) : (
+                          {activeTransfer.available_actions?.execute === true ? (
                             <Button
                               size="sm"
                               variant="primary"
@@ -393,21 +439,27 @@ export default function TransferOrdersPage() {
                             >
                               Execute
                             </Button>
+                          ) : activeTransfer.created_by?.id === currentUserId ? (
+                            <p role="status" className="text-caption text-muted self-center">
+                              Another warehouse user must execute a transfer you created.
+                            </p>
+                          ) : null}
+                          {activeTransfer.available_actions?.cancel === true && (
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              disabled={
+                                detailQuery.isFetching ||
+                                detailQuery.isError ||
+                                executeTransfer.isPending ||
+                                cancelTransfer.isPending
+                              }
+                              icon={<LuCircleX size={14} />}
+                              onClick={() => setCancelTarget(activeTransfer)}
+                            >
+                              Cancel
+                            </Button>
                           )}
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            disabled={
-                              detailQuery.isFetching ||
-                              detailQuery.isError ||
-                              executeTransfer.isPending ||
-                              cancelTransfer.isPending
-                            }
-                            icon={<LuCircleX size={14} />}
-                            onClick={() => setCancelTarget(activeTransfer)}
-                          >
-                            Cancel
-                          </Button>
                         </div>
                       )}
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -681,7 +733,8 @@ export default function TransferOrdersPage() {
           detailQuery.isFetching ||
           !executeTarget ||
           activeTransfer?.id !== executeTarget.id ||
-          activeTransfer.status !== 'pending'
+          activeTransfer.status !== 'pending' ||
+          activeTransfer.available_actions?.execute !== true
         }
         pending={executeTransfer.isPending}
       />
@@ -700,7 +753,8 @@ export default function TransferOrdersPage() {
           detailQuery.isFetching ||
           !cancelTarget ||
           activeTransfer?.id !== cancelTarget.id ||
-          activeTransfer.status !== 'pending'
+          activeTransfer.status !== 'pending' ||
+          activeTransfer.available_actions?.cancel !== true
         }
         pending={cancelTransfer.isPending}
       />

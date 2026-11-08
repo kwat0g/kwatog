@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
-import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
@@ -14,6 +13,8 @@ import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import toast from 'react-hot-toast';
 
 const STATUS_VARIANT = { pending: 'warning', approved: 'success', rejected: 'neutral' } as const;
@@ -21,34 +22,46 @@ const STATUS_VARIANT = { pending: 'warning', approved: 'success', rejected: 'neu
 export default function BudgetTransferDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const { canApprove } = usePermission();
+  useRealtimeRecord('budget_transfer', id);
   const [confirmReject, setConfirmReject] = useState(false);
   const query = useQuery({
     queryKey: ['budget-transfer', id],
     queryFn: () => budgetingApi.transfer(id!),
     enabled: Boolean(id),
   });
-  const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['budget-transfer', id] });
-    queryClient.invalidateQueries({ queryKey: ['budget-transfers'] });
-  };
   const approve = useMutation({
     mutationFn: () => budgetingApi.approveTransfer(id!),
-    onSuccess: () => { refresh(); toast.success('Transfer approved and applied.'); },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['budget-transfer', id], updated);
+      void invalidateRealtimeChange(queryClient, { entityType: 'budget_transfer', entityId: id! });
+      toast.success('Transfer approved and applied.');
+    },
     onError: (error) => reportMutationError(error, 'Could not approve the transfer.'),
   });
   const reject = useMutation({
     mutationFn: () => budgetingApi.rejectTransfer(id!),
-    onSuccess: () => { refresh(); setConfirmReject(false); toast.success('Transfer rejected; nothing moved.'); },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['budget-transfer', id], updated);
+      void invalidateRealtimeChange(queryClient, { entityType: 'budget_transfer', entityId: id! });
+      setConfirmReject(false);
+      toast.success('Transfer rejected; nothing moved.');
+    },
     onError: (error) => reportMutationError(error, 'Could not reject the transfer.'),
   });
 
   if (query.isLoading) return <SkeletonDetail />;
-  if (query.isError) return <QueryErrorState subject="this budget transfer" onRetry={() => void query.refetch()} />;
+  if (query.isError) {
+    const status = (query.error as { response?: { status?: number } })?.response?.status;
+    if (status === 403 || status === 404) {
+      return <EmptyState icon="alert-circle" title="This transfer is no longer available" description="It may have been decided or your approval scope changed." />;
+    }
+    return <QueryErrorState subject="this budget transfer" onRetry={() => void query.refetch()} />;
+  }
   const transfer = query.data;
   if (!transfer) return <EmptyState icon="alert-circle" title="Transfer not found" />;
 
-  const canDecide = transfer.status === 'pending' && transfer.can_approve === true && canApprove('budgeting.approve');
+  const canApproveTransfer = transfer.available_actions?.approve === true;
+  const canRejectTransfer = transfer.available_actions?.reject === true;
   const lineName = (line: typeof transfer.from_line) => [line?.account_code, line?.account_name].filter(Boolean).join(' — ') || 'Unavailable';
 
   return (
@@ -58,9 +71,9 @@ export default function BudgetTransferDetailPage() {
         subtitle={<Chip variant={STATUS_VARIANT[transfer.status]}>{transfer.status_label ?? transfer.status}</Chip>}
         backTo="/budgeting/transfers"
         backLabel="Budget transfers"
-        actions={canDecide ? <div className="flex gap-2">
-          <Button variant="primary" loading={approve.isPending} onClick={() => approve.mutate()}>Approve transfer</Button>
-          <Button variant="secondary" onClick={() => setConfirmReject(true)}>Reject</Button>
+        actions={canApproveTransfer || canRejectTransfer ? <div className="flex gap-2">
+          {canApproveTransfer && <Button variant="primary" loading={approve.isPending} onClick={() => approve.mutate()}>Approve transfer</Button>}
+          {canRejectTransfer && <Button variant="secondary" onClick={() => setConfirmReject(true)}>Reject</Button>}
         </div> : undefined}
       />
       <Panel title="Transfer details">

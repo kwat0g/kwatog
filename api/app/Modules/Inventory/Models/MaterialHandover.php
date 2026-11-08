@@ -24,4 +24,9 @@ class MaterialHandover extends Model
     {
         return $this->belongsTo(User::class, 'recorded_by');
     }
+
+    public function stockMovement(): BelongsTo
+    {
+        return $this->belongsTo(StockMovement::class);
+    }
 }

@@ -188,6 +188,34 @@ class FinishFirstWorkOrderTest extends TestCase
         $this->assertSame(1, OutboxMessage::where('event_type', WorkOrderCompleted::class)->count());
     }
 
+
+    public function test_simple_production_finishes_without_recording_routing_operations(): void
+    {
+        config(['production.routing_execution_enabled' => false]);
+        [$item, $location] = $this->prepareAutomaticStockReceipt();
+        $operation = WoOperation::create(['work_order_id' => $this->wo->id, 'sequence' => 1,
+            'operation_name' => 'Packing', 'status' => 'pending', 'qty_planned' => 200]);
+        app(WorkOrderOutputService::class)->record($this->wo,
+            $this->outputForCrew($this->wo, ['produced_count' => 200], $this->manager), $this->manager->id, 'simple-routing-disabled');
+        $this->assertSame('completed', $this->wo->fresh()->status->value);
+        $this->assertSame('pending', $operation->fresh()->status->value);
+        $this->assertSame(0.0, (float) $operation->fresh()->qty_completed);
+        $this->assertSame(200, (int) $this->wo->fresh()->quantity_produced);
+        $this->assertSame('200.000', app(QualityStockHoldService::class)->heldQuantity($item->id, $location->id));
+        $this->assertNotNull(app(WorkOrderService::class)->qualityCloseBlocker($this->wo->fresh()));
+    }
+
+    public function test_simple_production_still_blocks_unresolved_process_qc(): void
+    {
+        config(['production.routing_execution_enabled' => false]);
+        Inspection::create(['inspection_number' => 'SIMPLE-QC-HOLD', 'stage' => 'in_process', 'status' => 'failed',
+            'product_id' => $this->wo->product_id, 'entity_type' => 'work_order', 'entity_id' => $this->wo->id,
+            'batch_quantity' => 200, 'sample_size' => 3]);
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('in-process QC');
+        $this->wo->fresh()->assertProcessQualityReleased();
+    }
+
     public function test_final_routing_operation_unblocks_automatic_finish(): void
     {
         $this->prepareAutomaticStockReceipt();

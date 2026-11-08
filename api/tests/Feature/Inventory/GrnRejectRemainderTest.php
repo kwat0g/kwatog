@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Events\ChainStepAdvanced;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -18,6 +20,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class GrnRejectRemainderTest extends TestCase
@@ -25,8 +28,10 @@ class GrnRejectRemainderTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     // Maker-checker: an incoming inspection counts only when a different user checks it.
     private User $checker;
+
     private GrnService $grnSvc;
 
     protected function setUp(): void
@@ -89,6 +94,41 @@ class GrnRejectRemainderTest extends TestCase
         return $grn;
     }
 
+    public function test_repeated_partial_receipt_refreshes_po_detail_when_po_status_is_unchanged(): void
+    {
+        $grn = $this->createPartiallyAcceptedGrn('100.000', '60.000');
+        $po = PurchaseOrder::query()->findOrFail($grn->purchase_order_id);
+        $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $po->status);
+
+        $priorPoSignalIds = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->filter(static function ($row) use ($po): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $po->hash_id;
+            })
+            ->pluck('id');
+        DB::table('event_outbox')->whereIn('id', $priorPoSignalIds)->delete();
+
+        $line = $grn->items()->firstOrFail();
+        $this->grnSvc->partialAccept($grn->fresh(), [$line->id => '80.000'], $this->user);
+
+        $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $po->fresh()->status);
+        $poSignals = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->get()
+            ->filter(static function ($row) use ($po): bool {
+                $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
+
+                return ($payload['entityType'] ?? null) === 'purchase_order'
+                    && ($payload['entityHashId'] ?? null) === (string) $po->hash_id;
+            });
+
+        $this->assertCount(1, $poSignals, 'Linked PO detail viewers need a refresh even when its status stays PartiallyReceived.');
+    }
+
     public function test_reject_remainder_reduces_po_line_received_quantity(): void
     {
         $grn = $this->createPartiallyAcceptedGrn('100.000', '60.000');
@@ -117,7 +157,7 @@ class GrnRejectRemainderTest extends TestCase
         $this->grnSvc->rejectRemainder($grn, 'Remainder rejected', $this->user);
 
         // Check that a supplier return was created with source_key grn-rejection:{id}
-        $return = ReturnRequest::where('source_key', 'grn-rejection:' . $grn->id)->first();
+        $return = ReturnRequest::where('source_key', 'grn-rejection:'.$grn->id)->first();
         $this->assertNotNull($return, 'A supplier return should be opened for the rejected remainder');
 
         // The return should be for 40 units (remainder)
@@ -131,7 +171,7 @@ class GrnRejectRemainderTest extends TestCase
 
         $this->grnSvc->rejectRemainder($grn, 'First rejection', $this->user);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('already rejected');
 
         $this->grnSvc->rejectRemainder($grn->fresh(), 'Second rejection', $this->user);
@@ -142,7 +182,7 @@ class GrnRejectRemainderTest extends TestCase
         $grn = $this->createPartiallyAcceptedGrn('100.000', '60.000');
         $grn = $this->grnSvc->rejectRemainder($grn, 'Remainder rejected', $this->user);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('rejected');
 
         $this->grnSvc->partialAccept($grn->fresh(), [$grn->items->first()->id => '70.000'], $this->user);
@@ -177,7 +217,7 @@ class GrnRejectRemainderTest extends TestCase
             'unit_cost' => '10.00',
         ]], ['received_date' => now()->toDateString()], $this->user);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('partial_accepted');
 
         $this->grnSvc->rejectRemainder($grn, 'Cannot reject on pending_qc', $this->user);
@@ -220,7 +260,7 @@ class GrnRejectRemainderTest extends TestCase
 
         $this->grnSvc->accept($grn, $this->user);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('partial_accepted');
 
         $this->grnSvc->rejectRemainder($grn->fresh(), 'Cannot reject on fully accepted', $this->user);
@@ -307,7 +347,7 @@ class GrnRejectRemainderTest extends TestCase
         $this->assertSame(GrnStatus::Accepted->value, (string) $grn->status->value);
 
         // This should fail because the GRN is Accepted, not PartialAccepted
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('partial_accepted');
 
         $this->grnSvc->rejectRemainder($grn->fresh(), 'Cannot reject when fully accepted', $this->user);

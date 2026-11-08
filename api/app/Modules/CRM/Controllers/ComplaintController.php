@@ -65,7 +65,10 @@ class ComplaintController
 
     public function store(StoreComplaintRequest $request): CustomerComplaintResource
     {
-        return new CustomerComplaintResource($this->service->create($request->validated(), $request->user()));
+        $complaint = $this->service->create($request->validated(), $request->user());
+        $complaint->load('eightDReport');
+
+        return new CustomerComplaintResource($complaint);
     }
 
     /** Retry a failed complaint → Quality NCR handoff. */
@@ -79,6 +82,7 @@ class ComplaintController
     public function update8D(Request $request, CustomerComplaint $complaint): CustomerComplaintResource
     {
         $validated = $request->validate([
+            'expected_version'      => ['sometimes', 'nullable', 'string', 'max:128'],
             'd1_team'              => ['nullable', 'string', 'max:5000'],
             'd2_problem'           => ['nullable', 'string', 'max:5000'],
             'd3_containment'       => ['nullable', 'string', 'max:5000'],
@@ -88,7 +92,10 @@ class ComplaintController
             'd7_prevention'        => ['nullable', 'string', 'max:5000'],
             'd8_recognition'       => ['nullable', 'string', 'max:5000'],
         ]);
-        $this->service->update8DReport($complaint, $validated);
+        $checkVersion = array_key_exists('expected_version', $validated);
+        $expectedVersion = $validated['expected_version'] ?? null;
+        unset($validated['expected_version']);
+        $this->service->update8DReport($complaint, $validated, $expectedVersion, $checkVersion);
         return new CustomerComplaintResource($this->service->show($complaint));
     }
 

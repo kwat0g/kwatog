@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { LuArrowLeft, LuCheck, LuFileText, LuSearch, LuX } from '@/lib/icons';
 import { returnCasesApi } from '@/api/returnCases';
@@ -15,14 +15,19 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { useReturnCaseSourceRealtime } from '@/hooks/useRealtimeRecord';
+import { returnCaseQueryKeys } from '@/lib/queryKeys/returnCases';
 import type {
   CreateReturnCasePayload,
+  ReturnCaseRecord,
   ReturnCaseLineSubmission,
   ReturnCasePreferredResolution,
   ReturnCaseSourceKind,
   ReturnCaseSourceLineOption,
   ReturnCaseSourceResult,
 } from '@/types/returnCases';
+import type { CustomerPortalUser, SupplierPortalUser } from '@/types/b2b';
 import {
   apiFieldErrors,
   apiMessage,
@@ -74,10 +79,23 @@ export default function ReturnCaseCreatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const realm = realmFromPath(location.pathname);
+  const portalUser = useOutletContext<CustomerPortalUser | SupplierPortalUser | null>();
+  const authUserId = useAuthStore((state) => state.user?.id);
+  const portalScope = realm === 'customer'
+    ? (portalUser as CustomerPortalUser | null)?.customer?.id
+    : realm === 'supplier'
+      ? (portalUser as SupplierPortalUser | null)?.vendor?.id
+      : undefined;
+  const cacheScope = realm === 'internal' ? `user:${authUserId ?? 'unknown'}` : `${realm}:${portalScope ?? 'unknown'}`;
+  const queryClient = useQueryClient();
   const { can } = usePermission();
   const roleSlug = useAuthStore((state) => state.user?.role.slug);
   const canCreateSupplierReturn =
     roleSlug !== 'customer_service_officer' || can('purchasing.po.create');
+  const internalRealtimeScope = realm === 'internal'
+    ? roleSlug === 'customer_service_officer' && !can('purchasing.po.create') ? 'customer' : 'all'
+    : undefined;
+  useReturnCaseSourceRealtime(realm, portalScope, internalRealtimeScope);
   const reportOnly =
     realm === 'internal' && !can('return_management.manage') && can('inventory.grn.create');
   const initialKind = searchParams.get('source_kind') as ReturnCaseSourceKind | null;
@@ -111,13 +129,13 @@ export default function ReturnCaseCreatePage() {
   const submitting = useRef(false);
 
   const sourceSearch = useQuery({
-    queryKey: ['return-cases', realm, 'sources', type, debouncedSearch],
+    queryKey: returnCaseQueryKeys.sources(realm, cacheScope, type, debouncedSearch),
     queryFn: () => returnCasesApi.findSources(realm, type, debouncedSearch.trim()),
     enabled: !reportOnly && debouncedSearch.trim().length >= 2,
     staleTime: 15_000,
   });
   const sourceQuery = useQuery({
-    queryKey: ['return-cases', realm, 'source-options', selectedSource?.kind, selectedSource?.id],
+    queryKey: returnCaseQueryKeys.sourceOptions(realm, cacheScope, selectedSource?.kind, selectedSource?.id),
     queryFn: () => returnCasesApi.sourceOptions(realm, selectedSource!.kind, selectedSource!.id),
     enabled: !!selectedSource,
   });
@@ -203,6 +221,8 @@ export default function ReturnCaseCreatePage() {
   const createMutation = useMutation({
     mutationFn: (payload: CreateReturnCasePayload) => returnCasesApi.create(realm, payload),
     onSuccess: async (record) => {
+      queryClient.setQueryData(returnCaseQueryKeys.detail(record.id, realm, cacheScope), record as ReturnCaseRecord);
+      void invalidateRealtimeChange(queryClient, { entityType: 'return_case', entityId: record.id });
       toast.success(`Report ${record.case_number} submitted.`);
       const failedFiles: File[] = [];
       for (let index = 0; index < files.length; index += 1) {

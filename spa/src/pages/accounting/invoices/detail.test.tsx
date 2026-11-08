@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { accountingOptionsApi } from '@/api/accounting/options';
@@ -19,7 +19,7 @@ vi.mock('@/api/accounting/invoices', () => ({
   },
 }));
 vi.mock('@/hooks/useChainProgress', () => ({ useChainProgress: () => {} }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true, canApprove: () => true }) }));
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: (selector: (state: { user: { id: string } }) => unknown) =>
     selector({ user: { id: 'poster' } }),
@@ -65,7 +65,7 @@ function renderPage(value: Invoice) {
     credit_note_statuses: [],
   });
 
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/accounting/invoices/invoice-1']}>
         <Routes>
@@ -74,6 +74,8 @@ function renderPage(value: Invoice) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+
+  return { ...view, queryClient };
 }
 
 describe('standard invoice delivery gate', () => {
@@ -171,21 +173,75 @@ describe('standard invoice delivery gate', () => {
 
     expect(await screen.findByRole('button', { name: 'Finalize' })).toBeEnabled();
   });
+
+  it('hides prebill approval when the server says this viewer cannot approve', async () => {
+    renderPage({
+      ...invoice(),
+      lifecycle_type: 'prebill',
+      prebill_reason: 'Approved prebilling for a confirmed customer order.',
+      available_actions: { approve_prebill: false },
+    } as Invoice);
+
+    expect(await screen.findByText('DRAFT')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve prebill' })).not.toBeInTheDocument();
+  });
+
+  it('shows prebill approval when the server permits it', async () => {
+    renderPage({
+      ...invoice(),
+      lifecycle_type: 'prebill',
+      prebill_reason: 'Approved prebilling for a confirmed customer order.',
+      available_actions: { approve_prebill: true },
+    } as Invoice);
+
+    expect(await screen.findByRole('button', { name: 'Approve prebill' })).toBeEnabled();
+  });
 });
 
-it('hides ordinary collection before evidence and shows one review action afterward', async () => {
+it('leaves active invoice freshness to the shared realtime hook', async () => {
+  const { queryClient } = renderPage(invoice());
+  await waitFor(() => expect(invoicesApi.show).toHaveBeenCalled());
+
+  const queryOptions = queryClient.getQueryCache().find({ queryKey: ['accounting', 'invoices', 'invoice-1'] })?.options as { refetchInterval?: unknown } | undefined;
+  expect(queryOptions?.refetchInterval).toBeUndefined();
+});
+
+it('shows Finance collection access before evidence and one review action while evidence is pending', async () => {
   const pending = { id: 'payment-1', status: 'pending' as const, amount: '100.00', sending_bank: 'BDO', reference_number: 'REF-1', payment_date: '2026-10-09', proof_file_name: 'proof.pdf', proof_mime: 'application/pdf', proof_size: 100, submitted_at: '2026-10-09T10:00:00Z', reviewed_at: null, rejection_reason: null, collection_id: null };
   const first = renderPage({ ...invoice(), status: 'finalized', display_status: 'unpaid', payment_submissions: [] });
   await screen.findByText('Awaiting customer payment submission.');
-  expect(screen.queryByRole('button', { name: 'Record collection' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Record collection' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Review payment' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   expect(screen.getByText('Awaiting customer payment')).toBeInTheDocument();
   first.unmount();
-  renderPage({ ...invoice(), status: 'finalized', display_status: 'unpaid', payment_submissions: [pending] });
+  renderPage({ ...invoice(), status: 'finalized', display_status: 'unpaid', available_actions: { review_payment: true }, payment_submissions: [pending] });
   expect(await screen.findByRole('button', { name: 'Review payment' })).toBeEnabled();
   expect(screen.getByText('Awaiting payment verification')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Record collection' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Record exceptional collection' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+});
+
+it('renders the finalized API invoice immediately and removes the stale finalize action', async () => {
+  const draft = invoice({ id: 'delivery-1', delivery_number: 'DR-1', status: 'confirmed' });
+  const finalized = {
+    ...draft,
+    status: 'finalized',
+    display_status: 'unpaid',
+    invoice_number: 'INV-202611-0001',
+  } as Invoice;
+  const { queryClient } = renderPage(draft);
+  await screen.findByRole('button', { name: 'Finalize' });
+  vi.mocked(invoicesApi.finalize).mockResolvedValue(finalized);
+  const detailReadsBeforeFinalize = vi.mocked(invoicesApi.show).mock.calls.length;
+
+  fireEvent.click(screen.getByRole('button', { name: 'Finalize' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finalize' }));
+
+  await waitFor(() => expect(screen.getByText('Awaiting customer payment')).toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: 'Finalize' })).not.toBeInTheDocument();
+  expect(vi.mocked(invoicesApi.show)).toHaveBeenCalledTimes(detailReadsBeforeFinalize);
+  expect(queryClient.getQueryData(['accounting', 'invoices', 'invoice-1']))
+    .toMatchObject({ status: 'finalized', invoice_number: 'INV-202611-0001' });
 });

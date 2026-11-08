@@ -1,5 +1,5 @@
 /** Sprint 8 — Task 69. Maintenance work-orders list. */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
 import { workOrdersApi, type WorkOrderListParams } from '@/api/maintenance/workOrders';
@@ -13,8 +13,9 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import { useEcho } from '@/hooks/useEcho';
+import { useMaintenanceWorkOrderListRealtime } from '@/hooks/useRealtimeRecord';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { useAuthStore } from '@/stores/authStore';
 import {
  maintenancePriorityVariant as PRIORITY_CHIP,
@@ -35,20 +36,18 @@ export default function MaintenanceWorkOrdersListPage() {
  const orderPath = selfService ? '/self-service/maintenance-work-orders' : '/maintenance/work-orders';
  const { can } = usePermission();
  const employeeId = useAuthStore((s) => s.user?.employee?.id);
- const qc = useQueryClient();
  // Bound to the URL so dashboard drill-downs (?status=in_progress) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<WorkOrderListParams>(DEFAULT_FILTERS);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['maintenance', 'work-orders', filters],
+  const queryKey = ['maintenance', 'work-orders', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => workOrdersApi.list(filters),
- refetchInterval: 60_000,
- placeholderData: (prev) => prev });
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
 
- useEcho(can('maintenance.view') ? 'maintenance.dashboard' : '', '.maintenance.wo_created', () => {
-  qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
- });
+ useMaintenanceWorkOrderListRealtime(can('maintenance.view'));
  const { data: options } = useQuery({
  queryKey: ['maintenance', 'work-order-options'],
  queryFn: () => workOrdersApi.options() });

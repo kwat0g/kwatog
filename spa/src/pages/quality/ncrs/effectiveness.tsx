@@ -9,10 +9,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import type { NcrAction } from '@/types/quality';
 
 /** CAPA due/overdue queue. The detail page owns the actual verdict form. */
 export default function NcrEffectivenessPage() {
+  useRealtimeList('ncr', 'visible');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const signal = searchParams.get('signal') === 'awaiting_my_action' ? 'awaiting_my_action' : undefined;
@@ -20,7 +22,6 @@ export default function NcrEffectivenessPage() {
   const query = useQuery({
     queryKey: ['quality', 'ncr-effectiveness', signal, page],
     queryFn: () => ncrsApi.due({ page, per_page: 25, signal }),
-    placeholderData: (previous) => previous,
   });
 
   const columns: Column<NcrAction>[] = [

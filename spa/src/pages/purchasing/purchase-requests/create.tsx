@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -29,6 +29,7 @@ import { localIsoDate } from '@/lib/formatDate';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 // eslint-disable-next-line react-refresh/only-export-components
 export const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
@@ -63,6 +64,7 @@ type V = z.infer<typeof schema>;
 
 export default function CreatePurchaseRequestPage() {
   const nav = useNavigate();
+  const queryClient = useQueryClient();
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<V | null>(null);
 
@@ -155,29 +157,35 @@ export default function CreatePurchaseRequestPage() {
   };
 
   const create = useMutation({
-    mutationFn: ({ values, submit }: { values: V; submit: boolean }) =>
-      purchaseRequestsApi
-        .create({
-          reason: values.reason?.trim() || undefined,
-          priority: values.priority as PurchaseRequestPriority,
-          sourcing_method: values.sourcing_method as PurchaseRequestSourcingMethod,
-          department_id:
-            (isDepartmentLocked ? ownDepartmentId : values.department_id || null) ?? undefined,
-          required_delivery_date: values.required_delivery_date || null,
-          items: values.items.map((l) => ({
-            item_id: l.item_id || null,
-            description: l.description.trim(),
-            quantity: l.quantity,
-            unit: l.unit || undefined,
-            estimated_unit_price: l.estimated_unit_price || undefined,
-            purpose: l.purpose?.trim() || undefined,
-          })),
-        })
-        .then(async (pr) => {
-          if (submit) await purchaseRequestsApi.submit(pr.id);
-          return pr;
-        }),
+    mutationFn: async ({ values, submit }: { values: V; submit: boolean }) => {
+      const created = await purchaseRequestsApi.create({
+        reason: values.reason?.trim() || undefined,
+        priority: values.priority as PurchaseRequestPriority,
+        sourcing_method: values.sourcing_method as PurchaseRequestSourcingMethod,
+        department_id:
+          (isDepartmentLocked ? ownDepartmentId : values.department_id || null) ?? undefined,
+        required_delivery_date: values.required_delivery_date || null,
+        items: values.items.map((l) => ({
+          item_id: l.item_id || null,
+          description: l.description.trim(),
+          quantity: l.quantity,
+          unit: l.unit || undefined,
+          estimated_unit_price: l.estimated_unit_price || undefined,
+          purpose: l.purpose?.trim() || undefined,
+        })),
+      });
+      // The submit call is a second state change. Its response, rather than
+      // the earlier draft response, is the authoritative snapshot for detail.
+      return submit ? purchaseRequestsApi.submit(created.id) : created;
+    },
     onSuccess: (pr) => {
+      reconcileRealtimeMutationResponse(
+        queryClient,
+        { entityType: 'purchase_request', entityId: pr.id },
+        ['purchasing', 'purchase-requests', pr.id],
+        pr,
+      );
+      safety.allowNavigationAfterSave();
       toast.success(`PR ${pr.pr_number} created.`);
       nav(`/purchasing/purchase-requests/${pr.id}`);
     },

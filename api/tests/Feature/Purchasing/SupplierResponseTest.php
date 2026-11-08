@@ -138,6 +138,34 @@ class SupplierResponseTest extends TestCase
         $this->assertSame('10.00', (string) $item->unit_price);
     }
 
+    public function test_pending_supplier_response_projects_viewer_actions_on_po_detail(): void
+    {
+        $buyer = $this->userWithRole('purchasing_officer');
+        $vendor = Vendor::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id' => $vendor->id,
+            'created_by' => $buyer->id,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $proposedDate = $po->expected_delivery_date->copy()->addDay()->toDateString();
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type' => 'propose',
+            'proposed_delivery_date' => $proposedDate,
+        ]);
+
+        $this->actingAs($buyer, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.latest_response.available_actions.accept', true)
+            ->assertJsonPath('data.latest_response.available_actions.reject', true);
+
+        $this->patchJson('/api/v1/purchasing/purchase-order-responses/'.$response->hash_id.'/accept', [])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'accepted')
+            ->assertJsonPath('data.available_actions.accept', false)
+            ->assertJsonPath('data.available_actions.reject', false);
+    }
+
     public function test_accepting_date_only_proposal_preserves_po_amounts(): void
     {
         $vendor = Vendor::factory()->create();

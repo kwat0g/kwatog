@@ -17,10 +17,10 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Production\Models\LateProductionReport;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
-use App\Modules\Production\Models\LateProductionReport;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Quality\Enums\CalibrationStatus;
@@ -32,6 +32,7 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Exceptions\InspectionStateConflictException;
 use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionDefectivePiece;
@@ -40,6 +41,7 @@ use App\Modules\Quality\Models\InspectionPieceReading;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\ItemQualityPlan;
+use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Support\ChecklistDefinition;
 use App\Modules\Quality\Support\InspectionStateMachine;
 use App\Modules\Quality\Support\LotDefectCounter;
@@ -51,7 +53,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Sprint 7 — Task 60. Lifecycle service for quality inspections.
@@ -189,6 +190,7 @@ class InspectionService
         foreach ($finalInspections as $inspection) {
             $inspection->setAttribute('work_order_quality', $summaries[$inspection->entity_id] ?? null);
         }
+
         return $page;
     }
 
@@ -353,10 +355,7 @@ class InspectionService
                 InspectionMeasurement::query()->insert($checklistRows);
             }
 
-            DB::table('goods_receipt_notes')
-                ->where('id', $grnId)
-                ->where(fn ($query) => $query->whereNull('qc_inspection_id')->orWhereIn('qc_inspection_id', Inspection::query()->where('status', 'cancelled')->select('id')))
-                ->update(['qc_inspection_id' => $inspection->id, 'updated_at' => now()]);
+            $this->linkIncomingInspectionToGrn($grnId, $inspection->id);
 
             return $this->show($this->pinCountedCapture($inspection));
         });
@@ -517,8 +516,7 @@ class InspectionService
 
             $this->scaffoldLotChecklist($inspection, $parameters, $this->measuredPieces());
 
-            GoodsReceiptNote::query()->whereKey($grn->id)->where(fn ($query) => $query->whereNull('qc_inspection_id')->orWhereIn('qc_inspection_id', Inspection::query()->where('status', 'cancelled')->select('id')))
-                ->update(['qc_inspection_id' => $inspection->id, 'updated_at' => now()]);
+            $this->linkIncomingInspectionToGrn($grn->id, $inspection->id);
 
             return $this->show($this->pinCountedCapture($inspection));
         });
@@ -690,6 +688,7 @@ class InspectionService
         if (! config('inspection.outgoing_confirmed_checks_enabled') || trim($reason) === '' || mb_strlen($reason) > 2000) {
             throw new BusinessRuleException('Confirmed checks are unavailable or the replacement reason is missing.');
         }
+
         return DB::transaction(function () use ($original, $wo, $reason): Inspection {
             $wo = WorkOrder::query()->lockForUpdate()->findOrFail($wo->id);
             $output = WorkOrderOutput::query()->lockForUpdate()->findOrFail($original->work_order_output_id);
@@ -703,7 +702,7 @@ class InspectionService
                 || (int) $original->batch_quantity < 1
                 || (int) ($original->counted_capture['required_quantity'] ?? 0) !== (int) $original->batch_quantity
                 || ($original->counted_capture['result_policy'] ?? null) !== 'zero_defects'
-                || ($output->rework_ncr_id && ! \App\Modules\Quality\Models\NonConformanceReport::query()
+                || ($output->rework_ncr_id && ! NonConformanceReport::query()
                     ->whereKey($output->rework_ncr_id)->whereNotNull('rework_finished_at')->exists())
                 || $this->fullPieceOutputQuantity($output) !== (int) $original->batch_quantity
                 || bccomp((string) $original->source_quantity, (string) $original->batch_quantity, 3) !== 0
@@ -731,6 +730,7 @@ class InspectionService
                 'acceptance_criterion' => ChecklistDefinition::criterion($item->toArray()),
             ])->all();
             $this->scaffoldLotChecklist($next, $parameters, 1);
+
             return $next;
         }, 3);
     }
@@ -1078,11 +1078,8 @@ class InspectionService
                     InspectionEntityType::Grn => 'goods_receipt_notes',
                     default => null,
                 };
-                if ($table) {
-                    DB::table($table)
-                        ->where('id', $insp->entity_id)
-                        ->whereNull('qc_inspection_id')
-                        ->update(['qc_inspection_id' => $insp->id, 'updated_at' => now()]);
+                if ($table === 'goods_receipt_notes') {
+                    $this->linkIncomingInspectionToGrn((int) $insp->entity_id, $insp->id, false);
                 }
             }
 
@@ -1099,7 +1096,7 @@ class InspectionService
      *
      * @param  array<int, array{measured_value?: float|string|null, is_pass?: bool|null, notes?: string|null}>  $rows
      */
-    public function recordMeasurements(Inspection $inspection, array $rows, User $by): Inspection
+    public function recordMeasurements(Inspection $inspection, array $rows, User $by, ?int $expectedVersion = null): Inspection
     {
         $this->assertLegacyEntry($inspection);
         if ($inspection->usesChecklistCapture()) {
@@ -1112,7 +1109,7 @@ class InspectionService
             throw new BusinessRuleException('Inspection is awaiting checker review and its evidence is locked.');
         }
 
-        return DB::transaction(function () use ($inspection, $rows, $by) {
+        return DB::transaction(function () use ($inspection, $rows, $by, $expectedVersion) {
             app(WorkOrderOutputService::class)->lockTrialSource($inspection);
             // Route-bound inspection models can be stale when a completion or
             // cancellation races measurement entry. Serialize the lifecycle
@@ -1120,6 +1117,9 @@ class InspectionService
             $lockedInspection = Inspection::query()
                 ->lockForUpdate()
                 ->findOrFail($inspection->id);
+            if ($expectedVersion !== null) {
+                $this->assertResultVersion($lockedInspection, $expectedVersion);
+            }
             app(WorkOrderOutputService::class)->assertTrialEvidence($lockedInspection);
             if ($lockedInspection->startup_trial_required && (! $by->is_active || ! $by->hasPermission('quality.inspections.manage'))) {
                 throw new ForbiddenActionException('Active authorized QC user required to record trial evidence.');
@@ -1247,6 +1247,7 @@ class InspectionService
                 'defect_count' => $defects,
                 'status' => InspectionStatus::InProgress->value,
                 'inspector_id' => $lockedInspection->inspector_id ?? $by->id,
+                'result_version' => (int) $lockedInspection->result_version + 1,
             ])->save();
 
             return $this->show($lockedInspection->fresh());
@@ -1293,6 +1294,10 @@ class InspectionService
             }
             if ($lockedInspection->status === InspectionStatus::AwaitingReview) {
                 throw new BusinessRuleException('Inspection is awaiting checker review and its evidence is locked.');
+            }
+            $versionBefore = (int) $lockedInspection->result_version;
+            if (array_key_exists('expected_result_version', $data)) {
+                $this->assertResultVersion($lockedInspection, $data['expected_result_version']);
             }
 
             // Fetch all measurement rows for validation.
@@ -1386,7 +1391,17 @@ class InspectionService
                 $lockedInspection->forceFill(['inspected_quantity' => $lockedInspection->sample_size,
                     'defects_removed_confirmed' => (bool) ($data['defects_removed_confirmed'] ?? false)])->save();
 
+                if ((int) $lockedInspection->result_version === $versionBefore) {
+                    $lockedInspection->result_version++;
+                    $lockedInspection->save();
+                }
+
                 return $this->complete($lockedInspection->fresh(), $by);
+            }
+
+            if ((int) $lockedInspection->result_version === $versionBefore) {
+                $lockedInspection->result_version++;
+                $lockedInspection->save();
             }
 
             return $this->show($lockedInspection->fresh());
@@ -1396,9 +1411,7 @@ class InspectionService
     private function assertResultVersion(Inspection $inspection, ?int $expected): void
     {
         if ($expected === null || $expected !== (int) $inspection->result_version) {
-            throw ValidationException::withMessages([
-                'expected_result_version' => 'This inspection changed. Reload before submitting.',
-            ]);
+            throw new InspectionStateConflictException('This inspection changed. Reload before submitting.');
         }
     }
 
@@ -1468,7 +1481,7 @@ class InspectionService
             if (in_array($workOrder->status->value, ['closed', 'cancelled'], true)
                 || (int) $workOrder->product_id !== (int) $inspection->product_id
                 || ($operation && (int) $operation->work_order_id !== (int) $workOrder->id)
-                || bccomp($quantity, (string) $inspection->source_quantity, 4) !== 0) {
+                || bccomp($quantity, (string) ($inspection->source_quantity ?? $inspection->batch_quantity), 4) !== 0) {
                 throw new BusinessRuleException('Source work order changed or is closed. Reconcile it before inspecting.');
             }
         }
@@ -1505,7 +1518,8 @@ class InspectionService
         if ($rows->isEmpty() || $rows->contains(fn ($row) => trim((string) $row->acceptance_criterion) === '')) {
             throw new BusinessRuleException('QC must publish a requirement for every inspection check.');
         }
-        $full = in_array($inspection->stage, [InspectionStage::Outgoing, InspectionStage::CustomerReturn, InspectionStage::SupplierReturn], true);
+        $full = in_array($inspection->stage, [InspectionStage::Outgoing, InspectionStage::CustomerReturn, InspectionStage::SupplierReturn], true)
+            || ($inspection->stage === InspectionStage::Incoming && $inspection->sampling_basis === 'piece');
         $inspection->forceFill(['counted_capture' => [
             'version' => 1, 'result_policy' => 'zero_defects',
             'required_quantity' => $full ? $inspection->batch_quantity : $inspection->sample_size,
@@ -1513,6 +1527,26 @@ class InspectionService
         ]])->save();
 
         return $inspection;
+    }
+
+    /** Link the active incoming inspection without bypassing GRN observers. */
+    private function linkIncomingInspectionToGrn(int $grnId, int $inspectionId, bool $replaceCancelled = true): void
+    {
+        $grn = GoodsReceiptNote::query()->lockForUpdate()->find($grnId);
+        if (! $grn) {
+            return;
+        }
+
+        $existingInspectionIsCancelled = $grn->qc_inspection_id !== null
+            && Inspection::query()->whereKey($grn->qc_inspection_id)
+                ->where('status', InspectionStatus::Cancelled->value)
+                ->exists();
+
+        if ($grn->qc_inspection_id !== null && (! $replaceCancelled || ! $existingInspectionIsCancelled)) {
+            return;
+        }
+
+        $grn->forceFill(['qc_inspection_id' => $inspectionId])->save();
     }
 
     private function assertLegacyEntry(Inspection $inspection): void
@@ -1524,15 +1558,31 @@ class InspectionService
 
     private function assertCountedEvidence(Inspection $inspection): void
     {
+        if ($inspection->quantity_result !== null) {
+            $result = $this->normalizeQuantityResult($inspection, $inspection->quantity_result);
+            $defects = $inspection->sampling_basis === 'lot' ? (bccomp($result['defective_quantity'], '0', 3) > 0 ? 1 : 0) : (int) $result['defective_quantity'];
+            $checked = $inspection->sampling_basis === 'lot' ? 1 : (int) $result['source_quantity'];
+            if ($result != $inspection->quantity_result || ! $inspection->coverage_confirmed_at
+                || $inspection->sample_defect_count !== $defects || $inspection->inspected_quantity !== $checked) {
+                throw new BusinessRuleException('Quantity inspection evidence is incomplete or changed.');
+            }
+
+            return;
+        }
+
         $required = (int) ($inspection->counted_capture['required_quantity'] ?? 0);
+        $inspected = (int) $inspection->inspected_quantity;
+        $fullIncomingCoverage = $inspection->stage === InspectionStage::Incoming
+            && $inspection->sampling_basis === 'piece'
+            && $inspected === (int) $inspection->batch_quantity;
         $rows = $inspection->measurements()->get();
         if (($inspection->counted_capture['version'] ?? null) !== 1
             || ($inspection->counted_capture['result_policy'] ?? null) !== 'zero_defects'
             || $required < 1 || $required > $inspection->batch_quantity
             || ($inspection->stage === InspectionStage::Outgoing && $required !== $inspection->batch_quantity)
-            || ! $inspection->coverage_confirmed_at || $inspection->inspected_quantity !== $required
+            || ! $inspection->coverage_confirmed_at || ($inspected !== $required && ! $fullIncomingCoverage)
             || $inspection->sample_defect_count === null || $inspection->sample_defect_count < 0
-            || $inspection->sample_defect_count > $required || $rows->isEmpty()
+            || $inspection->sample_defect_count > $inspected || $rows->isEmpty()
             || $rows->contains(fn ($row) => trim((string) $row->acceptance_criterion) === ''
                 || ($row->requiresSizeReading() && $row->measured_value === null))) {
             throw new BusinessRuleException('Complete the prescribed coverage, defective quantity and required size readings before review.');
@@ -1599,7 +1649,7 @@ class InspectionService
         )->keyBy('id');
         $readings = InspectionPieceReading::query()->where('inspection_id', $inspection->id)
             ->with('requirement')->get();
-        if (! $inspection->usesConfirmedChecks() && $readings->count() !== $required * $requirements->count()) {
+        if (! $inspection->quantity_result && ! $inspection->usesConfirmedChecks() && $readings->count() !== $required * $requirements->count()) {
             throw new BusinessRuleException('Enter every required size reading for every physical piece.');
         }
         if ($inspection->usesConfirmedChecks() && $readings->isNotEmpty()) {
@@ -1635,6 +1685,12 @@ class InspectionService
                 || mb_strlen(trim($piece->problem_description)) > 500)) {
             throw new BusinessRuleException('Describe each defective piece once before submitting.');
         }
+        if ($inspection->quantity_result) {
+            $this->assertCountedEvidence($inspection);
+            if ($readings->isNotEmpty() || $defects->pluck('problem_description')->all() !== $inspection->quantity_result['descriptions']) {
+                throw new BusinessRuleException('Saved defect explanations do not match the quantity inspection result.');
+            }
+        }
         $defectNumbers = $defects->pluck('piece_number')->map(static fn ($number): int => (int) $number)->all();
         if (array_diff(array_keys($failedPieceNumbers), $defectNumbers) !== []) {
             throw new BusinessRuleException('Describe every piece with an out-of-tolerance size reading.');
@@ -1664,17 +1720,94 @@ class InspectionService
             $defects = (int) $locked->sample_defect_count;
             $target = $defects > 0 || $badRequirements->isNotEmpty()
                 ? InspectionStatus::Failed : InspectionStatus::Passed;
-            $problem = $evidence['defects']->map(static fn (InspectionDefectivePiece $piece): string =>
-                '#'.$piece->piece_number.': '.trim($piece->problem_description))->implode("\n");
+            $problem = $evidence['defects']->map(static fn (InspectionDefectivePiece $piece): string => '#'.$piece->piece_number.': '.trim($piece->problem_description))->implode("\n");
             $locked->forceFill([
                 'recorded_result' => $target->value,
                 'problem_description' => $target === InspectionStatus::Failed ? $problem : null,
                 'affected_quantity' => $target === InspectionStatus::Failed ? $locked->batch_quantity : null,
-                'critical_defect' => $evidence['critical_defect'] || $badRequirements->contains(static fn (InspectionPieceReading $reading): bool =>
-                    (bool) $reading->requirement?->is_critical),
+                'critical_defect' => $evidence['critical_defect'] || $badRequirements->contains(static fn (InspectionPieceReading $reading): bool => (bool) $reading->requirement?->is_critical),
                 'result_version' => (int) $locked->result_version + 1,
                 'started_at' => $locked->started_at ?? now(),
             ]);
+
+            return $this->submitOutcome($locked, $target, $by, $defects);
+        });
+    }
+
+    private function normalizeQuantityResult(Inspection $inspection, array $data): array
+    {
+        $piece = $inspection->sampling_basis !== 'lot';
+        $source = (string) ($inspection->startup_trial_required ? $inspection->sample_size : ($inspection->source_quantity ?? $inspection->batch_quantity));
+        $quantity = (string) ($data['defective_quantity'] ?? '');
+        $descriptions = $data['descriptions'] ?? [];
+        if (! preg_match('/^\d{1,12}(?:\.\d{1,3})?$/', $quantity)
+            || bccomp($source, '0', 3) <= 0 || bccomp($quantity, $source, 3) > 0
+            || ($piece && (bccomp($quantity, (string) (int) $quantity, 3) !== 0 || bccomp($source, (string) (int) $source, 3) !== 0 || bccomp($source, (string) $inspection->batch_quantity, 3) > 0))
+            || ! is_array($descriptions)) {
+            throw new BusinessRuleException('Enter a defective quantity between zero and the source quantity in its original unit.');
+        }
+        $failed = bccomp($quantity, '0', 3) > 0;
+        $requiredDescriptions = $failed ? ($piece ? (int) $quantity : 1) : 0;
+        if (count($descriptions) !== $requiredDescriptions || count($descriptions) > 10000) {
+            throw new BusinessRuleException('Describe each defective piece, or provide one explanation for the defective material quantity.');
+        }
+        foreach ($descriptions as $description) {
+            if (! is_string($description) || trim($description) === '' || mb_strlen($description) > 500) {
+                throw new BusinessRuleException('Each defect explanation must contain 1–500 characters.');
+            }
+        }
+
+        return ['defective_quantity' => bcadd($quantity, '0', 3), 'source_quantity' => bcadd($source, '0', 3),
+            'unit' => $inspection->source_uom_code ?: 'PCS', 'descriptions' => array_values(array_map('trim', $descriptions))];
+    }
+
+    private function recordQuantityResult(Inspection $inspection, array $data, User $by): Inspection
+    {
+        if (! $by->is_active || ! $by->hasPermission('quality.inspections.manage')) {
+            throw new ForbiddenActionException('Active authorized QC user required.');
+        }
+
+        return DB::transaction(function () use ($inspection, $data, $by): Inspection {
+            $this->lockInspectionSource($inspection);
+            $locked = Inspection::query()->lockForUpdate()->findOrFail($inspection->id);
+            if (($locked->counted_capture && ! $locked->usesFullPieceCapture() && ($locked->counted_capture['version'] ?? null) !== 1) || $locked->status->isTerminal() || $locked->status === InspectionStatus::AwaitingReview) {
+                throw new BusinessRuleException('Inspection evidence is locked. Reload its current result.');
+            }
+            $this->assertResultVersion($locked, $data['expected_result_version'] ?? null);
+            app(WorkOrderOutputService::class)->assertTrialEvidence($locked);
+            $this->assertChecklistSourceUnchanged($locked);
+            $rows = $locked->measurements()->lockForUpdate()->get();
+            if ($rows->isEmpty() || $rows->contains(fn ($row) => $row->measured_value !== null || $row->item_result !== null || $row->is_pass !== null)
+                || $locked->pieceReadings()->exists() || $locked->defectivePieces()->exists()) {
+                throw new BusinessRuleException('Existing captured readings must be completed through their original inspection form.');
+            }
+            $result = $this->normalizeQuantityResult($locked, $data['quantity_result']);
+            $piece = $locked->sampling_basis !== 'lot';
+            $defects = $piece ? (int) $result['defective_quantity'] : (bccomp($result['defective_quantity'], '0', 3) > 0 ? 1 : 0);
+            $checked = $piece ? (int) $result['source_quantity'] : 1;
+            app(WorkOrderOutputService::class)->assertTrialEvidence($locked, $checked, true);
+            $historicalHold = $locked->work_order_output_id && (int) $locked->workOrderOutput?->held_quantity > 0;
+            $target = $defects > 0 || $historicalHold ? InspectionStatus::Failed : InspectionStatus::Passed;
+            $problem = collect($result['descriptions'])->map(fn ($description, $index) => $piece ? 'Defective piece '.($index + 1).': '.$description : $result['defective_quantity'].' '.$result['unit'].': '.$description)->implode("\n");
+            if ($historicalHold && $problem === '') {
+                $problem = 'Production occurred before required QC release; independent process recovery is required.';
+            }
+            $locked->forceFill(['quantity_result' => $result, 'inspected_quantity' => $checked, 'sample_defect_count' => $defects,
+                'coverage_confirmed_at' => now(), 'result_version' => (int) $locked->result_version + ($locked->usesFullPieceCapture() ? 0 : 1),
+                'critical_defect' => false, 'defects_removed_confirmed' => false, 'recorded_result' => $target->value,
+                'problem_description' => $target === InspectionStatus::Failed ? $problem : null,
+                'affected_quantity' => $target === InspectionStatus::Failed ? $locked->batch_quantity : null,
+                'started_at' => $locked->started_at ?? now()]);
+
+            if ($locked->usesFullPieceCapture()) {
+                foreach ($result['descriptions'] as $index => $description) {
+                    InspectionDefectivePiece::create(['inspection_id' => $locked->id, 'piece_number' => $index + 1,
+                        'problem_description' => $description, 'recorded_by' => $by->id]);
+                }
+                $locked->save();
+
+                return $this->recordFullPieceOutcome($locked, $by);
+            }
 
             return $this->submitOutcome($locked, $target, $by, $defects);
         });
@@ -1703,6 +1836,9 @@ class InspectionService
             }
             $defects = $lot ? ($data['physical_defects_confirmed'] ? 1 : 0) : ($data['sample_defect_count'] ?? null);
             $required = (int) $locked->counted_capture['required_quantity'];
+            $fullIncomingCoverage = $locked->stage === InspectionStage::Incoming
+                && $locked->sampling_basis === 'piece'
+                && $quantity === (int) $locked->batch_quantity;
             if (($locked->counted_capture['version'] ?? null) !== 1
                 || ($locked->counted_capture['result_policy'] ?? null) !== 'zero_defects'
                 || $required < 1 || $required > $locked->batch_quantity
@@ -1715,7 +1851,7 @@ class InspectionService
             if ($problem !== '' && $defects === 0 && ! $otherProblem && ! $historicalHold) {
                 throw new BusinessRuleException('Confirm the requirement problem or correct the defective quantity.');
             }
-            if (($data['coverage_confirmed'] ?? false) !== true || ! is_int($quantity) || $quantity !== $required
+            if (($data['coverage_confirmed'] ?? false) !== true || ! is_int($quantity) || ($quantity !== $required && ! $fullIncomingCoverage)
                 || ! is_int($defects) || $defects < 0 || $defects > $quantity || ! is_bool($otherProblem)) {
                 throw new BusinessRuleException('Confirm the prescribed checked quantity and count each defective piece once.');
             }
@@ -1917,6 +2053,9 @@ class InspectionService
     /** Record sample coverage once; the pinned acceptance plan derives the batch verdict. */
     public function recordBatchResult(Inspection $inspection, array $data, User $by): Inspection
     {
+        if (isset($data['quantity_result'])) {
+            return $this->recordQuantityResult($inspection, $data, $by);
+        }
         if ($inspection->counted_capture) {
             return $this->recordCountedBatch($inspection, $data, $by);
         }
@@ -1933,6 +2072,9 @@ class InspectionService
             }
             if ($locked->status->isTerminal() || $locked->status === InspectionStatus::AwaitingReview) {
                 throw new BusinessRuleException('Inspection is already finalised.');
+            }
+            if (array_key_exists('expected_result_version', $data)) {
+                $this->assertResultVersion($locked, $data['expected_result_version']);
             }
             $quantity = $data['inspected_quantity'] ?? null;
             $defects = $data['sample_defect_count'] ?? null;
@@ -1998,6 +2140,7 @@ class InspectionService
                     : $failureDescription,
                 'affected_quantity' => $passed ? null : $locked->batch_quantity,
                 'started_at' => $locked->started_at ?? now(),
+                'result_version' => (int) $locked->result_version + 1,
             ]);
 
             return $this->submitOutcome($locked, $target, $by, $defects);
@@ -2030,6 +2173,9 @@ class InspectionService
             }
             if ($locked->status->isTerminal() || $locked->status === InspectionStatus::AwaitingReview) {
                 throw new BusinessRuleException('Inspection is already finalised.');
+            }
+            if (array_key_exists('expected_result_version', $data)) {
+                $this->assertResultVersion($locked, $data['expected_result_version']);
             }
             $rows = InspectionMeasurement::query()->where('inspection_id', $locked->id)
                 ->orderBy('sample_index')->orderBy('id')->lockForUpdate()->get();
@@ -2074,10 +2220,14 @@ class InspectionService
                     'item_problem_description' => $update['problem'],
                 ])->save();
             }
+            $locked->result_version++;
 
             if (! ($data['submit'] ?? false)) {
                 $this->recordResultAuthor($locked, $by);
-                $locked->forceFill(['status' => InspectionStatus::InProgress, 'started_at' => $locked->started_at ?? now()])->save();
+                $locked->forceFill([
+                    'status' => InspectionStatus::InProgress,
+                    'started_at' => $locked->started_at ?? now(),
+                ])->save();
 
                 return $this->show($locked->fresh());
             }
@@ -2296,7 +2446,7 @@ class InspectionService
                     throw new BusinessRuleException('Review must confirm the result calculated from the saved full-piece evidence.');
                 }
                 $lockedInspection->result_version++;
-            } elseif ($lockedInspection->counted_capture) {
+            } elseif ($lockedInspection->counted_capture || $lockedInspection->quantity_result) {
                 if (! $by->is_active || ! $by->hasPermission('quality.inspections.review')) {
                     throw new ForbiddenActionException('Active authorized QC reviewer required.');
                 }
@@ -2316,6 +2466,11 @@ class InspectionService
                     || $lockedInspection->inspected_quantity < $lockedInspection->sample_size
                     || $lockedInspection->inspected_quantity > $lockedInspection->batch_quantity) {
                     throw new BusinessRuleException('Review requires complete checklist evidence and confirmed coverage.');
+                }
+                $lockedInspection->result_version++;
+            } else {
+                if ($expectedVersion !== null) {
+                    $this->assertResultVersion($lockedInspection, $expectedVersion);
                 }
                 $lockedInspection->result_version++;
             }
@@ -2417,6 +2572,15 @@ class InspectionService
 
     private function assertCriticalMeasurementsRecorded(Inspection $inspection): void
     {
+        if ($inspection->quantity_result && ! $inspection->usesFullPieceCapture()) {
+            $this->assertCountedEvidence($inspection);
+            if (bccomp($inspection->quantity_result['defective_quantity'], '0', 3) !== 0 || trim((string) $inspection->problem_description) !== '') {
+                throw new BusinessRuleException('PASS requires zero defective quantity.');
+            }
+
+            return;
+        }
+
         if ($inspection->usesFullPieceCapture()) {
             $this->assertFullPieceEvidence($inspection);
             if ((int) $inspection->sample_defect_count !== 0) {
@@ -2429,7 +2593,7 @@ class InspectionService
             $this->assertCountedEvidence($inspection);
             if ($inspection->sample_defect_count !== 0 || $inspection->critical_defect
                 || trim((string) $inspection->problem_description) !== ''
-                || $inspection->measurements()->get()->contains(fn ($row) => $row->requiresSizeReading() && $row->evaluate() !== true)) {
+                || (! $inspection->quantity_result && $inspection->measurements()->get()->contains(fn ($row) => $row->requiresSizeReading() && $row->evaluate() !== true))) {
                 throw new BusinessRuleException('PASS requires zero defects and conforming required size readings.');
             }
 
@@ -2545,10 +2709,10 @@ class InspectionService
                 throw new BusinessRuleException('Captured trial pieces must keep their original inspection. Use quality recovery.');
             }
             $this->states->assertAllowed($lockedInspection, InspectionStatus::Cancelled);
-            if ($lockedInspection->usesChecklistCapture() || $lockedInspection->counted_capture) {
+            if ($lockedInspection->usesChecklistCapture() || $lockedInspection->counted_capture || $expectedVersion !== null) {
                 $this->assertResultVersion($lockedInspection, $expectedVersion);
-                $lockedInspection->result_version++;
             }
+            $lockedInspection->result_version++;
 
             $lockedInspection->forceFill([
                 'status' => InspectionStatus::Cancelled->value,
@@ -2624,8 +2788,11 @@ class InspectionService
             }
             $next->forceFill(['replaces_inspection_id' => $locked->id])->save();
             if ($locked->entity_type === InspectionEntityType::ReturnRequest) {
-                ReturnRequest::query()->whereKey($locked->entity_id)->where('inspection_id', $locked->id)
-                    ->update(['inspection_id' => $next->id]);
+                $returnRequest = ReturnRequest::query()
+                    ->whereKey($locked->entity_id)
+                    ->where('inspection_id', $locked->id)
+                    ->first();
+                $returnRequest?->update(['inspection_id' => $next->id]);
             }
 
             return $this->show($next->fresh());

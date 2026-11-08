@@ -231,6 +231,9 @@ export interface Training {
  created_at: string;
  updated_at: string;
  deleted_at?: string | null;
+ version: string;
+ permissions: { view: boolean; manage: boolean };
+ available_actions: string[];
 }
 
 export interface CreateTrainingData {
@@ -280,6 +283,9 @@ export interface EmployeeTraining {
  last_alert_level: string | null;
  last_alert_at: string | null;
  created_at: string;
+ version: string;
+ permissions: { view: boolean; manage: boolean };
+ available_actions: string[];
 }
 
 export interface TrainingEvidence {

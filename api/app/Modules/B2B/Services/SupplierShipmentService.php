@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SystemUserResolver;
 use App\Common\Support\HashIdFilter;
@@ -256,6 +257,13 @@ class SupplierShipmentService
                 app(GrnService::class)->createDraftForSupplierShipment($shipment);
             }
 
+            // The shipment changes supplier-visible PO detail even when the
+            // purchase-order status itself does not move.
+            app(ChainBroadcaster::class)->broadcastFor(
+                $row,
+                (string) $row->status?->value,
+            );
+
             // The ETA deliberately no longer writes purchase_orders.confirmed_delivery_date.
             // The agreed date comes from the accept/propose flow; an ETA is a
             // forecast, and letting it move the agreed date let a late supplier
@@ -381,7 +389,7 @@ class SupplierShipmentService
                     return $existing;
                 }
 
-                return PortalShippingDocument::create([
+                $document = PortalShippingDocument::create([
                     'purchase_order_id' => $po->id,
                     'supplier_shipment_id' => $shipmentId,
                     'document_type' => $data['document_type'],
@@ -394,6 +402,13 @@ class SupplierShipmentService
                     'uploaded_by' => $portalUserId,
                     'uploaded_at' => now(),
                 ]);
+
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $po,
+                    (string) $po->status?->value,
+                );
+
+                return $document;
             });
         } catch (\Throwable $e) {
             // The cleanup window ends at COMMIT. Past that point a persisted

@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatInt } from '@/lib/formatNumber';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import type {
  ActivityEvent,
  ActivitySeverity,
@@ -42,6 +43,7 @@ function relTime(iso: string): string {
 
 export default function AdminActivityFeedPage() {
  const navigate = useNavigate();
+ useRealtimeSignal('admin_activity_changed', 'admin.activity', '.admin.activity.changed');
  const [filters, setFilters] = useUrlFilters<ActivityFeedParams>({
  page: 1,
  per_page: 50,
@@ -60,8 +62,6 @@ export default function AdminActivityFeedPage() {
  const { data, isLoading, isError, refetch, isFetching } = useQuery({
  queryKey: ['admin', 'activity', filters],
  queryFn: () => activityApi.list(filters),
- placeholderData: (prev) => prev,
- refetchInterval: 60_000, // light polling — websocket upgrade is a future task
  });
  const { data: activityOptions } = useQuery({
  queryKey: ['admin', 'activity', 'options'],

@@ -7,7 +7,7 @@
  *
  * Data sources:
  * GET /api/v1/hr/self-service/home (greeting, shift, balances, payslip)
- * GET /api/v1/dashboards/employee (KPI cards, next holiday — 30s Redis)
+ * GET /api/v1/dashboards/employee (KPI cards and next holiday)
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
@@ -72,8 +72,6 @@ export default function SelfServiceHomePage() {
   const dashboardQuery = useQuery({
     queryKey: ['self-service', 'dashboard'],
     queryFn: () => dashboardsApi.employee(),
-    placeholderData: (prev) => prev,
-    refetchInterval: 60_000,
   });
 
   const home = homeQuery.data ?? null;

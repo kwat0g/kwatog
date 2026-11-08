@@ -12,8 +12,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\ComplaintNcrHandoffStatus;
 use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\CRM\Listeners\CreateNcrOnComplaintRequested;
-use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Services\ComplaintService;
+use App\Modules\Dashboard\Events\ChainBottlenecksChanged;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\NcrService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,7 +41,7 @@ class ComplaintNcrHandoffTest extends TestCase
 
         $outbox = DB::table('event_outbox')
             ->where('event_type', ComplaintNcrRequested::class)
-            ->where('dedupe_key', 'complaint-ncr-request:' . $complaint->id)
+            ->where('dedupe_key', 'complaint-ncr-request:'.$complaint->id)
             ->firstOrFail();
         $this->assertDatabaseHas('chain_step_runs', [
             'outbox_id' => $outbox->id,
@@ -75,11 +75,23 @@ class ComplaintNcrHandoffTest extends TestCase
 
         $outbox = DB::table('event_outbox')
             ->where('event_type', ComplaintNcrRequested::class)
-            ->where('dedupe_key', 'complaint-ncr-request:' . $complaint->id)
+            ->where('dedupe_key', 'complaint-ncr-request:'.$complaint->id)
             ->firstOrFail();
 
+        $bottleneckSignalBefore = DB::table('event_outbox')
+            ->where('event_type', ChainBottlenecksChanged::class)
+            ->firstOrFail();
+        $bottleneckEventIdBefore = json_decode((string) $bottleneckSignalBefore->payload, true, 512, JSON_THROW_ON_ERROR)['eventId'];
         $this->travel(2)->seconds();
         app(ComplaintService::class)->markNcrHandoffManual($complaint->id, 'Replay after state change.');
+        $bottleneckSignalAfter = DB::table('event_outbox')
+            ->where('event_type', ChainBottlenecksChanged::class)
+            ->firstOrFail();
+        $this->assertNotSame(
+            $bottleneckEventIdBefore,
+            json_decode((string) $bottleneckSignalAfter->payload, true, 512, JSON_THROW_ON_ERROR)['eventId'],
+            'A second write in the transaction updates the coalesced signal payload.',
+        );
 
         $event = app(OutboxEventCodec::class)->decode(
             (string) $outbox->event_type,

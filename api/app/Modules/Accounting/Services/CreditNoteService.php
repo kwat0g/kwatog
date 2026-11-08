@@ -17,6 +17,7 @@ use App\Modules\Accounting\Enums\CreditNoteType;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Events\CreditNoteFinalized;
+use App\Modules\Accounting\Exceptions\CreditNoteStateConflictException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\CreditNote;
@@ -185,7 +186,7 @@ class CreditNoteService
     public function finalize(CreditNote $cn, User $by): CreditNote
     {
         if ($cn->status !== CreditNoteStatus::Draft) {
-            throw new BusinessRuleException('Only draft credit notes can be finalized.');
+            throw new CreditNoteStateConflictException('This credit note is no longer a draft. Refresh and review its current status.');
         }
 
         $finalized = DB::transaction(function () use ($cn, $by) {
@@ -194,7 +195,7 @@ class CreditNoteService
             // VAT-reversing journal entry twice (P01-01 shape on the GL).
             $locked = CreditNote::query()->lockForUpdate()->findOrFail($cn->getKey());
             if ($locked->status !== CreditNoteStatus::Draft) {
-                throw new BusinessRuleException('Only draft credit notes can be finalized.');
+                throw new CreditNoteStateConflictException('This credit note is no longer a draft. Refresh and review its current status.');
             }
 
             $this->periods->assertPostingAllowed($locked->date->toDateString());
@@ -268,7 +269,7 @@ class CreditNoteService
             // so an already-consumed note cannot be applied a second time.
             $creditNote = CreditNote::query()->lockForUpdate()->findOrFail($cn->id);
             if ($creditNote->status !== CreditNoteStatus::Finalized) {
-                throw new BusinessRuleException('Only a finalized credit note can be applied.');
+                throw new CreditNoteStateConflictException('This credit note is no longer available for application. Refresh and review its current status.');
             }
             if (Money::gt($amount, (string) $creditNote->balance)) {
                 throw new BusinessRuleException("Amount {$amount} exceeds the credit note's remaining balance {$creditNote->balance}.");
@@ -313,11 +314,10 @@ class CreditNoteService
                     app(SalesOrderService::class)
                         ->synchronizeCompletionState((int) $invoice->sales_order_id);
                 }
-                if ($invoice->wasChanged('status')) {
-                    $fresh = $invoice->fresh();
-                    app(ChainBroadcaster::class)
-                        ->broadcastFor($fresh, $newStatus->value, $by);
-                }
+                // Applying a credit changes balance and available collection
+                // actions even when the invoice remains partially paid.
+                app(ChainBroadcaster::class)
+                    ->broadcastFor($invoice->fresh(), $newStatus->value, $by);
                 $application->invoice_id = $invoice->id;
             } else {
                 $bill = Bill::query()->lockForUpdate()->findOrFail(
@@ -347,11 +347,12 @@ class CreditNoteService
                     'balance' => $newBalance,
                     'status' => $newStatus,
                 ]);
-                if ($bill->wasChanged('status')) {
-                    $fresh = $bill->fresh();
-                    app(ChainBroadcaster::class)
-                        ->broadcastFor($fresh, $newStatus->value, $by);
-                }
+                // Bill details render balance and available payment actions,
+                // so a partial credit application needs a refresh even when
+                // the status remains Partial.
+                $fresh = $bill->fresh();
+                app(ChainBroadcaster::class)
+                    ->broadcastFor($fresh, $newStatus->value, $by);
                 $application->bill_id = $bill->id;
             }
 
@@ -384,8 +385,8 @@ class CreditNoteService
         return DB::transaction(function () use ($cn, $by, $reason): CreditNote {
             $locked = CreditNote::query()->lockForUpdate()->findOrFail($cn->getKey());
             if ($locked->status !== CreditNoteStatus::Finalized) {
-                throw new BusinessRuleException(
-                    'Only an unapplied finalized credit note can be voided; an applied credit note must be unwound before it can be voided.',
+                throw new CreditNoteStateConflictException(
+                    'This credit note is no longer an unapplied finalized credit note. Refresh and review its current status.',
                 );
             }
             if (! Money::isZero((string) $locked->applied_amount)) {

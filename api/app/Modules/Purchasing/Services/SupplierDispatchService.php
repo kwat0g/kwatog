@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
@@ -62,11 +63,14 @@ class SupplierDispatchService
     }
 
     /** Record a completed portal send or a confirmed manual transmission. */
-    public function confirmSent(PurchaseOrder $purchaseOrder, ?string $channel = null): SupplierOrderDispatch
-    {
+    public function confirmSent(
+        PurchaseOrder $purchaseOrder,
+        ?string $channel = null,
+        bool $emitRefresh = true,
+    ): SupplierOrderDispatch {
         $key = $this->idempotencyKey($purchaseOrder);
 
-        return DB::transaction(function () use ($purchaseOrder, $channel, $key): SupplierOrderDispatch {
+        return DB::transaction(function () use ($purchaseOrder, $channel, $key, $emitRefresh): SupplierOrderDispatch {
             $dispatch = SupplierOrderDispatch::query()
                 ->where('purchase_order_id', $purchaseOrder->id)
                 ->lockForUpdate()
@@ -76,6 +80,7 @@ class SupplierDispatchService
                 // a late portal acknowledgement must not resurrect it.
                 return $dispatch->fresh();
             }
+            $statusChanged = $dispatch?->status !== SupplierDispatchStatus::Confirmed;
             $metadata = is_array($dispatch?->metadata) ? $dispatch->metadata : [];
             $metadata['confirmed_by_process'] = true;
 
@@ -93,7 +98,14 @@ class SupplierDispatchService
                 'metadata' => $metadata,
             ])->save();
 
-            return $dispatch->fresh();
+            $dispatch = $dispatch->fresh();
+            if ($statusChanged && $emitRefresh) {
+                app(ChainBroadcaster::class)->refreshPurchaseOrder(
+                    $purchaseOrder->fresh() ?? $purchaseOrder,
+                );
+            }
+
+            return $dispatch;
         });
     }
 
@@ -102,9 +114,12 @@ class SupplierDispatchService
      * intentionally idempotent because the cancellation event can be replayed
      * after the synchronous cancellation path has already reconciled the row.
      */
-    public function cancelForPurchaseOrder(PurchaseOrder $purchaseOrder, string $reason): ?SupplierOrderDispatch
-    {
-        return $this->cancelDispatch($purchaseOrder->id, $reason);
+    public function cancelForPurchaseOrder(
+        PurchaseOrder $purchaseOrder,
+        string $reason,
+        bool $emitRefresh = true,
+    ): ?SupplierOrderDispatch {
+        return $this->cancelDispatch($purchaseOrder->id, $reason, $emitRefresh);
     }
 
     /**
@@ -234,13 +249,16 @@ class SupplierDispatchService
                 ])->save();
             }
 
-            return $dispatch->fresh();
+            $dispatch = $dispatch->fresh();
+            app(ChainBroadcaster::class)->refreshPurchaseOrder($po);
+
+            return $dispatch;
         });
     }
 
     private function complete(int $dispatchId, SupplierDispatchResult $result, PurchaseOrder $purchaseOrder): SupplierOrderDispatch
     {
-        $dispatch = DB::transaction(function () use ($dispatchId, $result): SupplierOrderDispatch {
+        $dispatch = DB::transaction(function () use ($dispatchId, $result, $purchaseOrder): SupplierOrderDispatch {
             $dispatch = SupplierOrderDispatch::query()->lockForUpdate()->findOrFail($dispatchId);
             if ($dispatch->status !== SupplierDispatchStatus::Pending) {
                 return $dispatch;
@@ -257,7 +275,14 @@ class SupplierDispatchService
                 'metadata' => $metadata,
             ])->save();
 
-            return $dispatch->fresh();
+            $dispatch = $dispatch->fresh();
+            if ($dispatch->status === SupplierDispatchStatus::ManualRequired) {
+                app(ChainBroadcaster::class)->refreshPurchaseOrder(
+                    $purchaseOrder->fresh() ?? $purchaseOrder,
+                );
+            }
+
+            return $dispatch;
         });
 
         if ($dispatch->status === SupplierDispatchStatus::ManualRequired) {
@@ -294,17 +319,35 @@ class SupplierDispatchService
     private function recordFailure(int $dispatchId, Throwable $exception): void
     {
         try {
-            SupplierOrderDispatch::query()
-                ->whereKey($dispatchId)
-                ->where('status', SupplierDispatchStatus::Pending->value)
-                ->update([
-                    'status' => SupplierDispatchStatus::Failed->value,
-                    'last_error' => mb_substr($exception->getMessage(), 0, 2000),
-                    'updated_at' => now(),
-                ]);
-        } catch (Throwable) {
+            DB::transaction(function () use ($dispatchId, $exception): void {
+                $dispatch = SupplierOrderDispatch::query()->lockForUpdate()->find($dispatchId);
+                if ($dispatch === null || $dispatch->status !== SupplierDispatchStatus::Pending) {
+                    return;
+                }
+
+                $updated = SupplierOrderDispatch::query()
+                    ->whereKey($dispatchId)
+                    ->where('status', SupplierDispatchStatus::Pending->value)
+                    ->update([
+                        'status' => SupplierDispatchStatus::Failed->value,
+                        'last_error' => mb_substr($exception->getMessage(), 0, 2000),
+                        'updated_at' => now(),
+                    ]);
+
+                if ($updated === 1) {
+                    $purchaseOrder = PurchaseOrder::withTrashed()->find($dispatch->purchase_order_id);
+                    if ($purchaseOrder !== null) {
+                        app(ChainBroadcaster::class)->refreshPurchaseOrder($purchaseOrder);
+                    }
+                }
+            });
+        } catch (Throwable $recordingException) {
             // The queue lifecycle ledger still records the failed listener if
-            // the dispatch row itself cannot be updated.
+            // the dispatch row or its refresh ping cannot be durably staged.
+            Log::warning('Supplier dispatch failure status/refresh could not be durably staged.', [
+                'dispatch_id' => $dispatchId,
+                'error' => $recordingException->getMessage(),
+            ]);
         }
     }
 
@@ -357,9 +400,12 @@ class SupplierDispatchService
         return $recovered === null ? 'skipped' : 'recovered';
     }
 
-    private function cancelDispatch(int $purchaseOrderId, string $reason): ?SupplierOrderDispatch
-    {
-        return DB::transaction(function () use ($purchaseOrderId, $reason): ?SupplierOrderDispatch {
+    private function cancelDispatch(
+        int $purchaseOrderId,
+        string $reason,
+        bool $emitRefresh = true,
+    ): ?SupplierOrderDispatch {
+        return DB::transaction(function () use ($purchaseOrderId, $reason, $emitRefresh): ?SupplierOrderDispatch {
             $dispatch = SupplierOrderDispatch::query()
                 ->where('purchase_order_id', $purchaseOrderId)
                 ->lockForUpdate()
@@ -383,7 +429,15 @@ class SupplierDispatchService
                 'metadata' => $metadata,
             ])->save();
 
-            return $dispatch->fresh();
+            $dispatch = $dispatch->fresh();
+            if ($emitRefresh) {
+                $purchaseOrder = PurchaseOrder::withTrashed()->find($purchaseOrderId);
+                if ($purchaseOrder !== null) {
+                    app(ChainBroadcaster::class)->refreshPurchaseOrder($purchaseOrder);
+                }
+            }
+
+            return $dispatch;
         });
     }
 }

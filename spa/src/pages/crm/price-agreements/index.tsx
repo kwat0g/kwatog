@@ -21,6 +21,7 @@ import type { PriceAgreement } from '@/types/crm';
 import { manilaIsoDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { PricingNavigation } from './PricingNavigation';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 export default function PriceAgreementsListPage() {
   const navigate = useNavigate();
@@ -35,11 +36,13 @@ export default function PriceAgreementsListPage() {
   });
   const [scope, setScope] = useState<ArchiveScope>('active');
   const [confirmDelete, setConfirmDelete] = useState<PriceAgreement | null>(null);
+  const listQueryKey = ['crm', 'price-agreements', filters, { trashed: archiveToTrashed(scope) }] as const;
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['crm', 'price-agreements', filters, { trashed: archiveToTrashed(scope) }],
+    queryKey: listQueryKey,
     queryFn: () => priceAgreementsApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? prev : undefined,
   });
 
   const del = useMutation({

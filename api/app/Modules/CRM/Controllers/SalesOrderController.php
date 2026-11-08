@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Controllers;
 
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
 use App\Modules\CRM\Requests\CancelSalesOrderRequest;
 use App\Modules\CRM\Requests\ListSalesOrderRequest;
 use App\Modules\CRM\Requests\StoreSalesOrderRequest;
@@ -85,23 +86,24 @@ class SalesOrderController
         if (! $this->user()->hasPermission('crm.sales_orders.confirm')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
-        // Deliberately uncaught. The render hook in bootstrap/app.php turns a
-        // BusinessRuleException into the same 422 this arm produced, plus the
-        // `errors` bag and `code` the subclasses carry — and re-emitting only
-        // getMessage() here threw both away. ChainErrorPanel decides whether to
-        // offer "Manage BOMs" from `errors.bom` / `code === 'missing_bom'`
-        // (MissingBomException, BomStructureException), so with the arm in place
-        // the button that fixes the failure could never appear. This is the one
-        // endpoint in this sweep whose client reads the structured fields; the
-        // rest keep their arm because `applyServerValidationErrors` replaces a
-        // message with a generic "The server flagged some fields" as soon as an
-        // `errors` bag is present.
+        // General business rules still reach the render hook in bootstrap/app.php,
+        // preserving their structured `errors` bag and `code`. Only the locked
+        // stale-state conflict is handled here because it requires HTTP 409.
+        // ChainErrorPanel uses `errors.bom` / `code === 'missing_bom'` to offer
+        // "Manage BOMs" for MissingBomException and BomStructureException. A
+        // message-only controller response would hide that recovery action.
         //
         // NoPriceAgreementException also passes through now: it is an
-        // HttpResponseException carrying its own 422 with errors.product_id, and
-        // HttpResponseException::getMessage() is empty, so this arm used to
-        // answer a missing price agreement with `422 {"message":""}`.
-        $result = $this->service->confirmWithChainResult($salesOrder);
+        // HttpResponseException carrying its own 422 with errors.product_id.
+        try {
+            $result = $this->service->confirmWithChainResult($salesOrder);
+        } catch (SalesOrderStateConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        }
 
         return response()->json([
             'data' => (new SalesOrderResource($result['so']))->resolve(),

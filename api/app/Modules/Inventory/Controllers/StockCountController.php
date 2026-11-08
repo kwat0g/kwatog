@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Enums\StockCountScope;
+use App\Modules\Inventory\Exceptions\StockCountStateConflictException;
 use App\Modules\Inventory\Resources\StockCountItemResource;
 use App\Modules\Inventory\Resources\StockCountSessionResource;
 use App\Modules\Inventory\Services\StockCountService;
@@ -29,6 +30,15 @@ class StockCountController
         private readonly StockCountService $service,
         private readonly SettingsService $settings,
     ) {}
+
+    private function conflict(StockCountStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
+    }
 
     public function options(): JsonResponse
     {
@@ -115,7 +125,7 @@ class StockCountController
             ->response()->setStatusCode(201);
     }
 
-    public function start(string $id, Request $request): StockCountSessionResource
+    public function start(string $id, Request $request): StockCountSessionResource|JsonResponse
     {
         // Kept outside the try. This used to be load-bearing: abort(404) raises
         // NotFoundHttpException, which extends RuntimeException, so the old
@@ -127,13 +137,15 @@ class StockCountController
 
         try {
             $session = $this->service->startSession($sessionId, $request->user());
+        } catch (StockCountStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountSessionResource($session);
     }
 
-    public function recordCount(string $id, Request $request): StockCountItemResource
+    public function recordCount(string $id, Request $request): StockCountItemResource|JsonResponse
     {
         $itemId = $this->itemId($id);
 
@@ -152,30 +164,36 @@ class StockCountController
 
         try {
             $item = $this->service->recordCount($itemId, $data, $request->user());
+        } catch (StockCountStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountItemResource($item);
     }
 
-    public function approveVariance(string $id, Request $request): StockCountItemResource
+    public function approveVariance(string $id, Request $request): StockCountItemResource|JsonResponse
     {
         $itemId = $this->itemId($id);
 
         try {
             $item = $this->service->approveVariance($itemId, $request->user());
+        } catch (StockCountStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountItemResource($item);
     }
 
-    public function complete(string $id, Request $request): StockCountSessionResource
+    public function complete(string $id, Request $request): StockCountSessionResource|JsonResponse
     {
         $sessionId = $this->sessionId($id);
 
         try {
             $session = $this->service->completeSession($sessionId, $request->user());
+        } catch (StockCountStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             abort(422, $e->getMessage());
         }
@@ -188,6 +206,8 @@ class StockCountController
 
         try {
             $this->service->cancelSession($sessionId);
+        } catch (StockCountStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

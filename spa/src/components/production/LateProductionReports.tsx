@@ -9,7 +9,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { productionDateTime } from '@/components/production/scheduleDates';
-import type { LateProductionReportSubmission } from '@/types/production';
+import type { LateProductionReport, LateProductionReportSubmission } from '@/types/production';
 import type { AssignedWorkOrder, Crew } from '@/types/production-crew';
 import { useAuthStore } from '@/stores/authStore';
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave';
@@ -17,6 +17,8 @@ import { usePendingProductionSubmission } from '@/hooks/usePendingProductionSubm
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { DraftRestoreBanner } from '@/components/ui/DraftRestoreBanner';
 import { createRequestKey } from '@/lib/requestKey';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 type DefectRow = { defect_type_id: string; count: string };
 type PendingSubmission = { data: LateProductionReportSubmission; key: string };
@@ -121,7 +123,7 @@ export function LateProductionEntry({
   const save = useMutation({
     mutationFn: (submission: PendingSubmission) =>
       workOrdersApi.proposeLateProduction(workOrderId, submission.data, submission.key),
-    onSuccess: () => {
+    onSuccess: (created) => {
       recovery.clear();
       draft.discard();
       setUncertain(false);
@@ -133,6 +135,19 @@ export function LateProductionEntry({
       setDefects([]);
       setReason('');
       setReportPage(1);
+      queryClient.setQueryData<Awaited<ReturnType<typeof workOrdersApi.myLateProductionReports>>>(
+        ['my-late-production-reports', userId, workOrderId, 1],
+        (current) => {
+          if (!current) return current;
+          const existed = current.data.some((report) => report.id === created.id);
+
+          return {
+            ...current,
+            data: [created, ...current.data.filter((report) => report.id !== created.id)].slice(0, 50),
+            meta: { ...current.meta, total: current.meta.total + (existed ? 0 : 1) },
+          };
+        },
+      );
       refresh();
     },
     onError: (error) => {
@@ -571,6 +586,7 @@ export function LateProductionReviewQueue({
   workOrderId: string;
   workOrderStatus: string;
 }) {
+  useRealtimeList('late_production_report', 'visible');
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -578,19 +594,35 @@ export function LateProductionReviewQueue({
     queryKey: ['late-production-reports', workOrderId, page],
     queryFn: () => workOrdersApi.lateProductionReports(workOrderId, undefined, page),
   });
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ['late-production-reports', workOrderId] });
-    void queryClient.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+  const reconcile = (updated: LateProductionReport) => {
+    queryClient.setQueryData<Awaited<ReturnType<typeof workOrdersApi.lateProductionReports>>>(
+      ['late-production-reports', workOrderId, page],
+      (current) => current
+        ? { ...current, data: current.data.map((report) => report.id === updated.id ? updated : report) }
+        : current,
+    );
   };
   const approve = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       workOrdersApi.approveLateProductionReport(id, reason),
-    onSuccess: refresh,
+    onSuccess: (updated) => {
+      reconcile(updated);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'late_production_report', entityId: updated.id },
+      );
+    },
   });
   const reject = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       workOrdersApi.rejectLateProductionReport(id, reason),
-    onSuccess: refresh,
+    onSuccess: (updated) => {
+      reconcile(updated);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'late_production_report', entityId: updated.id },
+      );
+    },
   });
 
   return (

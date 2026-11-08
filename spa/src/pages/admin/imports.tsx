@@ -22,11 +22,13 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { LinkButton } from '@/components/ui/LinkButton';
 
 import { PendingHint } from '@/components/ui/PendingHint';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const batchStatusVariant = (s: string): ChipVariant =>
  s === 'committed' ? 'success' : 'neutral';
 
 export default function ImportsPage() {
  const qc = useQueryClient();
+ useRealtimeList('import_batch', 'visible');
  const [entity, setEntity] = useState<string>('');
  const [file, setFile] = useState<File | null>(null);
  const [dryRun, setDryRun] = useState<ImportDryRunResult | null>(null);
@@ -37,7 +39,6 @@ export default function ImportsPage() {
  const batchesQ = useQuery({
  queryKey: ['imports', 'batches'],
  queryFn: importsApi.batches,
- placeholderData: (prev) => prev,
  });
 
  const resetResults = () => { setDryRun(null); setCommitErrors(null); };

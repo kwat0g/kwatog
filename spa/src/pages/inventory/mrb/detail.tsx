@@ -21,19 +21,14 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatQuantity } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
-import type { ChipVariant } from '@/components/ui/Chip';
-import type { MrbRecord, MrbDisposition, MrbStatus } from '@/types/inventory';
-
-const mrbStatusVariant = (s: MrbStatus): ChipVariant => {
-  if (s === 'held') return 'warning';
-  if (s === 'released') return 'success';
-  if (s === 'scrapped') return 'danger';
-  return 'info'; // returned
-};
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { MrbRecord, MrbDisposition } from '@/types/inventory';
+import { mrbStatusVariant } from '@/lib/statusVariants';
 
 // Rework / use-as-is send stock back into good inventory, so a target good
 // location is required by the backend; scrap / return do not use one.
@@ -69,10 +64,11 @@ type ReleaseValues = z.infer<typeof releaseSchema>;
 export default function MrbDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { can } = usePermission();
+  useRealtimeRecord('material_review_record', id || undefined);
   const currentUserId = useAuthStore((state) => state.user?.id);
   const [releaseOpen, setReleaseOpen] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['inventory', 'mrb', id],
     queryFn: () => mrbApi.show(id),
     enabled: !!id,
@@ -111,7 +107,7 @@ export default function MrbDetailPage() {
         backLabel="MRB / Quarantine"
         actions={
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Chip variant={mrbStatusVariant(data.status)}>{data.status_label}</Chip>
+            <Chip variant={mrbStatusVariant[data.status]}>{data.status_label}</Chip>
             {canRelease && (
               <Button variant="primary" onClick={() => setReleaseOpen(true)}>
                 Release
@@ -283,6 +279,7 @@ export default function MrbDetailPage() {
       {can('inventory.mrb.manage') && (
         <ReleaseModal
           record={data}
+          recordIsFetching={isFetching}
           dispositions={mrbOptions?.dispositions ?? []}
           isOpen={releaseOpen}
           onClose={() => setReleaseOpen(false)}
@@ -304,11 +301,13 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
 
 function ReleaseModal({
   record,
+  recordIsFetching,
   dispositions,
   isOpen,
   onClose,
 }: {
   record: MrbRecord;
+  recordIsFetching: boolean;
   dispositions: Array<{ value: string; label: string }>;
   isOpen: boolean;
   onClose: () => void;
@@ -415,13 +414,32 @@ function ReleaseModal({
           : {}),
       }),
     onSuccess: (rec) => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'mrb'] });
-      qc.invalidateQueries({ queryKey: ['return-request'] });
+      qc.setQueryData(['inventory', 'mrb', rec.id], rec);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'material_review_record', entityId: rec.id },
+        [['return-request']],
+        [['inventory', 'mrb', rec.id]],
+      );
       toast.success(`MRB ${rec.mrb_number} released (${rec.disposition}).`);
       reset(initial);
       onClose();
     },
-    onError: (e) => applyServerValidationErrors(e, setError, 'Failed to release MRB.'),
+    onError: (error) => {
+      const conflict = error as Error & {
+        response?: { status?: number; data?: { code?: string; message?: string } };
+      };
+      if (conflict.response?.status === 409 && conflict.response.data?.code === 'material_review_record_state_conflict') {
+        toast.error(conflict.response.data.message ?? 'This MRB changed. Review its current status.');
+        void invalidateRealtimeChange(
+          qc,
+          { entityType: 'material_review_record', entityId: record.id },
+          [['return-request']],
+        );
+        return;
+      }
+      applyServerValidationErrors(error, setError, 'Failed to release MRB.');
+    },
   });
 
   return (
@@ -443,6 +461,13 @@ function ReleaseModal({
           {record.item?.unit_of_measure} of <span className="font-mono">{record.item?.code}</span>{' '}
           from quarantine.
         </p>
+        {(recordIsFetching || record.status !== 'held' || record.actions?.can_release !== true) && (
+          <p role="status" className="text-sm text-warning-fg">
+            {recordIsFetching
+              ? 'Refreshing the MRB status. Your entered release details are preserved.'
+              : 'This MRB changed and can no longer be released from the current state. Your entered release details are preserved.'}
+          </p>
+        )}
 
         <Select
           label="Disposition"
@@ -565,6 +590,9 @@ function ReleaseModal({
             disabled={
               isSubmitting ||
               mutation.isPending ||
+              recordIsFetching ||
+              record.status !== 'held' ||
+              record.actions?.can_release !== true ||
               (needsTarget &&
                 (!watch('evidence_reference')?.trim() || !watch('recovery_passed'))) ||
               (needsConcession && !watch('concession_approval_reference')?.trim())

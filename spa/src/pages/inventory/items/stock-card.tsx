@@ -45,7 +45,12 @@ export default function StockCardPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'stock-card', id, from, to, page],
     queryFn: () => stockCardApi.show(id, { from, to, page }),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === id
+      && previousQuery.queryKey[3] === from
+      && previousQuery.queryKey[4] === to
+        ? previous
+        : undefined,
   });
 
   return (

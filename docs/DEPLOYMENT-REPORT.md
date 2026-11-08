@@ -1,31 +1,60 @@
 # Ogami ERP — Production Deployment Handoff Report
 
-**Prepared:** 2026-10-29 (Asia/Manila)
+**Prepared:** 2026-10-29; updated after the authorized demo seed and PHP security review
 **For:** Codex / next operator
-**Server:** AWS EC2 `52.221.206.245` (ap-southeast-1b, Ubuntu 26.04.1 LTS, t3.xlarge, 16 GB RAM)
+**Server:** AWS EC2, ap-southeast-1, Ubuntu 26.04.1 LTS, t3.xlarge, 16 GB RAM (public IP held outside this repository)
 **Domain:** `https://ogamiph.dev` (Cloudflare proxy in front of this server)
-**Repo:** `kwat0g/kwatog`, branch `main`, commit `e0942681`
-**Deploy path:** `/opt/ogami-erp`
+**Repo:** kwat0g/kwatog; report originally described e0942681. The checkout inspected for this update is main at 87ed280b with uncommitted changes.
+**Deploy path:** /opt/ogami-erp (current host uses an in-place checkout; the GitHub Actions workflow expects a releases/shared/current layout)
+
+**Source update (2026-11-04):** This report records the production handoff as it
+stood on 2026-10-29. Delta 867 has since corrected the source-level deploy
+ordering, framework-cache generation, OPcache restart, and `queue-mail`
+rebuild/restart/smoke-check gaps in `Makefile`, `scripts/deploy-update.sh`, and
+the GitHub workflow. Those changes have not been deployed to production; use
+the current procedure in [DEPLOY.md](DEPLOY.md), and do not treat this source
+change as proof that production has received it.
 
 ---
 
 ## 1. Executive summary
 
-The full production stack is deployed and running on the Singapore VPS:
+The production stack is deployed with the production Compose file: Nginx serves
+the built React SPA over HTTPS; Laravel 12, PostgreSQL 16, Redis 7, Reverb,
+Horizon, the scheduler, and the mail worker run in Docker. At the time of this
+update, all eight long-running containers were up, API health returned OK,
+scheduler health passed, and there were no failed jobs.
 
-- Nginx serves the built React SPA over HTTPS and proxies `/api`, `/sanctum`, and `/app` (Reverb WebSocket).
-- Laravel 12 API, PostgreSQL 16, Redis 7, Reverb, Horizon, scheduler, and mail worker are all in Docker.
-- 826 migrations applied; no pending migrations.
-- Seeder completed; `admin@ogami.test` exists with role `system_admin`.
-- SMTP TLS + AUTH verified against Amazon SES Mail Manager (`235 Authentication successful`).
-- Reverb WebSocket handshake verified internally (`101`) and through Cloudflare from a real browser (`open`).
-- Horizon processes queued broadcast events successfully; zero failed jobs.
-- Scheduler has 71 scheduled commands and reports healthy.
-- Database and uploads backups are installed as daily cron jobs and were test-run successfully.
-- Cloudflare **Full (strict)** now accepts the origin because a **Cloudflare Origin CA certificate** (valid to 2041) was installed.
-- Browser end-to-end test passed: landing page → sign-in → `/dashboard/admin` with live API calls all returning 200 through Cloudflare.
+The full reference and thesis-demo fixture set was seeded on 2026-10-29 after
+creating a pre-seed database and files backup. The database now contains 20
+users, 200 employees, 15 departments, 5 customers, 8 products, 12 inventory
+items, 8 BOMs, 12 sales orders, 12 MRP plans, 12 work orders, 6 purchase
+requests, 1 RFQ with 2 supplier quotes, 2 purchase orders, 3 invoices, 7
+payroll periods, 1,070 payroll rows, 3 inspections, 150 inspection
+measurements, 10 item quality plans, 5 budgets, and 2 shipments. There are 474
+settings. The only empty settings found are company.logo_path, company.phone,
+company.tagline, pdf.terms_conditions, quality.coc.manager_name, and
+quality.coc.manager_role. The company TIN is a placeholder and the VAT
+registration status needs confirmation.
 
-Two caveats remain: the ERP is using test/placeholder company identity values (TIN, phone, CoC manager), and the admin mailbox `admin@ogami.test` is not a real deliverable address. See §8.
+Every running PHP service was checked at PHP 8.3.36. This is the PHP 8.3 fix
+release for CVE-2026-109618 and CVE-2026-109619. A PHP minor-version upgrade is
+not required to address those CVEs; maintain the current branch at its newest
+security patch and schedule a staged move before PHP 8.3 security support ends
+on 2027-12-31. The repository's development and production Dockerfiles now pin
+`php:8.3.36-fpm-alpine3.24`; the live runtime already had this PHP patch, so no
+container restart was needed for the pinning change.
+
+The report's credential values have been removed from this current copy. They
+were previously committed to a public repository, so all affected credentials
+must still be rotated and Git history must be cleaned separately. Editing this
+file does not revoke old credentials or erase previous commits.
+
+The deployment is not yet fully reproducible from a clean checkout: demo
+seeding has a production-image factory failure, route operations are removed
+by a later cascading truncate unless re-seeded, deployment automation omits
+queue-mail from its restart/smoke checks, alert mappings include manual DB
+changes, and the DSS fix is uncommitted. See sections 7 and 8.
 
 ---
 
@@ -33,24 +62,21 @@ Two caveats remain: the ERP is using test/placeholder company identity values (T
 
 ### SSH
 
-```powershell
-ssh -i C:\Users\Administrator\Desktop\kwatog\ogami.pem ubuntu@52.221.206.245
-```
-
-- Password for `ubuntu`: `kwatog` (password SSH login is enabled).
-- `ubuntu` has passwordless sudo.
-- Git is cloned to `/opt/ogami-erp`.
-- Old Sydney server `3.25.115.35` is unreachable (SSH timeout) and was not used.
+Use the operator's managed SSH key and the non-root deploy account. At the time
+of audit, effective sshd configuration still allowed password authentication,
+and the account had passwordless sudo. The report previously disclosed an SSH
+password; treat it as compromised, rotate it, disable password and root SSH,
+verify key-only login in a second session, and restrict the security-group SSH
+source to the operator's fixed address.
 
 ### Application login
 
-- URL: `https://ogamiph.dev/sign-in`
-- Email: `admin@ogami.test`
-- Password: `password1234`
-- Role: `system_admin`
-- `must_change_password=false`
-
-> The requested password `"password"` was rejected by `AdminUserSeeder`, which throws when the password is shorter than 12 characters. `password1234` was used instead.
+The demo administrator account is admin@ogami.test with the system_admin role.
+It is not a deliverable mailbox. DemoAccountSeeder resets this account to the
+shared fixture password, marks it active, and does not require a password
+change. Do not use or publish its seeded credential; rotate it before opening
+the demo to anyone else. The bootstrap administrator should use a unique real
+email that is not one of the demo fixture accounts.
 
 ### Common commands
 
@@ -112,12 +138,14 @@ Key values:
 APP_NAME=Ogami ERP
 APP_ENV=production
 APP_DEBUG=false
+SEED_DEMO_DATA=false
+SEED_REFERENCE_DATA=false
 APP_URL=https://ogamiph.dev
 APP_TIMEZONE=Asia/Manila
 
 ADMIN_NAME=System Administrator
-ADMIN_EMAIL=admin@ogami.test
-ADMIN_PASSWORD=password1234
+ADMIN_EMAIL=<real unique administrator email>
+# ADMIN_PASSWORD is stored only in the protected host .env or secret manager.
 
 FRONTEND_URL=https://ogamiph.dev
 SERVER_NAME=ogamiph.dev
@@ -198,7 +226,7 @@ Existing seeded mappings were preserved.
 
 ### Current setup
 
-- Cloudflare proxies `ogamiph.dev` and `www.ogamiph.dev` to `52.221.206.245`.
+- Cloudflare proxies `ogamiph.dev` and `www.ogamiph.dev` to `[origin IP omitted]`.
 - Origin certificate: **Cloudflare Origin CA**, SAN `*.ogamiph.dev` + `ogamiph.dev`.
 - Valid: `2026-10-29` → `2041-10-25`.
 - Installed on the host at:
@@ -216,7 +244,7 @@ Cloudflare has "Always Use HTTPS" active: an HTTP request to `/.well-known/acme-
 
 ### Cloudflare behavior observed
 
-- Direct server access: `http://52.221.206.245/` → `301 https://ogamiph.dev/`; `https://52.221.206.245/` → 200 (self-signed/local CA warning expected).
+- Direct server access: `http://[origin IP omitted]/` → `301 https://ogamiph.dev/`; `https://[origin IP omitted]/` → 200 (self-signed/local CA warning expected).
 - Through Cloudflare with a real browser: landing page, sign-in, dashboard, API, and WebSocket all work.
 - `curl` from the public internet gets Cloudflare `403` with `Cf-Mitigated: challenge`. This is Cloudflare's bot challenge, not the ERP. If API clients, webhooks, or monitoring need to call the public API with curl, add a Cloudflare WAF skip rule for the relevant paths or disable Bot Fight Mode/Under Attack for API traffic.
 
@@ -228,12 +256,16 @@ Cloudflare has "Always Use HTTPS" active: an HTTP request to `/.well-known/acme-
 
 ## 6. What was verified
 
-All checks below were run on 2026-10-29 and passed unless noted.
+Checks below were run on 2026-10-29. Authentication and browser E2E rows are
+from before the demo seeding changed fixture-account credentials; recheck
+login with the newly rotated accounts before opening the demo publicly.
 
 | Area | Check | Result |
 |---|---|---|
 | Containers | All eight long-running containers running; migrate exited 0; restart policies `unless-stopped` | PASS |
+| App runtime | `APP_ENV=production`, `APP_DEBUG=false`, HTTPS app URL, Redis queue | PASS |
 | API health | `GET /api/v1/health` → 200; detail `app=true, db=true, redis=true, queue=0` | PASS |
+| Cloudflare app requests | Current public `GET /api/v1/health` → 403 with `cf-mitigated: challenge`; direct-origin API → 200 in 57–73 ms and `/` → 200 in 6–8 ms; screenshot shows repeated challenge Ray IDs | FAIL; identify and correct the specific Cloudflare challenge rule |
 | HTTP redirect | `http://ogamiph.dev/` → `301 https://ogamiph.dev/` | PASS |
 | SPA | `/`, `/login`, `/dashboard` → 200 with `<div id="root">`; JS asset → 200 | PASS |
 | SPA config | Built bundle references `ogamiph.dev`, `/api/v1`, and the correct Reverb key | PASS |
@@ -245,13 +277,19 @@ All checks below were run on 2026-10-29 and passed unless noted.
 | Reverb via Cloudflare | Browser `new WebSocket("wss://ogamiph.dev/app/<key>...")` → open | PASS |
 | Broadcasting | `BadgesChanged` event processed by Horizon in 27 ms; no `BroadcastException` after `REVERB_SERVER_*` fix | PASS |
 | Database | PostgreSQL 16.15; 826 migrations; `migrate:status --pending` → no pending | PASS |
-| Seed data | users=1, roles=17, settings=474; admin role `system_admin`; `Dasmariñas` stored as UTF-8 | PASS |
+| PHP runtime | API, Horizon, scheduler, queue-mail, and Reverb report PHP 8.3.36 | PASS; fixes CVE-2026-109618 and CVE-2026-109619 |
+| Seed data after demo run | users=20, employees=200, departments=15, products=8, settings=474; 12 work orders; 1 RFQ + 2 supplier quotes | PASS, with seed caveats in §8 |
 | Redis | `PING` → `PONG` | PASS |
 | Horizon | `horizon:status` → running; queue failed jobs = 0 | PASS |
 | Scheduler | 71 scheduled commands; `scheduler:health --stale-minutes=15` → OK | PASS |
 | Mail config | `mailer=smtp`, host/port/from match the CSV; `queue-mail` logs no errors | PASS |
 | SMTP auth | `openssl s_client -starttls smtp` + `AUTH LOGIN` → `235 Authentication successful` | PASS |
+| SMTP send | Laravel sent one test message through the configured production SMTP relay on 2026-10-29; no transport error | SMTP accepted; recipient inbox not checked |
+| Career interview email | Candidate stage event was recorded; `InterviewScheduledMail` failed on its first attempt and completed on retry; no permanent failed jobs in the last 24 hours | Queue processed; candidate reports no message received |
+| Sender DNS | Cloudflare shows three SES DKIM CNAME records and DMARC `p=none`; no root SPF TXT record; SES identity/DKIM verification and custom MAIL FROM configuration not checked | CHECK SES identity and MAIL FROM settings; publish only the provider's required records |
 | DB backup | `/var/backups/ogami/ogami-20261029-133214.sql.gz` (166 KB), `gzip -t` OK, PostgreSQL dump header | PASS |
+| Pre-seed backup | `/var/backups/ogami/ogami-20261029-151028.sql.gz` (199,077 bytes), mode 600 | PASS, same host only |
+| Pre-seed files archive | `/var/backups/ogami/files/ogami-files-20261029-151028.tar.gz` (139 bytes), mode 600 | Created; contains little/no upload data |
 | Files backup | `/var/backups/ogami/files/ogami-files-20261029-140202.tar.gz` (4 KB), `tar -tzf` OK | PASS |
 | Backups cron | `/etc/cron.daily/ogami-pgdump`, `/etc/cron.daily/ogami-files` executable | INSTALLED |
 | Error logs | No fatal/uncaught/SQLSTATE lines after stabilization | PASS |
@@ -302,7 +340,7 @@ The Windows → SSH pipeline converted `Dasmariñas` to `Dasmari??as` in `.env` 
 
 ### 7.4 Merge regression: `RecommendationService::expirePastValidity()` missing
 
-`App\Console\Commands\MaintainDss` calls `$recommendations->expirePastValidity()`, but the method is absent at HEAD `e0942681` (it existed in commit `ace82c17`, then was lost during a merge). Every scheduled `dss:maintain` run failed with:
+`App\Console\Commands\MaintainDss` calls `$recommendations->expirePastValidity()`. The method was absent at the original handoff commit e0942681 and remains absent from the current committed HEAD 87ed280b; it exists only in the uncommitted working tree. Every scheduled `dss:maintain` run failed with:
 
 ```text
 Call to undefined method App\Modules\DSS\Services\RecommendationService::expirePastValidity()
@@ -324,7 +362,7 @@ public function expirePastValidity(): int
 
 File: `/opt/ogami-erp/api/app/Modules/DSS/Services/RecommendationService.php`.
 
-This is an **uncommitted local change** and the only intended source modification in the deployment checkout. `git status` should show only this file. A future `git pull`/fresh clone from `main` will reintroduce the bug unless the upstream repo is fixed. Re-apply the method (or cherry-pick the fix) before rebuilding. A local patch copy is recommended; see §9.
+This remains an uncommitted local change. The current checkout also contains uncommitted Nginx and SPA changes, so inspect and commit only reviewed work before any release. A future deploy from GitHub will not include this DSS method until the fix is committed. See §8.
 
 ### 7.5 Only the API image was rebuilt (scheduler kept old code)
 
@@ -348,7 +386,7 @@ During inspection, `api/app/Common/Enums/AlertType.php` was transiently truncate
 git checkout -- api/app/Common/Enums/AlertType.php
 ```
 
-Current file is 4125 bytes, intact. `git status` after restore shows only `RecommendationService.php` modified.
+The file was restored and verified intact during the original deployment. The current working tree has additional uncommitted edits; see §8.
 
 ### 7.8 Cloudflare 526 → Origin CA install
 
@@ -371,23 +409,96 @@ Nginx logged `api could not be resolved` / `reverb could not be resolved` while 
 
 ## 8. Outstanding items / risks
 
-1. **Company legal data is placeholder.** `COMPANY_TIN=Not Configured`, `COMPANY_VAT_STATUS=VAT Registered`, `COMPANY_PHONE` empty, `QUALITY_COC_MANAGER_NAME/ROLE` empty. Correct these in `/opt/ogami-erp/.env` and the `settings` table (or via Admin → Settings) before using invoices, BIR reports, or quality certificates.
-2. **Admin mailbox is fake.** `admin@ogami.test` uses the reserved `.test` TLD. Critical-alert emails and password resets cannot be delivered. Create a real admin user/mailbox and update `ADMIN_EMAIL`/the user record.
-3. **Admin password is `password1234`, not `"password"`.** The seeder enforces ≥12 characters. Change it through the UI if a different password is required.
-4. **No live email delivery test.** SMTP TLS + `AUTH LOGIN` succeeded (`235`), but no message was sent to a real recipient. Send a test password-reset or use a real mailbox to validate end-to-end delivery.
-5. **Cloudflare bot challenge.** Curl/webhook/API clients receive `403 Cf-Mitigated: challenge`. Browser SPA works. Add a WAF skip rule or adjust Bot Fight Mode if external API clients need access.
-6. **Uncommitted source patch.** `RecommendationService::expirePastValidity()` exists only in `/opt/ogami-erp` working tree. A fresh deploy from `main` will regress `dss:maintain`. Fix upstream or re-apply the patch.
-7. **Scheduled `dss:maintain` after final rebuild was not observed.** Manual runs in both `ogami-api` and `ogami-scheduler` succeeded after the full rebuild, and `scheduler:health` reported OK at 22:03 PHT. The 22:05 PHT scheduled tick was not confirmed because the wait command was interrupted. Codex should verify:
-   ```bash
-   sudo docker compose -f docker-compose.prod.yml exec -T db psql -U ogami -d ogami \
-     -c "select status, started_at, last_error from scheduler_task_runs where task_name like '%dss:maintain%' order by started_at desc limit 5;"
-   ```
-   Also note: `scheduler_task_runs` showed duplicate rows at identical timestamps (one `failed`, one `succeeded`) for `dss:maintain` around 21:45–21:55, likely two scheduler instances overlapping during container recreates. Check whether duplicates persist after stabilization.
-8. **No off-site backup.** DB and uploads archives are local under `/var/backups/ogami`. `BACKUP_S3_BUCKET` is unset. Configure S3/off-site replication for disaster recovery.
-9. **`.env` is not in backups.** Secrets are only on the server. Store an encrypted copy in a secure secret manager.
-10. **Redis persistence.** The `ogami-erp_redisdata` volume exists, but Redis is used for cache/queue; a Redis loss would drop queued jobs, not committed DB data. Acceptable for most ERP workloads; use Horizon retries/alerts as configured.
-11. **Cloudflare Origin CA cert expires 2041-10-25.** No renewal automation is needed now. If the cert is replaced, update both files and reload Nginx.
-12. **UFW is inactive.** AWS security group is the effective firewall; ports 80/443 are open. If UFW is enabled later, allow 80/443 and Docker's forwarding rules carefully.
+1. **Credential exposure is critical.** The previous public report contained
+   SSH and administrator credentials. At audit, sshd still allowed password
+   authentication and the deploy account had passwordless sudo. Rotate SSH,
+   application, SMTP, and any other exposed credentials; disable SSH password
+   login; verify key-only access; restrict the AWS security group; and remove
+   the leaked values from public Git history. The current document has had the
+   values removed, but old commits remain exposed.
+2. **Demo passwords are shared and active.** The demo-account seeder writes a
+   hard-coded shared password and sets must_change_password=false. The
+   admin@ogami.test fixture is overwritten by this seeder. Change all demo
+   passwords and use a separate real bootstrap admin before public access.
+3. **Cloudflare blocks application API traffic with challenges.** A live
+   public `GET /api/v1/health` returns 403 with `cf-mitigated: challenge`, and
+   the browser showed multiple challenge Ray IDs. The same root page served
+   directly from Nginx returns 200 in 6–8 ms; host load and memory were low.
+   Search the screenshot Ray IDs under Security → Events, then adjust only the
+   challenge-producing rule for the affected API/auth/WebSocket paths. A WAF
+   Skip rule cannot bypass free Bot Fight Mode. Separately, Nginx publishes
+   ports 80/443 on all interfaces; restrict the AWS security group to
+   Cloudflare IP ranges or another origin access control.
+4. **Backups are same-host only.** Daily DB and file archives are stored under
+   /var/backups/ogami, with no confirmed off-site copy or restore drill. The
+   .env is not included in backups. Store an encrypted configuration backup
+   separately and test both DB and private-file restores off-host.
+5. **Fresh demo seeding is not yet one-command reproducible.**
+   DemoRfqBudgetSeeder uses PurchaseRequestFactory, whose Faker helper is not
+   available in the production image. The run was completed by creating its
+   purchase-request/RFQ prerequisite through the real application service and
+   then running the remaining demo seeders. Fix the fixture so a clean
+   production image completes DatabaseSeeder without manual intervention.
+6. **Routing seed order loses child rows.** ComprehensiveDemoSeeder uses
+   TRUNCATE ... CASCADE after ProductRoutingSeeder; the cascade removed route
+   operations. ProductRoutingSeeder was run afterward, leaving 8 active routes
+   with operations and 8 inactive empty route versions. Fix the seed order or
+   truncate scope, then verify on a disposable database.
+7. **Deployment automation omits queue-mail.** Both scripts/deploy-update.sh
+   and .github/workflows/deploy.yml omit queue-mail from their restart and/or
+   health-check service lists. An old mail worker can remain after a release.
+   Add it to build, stop, start, recreation, and smoke checks before relying on
+   unattended deploys.
+8. **The Git checkout is dirty.** The current checkout is main at 87ed280b and
+   contains uncommitted edits, including RecommendationService's
+   expirePastValidity() method and Nginx/SPA changes. The DSS method is absent
+   from the committed checkout; a deployment from GitHub can regress
+   dss:maintain. Commit and review intended changes before deploying, and pin
+   releases to a reviewed commit.
+9. **Alert recipient mappings are partly manual.** New alert mappings were
+   inserted into this database but are not all present in migration
+   0417_seed_alert_critical_notification_roles.php. A fresh database may omit
+   those recipients until the migration/seeder is updated.
+10. **Runbook and deployment modes previously disagreed.** The current VPS is
+    an in-place checkout. GitHub Actions expects releases/shared/current. Do
+    not use the workflow on the flat checkout or the in-place script on the
+    atomic release layout. Update the documented canonical path when the
+    migration is completed.
+11. **Career email delivery is unproven.** The user's interview transition was
+    recorded. The queued `InterviewScheduledMail` failed on the first attempt
+    and completed on retry, but the candidate reports no email. The configured
+    SMTP host is an AWS Mail Manager ingress-style endpoint; SMTP acceptance
+    and queue completion do not prove the ingress rule sent it to Gmail. Check
+    the Mail Manager rule set and provider delivery logs, or switch to the
+    standard SES outbound SMTP endpoint with region-matched credentials and a
+    verified sender identity. The Cloudflare screenshot shows three SES DKIM
+    CNAMEs and DMARC `p=none`; SES identity verification and custom MAIL FROM
+    settings still need checking. No root SPF TXT exists. SES uses
+    `amazonses.com` for SPF by default; when using a custom MAIL FROM domain,
+    publish the exact SES-provided MX and SPF records on that subdomain instead
+    of guessing a root record. Check the recipient's Gmail authentication
+    results after the sender route is confirmed.
+    The .test administrator mailbox cannot receive password-reset or alert
+    messages; configure a real administrator address.
+12. **Company settings need review.** Six optional settings are empty: logo,
+    phone, tagline, PDF terms, and CoC manager name/role. The TIN is a
+    placeholder and VAT status is unconfirmed. Confirm these before generating
+    invoices, statutory reports, or quality certificates.
+13. **PHP maintenance.** All currently running PHP services are at 8.3.36,
+    which fixes the critical October 2026 PHP RCE advisories. Keep the 8.3
+    branch patched and plan a staged branch upgrade before security support
+    ends on 2027-12-31. Rebuild every PHP service image for each security
+    update; a container restart does not update its image.
+14. **Nginx image is old and floating.** Compose uses nginx:1.27-alpine. Check
+    the supported stable release before each update, pin a reviewed version or
+    digest, and smoke-test the TLS and WebSocket routes.
+15. **TLS certificate renewal is manual.** The Cloudflare Origin CA certificate
+    is not managed by Certbot. Track its expiration and replace it before the
+    date; keep the origin behind Cloudflare Full (strict).
+16. **The files backup is nearly empty.** The pre-seed files archive was 139
+    bytes. Confirm the private storage volume contains the intended demo
+    documents and verify that future file archives are non-empty when uploads
+    exist.
 
 ---
 
@@ -397,7 +508,7 @@ Nginx logged `api could not be resolved` / `reverb could not be resolved` while 
 
 | Path | Purpose |
 |---|---|
-| `/opt/ogami-erp` | Production checkout at `e0942681` |
+| `/opt/ogami-erp` | In-place production checkout; current inspected HEAD is `87ed280b`, with uncommitted changes |
 | `/opt/ogami-erp/.env` | Production secrets/config, mode 600 |
 | `/opt/ogami-erp/spa/dist` | Built SPA mounted into Nginx |
 | `/opt/ogami-erp/api/app/Modules/DSS/Services/RecommendationService.php` | Locally patched with `expirePastValidity()` |
@@ -411,80 +522,57 @@ Nginx logged `api could not be resolved` / `reverb could not be resolved` while 
 | `/etc/cron.daily/ogami-pgdump` | DB backup cron |
 | `/etc/cron.daily/ogami-files` | Files backup cron |
 
-### Local workspace (`C:\Users\Administrator\Desktop\kwatog`)
+### Local workspace
 
-| File | Notes |
-|---|---|
-| `ogami.pem` | SSH private key for both servers (sensitive) |
-| `smtp-credentials.csv` | SMTP endpoint/user/password (sensitive) |
-| `cloudflare-origin.crt` | Cloudflare Origin CA cert copy |
-| `cloudflare-origin.key` | Origin private key copy (sensitive) |
-| `DEPLOYMENT-REPORT.md` | This report |
-| `_bringup.sh` | Original bring-up script; note its seed-before-api ordering issue |
-| `_verify.sh` | First verification pass |
-| `_verify2.sh` | DB/queue/scheduler/mail checks |
-| `_finalverify.sh` | Final full verification (containers, health, SPA, auth, WS, DB, queue, scheduler, mail, logs, host) |
-| `_fixreverb.sh` | Adds `REVERB_SERVER_*` and recreates services |
-| `_fixdss3.sh` | Restores/patches `expirePastValidity`, fixes `.env` address, rebuilds |
-| `_rebuildall.sh` | Rebuilds all PHP service images and force-recreates |
-| `_installcert.sh` | Installs Cloudflare Origin cert and reloads Nginx |
-| `_filesbackup2.sh` | Tests files backup and installs `/etc/cron.daily/ogami-files` |
-| `_waitdss.sh` | Waits for the next scheduler tick (was interrupted) |
-| `_smtpcheck.sh` | SMTP TLS + AUTH test |
-| `_postfixverify.sh`, `_finalsched.sh`, `_dssruns.sh` | Post-fix scheduler/DB probes |
-
-> The private key copies are sensitive. Protect or delete them once no longer needed.
+Private deployment artifacts such as SSH keys, SMTP credentials, and Origin CA
+private keys must stay outside this repository. Store them in an approved
+secret manager and rotate any copies that were committed or shared.
 
 ---
 
-## 10. Quick recovery / redeploy sequence
+## 10. Recovery and first-time demo seeding
 
-If rebuilding from scratch or after a reboot:
+A reboot is not a reason to reseed. Start the existing services and check
+health; do not run DatabaseSeeder on a populated database. Routine deploys
+must run migrations only, never demo fixtures.
 
-```bash
-cd /opt/ogami-erp
+For a new empty thesis-demo database, first complete the source fixes listed
+in §8, create a verified backup, and keep the app consumers stopped while
+seeding. The only demo flags should be temporary overrides on a one-shot
+container; leave both production flags false in .env. The fixture command is
+in §6. Do not run it against the existing database unless you deliberately
+intend its cascading transaction reset.
 
-# 1. Confirm secrets/config
-test -f .env && stat -c '%a %U:%G %n' .env
+After a new seed, verify table counts and business flows rather than relying
+only on the seeder's success message. In particular, check active routing
+operations, MRP plans/work orders, the RFQ and submitted quotes, inspection
+evidence, budgets, scheduler health, and failed jobs. Change all seeded demo
+passwords before opening the site publicly.
 
-# 2. Bring up data services
-sudo docker compose -f docker-compose.prod.yml up -d db redis
-
-# 3. Run migrations (one-shot)
-sudo docker compose -f docker-compose.prod.yml up migrate
-
-# 4. Start app services BEFORE seeding
-sudo docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler queue-mail
-
-# 5. Seed only on a fresh database
-sudo docker compose -f docker-compose.prod.yml exec -T api php artisan db:seed --force
-sudo docker compose -f docker-compose.prod.yml exec -T api php artisan storage:link
-
-# 6. Verify
-bash /tmp/finalverify.sh   # or re-upload _finalverify.sh
-```
-
-If the repo is re-cloned from `main`, re-apply the `expirePastValidity()` method in `api/app/Modules/DSS/Services/RecommendationService.php` before rebuilding.
-
----
+For the current in-place VPS, deploy committed changes with
+scripts/deploy-update.sh. That script currently omits queue-mail, so follow
+the explicit worker recovery/deploy steps in docs/DEPLOY.md until the script
+is corrected. For the GitHub Actions atomic layout, roll back by retargeting
+current to the last known-good release; do not apply that procedure to the
+flat checkout.
 
 ## 11. Change log (server-side)
 
 1. Installed Docker 29.1.3 + Compose 2.40.3.
-2. Cloned repo to `/opt/ogami-erp` at `e0942681`.
+2. Cloned repo to `/opt/ogami-erp`; the handoff recorded e0942681, while the checkout inspected in this update is main at 87ed280b.
 3. Generated `.env` with fresh secrets; verified raw SMTP password handling.
 4. Built PHP production images and SPA `dist`.
 5. Created `/etc/letsencrypt/live/ogamiph.dev` with temporary self-signed cert; installed certbot 4.0.0 (not used for the final Origin CA cert).
 6. Ran 826 migrations.
 7. Started API/Nginx/Reverb/Horizon/Scheduler/Mail worker.
-8. Seeded all data; created admin; linked storage.
+8. Seeded the full reference/demo fixture set on 2026-10-29 after a pre-seed backup; linked storage. The RFQ fixture needed a deterministic prerequisite workaround, and ProductRoutingSeeder was rerun after the comprehensive cascade.
 9. Added `REVERB_SERVER_*` and recreated services; fixed broadcast path.
 10. Fixed `company.address` UTF-8 in `.env` and DB.
 11. Restored `expirePastValidity()`, rebuilt all PHP images, force-recreated services.
 12. Installed Cloudflare Origin CA certificate and reloaded Nginx; Cloudflare 526 resolved.
 13. Added missing critical-alert role mappings; resolved stale scheduler alert.
 14. Installed and tested DB + files backup cron jobs.
-15. Ran full verification and public browser E2E test (landing → login → dashboard, API 200, WSS open).
+15. Rechecked the post-seed API health, scheduler health, failed jobs, and container state. PHP 8.3.36 is running in all PHP services.
 
 ---
 

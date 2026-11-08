@@ -13,7 +13,7 @@
  * the SPA had no way to send it.
  */
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { depreciationApi } from '@/api/assets';
@@ -25,6 +25,7 @@ import { PendingHint } from '@/components/ui/PendingHint';
 import { formatPeso } from '@/lib/formatNumber';
 
 export function DepreciationRunner({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+ const queryClient = useQueryClient();
  const now = new Date();
  const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
  const [year, setYear] = useState<number>(previousMonth.getFullYear());
@@ -35,6 +36,8 @@ export function DepreciationRunner({ isOpen, onClose }: { isOpen: boolean; onClo
  const run = useMutation({
   mutationFn: () => depreciationApi.runMonth(year, month, backfill),
   onSuccess: (res) => {
+   void queryClient.invalidateQueries({ queryKey: ['assets'], refetchType: 'active' });
+   void queryClient.invalidateQueries({ queryKey: ['asset'], refetchType: 'active' });
    const d = (res.data ?? res) as { posted_count?: number; total_amount?: string; processed_periods?: number };
    const entries = `${d.posted_count ?? '—'} ${d.posted_count === 1 ? 'entry' : 'entries'}`;
    toast.success(

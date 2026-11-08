@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
+import { useRealtimeEvent } from '@/hooks/useRealtimeEvent';
+import { scheduleRealtimeChangeInvalidation } from '@/lib/realtime/invalidationMap';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -13,24 +15,73 @@ export interface FulfillmentPreview {
   as_of: string;
   lines: Array<{ id: string; part_number: string; name: string; policy: 'stock_first' | 'produce_new'; demand: string; allocated_stock: string; eligible_free_stock: string; proposed_stock: string; production_shortage: string; production_commitments: string }>;
 }
+
+interface SalesOrderRefreshPayload {
+  entity_type?: string;
+  entity_id?: string;
+}
+
 export function FulfillmentDialog({ orderId, onClose }: { orderId: string; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [policies, setPolicies] = useState<Record<string, 'stock_first' | 'produce_new'>>({});
   const [reason, setReason] = useState('');
+  const [changedElsewhere, setChangedElsewhere] = useState(false);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const submitted = useRef<Parameters<typeof salesOrdersApi.updateFulfillment>[1] | null>(null);
+  const changeSequence = useRef(0);
   const preview = useQuery({ queryKey: ['sales-order-fulfillment', orderId], queryFn: () => salesOrdersApi.fulfillment(orderId) });
+  const invalidateOrderViews = useCallback(() => {
+    scheduleRealtimeChangeInvalidation(queryClient, { entityType: 'sales_order', entityId: orderId });
+  }, [orderId, queryClient]);
+  const noteOrderChanged = useCallback(() => {
+    changeSequence.current += 1;
+    if (Object.keys(policies).length > 0 || reason.trim() !== '') setChangedElsewhere(true);
+    invalidateOrderViews();
+  }, [invalidateOrderViews, policies, reason]);
+  const handleOrderChanged = useCallback((payload: SalesOrderRefreshPayload) => {
+    if (payload.entity_type === 'sales_order' && payload.entity_id === orderId) noteOrderChanged();
+  }, [noteOrderChanged, orderId]);
+  useRealtimeEvent(
+    orderId ? `sales-order-fulfillment.${orderId}` : '',
+    '.chain.refresh',
+    handleOrderChanged,
+    noteOrderChanged,
+    noteOrderChanged,
+  );
+
   const save = useMutation({ mutationFn: () => { submitted.current ??= {
     revision: preview.data!.revision, request_key: requestKey, reason: reason.trim(),
     lines: preview.data!.lines.map((line) => ({ id: line.id, policy: policies[line.id] ?? line.policy })),
   }; return salesOrdersApi.updateFulfillment(orderId, submitted.current); }, onError: (failure) => {
-    if (failure instanceof AxiosError && failure.response?.status === 422) { submitted.current = null; setRequestKey(crypto.randomUUID()); }
-  }, onSuccess: () => { void queryClient.invalidateQueries(); onClose(); } });
+    if (failure instanceof AxiosError && failure.response?.status === 422) {
+      submitted.current = null;
+      setRequestKey(crypto.randomUUID());
+      const message = (failure.response.data as { message?: string } | undefined)?.message;
+      if (message === 'Order changed. Refresh fulfillment before saving.') {
+        changeSequence.current += 1;
+        setChangedElsewhere(true);
+        void preview.refetch();
+      }
+    }
+  }, onSuccess: (fresh) => {
+    queryClient.setQueryData(['sales-order-fulfillment', orderId], fresh);
+    invalidateOrderViews();
+    onClose();
+  } });
+  const refreshSupply = async () => {
+    const sequence = changeSequence.current;
+    const result = await preview.refetch();
+    if (result.isSuccess && sequence === changeSequence.current) {
+      setChangedElsewhere(false);
+      save.reset();
+    }
+  };
   const locked = save.isPending || !!submitted.current;
   const message = save.error instanceof AxiosError ? save.error.response?.data?.message : save.error?.message;
   return <Modal isOpen onClose={() => { if (!save.isPending) onClose(); }} title="Review fulfillment" size="xl" closeOnOverlayClick={false}>
     <div className="space-y-5 p-5">
       <p className="text-sm text-muted">Use approved stock first. Production covers any shortage. Confirmed production and dispatched shipments remain committed.</p>
+      {changedElsewhere && <p role="status" className="text-sm text-warning-fg">Order supply changed while you were reviewing it. Your entries are preserved. Refresh supply and review the latest figures before confirming.</p>}
       {preview.isLoading && <p>Checking supply…</p>}
       {preview.isError && <p role="alert" className="text-danger-fg">Unable to load supply. Refresh to try again.</p>}
       {preview.data?.lines.map((line) => <div key={line.id} className="space-y-3 border-b border-border pb-4">
@@ -49,9 +100,9 @@ export function FulfillmentDialog({ orderId, onClose }: { orderId: string; onClo
       </div>)}
       <Textarea label="Planning reason" required value={reason} maxLength={2000} disabled={locked} onChange={(event) => setReason(event.target.value)} />
       {message && <p role="alert" className="text-danger-fg">{message}</p>}
-      <div className="flex flex-wrap justify-end gap-2"><Button variant="secondary" disabled={locked} onClick={() => { void preview.refetch(); }}>Refresh supply</Button>
+      <div className="flex flex-wrap justify-end gap-2"><Button variant="secondary" disabled={locked} onClick={() => { void refreshSupply(); }}>Refresh supply</Button>
         <Button variant="secondary" disabled={save.isPending} onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!preview.data?.editable || !reason.trim() || save.isPending || preview.isFetching} loading={save.isPending} onClick={() => save.mutate()}>Confirm fulfillment</Button></div>
+        <Button variant="primary" disabled={!preview.data?.editable || !reason.trim() || save.isPending || preview.isFetching || changedElsewhere} loading={save.isPending} onClick={() => save.mutate()}>Confirm fulfillment</Button></div>
     </div>
   </Modal>;
 }

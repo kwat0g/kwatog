@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { grnStatusVariant } from '@/lib/statusVariants';
 import type { SupplierDeliverySummary } from '@/types/b2b';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 type DeliveryFilters = { page: number; per_page: number; status?: string };
 
@@ -21,10 +22,12 @@ const DEFAULT_FILTERS: DeliveryFilters = { page: 1, per_page: 25 };
 
 export default function SupplierDeliveriesPage() {
   const [filters, setFilters] = useUrlFilters<DeliveryFilters>(DEFAULT_FILTERS);
+  const queryKey = ['portal', 'supplier', 'deliveries', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'supplier', 'deliveries', filters],
+    queryKey,
     queryFn: () => supplierPortalApi.listDeliveries(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined,
   });
 
   const columns: Column<SupplierDeliverySummary>[] = [

@@ -7,10 +7,12 @@ namespace Tests\Feature\Purchasing;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Events\SupplierCatalogChanged;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -62,6 +64,9 @@ class ApprovedSupplierBackfillTest extends TestCase
             ApprovedSupplier::query()->where('item_id', $itemB->id)->where('vendor_id', $vendor->id)->value('qualification_status'),
         );
         $this->assertDatabaseCount('approved_suppliers', 2);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->count());
     }
 
     public function test_backfill_ignores_cancelled_purchase_orders(): void

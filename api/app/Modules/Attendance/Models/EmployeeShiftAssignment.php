@@ -15,7 +15,8 @@ class EmployeeShiftAssignment extends Model
 {
     use HasAuditLog, HasFactory, HasHashId;
 
-    public $timestamps = false;
+    /** ISO weekdays for the long-standing Monday–Saturday default calendar. */
+    public const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5, 6];
 
     protected $fillable = ['employee_id', 'shift_id', 'effective_date', 'end_date', 'working_days', 'created_at'];
 

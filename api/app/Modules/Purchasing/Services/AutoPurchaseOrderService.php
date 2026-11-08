@@ -9,6 +9,7 @@ use App\Common\Enums\AlertType;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\BusinessPolicyService;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
@@ -147,6 +148,8 @@ class AutoPurchaseOrderService
             ]);
 
             $this->approvals->submit($po, 'purchase_order', (string) $po->total_amount);
+            app(ChainBroadcaster::class)
+                ->broadcastFor($po, $po->status?->value ?? '');
 
             // Raise an alert for visibility on the dashboard.
             $this->alerts->raise(

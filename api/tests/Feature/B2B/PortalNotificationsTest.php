@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
+use App\Common\Events\PortalNotificationChanged;
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
@@ -27,7 +28,7 @@ class PortalNotificationsTest extends TestCase
         parent::setUp();
         app(SettingsService::class)->set('modules.b2b_portals', true, 'modules');
         app(SettingsService::class)->set('security.password_expiry_days', 0, 'security');
-        Event::fake([UserNotificationCreated::class]);
+        Event::fake([UserNotificationCreated::class, PortalNotificationChanged::class]);
         Mail::fake();
     }
 

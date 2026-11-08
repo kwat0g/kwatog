@@ -96,7 +96,8 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
  onSuccess: (c) => {
  qc.invalidateQueries({ queryKey: ['accounting', 'customers'] });
  toast.success(mode === 'create' ? 'Customer created.' : 'Customer updated.');
- navigate(`/accounting/customers/${c.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/accounting/customers/${c.id}`);
  },
  onError: (e) => {
    applyServerValidationErrors(e, setError, 'Failed to save the customer.');

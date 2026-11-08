@@ -48,6 +48,8 @@ export interface UseFormSafetyOptions<T extends FieldValues> {
 
 export interface FormSafety {
   draftState: UseFormDraftAutosaveResult;
+  /** Allow the immediate route change after a successful save completes. */
+  allowNavigationAfterSave: () => void;
 }
 
 export function useFormSafety<T extends FieldValues>({
@@ -86,7 +88,9 @@ export function useFormSafety<T extends FieldValues>({
     blocklist: stableBlocklist,
   });
 
-  useUnsavedChangesGuard(formState.isDirty && !saved);
+  // All shared-safe forms should guard both browser exits and in-app route
+  // changes; the native prompt alone misses the most common discard path.
+  const allowNavigationAfterSave = useUnsavedChangesGuard(formState.isDirty && !saved, true);
 
-  return { draftState };
+  return { draftState, allowNavigationAfterSave };
 }

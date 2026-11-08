@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Resources;
 
 use App\Common\Support\HashId;
+use App\Modules\Quality\Enums\InspectionOutcome;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use Illuminate\Http\Request;
@@ -15,12 +16,56 @@ class InspectionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $viewer = $request->user();
         $trialOutput = $this->startup_trial_required ? $this->trialOutput : null;
+        $status = $this->status instanceof \BackedEnum ? $this->status->value : (string) $this->status;
+        $canManage = (bool) $viewer?->hasPermission('quality.inspections.manage');
+        $canReview = $status === InspectionStatus::AwaitingReview->value
+            && (bool) $viewer?->hasPermission('quality.inspections.review')
+            && $this->inspector_id !== null
+            && (int) $this->inspector_id !== (int) $viewer?->id
+            && ! $this->hasResultAuthor($viewer);
+        $canReplaceChecklist = (bool) config('inspection.checklist_capture_enabled')
+            && ! $trialOutput && ! $this->counted_capture
+            && ! $this->usesChecklistCapture()
+            && in_array($this->status, [InspectionStatus::Draft, InspectionStatus::InProgress], true)
+            && (int) $this->accepted_quantity === 0 && $this->ncr === null
+            && $this->relationLoaded('measurements')
+            && ! $this->measurements->contains(fn ($row) => $row->item_result === 'failed' || $row->is_pass === false || $row->evaluate() === false);
+        $trialOutputReady = ! $this->startup_trial_required || ($trialOutput
+            && (int) $trialOutput->trial_quantity === (int) $this->sample_size
+            && $trialOutput->id !== null);
+        $availableActions = [];
+
+        if ($canManage
+            && ! $this->usesFullPieceCapture()
+            && in_array($this->status, [InspectionStatus::Draft, InspectionStatus::InProgress], true)
+            && ! $trialOutput) {
+            $availableActions[] = 'cancel';
+        }
+
+        if ($canManage && $canReplaceChecklist) {
+            $availableActions[] = 'replace_checklist';
+        }
+
+        if ($canReview && $trialOutputReady && ! $this->usesFullPieceCapture()) {
+            $availableActions[] = $this->proposed_result === InspectionOutcome::Passed
+                ? 'review_pass'
+                : 'review_fail';
+        }
+
+        if ($this->relationLoaded('workOrderOutput')
+            && $this->workOrderOutput
+            && $viewer?->hasPermission('quality.ncr.manage')
+            && in_array($status, [InspectionStatus::Passed->value, InspectionStatus::Failed->value], true)) {
+            $availableActions[] = 'report_defect';
+        }
 
         return [
             'final_work_order_id' => $this->resource->usesFullPieceCapture() ? app('hashids')->encode((int) $this->entity_id) : null,
             'work_order_quality' => $this->resource->getAttribute('work_order_quality'),
             'counted_capture' => $this->counted_capture,
+            'quantity_result' => $this->quantity_result,
             'historical_held' => (bool) ($this->work_order_output_id && $this->workOrderOutput?->held_quantity > 0),
             'coverage_confirmed_at' => $this->coverage_confirmed_at?->toISOString(),
             'startup_trial_required' => (bool) $this->startup_trial_required,
@@ -37,15 +82,10 @@ class InspectionResource extends JsonResource
             'sampling_basis' => $this->sampling_basis,
             'capture_method' => $this->capture_method ?? 'measurement',
             'count_only_incoming' => $this->isCountOnlyIncoming(),
-            'can_manage' => (bool) $request->user()?->hasPermission('quality.inspections.manage'),
+            'can_manage' => $canManage,
             'replaces_inspection_id' => $this->replaces_inspection_id ? app('hashids')->encode((int) $this->replaces_inspection_id) : null,
-            'can_replace_checklist' => (bool) config('inspection.checklist_capture_enabled')
-                && ! $trialOutput && ! $this->counted_capture
-                && ! $this->usesChecklistCapture()
-                && in_array($this->status, [InspectionStatus::Draft, InspectionStatus::InProgress], true)
-                && (int) $this->accepted_quantity === 0 && $this->ncr === null
-                && $this->relationLoaded('measurements')
-                && ! $this->measurements->contains(fn ($row) => $row->item_result === 'failed' || $row->is_pass === false || $row->evaluate() === false),
+            'can_replace_checklist' => $canReplaceChecklist,
+            'available_actions' => $availableActions,
             'id' => $this->hash_id,
             'return_request_item_id' => $this->return_request_item_id ? HashId::encode((int) $this->return_request_item_id) : null,
             'inspection_number' => $this->inspection_number,
@@ -57,11 +97,7 @@ class InspectionResource extends JsonResource
                 : Str::headline((string) $this->status),
             // Mirrors InspectionService::review()'s guards so the checker actions
             // are hidden from the maker instead of failing with a 403 on click.
-            'can_review' => ($this->status instanceof \BackedEnum ? $this->status->value : $this->status) === InspectionStatus::AwaitingReview->value
-                && (bool) $request->user()?->hasPermission('quality.inspections.review')
-                && $this->inspector_id !== null
-                && (int) $this->inspector_id !== (int) $request->user()?->id
-                && ! $this->hasResultAuthor($request->user()),
+            'can_review' => $canReview,
             'proposed_result' => $this->proposed_result instanceof \BackedEnum ? $this->proposed_result->value : $this->proposed_result,
             'recorded_result' => $this->recorded_result instanceof \BackedEnum ? $this->recorded_result->value : $this->recorded_result,
             'problem_description' => $this->problem_description,

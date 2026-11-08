@@ -14,7 +14,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       <label
         htmlFor={cbId}
         className={cn(
-          'inline-flex min-h-6 min-w-6 max-xl:min-h-11 max-xl:min-w-11 items-center justify-center gap-2 cursor-pointer text-sm',
+          'inline-flex min-h-6 min-w-6 max-xl:min-h-11 max-xl:min-w-11 items-center justify-start gap-2 cursor-pointer text-sm',
           className,
         )}
       >

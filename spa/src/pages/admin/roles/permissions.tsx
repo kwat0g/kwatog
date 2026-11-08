@@ -33,6 +33,7 @@ import { SkeletonForm } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { focusRingInset } from '@/lib/focus';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 type StatusFilter = 'all' | 'granted' | 'ungranted' | 'modified';
 
@@ -68,6 +69,7 @@ function getActionBadge(slug: string) {
 
 export default function RolePermissionsPage() {
   const { id = '' } = useParams<{ id: string }>();
+  useRealtimeRecord('role', id || undefined);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 

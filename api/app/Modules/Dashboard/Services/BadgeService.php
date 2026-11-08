@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Models\ApprovalDelegation;
-use App\Common\Services\SettingsService;
 use App\Common\Services\ApprovalBoardService;
-use App\Common\Support\DepartmentScope;
-use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Common\Services\SettingsService;
+use App\Common\Support\CacheGeneration;
+use App\Common\Support\FailOpenCache;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
@@ -28,10 +28,10 @@ use App\Modules\HR\Services\SeparationService;
 use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Services\InventoryDashboardCache;
 use App\Modules\Inventory\Services\InventoryDashboardService;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Services\ContactInquiryInboxService;
-use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Services\LeaveApprovalPolicy;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
@@ -52,9 +52,9 @@ use App\Modules\Quality\Services\NcrSlaService;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
+use App\Modules\SupplyChain\Enums\VehicleStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Shipment;
-use App\Modules\SupplyChain\Enums\VehicleStatus;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Closure;
 use Illuminate\Support\Facades\Cache;
@@ -71,7 +71,8 @@ use Throwable;
  * the response.
  *
  * Per-user cache TTL is short (30s) because counts back UI hints; the SPA
- * also polls every 60s and the WebSocket layer invalidates instantly.
+ * invalidates on the private WebSocket signal and uses provider-managed
+ * visibility-aware catch-up only while delivery is degraded.
  *
  * Hardening (2026-08-08):
  *  - Settings thresholds + TTL are read ONCE per compute instead of once per
@@ -85,6 +86,8 @@ use Throwable;
  */
 class BadgeService
 {
+    private const VERSION_TTL_SECONDS = 604800; // Version metadata outlives badge snapshots, not forever.
+
     /** Badge counts disappear with the module that owns their screen. */
     private const FEATURE_BY_BADGE = [
         'purchase_requests' => 'purchasing',
@@ -136,12 +139,15 @@ class BadgeService
         'decision_center' => 'dss',
     ];
 
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly InventoryDashboardCache $inventoryCache,
+    ) {}
 
     /**
      * Build the per-slot badge map for the given user.
      *
-     * Cached per-user for the configured TTL, keyed by a global version integer
+     * Cached per-user for the configured TTL, keyed by a global generation token
      * so that a single call to touch() immediately invalidates every user's
      * cached map without needing to enumerate user IDs.
      *
@@ -151,18 +157,24 @@ class BadgeService
     {
         $ttl = $this->ttlSeconds();
         $version = self::version();
+        $inventoryVersion = $this->inventoryCache->version();
 
-        return Cache::remember(
-            "badges.user.{$user->id}.v{$version}",
+        return FailOpenCache::remember(Cache::store(),
+            "badges.user.{$user->id}.v{$version}.s{$inventoryVersion}",
             $ttl,
             fn () => $this->compute($user),
+            'dashboard.badges',
         );
     }
 
-    /** Current global cache version (defaults to 1). */
-    public static function version(): int
+    /** Current global cache generation token. */
+    public static function version(): string
     {
-        return (int) Cache::get('badges.version', 1);
+        return CacheGeneration::currentDefault(
+            'badges.version',
+            self::VERSION_TTL_SECONDS,
+            'dashboard.badges',
+        );
     }
 
     /**
@@ -171,11 +183,40 @@ class BadgeService
      */
     public static function touch(): void
     {
-        if (Cache::has('badges.version')) {
-            Cache::increment('badges.version');
-        } else {
-            Cache::forever('badges.version', 2); // 1 was the implicit default
-        }
+        // A reader can otherwise repopulate a badge snapshot from the old
+        // committed rows under a generation bumped by an uncommitted write.
+        // Unique generations also prevent an expired marker from reusing an
+        // old snapshot key after the marker's bounded TTL elapses.
+        DashboardCacheGeneration::touch();
+
+        self::rotateVersionAfterCommit();
+    }
+
+    /** Rotate the badge-only cache generation after the outer transaction commits. */
+    public static function rotateVersionAfterCommit(): ?bool
+    {
+        $rotated = null;
+        DB::afterCommit(static function () use (&$rotated): void {
+            // A failed write retires the old marker so readers cannot continue
+            // addressing snapshots from before the committed change.
+            $rotated = CacheGeneration::rotateDefault(
+                'badges.version',
+                self::VERSION_TTL_SECONDS,
+                'dashboard.badges',
+            );
+        });
+
+        return $rotated;
+    }
+
+    /** Rotate the badge snapshot namespace once the restored database is live. */
+    public static function invalidateForDatabaseRestore(): bool
+    {
+        return CacheGeneration::rotateDefault(
+            'badges.version',
+            self::VERSION_TTL_SECONDS,
+            'dashboard.badges.database_restore',
+        );
     }
 
     /** @return array<string, array{count: int, severity: string, label: string, description: string}> */
@@ -185,7 +226,7 @@ class BadgeService
         // per-badge severity overrides below cost nothing extra (one query
         // total, and the result is cached per-user for the TTL anyway).
         $settings = $this->settings->getGroup('dashboard');
-        $globalDanger  = $this->intSetting($settings, 'dashboard.badges.danger_threshold', 20);
+        $globalDanger = $this->intSetting($settings, 'dashboard.badges.danger_threshold', 20);
         $globalWarning = $this->intSetting($settings, 'dashboard.badges.warning_threshold', 0);
 
         $out = [];
@@ -203,24 +244,26 @@ class BadgeService
                 $count = (int) ($def['counter'])();
             } catch (Throwable $e) {
                 Log::debug("BadgeService.{$key} skipped: {$e->getMessage()}");
+
                 continue;
             }
             $out[$key] = [
-                'count'       => $count,
+                'count' => $count,
                 // Per-badge override wins; missing override falls back to the
                 // global thresholds (e.g. overdue_bills.danger=3 so a handful
                 // of overdue payables is red before the global 20).
-                'severity'    => $count > 0 && ($def['danger_when_positive'] ?? false)
+                'severity' => $count > 0 && ($def['danger_when_positive'] ?? false)
                     ? 'danger'
                     : $this->severity(
                         $count,
                         $this->intSetting($settings, "dashboard.badges.overrides.{$key}.danger", $globalDanger),
                         $this->intSetting($settings, "dashboard.badges.overrides.{$key}.warning", $globalWarning),
                     ),
-                'label'       => $def['label'],
+                'label' => $def['label'],
                 'description' => $def['description'],
             ];
         }
+
         return $out;
     }
 
@@ -259,9 +302,9 @@ class BadgeService
             // Reuse the board's filtered queue so sidebar count matches the cards shown there.
             'approvals' => [
                 'permissions' => ['approvals.board.view'],
-                'label'       => 'Approvals',
+                'label' => 'Approvals',
                 'description' => 'Approvals requiring your action',
-                'counter'     => fn (): int => (int) app(ApprovalBoardService::class)
+                'counter' => fn (): int => (int) app(ApprovalBoardService::class)
                     ->board($user)['summary']['my_action'],
             ],
 
@@ -269,7 +312,7 @@ class BadgeService
                 // Same slug that gates the action-center routes — a role that
                 // cannot open the queue must not carry its badge either.
                 'permissions' => ['dashboard.action_center.view'],
-                'label'       => 'Action Center',
+                'label' => 'Action Center',
                 'description' => 'Open items needing attention',
                 'counter' => fn (): int => (int) app(ActionCenterService::class)->for($user)['summary']['total'],
             ],
@@ -292,9 +335,9 @@ class BadgeService
             'purchase_requests' => [
                 // Match the list route; the counter separately requires approval permission.
                 'permissions' => ['purchasing.view'],
-                'label'       => 'Purchase Requests',
+                'label' => 'Purchase Requests',
                 'description' => 'Purchase requests awaiting approval',
-                'counter'     => fn (): int => $user->hasPermission('purchasing.pr.approve')
+                'counter' => fn (): int => $user->hasPermission('purchasing.pr.approve')
                     ? app(PurchaseRequestAccessPolicy::class)->pendingApprovalsFor($user)->count()
                     : 0,
             ],
@@ -332,9 +375,9 @@ class BadgeService
             'leaves' => [
                 'permissions' => ['leave.approve_dept', 'leave.approve_hr'],
                 'required_permissions' => ['leave.view'],
-                'label'       => 'Leaves',
+                'label' => 'Leaves',
                 'description' => 'Leave requests awaiting your approval',
-                'counter'     => fn (): int => app(LeaveApprovalPolicy::class)
+                'counter' => fn (): int => app(LeaveApprovalPolicy::class)
                     ->awaitingMyApprovalQuery(LeaveRequest::query(), $user)
                     ->count(),
             ],
@@ -343,9 +386,9 @@ class BadgeService
             'overtime' => [
                 'permissions' => ['attendance.ot.approve'],
                 'approval_permissions' => ['attendance.ot.approve'],
-                'label'       => 'Overtime',
+                'label' => 'Overtime',
                 'description' => 'Overtime requests awaiting your approval',
-                'counter'     => fn (): int => app(OvertimeDecisionPolicy::class)
+                'counter' => fn (): int => app(OvertimeDecisionPolicy::class)
                     ->awaitingMyApprovalQuery(OvertimeRequest::query(), $user)
                     ->count(),
             ],
@@ -363,16 +406,16 @@ class BadgeService
             // Maintenance > Maintenance WOs — open + in-progress work orders.
             'maintenance_wo' => [
                 'permissions' => ['maintenance.view'],
-                'label'       => 'Maintenance Work Orders',
+                'label' => 'Maintenance Work Orders',
                 'description' => 'Open maintenance work orders',
-                'counter'     => fn (): int => MaintenanceWorkOrder::query()->open()->count(),
+                'counter' => fn (): int => MaintenanceWorkOrder::query()->open()->count(),
             ],
             'maintenance_wo_unassigned' => [
                 'permissions' => ['maintenance.wo.assign'],
                 'required_permissions' => ['maintenance.view'],
-                'label'       => 'Unassigned',
+                'label' => 'Unassigned',
                 'description' => 'Open maintenance work orders without an assignee',
-                'counter'     => fn (): int => MaintenanceWorkOrder::query()->unassigned()->count(),
+                'counter' => fn (): int => MaintenanceWorkOrder::query()->unassigned()->count(),
             ],
 
             // Warehouse > Stock levels — items at/below reorder point.
@@ -380,30 +423,30 @@ class BadgeService
             // configured reorder threshold (0) should never appear as low-stock.
             'low_stock' => [
                 'permissions' => ['inventory.view'],
-                'label'       => 'Low Stock',
+                'label' => 'Low Stock',
                 'description' => 'Items at or below reorder point',
-                'counter'     => fn (): int => (int) app(InventoryDashboardService::class)->summary()['items_low_stock'],
+                'counter' => fn (): int => (int) app(InventoryDashboardService::class)->summary()['items_low_stock'],
             ],
             'out_of_stock' => [
                 'permissions' => ['inventory.view'],
-                'label'       => 'Out of Stock',
+                'label' => 'Out of Stock',
                 'description' => 'Active items with no usable stock',
-                'counter'     => fn (): int => (int) app(InventoryDashboardService::class)->summary()['items_out_of_stock'],
+                'counter' => fn (): int => (int) app(InventoryDashboardService::class)->summary()['items_out_of_stock'],
                 'danger_when_positive' => true,
             ],
 
             // Quality > NCRs — open / not-yet-closed reports.
             'ncrs' => [
                 'permissions' => ['quality.ncr.view'],
-                'label'       => 'NCRs',
+                'label' => 'NCRs',
                 'description' => 'Open non-conformance reports',
-                'counter'     => fn (): int => NonConformanceReport::query()->open()->count(),
+                'counter' => fn (): int => NonConformanceReport::query()->open()->count(),
             ],
             'overdue_ncrs' => [
                 'permissions' => ['quality.ncr.view'],
-                'label'       => 'Overdue NCRs',
+                'label' => 'Overdue NCRs',
                 'description' => 'Open NCRs at or past their severity response SLA',
-                'counter'     => fn (): int => app(NcrSlaService::class)->overdueQuery()->count(),
+                'counter' => fn (): int => app(NcrSlaService::class)->overdueQuery()->count(),
             ],
 
             'calibration_overdue' => [
@@ -432,9 +475,9 @@ class BadgeService
             // HR > Profile change requests — pending review queue.
             'profile_requests' => [
                 'permissions' => ['hr.employees.view', 'hr.profile_updates.finance_review'],
-                'label'       => 'Awaiting my action',
+                'label' => 'Awaiting my action',
                 'description' => 'Profile changes you can review',
-                'counter'     => fn (): int => app(ProfileUpdateRequestService::class)
+                'counter' => fn (): int => app(ProfileUpdateRequestService::class)
                     ->awaitingMyActionQuery($user)
                     ->count(),
             ],
@@ -454,9 +497,9 @@ class BadgeService
             // "Awaiting action" = draft (not yet submitted) + processing (computing / under review).
             'payroll' => [
                 'permissions' => ['payroll.periods.view'],
-                'label'       => 'Payroll',
+                'label' => 'Payroll',
                 'description' => 'Payroll periods awaiting action',
-                'counter'     => fn (): int => PayrollPeriod::query()
+                'counter' => fn (): int => PayrollPeriod::query()
                     ->whereIn('status', ['draft', 'processing'])
                     ->count(),
             ],
@@ -464,9 +507,9 @@ class BadgeService
             // HR > Training expiry — employee trainings that have expired.
             'training_expiry' => [
                 'permissions' => ['hr.employees.trainings.view'],
-                'label'       => 'Training Expiry',
+                'label' => 'Training Expiry',
                 'description' => 'Expired employee trainings',
-                'counter'     => function () use ($user): int {
+                'counter' => function () use ($user): int {
                     $query = EmployeeTraining::query()->expiredForActiveEmployees();
                     EmployeeCompetenceScope::trainings($query, $user);
 
@@ -478,9 +521,9 @@ class BadgeService
             // (Complements training_expiry, which counts already-expired rows.)
             'training_upcoming' => [
                 'permissions' => ['hr.employees.trainings.view'],
-                'label'       => 'Upcoming / expiring',
+                'label' => 'Upcoming / expiring',
                 'description' => 'Trainings upcoming or expiring soon',
-                'counter'     => function () use ($user): int {
+                'counter' => function () use ($user): int {
                     $query = EmployeeTraining::query()->upcomingOrExpiringForActiveEmployees();
                     EmployeeCompetenceScope::trainings($query, $user);
 
@@ -491,9 +534,9 @@ class BadgeService
             // HR > Recruitment — postings currently accepting applications.
             'open_postings' => [
                 'permissions' => ['hr.recruitment.view'],
-                'label'       => 'Recruitment',
+                'label' => 'Recruitment',
                 'description' => 'Open job postings',
-                'counter'     => fn (): int => JobPosting::query()
+                'counter' => fn (): int => JobPosting::query()
                     ->where('status', JobPostingStatus::Open->value)
                     ->count(),
             ],
@@ -502,40 +545,40 @@ class BadgeService
             'work_orders_awaiting_confirmation' => [
                 'permissions' => ['production.work_orders.view'],
                 'required_permissions' => ['production.view', 'production.wo.confirm'],
-                'label'       => 'Awaiting confirmation',
+                'label' => 'Awaiting confirmation',
                 'description' => 'Planned production work orders awaiting confirmation',
-                'counter'     => fn (): int => WorkOrder::query()->awaitingConfirmation()->count(),
+                'counter' => fn (): int => WorkOrder::query()->awaitingConfirmation()->count(),
             ],
             'work_orders' => [
                 'permissions' => ['production.work_orders.view'],
                 'required_permissions' => ['production.view'],
-                'label'       => 'Overdue',
+                'label' => 'Overdue',
                 'description' => 'Overdue production work orders',
-                'counter'     => fn (): int => WorkOrder::query()->overdue()->count(),
+                'counter' => fn (): int => WorkOrder::query()->overdue()->count(),
             ],
             'work_orders_due_soon' => [
                 'permissions' => ['production.work_orders.view'],
                 'required_permissions' => ['production.view'],
-                'label'       => 'Due soon',
+                'label' => 'Due soon',
                 'description' => 'Production work orders due within the configured window',
-                'counter'     => fn (): int => WorkOrder::query()->dueSoon(
+                'counter' => fn (): int => WorkOrder::query()->dueSoon(
                     (int) $this->settings->get('production.work_orders.due_soon_days', 3),
                 )->count(),
             ],
             'work_orders_paused' => [
                 'permissions' => ['production.work_orders.view'],
                 'required_permissions' => ['production.view', 'production.work_orders.lifecycle'],
-                'label'       => 'Paused',
+                'label' => 'Paused',
                 'description' => 'Production work orders awaiting resume or cancellation',
-                'counter'     => fn (): int => WorkOrder::query()->paused()->count(),
+                'counter' => fn (): int => WorkOrder::query()->paused()->count(),
             ],
 
             // Supply chain > Deliveries in transit needing an update.
             'deliveries' => [
                 'permissions' => ['supply_chain.view', 'supply_chain.deliveries.view'],
-                'label'       => 'Deliveries',
+                'label' => 'Deliveries',
                 'description' => 'Deliveries in transit',
-                'counter'     => fn (): int => Delivery::query()
+                'counter' => fn (): int => Delivery::query()
                     ->whereIn('status', ['loading', 'in_transit'])
                     ->count(),
             ],
@@ -552,17 +595,17 @@ class BadgeService
             // Overview > Notifications — unread notification count.
             'unread' => [
                 'permissions' => [],
-                'label'       => 'Notifications',
+                'label' => 'Notifications',
                 'description' => 'Unread notifications',
-                'counter'     => fn (): int => $user->unreadNotifications()->count(),
+                'counter' => fn (): int => $user->unreadNotifications()->count(),
             ],
 
             // Orders awaiting confirmation or a response; exclude unsent drafts.
             'pending_so' => [
                 'permissions' => ['crm.sales_orders.view'],
-                'label'       => 'Confirmation queue',
+                'label' => 'Confirmation queue',
                 'description' => 'Sales orders awaiting confirmation or response',
-                'counter'     => fn (): int => SalesOrder::query()
+                'counter' => fn (): int => SalesOrder::query()
                     ->awaitingConfirmation()
                     ->count(),
             ],
@@ -570,9 +613,9 @@ class BadgeService
             // CRM > Inquiries — public contact-form submissions not yet triaged.
             'inquiries' => [
                 'permissions' => ['crm.inquiries.manage'],
-                'label'       => 'New inquiries',
+                'label' => 'New inquiries',
                 'description' => 'New contact-form inquiries awaiting triage',
-                'counter'     => fn (): int => $user->hasPermission('crm.inquiries.view')
+                'counter' => fn (): int => $user->hasPermission('crm.inquiries.view')
                     ? app(ContactInquiryInboxService::class)
                         ->listQuery(['status' => ContactInquiryStatus::New->value])
                         ->count()
@@ -582,9 +625,9 @@ class BadgeService
             // CRM > Complaints — open / investigating customer complaints.
             'open_complaints' => [
                 'permissions' => ['crm.complaints.view'],
-                'label'       => 'Complaints',
+                'label' => 'Complaints',
                 'description' => 'Open complaints assigned to you',
-                'counter'     => fn (): int => $user->hasPermission('crm.complaints.manage')
+                'counter' => fn (): int => $user->hasPermission('crm.complaints.manage')
                     ? CustomerComplaint::query()->openAssignedTo((int) $user->id)->count()
                     : 0,
             ],
@@ -593,9 +636,9 @@ class BadgeService
             'pending_inspections' => [
                 'permissions' => ['quality.inspections.manage'],
                 'required_permissions' => ['quality.inspections.view'],
-                'label'       => 'Inspections to complete',
+                'label' => 'Inspections to complete',
                 'description' => 'Inspections awaiting completion',
-                'counter'     => fn (): int => Inspection::query()
+                'counter' => fn (): int => Inspection::query()
                     ->toInspect()
                     ->count(),
             ],
@@ -604,26 +647,26 @@ class BadgeService
                 'permissions' => ['quality.inspections.review'],
                 'required_permissions' => ['quality.inspections.view'],
                 'danger_when_positive' => true,
-                'label'       => 'Inspection reviews',
+                'label' => 'Inspection reviews',
                 'description' => 'Inspections awaiting your review',
-                'counter'     => fn (): int => Inspection::query()->awaitingReviewBy((int) $user->id)->count(),
+                'counter' => fn (): int => Inspection::query()->awaitingReviewBy((int) $user->id)->count(),
             ],
 
             // Warehouse > Receiving — goods receipts waiting on QC acceptance.
             'pending_grn' => [
                 'permissions' => ['inventory.grn.create'],
                 'required_permissions' => ['inventory.view'],
-                'label'       => 'Receiving (GRN)',
+                'label' => 'Receiving (GRN)',
                 'description' => 'Goods receipts awaiting QC',
-                'counter'     => fn (): int => GoodsReceiptNote::query()->pendingQc()->count(),
+                'counter' => fn (): int => GoodsReceiptNote::query()->pendingQc()->count(),
             ],
 
             // Warehouse > MRB / Quarantine — lots physically on hold.
             'mrb_holds' => [
                 'permissions' => ['inventory.mrb.view'],
-                'label'       => 'MRB / Quarantine',
+                'label' => 'MRB / Quarantine',
                 'description' => 'Lots on hold in quarantine',
-                'counter'     => fn (): int => MaterialReviewRecord::query()
+                'counter' => fn (): int => MaterialReviewRecord::query()
                     ->held()
                     ->count(),
             ],
@@ -631,9 +674,9 @@ class BadgeService
             // Supply chain > Shipments — mid-pipe inbound shipments.
             'shipments' => [
                 'permissions' => ['supply_chain.view', 'supply_chain.shipments.view'],
-                'label'       => 'Shipments',
+                'label' => 'Shipments',
                 'description' => 'Inbound shipments in transit, customs, or cleared',
-                'counter'     => fn (): int => Shipment::query()
+                'counter' => fn (): int => Shipment::query()
                     ->midPipe()
                     ->count(),
             ],
@@ -641,9 +684,9 @@ class BadgeService
             // MRP > Plans — active plans still reporting material shortages.
             'mrp_plans' => [
                 'permissions' => ['mrp.plans.view'],
-                'label'       => 'MRP Plans',
+                'label' => 'MRP Plans',
                 'description' => 'Active MRP plans with shortages',
-                'counter'     => fn (): int => MrpPlan::query()
+                'counter' => fn (): int => MrpPlan::query()
                     ->where('status', MrpPlanStatus::Active->value)
                     ->where('shortages_found', '>', 0)
                     ->count(),
@@ -652,9 +695,9 @@ class BadgeService
             // Returns (RMA) — non-terminal requests, matching the pending list filter.
             'pending_returns' => [
                 'permissions' => ['return_management.view'],
-                'label'       => 'Returns (RMA)',
+                'label' => 'Returns (RMA)',
                 'description' => 'Non-terminal return requests',
-                'counter'     => fn (): int => ReturnRequest::query()
+                'counter' => fn (): int => ReturnRequest::query()
                     ->when(
                         ReturnManagementAccess::customerReturnsOnly($user),
                         fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
@@ -666,31 +709,31 @@ class BadgeService
             // Finance > Invoices (AR) — personal drafts plus open receivables and payment review.
             'draft_invoices' => [
                 'permissions' => ['accounting.invoices.view'],
-                'label'       => 'Draft invoices',
+                'label' => 'Draft invoices',
                 'description' => 'Your draft invoices awaiting posting',
-                'counter'     => fn (): int => (int) $countInvoiceSignals()->draft,
+                'counter' => fn (): int => (int) $countInvoiceSignals()->draft,
             ],
 
             'unpaid_invoices' => [
                 'permissions' => ['accounting.invoices.view'],
-                'label'       => 'Unpaid',
+                'label' => 'Unpaid',
                 'description' => 'Open invoices with an unpaid balance',
-                'counter'     => fn (): int => (int) $countInvoiceSignals()->unpaid,
+                'counter' => fn (): int => (int) $countInvoiceSignals()->unpaid,
             ],
 
             'overdue_invoices' => [
                 'permissions' => ['accounting.invoices.view'],
-                'label'       => 'Overdue',
+                'label' => 'Overdue',
                 'description' => 'Open invoices past their due date',
-                'counter'     => fn (): int => (int) $countInvoiceSignals()->overdue,
+                'counter' => fn (): int => (int) $countInvoiceSignals()->overdue,
             ],
 
             'payment_review_invoices' => [
                 'permissions' => ['accounting.invoices.collect'],
                 'required_permissions' => ['accounting.invoices.view'],
-                'label'       => 'Payment review',
+                'label' => 'Payment review',
                 'description' => 'Customer payments awaiting Finance verification',
-                'counter'     => fn (): int => $user->role?->slug === 'system_admin'
+                'counter' => fn (): int => $user->role?->slug === 'system_admin'
                     ? 0
                     : (int) $countInvoiceSignals()->payment_review,
             ],
@@ -698,39 +741,39 @@ class BadgeService
             // Finance > Bills (AP) — payable bills past their due date.
             'overdue_bills' => [
                 'permissions' => ['accounting.bills.view'],
-                'label'       => 'Overdue',
+                'label' => 'Overdue',
                 'description' => 'Overdue bills payable',
-                'counter'     => fn (): int => (int) $countBillSignals()->overdue,
+                'counter' => fn (): int => (int) $countBillSignals()->overdue,
             ],
 
             'unpaid_bills' => [
                 'permissions' => ['accounting.bills.view'],
-                'label'       => 'Unpaid',
+                'label' => 'Unpaid',
                 'description' => 'Open bills with an unpaid balance',
-                'counter'     => fn (): int => (int) $countBillSignals()->unpaid,
+                'counter' => fn (): int => (int) $countBillSignals()->unpaid,
             ],
 
             'due_soon_bills' => [
                 'permissions' => ['accounting.bills.view'],
-                'label'       => 'Due soon',
+                'label' => 'Due soon',
                 'description' => 'Open bills due within 3 days',
-                'counter'     => fn (): int => (int) $countBillSignals()->due_soon,
+                'counter' => fn (): int => (int) $countBillSignals()->due_soon,
             ],
 
             // Finance > Budgeting — submitted budgets awaiting a checker.
             'pending_budgets' => [
                 'permissions' => ['budgeting.view'],
-                'label'       => 'Budgets',
+                'label' => 'Budgets',
                 'description' => 'Budgets awaiting your approval',
-                'counter'     => fn (): int => Budget::query()->awaitingApprovalFor($user)->count(),
+                'counter' => fn (): int => Budget::query()->awaitingApprovalFor($user)->count(),
             ],
 
             // Finance > Budgeting — transfer requests awaiting a checker.
             'pending_transfers' => [
                 'permissions' => ['budgeting.approve', 'budgeting.view'],
-                'label'       => 'Budget transfers',
+                'label' => 'Budget transfers',
                 'description' => 'Budget transfers awaiting approval',
-                'counter'     => fn (): int => BudgetTransfer::query()->awaitingApprovalFor($user)->count(),
+                'counter' => fn (): int => BudgetTransfer::query()->awaitingApprovalFor($user)->count(),
             ],
         ];
     }
@@ -746,6 +789,7 @@ class BadgeService
                 return true;
             }
         }
+
         return false;
     }
 
@@ -769,13 +813,19 @@ class BadgeService
                 return false;
             }
         }
+
         return true;
     }
 
     private function severity(int $count, int $danger, int $warning): string
     {
-        if ($count > $danger)  return 'danger';
-        if ($count > $warning) return 'warning';
+        if ($count > $danger) {
+            return 'danger';
+        }
+        if ($count > $warning) {
+            return 'warning';
+        }
+
         return 'neutral';
     }
 
@@ -801,6 +851,7 @@ class BadgeService
         if (! is_numeric($value) || (int) $value < 0) {
             return $default;
         }
+
         return (int) $value;
     }
 }

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AxiosError } from 'axios';
 import { dssApi } from '@/api/dss';
 import RecommendationDetails from './RecommendationDetails';
 import { recommendationFixture } from './test-fixtures';
@@ -9,6 +10,7 @@ import { recommendationFixture } from './test-fixtures';
 vi.mock('@/api/dss', () => ({
   dssApi: { act: vi.fn(), outcome: vi.fn(), events: vi.fn(), affectedRecords: vi.fn() },
 }));
+vi.mock('@/hooks/useRealtimeSignal', () => ({ useRealtimeSignal: vi.fn() }));
 
 describe('RecommendationDetails', () => {
   beforeEach(() => {
@@ -61,8 +63,29 @@ describe('RecommendationDetails', () => {
       expect(dssApi.act).toHaveBeenCalledWith(rec.id, 'dismiss', {
         reason: 'Already resolved',
         snoozed_until: undefined,
+        expected_version: rec.version,
       }),
     );
+  });
+
+  it('refreshes DSS queries after a stale action conflict', async () => {
+    const invalidateQueries = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    let finishRefresh!: () => void;
+    invalidateQueries.mockImplementation(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
+    const conflict = new AxiosError('Conflict');
+    Object.defineProperty(conflict, 'response', {
+      value: { status: 409, data: { code: 'dss_recommendation_state_conflict' } },
+    });
+    vi.mocked(dssApi.act).mockRejectedValue(conflict);
+    renderDetails(recommendationFixture({ status: 'open' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['dss'] }));
+    expect(screen.getByRole('button', { name: 'Working…' })).toBeDisabled();
+    finishRefresh();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Working…' })).not.toBeInTheDocument());
+    invalidateQueries.mockRestore();
   });
 
   it('lets future snoozes resume or dismiss, but not accept or snooze again', () => {
@@ -83,6 +106,14 @@ describe('RecommendationDetails', () => {
     const due = recommendationFixture({
       status: 'snoozed',
       snoozed_until: '2000-01-02T00:00:00Z',
+      available_actions: {
+        accept: true,
+        dismiss: true,
+        snooze: false,
+        execute: false,
+        start_follow_up: true,
+        record_outcome: false,
+      },
     });
     const { unmount } = renderDetails(due);
     expect(screen.getByRole('button', { name: 'Resume follow-up' })).toBeVisible();
@@ -122,6 +153,7 @@ describe('RecommendationDetails', () => {
       expect(dssApi.act).toHaveBeenCalledWith(rec.id, 'start_follow_up', {
         reason: undefined,
         snoozed_until: undefined,
+        expected_version: rec.version,
       }),
     );
   });
@@ -182,8 +214,8 @@ describe('RecommendationDetails', () => {
   });
 
   it('shows outcome entry after completion and records the measured result', async () => {
-    const rec = recommendationFixture();
-    renderDetails({ ...rec, status: 'executed' });
+    const rec = recommendationFixture({ status: 'executed' });
+    renderDetails(rec);
 
     fireEvent.change(screen.getByLabelText('Measured result'), {
       target: { value: '2 days saved' },

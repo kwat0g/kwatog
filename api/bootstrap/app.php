@@ -4,20 +4,34 @@ declare(strict_types=1);
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
-use App\Modules\Accounting\Exceptions\ClosedPeriodException;
-use App\Modules\Dashboard\Exceptions\DashboardLayoutConflictException;
-use App\Modules\Production\Exceptions\RoutingVersionConflictException;
+use App\Common\Middleware\CheckAnyPermission;
+use App\Common\Middleware\CheckApprovalPermission;
 use App\Common\Middleware\CheckFeature;
 use App\Common\Middleware\CheckPasswordExpiry;
 use App\Common\Middleware\CheckPermission;
 use App\Common\Middleware\EnsurePortalGuard;
 use App\Common\Middleware\ForceJsonResponse;
 use App\Common\Middleware\LogSlowQueries;
+use App\Common\Middleware\PreventAuthenticatedApiCaching;
 use App\Common\Middleware\RequestId;
+use App\Common\Middleware\RequireRecoveryAccess;
 use App\Common\Middleware\SanitizeInput;
 use App\Common\Middleware\SessionTimeout;
-use App\Providers\ModuleServiceProvider;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Attendance\Exceptions\OvertimeStateConflictException;
 use App\Modules\B2B\Middleware\CheckPortalPasswordChange;
+use App\Modules\Dashboard\Exceptions\DashboardLayoutConflictException;
+use App\Modules\DSS\DssServiceProvider;
+use App\Modules\DSS\Exceptions\RecommendationStateConflictException;
+use App\Modules\Leave\Exceptions\LeaveRequestStateConflictException;
+use App\Modules\Payroll\Exceptions\PayrollPeriodStateConflictException;
+use App\Modules\Production\Exceptions\RoutingVersionConflictException;
+use App\Modules\Production\Exceptions\WorkOrderAssignmentConflictException;
+use App\Modules\Purchasing\Exceptions\RequestForQuoteStateConflictException;
+use App\Modules\Purchasing\Exceptions\SupplierQuoteStateConflictException;
+use App\Modules\Quality\Exceptions\InspectionStateConflictException;
+use App\Modules\ReturnManagement\Exceptions\ReturnRequestStateConflictException;
+use App\Providers\ModuleServiceProvider;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Application;
@@ -34,13 +48,18 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
         apiPrefix: 'api/v1',
     )
+    // Keep Laravel's compatibility endpoint under the same authenticated
+    // API middleware as the SPA endpoint. The default `web`-only route lets
+    // inactive sessions reach channel callbacks without SessionTimeout.
+    ->withBroadcasting(__DIR__.'/../routes/channels.php', [
+        'middleware' => ['api', 'auth:sanctum'],
+    ])
     ->withProviders([
         ModuleServiceProvider::class,
-        \App\Modules\DSS\DssServiceProvider::class,
+        DssServiceProvider::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
         // Stateful SPA cookie auth (NEVER bearer tokens). This injects
@@ -57,6 +76,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // authenticated API handler can read or write restored data.
             PreventRequestsDuringMaintenance::class,
             RequestId::class,
+            PreventAuthenticatedApiCaching::class,
             ForceJsonResponse::class,
             SanitizeInput::class,
         ]);
@@ -64,8 +84,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Route-level aliases
         $middleware->alias([
             'permission' => CheckPermission::class,
-            'permission_any' => \App\Common\Middleware\CheckAnyPermission::class,
-            'approval_permission' => \App\Common\Middleware\CheckApprovalPermission::class,
+            'permission_any' => CheckAnyPermission::class,
+            'approval_permission' => CheckApprovalPermission::class,
             'feature' => CheckFeature::class,
             'session.timeout' => SessionTimeout::class,
             'password.expired' => CheckPasswordExpiry::class,
@@ -73,7 +93,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // B2B portal guard-type assertion — blocks web-session bleed into
             // the sanctum-driver portal guards (see EnsurePortalGuard).
             'portal' => EnsurePortalGuard::class,
-            'recovery.access' => \App\Common\Middleware\RequireRecoveryAccess::class,
+            'recovery.access' => RequireRecoveryAccess::class,
         ]);
 
         // Trust the reverse proxy (Nginx) for real client IP
@@ -94,6 +114,114 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(fn (Request $request) => $request->is('api/*') || $request->is('sanctum/*') || $request->expectsJson()
         );
 
+        $exceptions->render(function (PayrollPeriodStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (OvertimeStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (InspectionStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (LeaveRequestStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (WorkOrderAssignmentConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (ReturnRequestStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (SupplierQuoteStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (RequestForQuoteStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
+        $exceptions->render(function (RecommendationStateConflictException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
+        });
+
         // A violated business rule is a 422, not a server fault. Rendered in the
         // same envelope as a validation failure so the SPA surfaces the message
         // rather than a generic "Server Error" toast.
@@ -109,10 +237,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return response()->json(array_filter([
                 'message' => $e->getMessage(),
-                'errors'  => [$e->errorKey() => [$e->getMessage()]],
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
                 // Omitted entirely when the rule declares none, so the envelope
                 // is byte-identical for every existing caller.
-                'code'    => $e->errorCode(),
+                'code' => $e->errorCode(),
             ], static fn ($v) => $v !== null), 422);
         });
 
@@ -137,8 +265,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return response()->json(array_filter([
                 'message' => $e->getMessage(),
-                'errors'  => [$e->errorKey() => [$e->getMessage()]],
-                'code'    => $e->errorCode(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
             ], static fn ($v) => $v !== null), 403);
         });
 
@@ -195,6 +323,14 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $exceptions->respond(function ($response, Throwable $exception, Request $request) {
+            // Middleware cannot add response headers when an exception unwinds
+            // the API stack (for example auth/403/validation failures). Keep
+            // protected success and error representations under one policy.
+            if ($request->is('api/*')
+                && PreventAuthenticatedApiCaching::requiresAuthentication($request)) {
+                PreventAuthenticatedApiCaching::apply($response);
+            }
+
             if ($request->is('api/v1/recovery/*')) {
                 $response->headers->set('Cache-Control', 'no-store, private');
             }

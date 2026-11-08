@@ -12,6 +12,19 @@ class VehicleResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $canManage = $request->user()?->hasPermission('supply_chain.fleet.manage') ?? false;
+        $availableActions = [];
+        if ($canManage) {
+            if ($this->deleted_at) {
+                $availableActions = ['restore'];
+            } else {
+                $availableActions[] = 'update';
+                if ($this->asset_id === null && ! (bool) $this->has_active_delivery) {
+                    $availableActions[] = 'archive';
+                }
+            }
+        }
+
         return [
             'id'            => $this->hash_id,
             'plate_number'  => $this->plate_number,
@@ -27,6 +40,9 @@ class VehicleResource extends JsonResource
                 'name' => $this->asset->name,
             ] : null),
             'deleted_at'    => optional($this->deleted_at)?->toIso8601String(),
+            'version'       => $this->updated_at?->toISOString(),
+            'permissions'   => ['manage' => $canManage],
+            'available_actions' => $availableActions,
         ];
     }
 }

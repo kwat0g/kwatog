@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Models;
 
+use App\Common\Models\ApprovalRecord;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
@@ -11,6 +12,7 @@ use App\Modules\HR\Enums\SalaryAdjustmentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * REC-03 — a pending, maker-checker-gated salary change. The requested pay is
@@ -22,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SalaryAdjustment extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'employee_id',
@@ -48,6 +50,22 @@ class SalaryAdjustment extends Model
         'status'                    => SalaryAdjustmentStatus::class,
     ];
 
+    protected static function booted(): void
+    {
+        static::updating(static function (self $adjustment): void {
+            $original = $adjustment->getRawOriginal('updated_at');
+            if ($original === null) {
+                return;
+            }
+
+            // The legacy timestamps column stores whole seconds. Preserve a
+            // strictly increasing refresh version for rapid workflow writes.
+            $minimum = $adjustment->asDateTime($original)->startOfSecond()->addSecond();
+            $candidate = now()->startOfSecond();
+            $adjustment->updated_at = $candidate->greaterThan($minimum) ? $candidate : $minimum;
+        });
+    }
+
     /** Feeds the ApprovalService self-approval guard (resolveSubmitterUserId). */
     public function approvalSubmitterId(): ?int
     {
@@ -62,5 +80,12 @@ class SalaryAdjustment extends Model
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function approvalRecords(): MorphMany
+    {
+        return $this->morphMany(ApprovalRecord::class, 'approvable')
+            ->where('is_current', true)
+            ->orderBy('step_order');
     }
 }

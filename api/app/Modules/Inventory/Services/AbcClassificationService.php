@@ -77,6 +77,7 @@ class AbcClassificationService
                 // No usage data — everything is C.
                 $itemIds = $items->pluck('id')->toArray();
                 $this->bulkUpdate($itemIds, 'C');
+                app(ItemRealtimeService::class)->stageCatalog('updated');
                 return ['A' => 0, 'B' => 0, 'C' => $items->count()];
             }
 
@@ -101,6 +102,7 @@ class AbcClassificationService
             $this->bulkUpdate($aIds, 'A');
             $this->bulkUpdate($bIds, 'B');
             $this->bulkUpdate($cIds, 'C');
+            app(ItemRealtimeService::class)->stageCatalog('updated');
 
             return [
                 'A' => count($aIds),

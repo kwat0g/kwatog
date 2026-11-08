@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Auth;
 
 use App\Common\Models\AuditLog;
+use App\Modules\Admin\Events\UserAccessChanged;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Services\AuthService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -230,7 +232,7 @@ class AuthEventsAuditTest extends TestCase
         $request = Request::create('/api/v1/auth/change-password', 'POST');
         $request->setLaravelSession($session);
 
-        app(\App\Modules\Auth\Services\AuthService::class)->changePassword(
+        app(AuthService::class)->changePassword(
             $user,
             $original,
             'NewPass-9!',
@@ -239,6 +241,13 @@ class AuthEventsAuditTest extends TestCase
 
         $this->assertDatabaseHas('sessions', ['id' => $currentSessionId]);
         $this->assertDatabaseMissing('sessions', ['id' => $otherSessionId]);
+        $accessRefresh = DB::table('event_outbox')
+            ->where('event_type', UserAccessChanged::class)
+            ->sole();
+        $this->assertSame(
+            [$user->hash_id],
+            json_decode((string) $accessRefresh->payload, true, flags: JSON_THROW_ON_ERROR)['userHashIds'],
+        );
     }
 
     public function test_login_accepts_mixed_case_email_stored_by_an_older_writer(): void

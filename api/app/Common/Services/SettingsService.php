@@ -6,19 +6,31 @@ namespace App\Common\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
+use App\Common\Support\CacheGeneration;
+use App\Modules\Admin\Events\SettingsChanged;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Services\DashboardCacheGeneration;
+use App\Modules\Inventory\Services\InventoryDashboardCache;
+use App\Modules\Production\Services\ProductionDashboardService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Application-wide key/value settings backed by the `settings` table.
- * Cached in Redis (1 hour TTL); writes invalidate matching keys.
+ * Values use a one-hour TTL and per-key generations so late cache fills from
+ * before a committed write cannot become visible to later reads.
  */
 class SettingsService
 {
     private const CACHE_TTL = 3600; // 1 hour
+
+    private const CACHE_VERSION_TTL = 604800; // 7 days; cached settings expire within 1 hour.
+
+    private const CACHE_NAMESPACE_VERSION_KEY = 'settings:cache_namespace_version';
 
     /** A dependent feature may not be enabled while its source is disabled. */
     private const MODULE_DEPENDENCIES = [
@@ -43,7 +55,9 @@ class SettingsService
         // cache outage.
         try {
             $cacheMiss = new \stdClass;
-            $cached = Cache::get("settings:{$key}", $cacheMiss);
+            $version = $this->cacheNamespaceVersion().'.'.$this->cacheVersion($key);
+            $cacheKey = $this->cacheKey($key, $version);
+            $cached = Cache::get($cacheKey, $cacheMiss);
             if ($cached !== $cacheMiss) {
                 return $cached;
             }
@@ -54,7 +68,7 @@ class SettingsService
             }
 
             $value = json_decode($row->value, true) ?? $default;
-            Cache::put("settings:{$key}", $value, self::CACHE_TTL);
+            Cache::put($cacheKey, $value, self::CACHE_TTL);
 
             return $value;
         } catch (\Throwable $e) {
@@ -150,13 +164,7 @@ class SettingsService
             ]);
         }
 
-        try {
-            Cache::forget("settings:{$key}");
-            $this->forgetProductionDashboardCache($key);
-        } catch (\Throwable $e) {
-            // Cache layer may be unavailable; the next read will go straight
-            // to the DB so this is non-fatal.
-        }
+        $this->invalidateSettingCacheAfterCommit($key);
     }
 
     /**
@@ -243,20 +251,104 @@ class SettingsService
                 'reason' => mb_substr(trim($reason ?? '') ?: 'Admin settings update', 0, 2000),
                 'created_at' => $now,
             ]);
-        });
 
-        try {
-            Cache::forget("settings:{$key}");
-            $this->forgetProductionDashboardCache($key);
-        } catch (\Throwable $exception) {
-            // A cache outage must not roll back a committed settings change.
+            // Retire all setting-derived dashboard snapshots before the outbox
+            // callback can publish a refresh signal for active viewers.
+            $this->invalidateSettingCacheAfterCommit($key);
+            $this->stageSettingsRefresh($now->format('Y-m-d\\TH:i:s.uP'));
+        });
+    }
+
+    /**
+     * Retire the prior generation only after commit. A concurrent reader may
+     * still finish its old-generation fill, but subsequent reads cannot see it.
+     */
+    private function invalidateSettingCacheAfterCommit(string $key): void
+    {
+        if ($key === 'inventory.dashboard.consumption_history_days') {
+            app(InventoryDashboardCache::class)->invalidateAfterCommit();
         }
+
+        DB::afterCommit(function () use ($key): void {
+            try {
+                $this->rotateCacheGeneration($key);
+                DashboardCacheGeneration::touch();
+                DashboardCacheGeneration::touch('dashboard:finance');
+                $this->forgetProductionDashboardCache($key);
+            } catch (\Throwable $exception) {
+                // A cache outage must not roll back a committed settings change.
+                Log::warning('Settings-dependent cache invalidation failed after commit.', [
+                    'setting' => $key,
+                    'exception' => $exception,
+                ]);
+            }
+        });
+    }
+
+    private function stageSettingsRefresh(string $version): void
+    {
+        $transaction = DB::transactionLevel() > 0 && DB::connection()->getDriverName() === 'pgsql'
+            ? (string) DB::scalar('select txid_current()')
+            : (string) Str::uuid();
+
+        app(OutboxService::class)->recordCoalesced(
+            new SettingsChanged(action: 'updated', version: $version),
+            'settings-refresh:'.$transaction,
+        );
     }
 
     private function forgetProductionDashboardCache(string $key): void
     {
         if (str_starts_with($key, 'production.') || $key === 'alerts.mold.warning_ratio') {
-            Cache::forget('dashboard:production');
+            ProductionDashboardService::forgetCache();
+        }
+    }
+
+    private function cacheVersion(string $key): string
+    {
+        return CacheGeneration::currentDefault(
+            $this->cacheVersionKey($key),
+            self::CACHE_VERSION_TTL,
+            'settings',
+        );
+    }
+
+    private function cacheNamespaceVersion(): string
+    {
+        return CacheGeneration::currentDefault(
+            self::CACHE_NAMESPACE_VERSION_KEY,
+            self::CACHE_VERSION_TTL,
+            'settings.namespace',
+        );
+    }
+
+    private function cacheKey(string $key, string $version): string
+    {
+        return "settings:{$key}:v{$version}";
+    }
+
+    private function cacheVersionKey(string $key): string
+    {
+        return 'settings:version:'.hash('sha256', $key);
+    }
+
+    /** Retire both the old unversioned entry and any active versioned value. */
+    private function rotateCacheGeneration(string $key): void
+    {
+        CacheGeneration::rotateDefault(
+            $this->cacheVersionKey($key),
+            self::CACHE_VERSION_TTL,
+            'settings.'.hash('sha256', $key),
+        );
+
+        try {
+            // A legacy-key cleanup failure must not undo the version marker.
+            Cache::forget("settings:{$key}");
+        } catch (\Throwable $exception) {
+            Log::warning('Setting legacy cache cleanup failed after commit.', [
+                'setting_hash' => hash('sha256', $key),
+                'exception' => $exception::class,
+            ]);
         }
     }
 
@@ -380,14 +472,30 @@ class SettingsService
 
         // Clear only settings entries. Cache::flush() would also delete
         // sessions, queued jobs, rate-limit counters, and unrelated caches.
-        try {
-            DB::table('settings')->pluck('key')->each(static function (string $key): void {
-                // Do not return Cache::forget()'s boolean: Collection::each()
-                // treats false as a signal to stop iterating.
-                Cache::forget("settings:{$key}");
-            });
-        } catch (\Throwable $e) {
-            // Cache invalidation is best effort; reads fall back to the DB.
-        }
+        // Resolve keys after commit so newly inserted settings are included.
+        DB::afterCommit(function (): void {
+            try {
+                CacheGeneration::rotateDefault(
+                    self::CACHE_NAMESPACE_VERSION_KEY,
+                    self::CACHE_VERSION_TTL,
+                    'settings.namespace',
+                );
+                DB::table('settings')->pluck('key')->each(function (string $key): void {
+                    $this->rotateCacheGeneration($key);
+                });
+            } catch (\Throwable) {
+                // Cache invalidation is best effort; reads fall back to the DB.
+            }
+        });
+    }
+
+    /** Retire even settings whose rows were removed by the restored snapshot. */
+    public function invalidateForDatabaseRestore(): bool
+    {
+        return CacheGeneration::rotateDefault(
+            self::CACHE_NAMESPACE_VERSION_KEY,
+            self::CACHE_VERSION_TTL,
+            'settings.database_restore',
+        );
     }
 }

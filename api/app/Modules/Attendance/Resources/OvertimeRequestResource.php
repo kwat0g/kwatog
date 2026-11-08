@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Resources;
 
+use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,8 +13,16 @@ class OvertimeRequestResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $actionContext = $this->resource->getAttribute('realtime_action_context');
+        if (! is_array($actionContext) && $this->resource instanceof OvertimeRequest) {
+            $actionContext = app(OvertimeDecisionPolicy::class)->actionContext($this->resource, $request->user());
+        }
+
         return [
             'id'              => $this->hash_id,
+            'version'         => (int) $this->version,
+            'permissions'     => $this->when($actionContext !== null, $actionContext['permissions'] ?? []),
+            'available_actions' => $this->when($actionContext !== null, $actionContext['available_actions'] ?? []),
             'employee'        => $this->whenLoaded('employee', fn () => $this->employee ? [
                 'id'          => $this->employee->hash_id,
                 'employee_no' => $this->employee->employee_no,

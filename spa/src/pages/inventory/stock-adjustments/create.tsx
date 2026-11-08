@@ -143,7 +143,8 @@ export default function CreateStockAdjustmentPage() {
       void queryClient.invalidateQueries({ queryKey: ['inventory'] });
       toast.success(adjustment.status === 'pending'
         ? 'Adjustment submitted for Finance approval. Stock has not changed.' : 'Stock adjustment recorded.');
-      navigate(adjustment.status === 'pending' ? '/inventory/stock-adjustments?status=pending' : '/inventory/stock-levels?view=movements');
+            safety.allowNavigationAfterSave();
+navigate(adjustment.status === 'pending' ? '/inventory/stock-adjustments?status=pending' : '/inventory/stock-levels?view=movements');
     },
     onError: (error, values) => {
       setPendingValues(null);

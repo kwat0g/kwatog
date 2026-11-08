@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\PriceRequestStatus as Status;
+use App\Modules\CRM\Exceptions\PriceRequestStateConflictException;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\PriceRequest;
 use App\Modules\CRM\Models\Product;
@@ -49,11 +50,11 @@ class PriceNegotiationService
         }));
     }
 
-    public function offer(?PriceRequest $request, User $by, array $data): PriceRequest
+    public function offer(?PriceRequest $request, User $by, array $data, ?int $expectedVersion = null): PriceRequest
     {
         abort_unless($by->hasPermission('crm.price_agreements.propose'), 403);
 
-        return DB::transaction(function () use ($request, $by, $data): PriceRequest {
+        return DB::transaction(function () use ($request, $by, $data, $expectedVersion): PriceRequest {
             $productId = $request?->product_id ?? (int) $data['product_id'];
             $customerId = $request?->customer_id ?? (int) $data['customer_id'];
             app(PriceAgreementService::class)->lockPricingReferences([$productId], [$customerId]);
@@ -66,8 +67,11 @@ class PriceNegotiationService
             }
             if ($request) {
                 $row = PriceRequest::lockForUpdate()->findOrFail($request->id);
+                if ($expectedVersion !== null && $row->version !== $expectedVersion) {
+                    throw new PriceRequestStateConflictException('Proposal changed. Refresh and review the latest version before saving.');
+                }
                 if (! in_array($row->status, [Status::Requested, Status::PendingFinance, Status::Offered], true)) {
-                    throw new BusinessRuleException('This negotiation is closed. Create a new proposal.');
+                    throw new PriceRequestStateConflictException('This negotiation is no longer open. Refresh and review the latest status.');
                 }
             } else {
                 $this->assertNoOpen($customerId, $productId);
@@ -99,7 +103,7 @@ class PriceNegotiationService
                 throw new BusinessRuleException('Only a proposal awaiting Finance review can be approved.');
             }
             if ($row->version !== (int) ($data['version'] ?? 0)) {
-                throw new BusinessRuleException('Proposal changed. Refresh and review the latest version before approving.');
+                throw new PriceRequestStateConflictException('Proposal changed. Refresh and review the latest version before approving.');
             }
             if ($row->proposed_by === $by->id) {
                 abort(403, 'Proposal creators cannot approve their own terms.');
@@ -122,6 +126,7 @@ class PriceNegotiationService
                 }
             }
             $row->forceFill(['status' => Status::Offered, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'cost_review_signature' => $cost['signature']]);
+            $row->version++;
             $this->history($row, 'finance_approved', ['notes' => $data['notes']], $by->hash_id);
             $row->save();
             $this->notice($row, 'Finance approved this offer. Customer acceptance is required before applying it.', ['sales_officer', 'customer_service_officer'], actor: $by);
@@ -139,14 +144,14 @@ class PriceNegotiationService
             $row = PriceRequest::lockForUpdate()->findOrFail($request->id);
             abort_unless($row->customer_id === $by->customer_id, 404);
             if ($row->version !== $version) {
-                throw new BusinessRuleException('Offer changed. Refresh and review the latest terms.');
+                throw new PriceRequestStateConflictException('Offer changed. Refresh and review the latest terms.');
             }
             $target = $decision === 'accept' ? Status::Accepted : Status::Rejected;
             if ($row->status === $target) {
                 return $row->load(['product', 'customer']);
             }
             if ($row->status !== Status::Offered) {
-                throw new BusinessRuleException('This offer is not awaiting customer acceptance.');
+                throw new PriceRequestStateConflictException('This offer is no longer awaiting customer acceptance. Refresh and review the latest status.');
             }
             if ($decision === 'accept') {
                 $product = Product::active()->findOrFail($row->product_id);
@@ -178,6 +183,7 @@ class PriceNegotiationService
                 $row->agreement_id = $agreement->id;
             }
             $row->status = $target;
+            $row->version++;
             $row->responded_at = now();
             $this->history($row, $decision, ['version' => $version], $by->hash_id);
             $row->save();
@@ -187,16 +193,20 @@ class PriceNegotiationService
         }, 3));
     }
 
-    public function withdraw(PriceRequest $request, User $by, string $notes): PriceRequest
+    public function withdraw(PriceRequest $request, User $by, string $notes, ?int $expectedVersion = null): PriceRequest
     {
         abort_unless($by->hasPermission('crm.price_agreements.propose') || $by->hasPermission('crm.price_agreements.approve'), 403);
 
-        return DB::transaction(function () use ($request, $by, $notes): PriceRequest {
+        return DB::transaction(function () use ($request, $by, $notes, $expectedVersion): PriceRequest {
             $row = PriceRequest::lockForUpdate()->findOrFail($request->id);
+            if ($expectedVersion !== null && $row->version !== $expectedVersion) {
+                throw new PriceRequestStateConflictException('Proposal changed. Refresh and review the latest version before withdrawing.');
+            }
             if (! in_array($row->status, [Status::Requested, Status::PendingFinance, Status::Offered], true)) {
-                throw new BusinessRuleException('This negotiation is already closed.');
+                throw new PriceRequestStateConflictException('This negotiation is already closed. Refresh and review the latest status.');
             }
             $row->status = Status::Withdrawn;
+            $row->version++;
             $this->history($row, 'withdrawn', ['notes' => $notes], $by->hash_id);
             $row->save();
             $this->notice($row, 'Pricing proposal withdrawn: '.$notes, ['sales_officer', 'customer_service_officer', 'finance_officer'], actor: $by);
@@ -213,6 +223,7 @@ class PriceNegotiationService
                     $row = PriceRequest::lockForUpdate()->findOrFail($row->id);
                     if (in_array($row->status, [Status::PendingFinance, Status::Offered], true) && $row->offer['effective_to'] < today()->toDateString()) {
                         $row->status = Status::Expired;
+                        $row->version++;
                         $this->history($row, 'expired', ['notes' => 'The offer expired before customer acceptance. Contact Sales for new terms.'], app(SystemUserResolver::class)->user()->hash_id);
                         $row->save();
                         $this->notice($row, 'Pricing offer expired before customer acceptance.', ['sales_officer', 'customer_service_officer', 'finance_officer']);

@@ -8,6 +8,11 @@ function DirtyPage({ protectNavigation = true }: { protectNavigation?: boolean }
   const navigate = useNavigate();
   return <><Link to="/next">Leave</Link><button onClick={() => navigate('/next')}>Navigate</button></>;
 }
+function SavedPage() {
+  const allowNextNavigation = useUnsavedChangesGuard(true, true);
+  const navigate = useNavigate();
+  return <button onClick={() => { allowNextNavigation(); navigate('/next'); }}>Save and leave</button>;
+}
 afterEach(() => vi.restoreAllMocks());
 it('protects links and programmatic navigation in the current navigator', () => {
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
@@ -23,6 +28,13 @@ it('preserves existing forms without navigation protection opt-in', () => {
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   render(<MemoryRouter initialEntries={['/edit']}><Routes><Route path="/edit" element={<DirtyPage protectNavigation={false} />} /><Route path="/next" element={<p>Next page</p>} /></Routes></MemoryRouter>);
   fireEvent.click(screen.getByRole('link', { name: 'Leave' }));
+  expect(confirm).not.toHaveBeenCalled();
+  expect(screen.getByText('Next page')).toBeVisible();
+});
+it('lets a successfully saved form navigate without an unsaved-changes prompt', () => {
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  render(<MemoryRouter initialEntries={['/edit']}><Routes><Route path="/edit" element={<SavedPage />} /><Route path="/next" element={<p>Next page</p>} /></Routes></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: 'Save and leave' }));
   expect(confirm).not.toHaveBeenCalled();
   expect(screen.getByText('Next page')).toBeVisible();
 });

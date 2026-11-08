@@ -8,6 +8,7 @@ import ReturnCaseDetailPage from './detail';
 
 const permissions = vi.hoisted(() => new Set<string>());
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => permissions.has(permission) }) }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeRecord: vi.fn(), useReturnCasePortalRealtime: vi.fn() }));
 vi.mock('@/api/returnCases', () => ({ returnCasesApi: { show: vi.fn(), act: vi.fn(), resolutionOptions: vi.fn() } }));
 
 const record: ReturnCaseRecord = {
@@ -58,7 +59,7 @@ it('shows original order terms read-only in return case detail', async () => {
       acknowledgment: null, is_current: true, is_stale: false }],
   } });
   expect(screen.getByText('Origin order terms.')).toBeVisible();
-  expect(screen.getByRole('heading', { name: 'Agreed terms' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Previous order-specific terms' })).toBeVisible();
   expect(screen.queryByRole('button', { name: /publish|record external|acknowledge terms/i })).not.toBeInTheDocument();
 });
 

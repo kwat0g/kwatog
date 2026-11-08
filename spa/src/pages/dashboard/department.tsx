@@ -25,7 +25,7 @@ export default function DepartmentDashboardPage() {
   return (
     <RoleDashboardShell
       title="Department"
-      subtitle="Approvals, presence and headcount for the department you own."
+      subtitle="Approvals, attendance, and headcount."
       kpiCodes={[]}
       emptyTitle="No department blocks configured"
       emptyDescription="Your team's approvals, attendance and headcount appear here as you hold those reads."

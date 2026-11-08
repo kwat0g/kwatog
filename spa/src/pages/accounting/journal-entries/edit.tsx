@@ -22,6 +22,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { fromCents, toCents } from './money';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const amountSchema = z.string()
  .regex(/^\d+(\.\d{1,2})?$/, 'Use an amount with up to two decimals.')
@@ -105,9 +106,16 @@ export default function EditJournalEntryPage() {
    })),
   }),
   onSuccess: (entry) => {
-   qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+   qc.setQueryData(['accounting', 'journal-entries', entry.id], entry);
+   void invalidateRealtimeChange(
+    qc,
+    { entityType: 'journal_entry', entityId: entry.id },
+    [],
+    [['accounting', 'journal-entries', entry.id]],
+   );
    toast.success(`Draft ${entry.entry_number} updated.`);
-   navigate(`/accounting/journal-entries/${entry.id}`);
+      safety.allowNavigationAfterSave();
+navigate(`/accounting/journal-entries/${entry.id}`);
   },
   onError: (error) => applyServerValidationErrors(error, setError, 'Failed to update the journal entry.'),
  });

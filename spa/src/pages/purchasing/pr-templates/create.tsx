@@ -139,7 +139,8 @@ export default function PrTemplateFormPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['purchasing', 'pr-templates'] });
       toast.success(isEdit ? 'Template updated.' : 'Template created.');
-      navigate('/purchasing/pr-templates');
+            safety.allowNavigationAfterSave();
+navigate('/purchasing/pr-templates');
     },
     onError: (err) => {
       applyServerValidationErrors(err, setError, 'Failed to save the PR template.');

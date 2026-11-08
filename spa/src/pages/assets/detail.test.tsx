@@ -149,4 +149,24 @@ describe('asset operational association', () => {
     expect(await screen.findByText('Disposed assets cannot be associated with operational records.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Associate vehicle' })).not.toBeInTheDocument();
   });
+
+  it('hides Edit when the server says the disposed asset is immutable', async () => {
+    renderPage({
+      ...vehicleAsset(),
+      status: 'disposed',
+      available_actions: { can_edit: false },
+    });
+
+    expect(await screen.findByText('AST-001')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+
+  it('renders Edit when the server says the active asset is editable', async () => {
+    renderPage({
+      ...vehicleAsset(),
+      available_actions: { can_edit: true },
+    });
+
+    expect(await screen.findByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  });
 });

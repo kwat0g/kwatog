@@ -1,9 +1,10 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { SessionRetry } from './SessionRetry';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { FullPageLoader } from '@/components/ui/Spinner';
+import { realtimeIdentityKey } from '@/lib/realtime/identity';
 
 interface AuthGuardProps {
  children: ReactNode;
@@ -38,5 +39,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
  return <Navigate to="/change-password" state={{ from: location.pathname + location.search + location.hash }} replace />;
  }
 
- return <>{children}</>;
+ // Clearing QueryClient removes cached queries, but mounted observers can also
+ // retain placeholder data from their previous query key. Remount the guarded
+ // page tree whenever the server-derived access scope changes so no previous
+ // identity's placeholder or component-local record copy survives the switch.
+ return <Fragment key={realtimeIdentityKey(user)}>{children}</Fragment>;
 }

@@ -56,7 +56,12 @@ class SalesOrderRouteCoverageTest extends TestCase
 
         $chainEvent = DB::table('event_outbox')
             ->where('event_type', ChainStepAdvanced::class)
-            ->first();
+            ->get()
+            ->first(function (object $event): bool {
+                $payload = json_decode($event->payload, true, 512, JSON_THROW_ON_ERROR);
+
+                return ($payload['newStatus'] ?? null) === SalesOrderStatus::Cancelled->value;
+            });
         $this->assertNotNull($chainEvent);
         $chainPayload = json_decode($chainEvent->payload, true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame(SalesOrderStatus::Cancelled->value, $chainPayload['newStatus']);
@@ -97,6 +102,7 @@ class SalesOrderRouteCoverageTest extends TestCase
 
         $created->assertCreated()
             ->assertJsonPath('data.incoterm', 'FOB');
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $so = SalesOrder::query()
             ->where('so_number', $created->json('data.so_number'))
             ->firstOrFail();
@@ -108,6 +114,7 @@ class SalesOrderRouteCoverageTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.incoterm', 'CIF');
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
 
         $this->actingAs($actor)
             ->putJson("/api/v1/crm/sales-orders/{$so->hash_id}", [
@@ -120,17 +127,69 @@ class SalesOrderRouteCoverageTest extends TestCase
             ->assertJsonPath('data.delivery_terms', null)
             ->assertJsonPath('data.incoterm', null)
             ->assertJsonPath('data.notes', null);
+        $this->assertSame(3, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
 
         $this->actingAs($actor)
             ->deleteJson("/api/v1/crm/sales-orders/{$so->hash_id}")
             ->assertNoContent();
         $this->assertNotNull(SalesOrder::withTrashed()->findOrFail($so->id)->deleted_at);
+        $this->assertSame(4, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
 
         $this->actingAs($actor)
             ->patchJson("/api/v1/crm/sales-orders/{$so->hash_id}/restore")
             ->assertOk()
             ->assertJsonPath('data.id', $so->hash_id);
         $this->assertNull(SalesOrder::withTrashed()->findOrFail($so->id)->deleted_at);
+        $this->assertSame(5, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $actions = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->pluck('payload')
+            ->map(fn (string $eventPayload): string => json_decode($eventPayload, true, flags: JSON_THROW_ON_ERROR)['action'])
+            ->all();
+        $this->assertEqualsCanonicalizing(['created', 'updated', 'updated', 'deleted', 'restored'], $actions);
+    }
+
+    public function test_storing_a_sales_order_stages_one_chain_refresh_for_the_committed_record(): void
+    {
+        [$customer, $product] = $this->references();
+        $this->agreement($customer, $product);
+        $actor = $this->actor('crm.sales_orders.create');
+
+        $response = $this->actingAs($actor)
+            ->postJson('/api/v1/crm/sales-orders', $this->orderPayload($customer, $product, 'FOB'))
+            ->assertCreated();
+
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+        $chainEvent = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->firstOrFail();
+        $payload = json_decode($chainEvent->payload, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('sales_order', $payload['entityType']);
+        $this->assertSame($response->json('data.id'), $payload['entityHashId']);
+        $this->assertSame(SalesOrderStatus::Draft->value, $payload['newStatus']);
+    }
+
+    public function test_customer_portal_sales_order_refresh_maps_to_the_existing_draft_chain_step(): void
+    {
+        [$customer, $product] = $this->references();
+        $this->agreement($customer, $product);
+        $actor = $this->actor('crm.sales_orders.create');
+
+        $so = app(SalesOrderService::class)->create([
+            'customer_id' => $customer->id,
+            'date' => today()->toDateString(),
+            'submission_source' => 'customer_portal',
+            'items' => [[
+                'product_id' => $product->id,
+                'quantity' => '1.00',
+                'delivery_date' => today()->addDay()->toDateString(),
+            ]],
+        ], (int) $actor->id);
+
+        $this->assertSame(SalesOrderStatus::AwaitingConfirmation, $so->status);
+        $event = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->firstOrFail();
+        $payload = json_decode($event->payload, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(SalesOrderStatus::AwaitingConfirmation->value, $payload['newStatus']);
+        $this->assertSame('draft', $payload['activeStep']);
     }
 
     public function test_update_route_rejects_delivery_date_before_order_date(): void

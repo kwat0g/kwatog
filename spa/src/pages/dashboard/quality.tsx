@@ -7,7 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
+import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -22,6 +22,9 @@ import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { QC_KPIS } from '@/lib/dashboardKpis';
 import { chartColor } from '@/lib/chartPalette';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { usePermission } from '@/hooks/usePermission';
+import { useFeature } from '@/hooks/useFeature';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -287,16 +290,18 @@ function coverageVariant(
 /* ───────────────────────── Page component ───────────────────────── */
 
 export default function QcDashboard() {
+ const { can } = usePermission();
+ const qualityEnabled = useFeature('quality');
+ useRealtimeList('inspection', qualityEnabled && can('quality.inspections.view') ? 'visible' : undefined);
+ useRealtimeList('ncr', qualityEnabled && can('quality.ncr.view') ? 'visible' : undefined);
  const q = useQuery({
  queryKey: ['dashboard', 'quality'],
  queryFn: () => dashboardsApi.quality<QualityDashboardData>(),
- refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
  <DashboardShell<QualityDashboardData>
- title="QC Dashboard"
- subtitle="Live · refreshes every 60s"
+ title="Quality Control"
  query={q}
  refreshingQueryKey={['dashboard', 'quality']}
  header={<KpiStrip codes={QC_KPIS} compact />}

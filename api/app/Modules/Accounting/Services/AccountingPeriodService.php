@@ -14,6 +14,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 /**
  * OGAMI-001 — GL period-close lock.
@@ -166,7 +167,10 @@ class AccountingPeriodService
                 throw new BusinessRuleException(sprintf('Period %04d-%02d does not exist; nothing to reopen.', $year, $month));
             }
             if ($period->status !== AccountingPeriodStatus::Closed) {
-                throw new BusinessRuleException(sprintf('Only a closed period can be reopened (current status: %s).', $period->status->value));
+                throw new ConflictHttpException(sprintf(
+                    'This accounting period is no longer closed (current status: %s). Refresh before retrying.',
+                    $period->status->value,
+                ));
             }
 
             $period->status        = AccountingPeriodStatus::Reopened;

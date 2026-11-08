@@ -12,6 +12,7 @@ import { formatDate } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { deliveryStatusVariant } from '@/lib/statusVariants';
 import type { PortalDeliverySummary } from '@/types/b2b';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 type DeliveryFilters = { page: number; per_page: number; status?: string };
 
@@ -20,10 +21,12 @@ const DEFAULT_FILTERS: DeliveryFilters = { page: 1, per_page: 25 };
 export default function CustomerDeliveriesPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useUrlFilters<DeliveryFilters>(DEFAULT_FILTERS);
+  const queryKey = ['portal', 'customer', 'deliveries', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'customer', 'deliveries', filters],
+    queryKey,
     queryFn: () => customerPortalApi.listDeliveries(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined,
   });
 
   const columns: Column<PortalDeliverySummary>[] = [

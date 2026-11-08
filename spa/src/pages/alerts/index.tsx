@@ -1,6 +1,7 @@
 import { reportMutationError } from '@/lib/formErrors';
 /** Task A2 — Smart Alert Engine list page. */
 import { useState } from 'react';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -8,7 +9,7 @@ import {
  LuShieldCheck, LuClock, LuEye,
 } from '@/lib/icons';
 import { alertsApi } from '@/api/alerts';
-import type { Alert, AlertListParams, AlertSeverity, AlertType } from '@/types/alerts';
+import type { Alert, AlertListParams, AlertSeverity, AlertType, AlertUnreadCount } from '@/types/alerts';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -47,6 +48,57 @@ const severityVariant = (s: AlertSeverity): 'danger' | 'warning' | 'info' =>
 const severityIcon = (s: AlertSeverity) =>
  s === 'critical' ? LuTriangleAlert : s === 'warning' ? LuCircleAlert : LuInfo;
 
+interface AlertPage {
+ data: Alert[];
+ meta: {
+ current_page: number;
+ last_page: number;
+ per_page: number;
+ total: number;
+ from: number | null;
+ to: number | null;
+ };
+}
+
+function reconcileAlertResponse(queryClient: ReturnType<typeof useQueryClient>, updated: Alert): void {
+ let previous: Alert | undefined;
+ const listQueries = queryClient.getQueryCache().findAll({ queryKey: ['alerts'] });
+
+ for (const query of listQueries) {
+  const filters = query.queryKey[1];
+  const current = query.state.data as AlertPage | undefined;
+  if (!current || !Array.isArray(current.data) || !filters || typeof filters !== 'object') continue;
+  const matchingAlert = current.data.find((alert) => alert.id === updated.id);
+  if (!matchingAlert) continue;
+  previous ??= matchingAlert;
+
+  const alertFilters = filters as AlertListParams;
+  const stillMatches = (alertFilters.is_dismissed === undefined || alertFilters.is_dismissed === updated.is_dismissed)
+   && (alertFilters.is_read === undefined || alertFilters.is_read === updated.is_read);
+  const rows = stillMatches
+   ? current.data.map((alert) => alert.id === updated.id ? updated : alert)
+   : current.data.filter((alert) => alert.id !== updated.id);
+  const removed = rows.length !== current.data.length;
+
+  queryClient.setQueryData<AlertPage>(query.queryKey, {
+   ...current,
+   data: rows,
+   meta: removed ? {
+    ...current.meta,
+    total: Math.max(0, current.meta.total - 1),
+    from: current.meta.total <= 1 ? null : current.meta.from,
+    to: current.meta.total <= 1 ? null : Math.max(0, (current.meta.to ?? 1) - 1),
+   } : current.meta,
+  });
+ }
+
+ if (previous && !previous.is_read && !previous.is_dismissed && (updated.is_read || updated.is_dismissed)) {
+  queryClient.setQueryData<AlertUnreadCount>(['alerts', 'unread-count'], (count) =>
+   count ? { ...count, count: Math.max(0, count.count - 1) } : count,
+  );
+ }
+}
+
 export default function AlertsListPage() {
  const queryClient = useQueryClient();
  const { can } = usePermission();
@@ -54,13 +106,15 @@ export default function AlertsListPage() {
  page: 1, per_page: 50, is_dismissed: false,
  });
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['alerts', filters],
+  const queryKey = ['alerts', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => alertsApi.list(filters),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined,
  });
  const { data: options } = useQuery({
- queryKey: ['alerts', 'options'],
+ queryKey: ['alert-options'],
  queryFn: () => alertsApi.options(),
  staleTime: 5 * 60 * 1000,
  });
@@ -73,7 +127,8 @@ export default function AlertsListPage() {
 
  const dismiss = useMutation({
  mutationFn: (id: string) => alertsApi.dismiss(id),
- onSuccess: () => {
+ onSuccess: (updated) => {
+ reconcileAlertResponse(queryClient, updated);
  toast.success('Alert dismissed');
  queryClient.invalidateQueries({ queryKey: ['alerts'] });
  queryClient.invalidateQueries({ queryKey: ['alerts', 'unread-count'] });
@@ -83,7 +138,8 @@ export default function AlertsListPage() {
 
  const markRead = useMutation({
  mutationFn: (id: string) => alertsApi.markRead(id),
- onSuccess: () => {
+ onSuccess: (updated) => {
+ reconcileAlertResponse(queryClient, updated);
  queryClient.invalidateQueries({ queryKey: ['alerts'] });
  queryClient.invalidateQueries({ queryKey: ['alerts', 'unread-count'] });
  },

@@ -19,6 +19,7 @@ import { CanDo } from '@/components/guards/CanDo';
 import { permissionsApi } from '@/api/admin/permissions';
 import { userOverridesApi } from '@/api/admin/user-overrides';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeEvent } from '@/hooks/useRealtimeEvent';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
@@ -52,6 +53,18 @@ export function PermissionOverrides({
  const { can } = usePermission();
  const isSystemAdmin = useAuthStore((state) => state.user?.role?.slug === 'system_admin');
  const canManage = isSystemAdmin && can('admin.users.manage_permissions');
+
+ const refreshOverrides = () => {
+  void queryClient.invalidateQueries({ queryKey: ['admin', 'users', userId, 'overrides'] });
+  void queryClient.invalidateQueries({ queryKey: ['admin-user', userId] });
+ };
+ useRealtimeEvent(
+  can('admin.users.manage') ? `admin.user.${userId}` : '',
+  '.permission.override.changed',
+  refreshOverrides,
+  refreshOverrides,
+  refreshOverrides,
+ );
 
  const [showAdd, setShowAdd] = useState(false);
  const [includeDeleted, setIncludeDeleted] = useState(false);

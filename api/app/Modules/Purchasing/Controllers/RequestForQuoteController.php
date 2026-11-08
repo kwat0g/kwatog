@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Purchasing\Exceptions\RequestForQuoteStateConflictException;
+use App\Modules\Purchasing\Exceptions\SupplierQuoteStateConflictException;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RfqDocument;
@@ -104,6 +106,8 @@ class RequestForQuoteController
     {
         try {
             $result = $this->awards->award($rfq, (string) $request->validated('award_reason'), $request->validated('lines'), $request->user());
+        } catch (RequestForQuoteStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -124,6 +128,8 @@ class RequestForQuoteController
                 $request->validated('vendor_id') !== null ? (int) $request->validated('vendor_id') : null,
                 $request->user(),
             );
+        } catch (RequestForQuoteStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -137,6 +143,8 @@ class RequestForQuoteController
         $data = $request->validated();
         try {
             $quote = $this->quotes->save($rfq, (int) $data['vendor_id'], $data, true, null, $request->user());
+        } catch (SupplierQuoteStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -168,6 +176,8 @@ class RequestForQuoteController
     {
         try {
             $rfq = $action();
+        } catch (RequestForQuoteStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

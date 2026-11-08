@@ -13,6 +13,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -85,9 +86,15 @@ export default function CreateShipmentPage() {
  other_charges: data.other_charges || undefined,
  }),
  onSuccess: (shipment) => {
- qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments'] });
+ reconcileRealtimeMutationResponse(
+  qc,
+  { entityType: 'shipment', entityId: shipment.id },
+  ['supply-chain', 'shipments', shipment.id],
+  shipment,
+ );
  toast.success('Shipment created');
- navigate(`/supply-chain/shipments/${shipment.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/supply-chain/shipments/${shipment.id}`);
  },
  onError: (err) => {
  applyServerValidationErrors(err, setError, 'Failed to create shipment.');

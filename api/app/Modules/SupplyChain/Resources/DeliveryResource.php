@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Resources;
 
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
-use App\Modules\SupplyChain\Enums\DeliveryProofType;
-use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
-use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
 use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\SupplyChain\Enums\DeliveryAttemptReason;
+use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryProofType;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class DeliveryResource extends JsonResource
-// ADV7 — Proof of Delivery fields surfaced via receiver_* + proofs[].
+    // ADV7 — Proof of Delivery fields surfaced via receiver_* + proofs[].
 {
     public function toArray(Request $request): array
     {
@@ -28,10 +29,16 @@ class DeliveryResource extends JsonResource
         $activeProofCount = $this->relationLoaded('proofs')
             ? $this->proofs->whereNull('deleted_at')->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->count()
             : 0;
+        $canConfirm = $status === DeliveryStatus::Delivered
+            && $this->relationLoaded('proofs')
+            && $this->proofs->contains(fn ($proof) => ! $proof->trashed() && in_array($proof->proof_type, ['photo', 'signed_dr', 'customer_po_confirmation'], true))
+            && $this->blockingReturnCase === null;
+        $mayConfirm = $request->user()?->hasPermission('supply_chain.deliveries.confirm') ?? false;
         $transit = $this->cost_recognition_mode?->value === 'transit';
         $costSummary = function (string $kind) use ($request): array {
             $handoff = $this->costHandoffs->where('handoff_type', $kind)->sortByDesc('id')->first();
             $state = $handoff?->status?->value ?? 'pending';
+
             return [
                 'status' => $state, 'amount' => (string) ($handoff?->target_amount ?? '0.00'),
                 'message' => $handoff?->message,
@@ -40,8 +47,8 @@ class DeliveryResource extends JsonResource
         };
 
         return [
-            'id'                  => $this->hash_id,
-            'delivery_number'     => $this->delivery_number,
+            'id' => $this->hash_id,
+            'delivery_number' => $this->delivery_number,
             'cost_recognition_mode' => $this->cost_recognition_mode?->value ?? 'legacy',
             'stock_reservation_status' => $reservation?->status?->value ?? 'unreserved',
             'stock_reservation_batch_id' => $reservation?->hash_id,
@@ -57,32 +64,33 @@ class DeliveryResource extends JsonResource
             ])->all(),
             'cogs_handoff' => $this->when($transit, fn () => $costSummary('customer_cogs')),
             'loss_handoff' => $this->when($transit && $hasAttemptOutcome && $this->attemptOutcome->reconciled_at, fn () => $costSummary('unaccounted_loss')),
-            'status'              => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
-            'status_label'        => ($status = $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status))?->label() ?? (string) $this->status,
-            'can_confirm' => $this->whenLoaded('proofs', fn () => $status === DeliveryStatus::Delivered && $this->proofs->contains(fn ($proof) => ! $proof->trashed() && in_array($proof->proof_type, ['photo', 'signed_dr', 'customer_po_confirmation'], true)) && $this->blockingReturnCase === null),
+            'status' => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label' => ($status = $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status))?->label() ?? (string) $this->status,
+            'can_confirm' => $this->whenLoaded('proofs', fn () => $canConfirm),
+            'available_actions' => ['confirm' => $mayConfirm && $canConfirm],
             'can_cancel' => $status?->canTransitionTo(DeliveryStatus::Cancelled) ?? false,
-            'next_status'         => $nextStatus = $this->nextStatus($status),
-            'next_status_label'   => $nextStatus ? DeliveryStatus::from($nextStatus)->label() : null,
-            'scheduled_date'      => optional($this->scheduled_date)?->toDateString(),
+            'next_status' => $nextStatus = $this->nextStatus($status),
+            'next_status_label' => $nextStatus ? DeliveryStatus::from($nextStatus)->label() : null,
+            'scheduled_date' => optional($this->scheduled_date)?->toDateString(),
             'expected_delivery_date' => optional($this->expected_delivery_date)?->toDateString(),
             'carrier' => $this->carrier,
             'original_scheduled_date' => optional($this->original_scheduled_date)?->toDateString(),
-            'reschedule_count'    => (int) ($this->reschedule_count ?? 0),
-            'reschedules'         => $this->whenLoaded('reschedules', fn () => $this->reschedules->map(fn ($r) => [
-                'id'       => $r->hash_id,
+            'reschedule_count' => (int) ($this->reschedule_count ?? 0),
+            'reschedules' => $this->whenLoaded('reschedules', fn () => $this->reschedules->map(fn ($r) => [
+                'id' => $r->hash_id,
                 'from_date' => optional($r->from_date)?->toDateString(),
-                'to_date'  => optional($r->to_date)?->toDateString(),
-                'reason'   => $r->reason,
+                'to_date' => optional($r->to_date)?->toDateString(),
+                'reason' => $r->reason,
                 'rescheduled_by' => $r->relationLoaded('rescheduledBy') && $r->rescheduledBy ? [
-                    'id'   => $r->rescheduledBy->hash_id,
+                    'id' => $r->rescheduledBy->hash_id,
                     'name' => $r->rescheduledBy->name,
                 ] : null,
                 'created_at' => optional($r->created_at)?->toISOString(),
             ])->all()),
-            'departed_at'         => optional($this->departed_at)?->toISOString(),
-            'delivered_at'        => optional($this->delivered_at)?->toISOString(),
-            'confirmed_at'        => optional($this->confirmed_at)?->toISOString(),
-            'invoice_handoff'     => [
+            'departed_at' => optional($this->departed_at)?->toISOString(),
+            'delivered_at' => optional($this->delivered_at)?->toISOString(),
+            'confirmed_at' => optional($this->confirmed_at)?->toISOString(),
+            'invoice_handoff' => [
                 'status' => $this->invoice_handoff_status instanceof DeliveryInvoiceHandoffStatus
                     ? $this->invoice_handoff_status->value
                     : (string) $this->invoice_handoff_status,
@@ -92,7 +100,7 @@ class DeliveryResource extends JsonResource
                 'message' => $this->invoice_handoff_message,
                 'attempted_at' => optional($this->invoice_handoff_at)?->toISOString(),
             ],
-            'coc_handoff'         => [
+            'coc_handoff' => [
                 'status' => $this->coc_handoff_status instanceof DeliveryCocHandoffStatus
                     ? $this->coc_handoff_status->value
                     : (string) $this->coc_handoff_status,
@@ -102,20 +110,20 @@ class DeliveryResource extends JsonResource
                 'message' => $this->coc_handoff_message,
                 'attempted_at' => optional($this->coc_handoff_at)?->toISOString(),
             ],
-            'receipt_photo_url'   => $this->receipt_photo_path ? "/api/v1/supply-chain/deliveries/{$this->hash_id}/receipt-photo" : null,
-            'notes'               => $this->notes,
+            'receipt_photo_url' => $this->receipt_photo_path ? "/api/v1/supply-chain/deliveries/{$this->hash_id}/receipt-photo" : null,
+            'notes' => $this->notes,
             // ADV7 — Proof of Delivery receiver capture fields.
-            'receiver_name'       => $this->receiver_name,
-            'receiver_position'   => $this->receiver_position,
-            'received_at'         => optional($this->received_at)?->toISOString(),
-            'delivery_remarks'    => $this->delivery_remarks,
+            'receiver_name' => $this->receiver_name,
+            'receiver_position' => $this->receiver_position,
+            'received_at' => optional($this->received_at)?->toISOString(),
+            'delivery_remarks' => $this->delivery_remarks,
             'billing_hold' => $this->whenLoaded('blockingReturnCase', fn () => $this->blockingReturnCase ? [
                 'case_id' => $this->blockingReturnCase->hash_id,
                 'case_number' => $this->blockingReturnCase->case_number,
                 'message' => 'Resolve this problem report before confirming or billing the delivery.',
             ] : null),
             'can_report_attempt_outcome' => $canReportAttempt,
-            'attempt_outcome_reasons' => ($canReportAttempt || ($hasAttemptOutcome && ! $this->attemptOutcome->reconciled_at)) ? \App\Modules\SupplyChain\Enums\DeliveryAttemptReason::options() : [],
+            'attempt_outcome_reasons' => ($canReportAttempt || ($hasAttemptOutcome && ! $this->attemptOutcome->reconciled_at)) ? DeliveryAttemptReason::options() : [],
             'can_receive_truck_return' => $status === DeliveryStatus::ReturnPending
                 && $hasAttemptOutcome
                 && $this->attemptOutcome->reconciled_at === null
@@ -126,7 +134,7 @@ class DeliveryResource extends JsonResource
                 : null,
             'quantity_discrepancy' => $this->whenLoaded('quantityDiscrepancy', fn () => $this->quantityDiscrepancy
                 ? new DeliveryQuantityDiscrepancyResource($this->quantityDiscrepancy) : null),
-            'proofs'              => $this->whenLoaded('proofs', fn () => $this->proofs->map(function ($p) use ($status, $activeProofCount): array {
+            'proofs' => $this->whenLoaded('proofs', fn () => $this->proofs->map(function ($p) use ($status, $activeProofCount): array {
                 $archiveBlockReason = ! $p->trashed() && $p->proof_type === DeliveryProofType::LoadingPhoto->value && ! in_array($status, [DeliveryStatus::Scheduled, DeliveryStatus::Loading, DeliveryStatus::Cancelled], true)
                     ? 'Loading evidence cannot be archived after dispatch.' : null;
                 if (! $p->trashed() && $status === DeliveryStatus::Confirmed && $archiveBlockReason === null) {
@@ -138,105 +146,105 @@ class DeliveryResource extends JsonResource
                 }
 
                 return [
-                    'id'          => $p->hash_id,
-                    'proof_type'  => $p->proof_type,
-                    'file_name'   => $p->file_name,
-                    'file_size'   => $p->file_size,
-                    'mime_type'   => $p->mime_type,
-                    'is_image'    => $p->mime_type ? str_starts_with((string) $p->mime_type, 'image/') : false,
-                    'notes'       => $p->notes,
-                    'view_url'    => "/api/v1/supply-chain/deliveries/{$this->hash_id}/proofs/{$p->hash_id}/view",
-                    'deleted_at'  => optional($p->deleted_at)?->toISOString(),
+                    'id' => $p->hash_id,
+                    'proof_type' => $p->proof_type,
+                    'file_name' => $p->file_name,
+                    'file_size' => $p->file_size,
+                    'mime_type' => $p->mime_type,
+                    'is_image' => $p->mime_type ? str_starts_with((string) $p->mime_type, 'image/') : false,
+                    'notes' => $p->notes,
+                    'view_url' => "/api/v1/supply-chain/deliveries/{$this->hash_id}/proofs/{$p->hash_id}/view",
+                    'deleted_at' => optional($p->deleted_at)?->toISOString(),
                     'can_archive' => ! $p->trashed() && $archiveBlockReason === null,
                     'archive_block_reason' => $archiveBlockReason,
-                    'uploader'    => $p->relationLoaded('uploader') && $p->uploader ? [
-                        'id'   => $p->uploader->hash_id,
+                    'uploader' => $p->relationLoaded('uploader') && $p->uploader ? [
+                        'id' => $p->uploader->hash_id,
                         'name' => $p->uploader->name,
                     ] : null,
                     'uploaded_at' => optional($p->created_at)?->toISOString(),
                 ];
             })->all()),
-            'proof_count'         => $this->whenLoaded('proofs', fn () => $activeProofCount),
-            'sales_order'         => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
-                'id'        => $this->salesOrder->hash_id,
+            'proof_count' => $this->whenLoaded('proofs', fn () => $activeProofCount),
+            'sales_order' => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
+                'id' => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
-                'customer'  => $this->salesOrder->relationLoaded('customer') && $this->salesOrder->customer ? [
-                    'id'   => $this->salesOrder->customer->hash_id,
+                'customer' => $this->salesOrder->relationLoaded('customer') && $this->salesOrder->customer ? [
+                    'id' => $this->salesOrder->customer->hash_id,
                     'name' => $this->salesOrder->customer->name,
                 ] : null,
             ] : null),
             // Chain 1 — where the run sheet sends the truck, resolved once in
             // Delivery::resolvedDeliveryAddress() rather than re-derived here.
-            'delivery_address'        => $this->resolvedDeliveryAddress(),
+            'delivery_address' => $this->resolvedDeliveryAddress(),
             'delivery_contact_person' => $this->resolvedDeliveryContactPerson(),
-            'delivery_contact_phone'  => $this->resolvedDeliveryContactPhone(),
-            'vehicle'             => $this->whenLoaded('vehicle', fn () => $this->vehicle ? [
-                'id'           => $this->vehicle->hash_id,
+            'delivery_contact_phone' => $this->resolvedDeliveryContactPhone(),
+            'vehicle' => $this->whenLoaded('vehicle', fn () => $this->vehicle ? [
+                'id' => $this->vehicle->hash_id,
                 'plate_number' => $this->vehicle->plate_number,
-                'name'         => $this->vehicle->name,
+                'name' => $this->vehicle->name,
             ] : null),
-            'driver'              => $this->whenLoaded('driver', fn () => $this->driver ? [
-                'id'   => $this->driver->hash_id,
+            'driver' => $this->whenLoaded('driver', fn () => $this->driver ? [
+                'id' => $this->driver->hash_id,
                 'name' => $this->driver->name,
             ] : null),
-            'confirmer'           => $this->whenLoaded('confirmer', fn () => $this->confirmer ? [
-                'id'   => $this->confirmer->hash_id,
+            'confirmer' => $this->whenLoaded('confirmer', fn () => $this->confirmer ? [
+                'id' => $this->confirmer->hash_id,
                 'name' => $this->confirmer->name,
             ] : null),
-            'invoice'             => $this->whenLoaded('invoice', fn () => $this->invoice ? [
-                'id'             => $this->invoice->hash_id,
+            'invoice' => $this->whenLoaded('invoice', fn () => $this->invoice ? [
+                'id' => $this->invoice->hash_id,
                 'invoice_number' => $this->invoice->invoice_number,
-                'total_amount'   => (string) $this->invoice->total_amount,
-                'status'         => $this->invoice->status instanceof \BackedEnum ? $this->invoice->status->value : $this->invoice->status,
+                'total_amount' => (string) $this->invoice->total_amount,
+                'status' => $this->invoice->status instanceof \BackedEnum ? $this->invoice->status->value : $this->invoice->status,
             ] : null),
             // ADV3 — IATF 16949 outgoing shipment lot (one per delivery).
-            'shipment_lot'        => $this->whenLoaded('shipmentLot', fn () => $this->shipmentLot ? [
-                'id'           => $this->shipmentLot->hash_id,
-                'lot_number'   => $this->shipmentLot->lot_number,
-                'lot_date'     => optional($this->shipmentLot->lot_date)?->toDateString(),
-                'quantity'     => (int) $this->shipmentLot->quantity,
-                'product'      => $this->shipmentLot->product ? [
-                    'id'          => $this->shipmentLot->product->hash_id,
+            'shipment_lot' => $this->whenLoaded('shipmentLot', fn () => $this->shipmentLot ? [
+                'id' => $this->shipmentLot->hash_id,
+                'lot_number' => $this->shipmentLot->lot_number,
+                'lot_date' => optional($this->shipmentLot->lot_date)?->toDateString(),
+                'quantity' => (int) $this->shipmentLot->quantity,
+                'product' => $this->shipmentLot->product ? [
+                    'id' => $this->shipmentLot->product->hash_id,
                     'part_number' => $this->shipmentLot->product->part_number ?? null,
-                    'name'        => $this->shipmentLot->product->name ?? null,
+                    'name' => $this->shipmentLot->product->name ?? null,
                 ] : null,
-                'customer'     => $this->shipmentLot->customer ? [
-                    'id'   => $this->shipmentLot->customer->hash_id,
+                'customer' => $this->shipmentLot->customer ? [
+                    'id' => $this->shipmentLot->customer->hash_id,
                     'name' => $this->shipmentLot->customer->name ?? null,
                 ] : null,
                 'work_order_count' => is_array($this->shipmentLot->work_order_ids) ? count($this->shipmentLot->work_order_ids) : 0,
             ] : null),
             'preparation' => $this->preparation ?? [],
-            'items'               => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
-                'id'                  => $i->hash_id,
+            'items' => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
+                'id' => $i->hash_id,
                 'sales_order_item_id' => optional($i->salesOrderItem)?->hash_id,
-                'stock_movement_id'   => optional($i->stockMovement)?->hash_id,
+                'stock_movement_id' => optional($i->stockMovement)?->hash_id,
                 'stock_movements' => $i->relationLoaded('stockMovements') ? $i->stockMovements->map(fn ($movement): array => [
                     'id' => $movement->hash_id,
                     'quantity' => (string) $movement->quantity,
                     'lot_number' => $movement->lot_number,
                     'from_location' => $movement->fromLocation?->full_code,
                 ])->all() : [],
-                'inspection'          => $i->relationLoaded('inspection') && $i->inspection ? [
-                    'id'                => $i->inspection->hash_id,
+                'inspection' => $i->relationLoaded('inspection') && $i->inspection ? [
+                    'id' => $i->inspection->hash_id,
                     'inspection_number' => $i->inspection->inspection_number,
-                    'status'            => $i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status,
-                    'status_label'      => InspectionStatus::tryFrom((string) ($i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status))?->label() ?? (string) $i->inspection->status,
+                    'status' => $i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status,
+                    'status_label' => InspectionStatus::tryFrom((string) ($i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status))?->label() ?? (string) $i->inspection->status,
                 ] : null,
                 'product' => $i->salesOrderItem?->product ? [
                     'part_number' => $i->salesOrderItem->product->part_number,
                     'name' => $i->salesOrderItem->product->name,
                 ] : null,
                 'unit_of_measure' => $i->salesOrderItem?->product?->unit_of_measure,
-                'quantity'            => (float) $i->quantity,
+                'quantity' => (float) $i->quantity,
                 'quantity_dispatched' => (string) $i->quantity,
                 'customer_received_quantity' => $i->customer_received_quantity === null
                     ? null : (string) $i->customer_received_quantity,
-                'unit_price'          => (string) $i->unit_price,
+                'unit_price' => (string) $i->unit_price,
             ])->all()),
-            'created_at'          => optional($this->created_at)?->toISOString(),
-            'updated_at'          => optional($this->updated_at)?->toISOString(),
-            'deleted_at'          => optional($this->deleted_at)?->toIso8601String(),
+            'created_at' => optional($this->created_at)?->toISOString(),
+            'updated_at' => optional($this->updated_at)?->toISOString(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 
@@ -244,11 +252,18 @@ class DeliveryResource extends JsonResource
     {
         // Delivery attempts and final depot counts are a trusted service
         // boundary; a generic status option must never complete that ledger.
-        if (! $status || $status === DeliveryStatus::ReturnPending) return null;
-        foreach (DeliveryStatus::cases() as $candidate) {
-            if (in_array($candidate, [DeliveryStatus::ReturnPending, DeliveryStatus::Returned], true)) continue;
-            if ($status->canTransitionTo($candidate)) return $candidate->value;
+        if (! $status || $status === DeliveryStatus::ReturnPending) {
+            return null;
         }
+        foreach (DeliveryStatus::cases() as $candidate) {
+            if (in_array($candidate, [DeliveryStatus::ReturnPending, DeliveryStatus::Returned], true)) {
+                continue;
+            }
+            if ($status->canTransitionTo($candidate)) {
+                return $candidate->value;
+            }
+        }
+
         return null;
     }
 }

@@ -16,8 +16,11 @@ use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Support\BudgetConsumptionLevel;
 use App\Modules\Auth\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Throwable;
 
 class BudgetService
 {
@@ -68,10 +71,22 @@ class BudgetService
      * Update the complete draft contract. A caller that supplies line_items
      * replaces the set atomically; omitted line_items leaves it unchanged.
      */
-    public function updateDraft(Budget $budget, array $data, ?array $lineItems = null): Budget
+    public function updateDraft(Budget $budget, array $data, ?array $lineItems = null, ?string $expectedUpdatedAt = null): Budget
     {
-        return DB::transaction(function () use ($budget, $data, $lineItems): Budget {
+        return DB::transaction(function () use ($budget, $data, $lineItems, $expectedUpdatedAt): Budget {
             $locked = Budget::query()->lockForUpdate()->findOrFail($budget->getKey());
+
+            if ($expectedUpdatedAt !== null) {
+                try {
+                    $matchesVersion = Carbon::parse(trim($expectedUpdatedAt, '"'))->equalTo($locked->updated_at);
+                } catch (Throwable) {
+                    $matchesVersion = false;
+                }
+                if (! $matchesVersion) {
+                    throw new ConflictHttpException('Budget changed since you opened it. Reload and review the latest version before saving.');
+                }
+            }
+
             $this->assertStatus($locked, 'draft');
 
             $attributes = array_intersect_key($data, array_flip([
@@ -185,7 +200,9 @@ class BudgetService
 
     public function hasDifferentRoleFromSubmitter(Budget $budget, User $approver): bool
     {
-        $submitter = User::query()->find($budget->submitted_by);
+        $submitter = $budget->relationLoaded('submittedBy')
+            ? $budget->getRelation('submittedBy')
+            : User::query()->find($budget->submitted_by);
 
         return ApprovalDelegation::hasDifferentPermissionRole(
             $approver,
@@ -193,6 +210,42 @@ class BudgetService
             $submitter?->role_id === null ? null : (int) $submitter->role_id,
             [(int) $budget->submitted_by],
         );
+    }
+
+    /** Keep approval visibility and action availability aligned with the API. */
+    public function canReview(Budget $budget, User $approver): bool
+    {
+        return (string) $budget->status === 'submitted'
+            && (int) $budget->submitted_by !== (int) $approver->getKey()
+            && ApprovalDelegation::canActForPermission($approver, 'budgeting.approve', [(int) $budget->submitted_by])
+            && $this->hasDifferentRoleFromSubmitter($budget, $approver);
+    }
+
+    /** Server-computed actions for this record and the current API principal. */
+    public function availableActionsFor(Budget $budget, User $actor): array
+    {
+        $actions = [];
+        $status = (string) $budget->status;
+
+        if ($actor->hasPermission('budgeting.manage')) {
+            if ($status === 'draft') {
+                $actions[] = 'edit';
+                $actions[] = 'delete';
+                if ((string) $budget->fiscalYear?->status === 'active') {
+                    $actions[] = 'submit';
+                }
+            }
+            if (in_array($status, ['active', 'approved'], true)) {
+                $actions[] = 'close';
+            }
+        }
+
+        if ($this->canReview($budget, $actor)) {
+            $actions[] = 'approve';
+            $actions[] = 'reject';
+        }
+
+        return $actions;
     }
 
     private function notifyBudgetSubmitter(Budget $budget, string $type, string $title): void
@@ -486,14 +539,14 @@ class BudgetService
     {
         $from = (string) $budget->status;
         if (! in_array($to, self::TRANSITIONS[$from] ?? [], true)) {
-            throw new BusinessRuleException("Budget cannot transition from {$from} to {$to}.");
+            throw new ConflictHttpException("Budget changed to {$from}; reload it before trying this action again.");
         }
     }
 
     private function assertStatus(Budget $budget, string $status): void
     {
         if ((string) $budget->status !== $status) {
-            throw new BusinessRuleException("Only {$status} budgets can be edited.");
+            throw new ConflictHttpException("Budget changed to {$budget->status}; reload it before editing.");
         }
     }
 

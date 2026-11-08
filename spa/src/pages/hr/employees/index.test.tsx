@@ -61,14 +61,14 @@ describe('Employees list status tabs', () => {
     vi.mocked(employeesApi.statusCounts).mockResolvedValue(counts);
   });
 
-  it('shows status counts and requests the selected status, with All omitting the status filter', async () => {
+  it('shows status counts, starts on All, and requests the selected status', async () => {
     renderPage();
 
-    const activeTab = await screen.findByRole('tab', { name: 'Active 30' });
-    expect(activeTab).toHaveAttribute('aria-selected', 'true');
+    const allTab = await screen.findByRole('tab', { name: 'All 42' });
+    expect(allTab).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByRole('tab', { name: 'Suspended 0' })).toBeInTheDocument();
     await waitFor(() => expect(employeesApi.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ status: 'active' }),
+      expect.objectContaining({ status: undefined }),
     ));
 
     fireEvent.click(screen.getByRole('tab', { name: 'On Leave 4' }));
@@ -76,7 +76,7 @@ describe('Employees list status tabs', () => {
       expect.objectContaining({ status: 'on_leave' }),
     ));
 
-    fireEvent.click(screen.getByRole('tab', { name: 'All 42' }));
+    fireEvent.click(allTab);
     await waitFor(() => expect(employeesApi.list).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: undefined }),
     ));

@@ -76,6 +76,10 @@ class DatabaseSeeder extends Seeder
         // Demo records are deliberately opt-in.
         if (config('app.seed_demo_data')) {
             $this->call([
+                // Product BOMs already exist from the reference-data pass.
+                // Create the matching inventory identities before DemoDataSeeder
+                // establishes stock levels for the demo catalog.
+                ManufacturedProductInventorySeeder::class,
                 // DemoAccountSeeder first: DemoDataSeeder needs admin@ogami.test
                 // to confirm sales orders (the confirmed-SO → MRP → work-order
                 // path is what populates the Order-to-Cash chain). Accounts only
@@ -91,6 +95,8 @@ class DatabaseSeeder extends Seeder
                 DemoRfqBudgetSeeder::class,
                 DemoInspectionEvidenceSeeder::class,
                 DemoItemQualityPlanSeeder::class,
+                ThesisDemoSeeder::class,
+                ThesisItemQualityPlanSeeder::class,
             ]);
         }
     }

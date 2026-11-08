@@ -5,6 +5,7 @@ import { kpiApi } from '@/api/kpi';
 import { cn } from '@/lib/cn';
 import { SparkLine } from '@/components/charts/SparkLine';
 import { kpiDashboardLink } from '@/lib/dashboardKpis';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { kpiGridCols } from './DashboardShell';
 import type { KpiScorecardItem } from '@/types/dashboard/kpi';
 
@@ -73,6 +74,12 @@ interface KpiStripProps {
 }
 
 export function KpiStrip({ codes, className, linkByCode, compact }: KpiStripProps) {
+  useRealtimeSignal(
+    'kpi_snapshot_changed',
+    codes.length > 0 ? 'entity.kpi_snapshot.visible' : '',
+    '.kpi.snapshot.changed',
+  );
+
   const now = new Date();
   const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const year = prevMonth.getFullYear();

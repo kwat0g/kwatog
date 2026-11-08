@@ -84,7 +84,7 @@ class Machine extends Model
      */
     protected static function booted(): void
     {
-        static::updating(static function (Machine $machine): void {
+        static::updated(static function (Machine $machine): void {
             $from = $machine->getOriginal('status');
             $fromValue = $from instanceof MachineStatus ? $from->value : (string) $from;
             $toValue = $machine->status instanceof MachineStatus
@@ -92,7 +92,7 @@ class Machine extends Model
                 : (string) $machine->status;
             if ($fromValue !== MachineStatus::Breakdown->value
                 && $toValue === MachineStatus::Breakdown->value) {
-                ProductionSchedule::where('machine_id', $machine->id)
+                $schedules = ProductionSchedule::where('machine_id', $machine->id)
                     ->whereIn('status', [
                         ProductionScheduleStatus::Pending->value,
                         ProductionScheduleStatus::Confirmed->value,
@@ -101,7 +101,14 @@ class Machine extends Model
                         WorkOrderStatus::InProgress->value,
                         WorkOrderStatus::Paused->value,
                     ]))
-                    ->update(['status' => ProductionScheduleStatus::Superseded->value, 'reserves_capacity' => false]);
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($schedules as $schedule) {
+                    $schedule->update([
+                        'status' => ProductionScheduleStatus::Superseded->value,
+                        'reserves_capacity' => false,
+                    ]);
+                }
             }
         });
     }

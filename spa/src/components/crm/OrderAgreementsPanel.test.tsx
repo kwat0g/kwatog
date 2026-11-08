@@ -116,14 +116,16 @@ it('downloads the authorized attachment and releases its object URL', async () =
   click.mockRestore();
 });
 
-it('invalidates agreement and order detail caches after portal acknowledgment', async () => {
+it('reconciles the API response and invalidates order details after portal acknowledgment', async () => {
   vi.mocked(customerPortalApi.agreements).mockResolvedValue(payload([agreement()], { can_acknowledge: true }));
-  vi.mocked(customerPortalApi.acknowledgeAgreement).mockResolvedValue(payload([agreement()]));
+  const updated = payload([agreement()]);
+  vi.mocked(customerPortalApi.acknowledgeAgreement).mockResolvedValue(updated);
   const { client } = renderPanel({ orderId: 'order-hash', realm: 'customer' });
   const invalidate = vi.spyOn(client, 'invalidateQueries');
+  const setQueryData = vi.spyOn(client, 'setQueryData');
   fireEvent.click(await screen.findByRole('checkbox', { name: /reviewed the current terms/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Acknowledge terms' }));
   await waitFor(() => expect(customerPortalApi.acknowledgeAgreement).toHaveBeenCalledWith('order-hash', 'revision-hash'));
-  await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['order-agreements', 'customer', 'order-hash'] }));
+  await waitFor(() => expect(setQueryData).toHaveBeenCalledWith(['order-agreements', 'customer', 'order-hash'], updated));
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['portal', 'customer', 'order', 'order-hash'] });
 });

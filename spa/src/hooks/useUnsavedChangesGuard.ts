@@ -9,15 +9,19 @@
 // const { isDirty } = formState;
 // useUnsavedChangesGuard(isDirty && !mutation.isSuccess);
 
-import { useContext, useEffect } from 'react';
+import { useCallback, useContext, useEffect, useRef } from 'react';
 import { UNSAFE_NavigationContext, type Navigator } from 'react-router-dom';
 
 interface BlockableNavigator {
   block?: (listener: (transition: { retry: () => void }) => void) => () => void;
 }
 
-export function useUnsavedChangesGuard(when: boolean, protectNavigation = false): void {
+export function useUnsavedChangesGuard(when: boolean, protectNavigation = false): () => void {
   const { navigator } = useContext(UNSAFE_NavigationContext);
+  const allowNextNavigationRef = useRef(false);
+  const allowNextNavigation = useCallback(() => {
+    allowNextNavigationRef.current = true;
+  }, []);
 
   useEffect(() => {
     if (!when) return;
@@ -30,9 +34,17 @@ export function useUnsavedChangesGuard(when: boolean, protectNavigation = false)
     window.addEventListener('beforeunload', onBeforeUnload);
     const block = (navigator as unknown as BlockableNavigator).block;
     let unblock: (() => void) | undefined;
+    const consumeNavigationAllowance = () => {
+      if (!allowNextNavigationRef.current) return false;
+      allowNextNavigationRef.current = false;
+      return true;
+    };
     if (block) {
       unblock = block((transition) => {
-        if (window.confirm('You have unsaved changes. Leave this page?')) {
+        if (
+          consumeNavigationAllowance() ||
+          window.confirm('You have unsaved changes. Leave this page?')
+        ) {
           unblock?.();
           transition.retry();
         }
@@ -46,19 +58,19 @@ export function useUnsavedChangesGuard(when: boolean, protectNavigation = false)
       let approvedPop = false;
       const confirm = () => window.confirm('You have unsaved changes. Leave this page?');
       guarded.push = (...args) => {
-        if (confirm()) {
+        if (consumeNavigationAllowance() || confirm()) {
           originals.push(...args);
           lastIndex = window.history.state?.idx;
         }
       };
       guarded.replace = (...args) => {
-        if (confirm()) {
+        if (consumeNavigationAllowance() || confirm()) {
           originals.replace(...args);
           lastIndex = window.history.state?.idx;
         }
       };
       guarded.go = (...args) => {
-        if (confirm()) {
+        if (consumeNavigationAllowance() || confirm()) {
           approvedPop = true;
           originals.go(...args);
         }
@@ -71,7 +83,7 @@ export function useUnsavedChangesGuard(when: boolean, protectNavigation = false)
           nextIndex === lastIndex
         )
           return;
-        if (approvedPop || confirm()) {
+        if (approvedPop || consumeNavigationAllowance() || confirm()) {
           approvedPop = false;
           lastIndex = nextIndex;
           return;
@@ -91,4 +103,6 @@ export function useUnsavedChangesGuard(when: boolean, protectNavigation = false)
       unblock?.();
     };
   }, [navigator, when, protectNavigation]);
+
+  return allowNextNavigation;
 }

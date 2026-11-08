@@ -26,6 +26,8 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import { usePermission } from '@/hooks/usePermission';
@@ -63,10 +65,14 @@ export default function ApprovedSuppliersPage() {
  const [confirmRestore, setConfirmRestore] = useState<ApprovedSupplier | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['purchasing', 'approved-suppliers', filters, { trashed: archiveToTrashed(scope) }],
+ useRealtimeList('approved_supplier', 'visible');
+
+  const queryKey = ['purchasing', 'approved-suppliers', filters, { trashed: archiveToTrashed(scope) }] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => approvedSuppliersApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
 
  const { data: filterOptions } = useQuery({

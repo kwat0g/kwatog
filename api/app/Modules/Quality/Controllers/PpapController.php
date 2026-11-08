@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Enums\PpapElementStatus;
 use App\Modules\Quality\Enums\PpapLevel;
+use App\Modules\Quality\Exceptions\PpapStateConflictException;
 use App\Modules\Quality\Models\PpapElement;
 use App\Modules\Quality\Models\PpapSubmission;
 use App\Modules\Quality\Requests\StorePpapRequest;
@@ -23,9 +24,23 @@ class PpapController
 {
     public function __construct(private readonly PpapService $service) {}
 
+    private function stateConflict(PpapStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
-        return PpapSubmissionResource::collection($this->service->list($request->query()));
+        return PpapSubmissionResource::collection($this->service->list($request->query()))
+            ->additional([
+                'permissions' => [
+                    'create' => $request->user()?->hasPermission('quality.ppap.manage') ?? false,
+                ],
+            ]);
     }
 
     public function show(PpapSubmission $ppap): PpapSubmissionResource
@@ -39,7 +54,7 @@ class PpapController
         return (new PpapSubmissionResource($ppap))->response()->setStatusCode(201);
     }
 
-    public function update(Request $request, PpapSubmission $ppap): PpapSubmissionResource
+    public function update(Request $request, PpapSubmission $ppap): PpapSubmissionResource|JsonResponse
     {
         // The create route takes HashIDs and a validated level (StorePpapRequest).
         // This route used to take `product_id` as a raw `integer` and `ppap_level` as a
@@ -66,49 +81,59 @@ class PpapController
 
         try {
             return new PpapSubmissionResource($this->service->update($ppap, $data));
+        } catch (PpapStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
 
-    public function submit(Request $request, PpapSubmission $ppap): PpapSubmissionResource
+    public function submit(Request $request, PpapSubmission $ppap): PpapSubmissionResource|JsonResponse
     {
         try {
             return new PpapSubmissionResource($this->service->submit($ppap));
+        } catch (PpapStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
 
-    public function review(Request $request, PpapSubmission $ppap): PpapSubmissionResource
+    public function review(Request $request, PpapSubmission $ppap): PpapSubmissionResource|JsonResponse
     {
         try {
             return new PpapSubmissionResource($this->service->review($ppap, $request->user()));
+        } catch (PpapStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
 
-    public function approve(Request $request, PpapSubmission $ppap): PpapSubmissionResource
+    public function approve(Request $request, PpapSubmission $ppap): PpapSubmissionResource|JsonResponse
     {
         try {
             return new PpapSubmissionResource($this->service->approve($ppap, $request->user()));
+        } catch (PpapStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
 
-    public function reject(Request $request, PpapSubmission $ppap): PpapSubmissionResource
+    public function reject(Request $request, PpapSubmission $ppap): PpapSubmissionResource|JsonResponse
     {
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
         try {
             return new PpapSubmissionResource($this->service->reject($ppap, $data['reason'], $request->user()));
+        } catch (PpapStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
 
-    public function updateElement(Request $request, PpapSubmission $ppap, PpapElement $element): PpapElementResource
+    public function updateElement(Request $request, PpapSubmission $ppap, PpapElement $element): PpapElementResource|JsonResponse
     {
         abort_unless($element->ppap_submission_id === $ppap->id, 404);
         $data = $request->validate([
@@ -117,7 +142,9 @@ class PpapController
             'notes'         => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
         try {
-            return new PpapElementResource($this->service->updateElement($element, $data));
+            return new PpapElementResource($this->service->updateElement($element, $data, $ppap));
+        } catch (PpapStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

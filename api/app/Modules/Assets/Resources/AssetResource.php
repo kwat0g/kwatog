@@ -6,6 +6,7 @@ namespace App\Modules\Assets\Resources;
 
 use App\Common\Services\ApprovalService;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Assets\Enums\AssetStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -19,6 +20,11 @@ class AssetResource extends JsonResource
     {
         return [
             'id'                       => $this->hash_id,
+            'available_actions'        => [
+                'can_edit' => $request->user() !== null
+                    && $request->user()->can('assets.update')
+                    && $this->status !== AssetStatus::Disposed,
+            ],
             'asset_code'               => $this->asset_code,
             'name'                     => $this->name,
             'description'              => $this->description,

@@ -1,5 +1,5 @@
 import { client } from './client';
-import type { ActionCenterData } from '@/types/actionCenter';
+import type { ActionCenterData, ActionCenterTaskUpdate } from '@/types/actionCenter';
 
 export const actionCenterApi = {
   get: () => client
@@ -10,5 +10,7 @@ export const actionCenterApi = {
     action: 'claim' | 'unclaim' | 'acknowledge' | 'snooze' | 'resolve' | 'reopen';
     snoozed_until?: string;
     notes?: string;
-  }) => client.patch('/dashboards/action-center/tasks', data).then((response) => response.data.data),
+  }) => client
+    .patch<{ data: ActionCenterTaskUpdate[] }>('/dashboards/action-center/tasks', data)
+    .then((response) => response.data.data),
 };

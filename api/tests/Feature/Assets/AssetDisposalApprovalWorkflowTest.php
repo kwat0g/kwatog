@@ -97,6 +97,23 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
             ->count();
     }
 
+    public function test_asset_resource_projects_viewer_and_state_scoped_edit_availability(): void
+    {
+        $viewer = $this->user('system_admin');
+        $asset = $this->asset(['status' => AssetStatus::Disposed->value]);
+
+        $this->actingAs($viewer)
+            ->getJson('/api/v1/assets/'.$asset->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.can_edit', false);
+
+        $editable = $this->asset();
+        $this->actingAs($viewer)
+            ->getJson('/api/v1/assets/'.$editable->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.can_edit', true);
+    }
+
     public function test_full_chain_approval_disposes_the_asset_and_posts_the_je(): void
     {
         $asset = $this->asset();

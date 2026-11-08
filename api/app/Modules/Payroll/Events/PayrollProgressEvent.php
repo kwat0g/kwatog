@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Events;
 
+use App\Common\Events\Concerns\BroadcastsOnDedicatedQueue;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 
 /**
  * Broadcast on private channel "payroll.period.{hash_id}" so the SPA period
@@ -25,16 +29,22 @@ use Illuminate\Queue\SerializesModels;
  * PayrollProgressTracker caches each snapshot so a mid-run page load renders a
  * real bar immediately instead of waiting for the next broadcast.
  */
-class PayrollProgressEvent implements ShouldBroadcast
+class PayrollProgressEvent implements ShouldBroadcast, ShouldDispatchAfterCommit
 {
+    use BroadcastsOnDedicatedQueue;
     use Dispatchable, InteractsWithSockets, SerializesModels;
+
+    public readonly string $eventId;
 
     public function __construct(
         public PayrollPeriod $period,
         public int $processed,
         public int $total,
         public int $failures,
-    ) {}
+        ?string $eventId = null,
+    ) {
+        $this->eventId = $eventId ?? (string) Str::uuid();
+    }
 
     public function broadcastOn(): PrivateChannel
     {
@@ -53,14 +63,9 @@ class PayrollProgressEvent implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'period_id' => $this->period->hash_id,
-            'processed' => $this->processed,
-            'total'     => $this->total,
-            'failures'  => $this->failures,
-            'percent'   => $this->total > 0 ? (int) round(($this->processed / $this->total) * 100) : 0,
-            // The final emit carries the terminal status, so a subscribed page
-            // leaves the processing state immediately rather than on next poll.
-            'status'    => $this->period->status?->value,
+            'refresh' => true,
+            'action' => $this->period->status === PayrollPeriodStatus::Processing ? 'progress' : 'completed',
+            'event_id' => $this->eventId,
         ];
     }
 }

@@ -10,15 +10,15 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 /**
- * Recover a payroll-period scheduler tick missed inside the active cutoff
- * window. It never creates periods outside their current half-month window;
+ * Recover a missed auto-period scheduler tick and queue any ended auto-created
+ * cutoff. It never creates periods outside their current half-month window;
  * older windows require an explicit --year/--month operator backfill.
  */
 class ReconcileAutoPayrollPeriods extends Command
 {
     protected $signature = 'payroll:reconcile-auto-periods';
 
-    protected $description = 'Recover missing auto-created payroll periods within the active cutoff window';
+    protected $description = 'Recover auto-created payroll periods and queue ended cutoffs';
 
     public function handle(AutoPayrollPeriodService $service): int
     {
@@ -30,7 +30,10 @@ class ReconcileAutoPayrollPeriods extends Command
             $period = $service->createForSecondHalfOfMonth($now->year, $now->month);
             if ($period !== null) {
                 $created++;
-                if ($period->fresh()->status !== PayrollPeriodStatus::Processing) {
+                $fresh = $period->fresh();
+                $stillInCutoff = $fresh->period_end->copy()->startOfDay()->gte($now->copy()->startOfDay());
+                if ($fresh->status !== PayrollPeriodStatus::Processing
+                    && ! ($fresh->status === PayrollPeriodStatus::Draft && $stillInCutoff)) {
                     $this->error("Payroll period #{$period->id} exists but its durable compute request was not staged.");
                     $failures++;
                 }
@@ -41,14 +44,25 @@ class ReconcileAutoPayrollPeriods extends Command
             $period = $service->createForFirstHalfOfMonth($now->year, $now->month);
             if ($period !== null) {
                 $created++;
-                if ($period->fresh()->status !== PayrollPeriodStatus::Processing) {
+                $fresh = $period->fresh();
+                $stillInCutoff = $fresh->period_end->copy()->startOfDay()->gte($now->copy()->startOfDay());
+                if ($fresh->status !== PayrollPeriodStatus::Processing
+                    && ! ($fresh->status === PayrollPeriodStatus::Draft && $stillInCutoff)) {
                     $this->error("Payroll period #{$period->id} exists but its durable compute request was not staged.");
                     $failures++;
                 }
             }
         }
 
-        $this->info("Payroll period reconciliation complete: created={$created} failures={$failures}.");
+        $staging = $service->stageDueAutoPeriods($now);
+        $failures += $staging['failures'];
+
+        $this->info(sprintf(
+            'Payroll period reconciliation complete: created=%d staged=%d failures=%d.',
+            $created,
+            $staging['staged'],
+            $failures,
+        ));
 
         return $failures === 0 ? self::SUCCESS : self::FAILURE;
     }

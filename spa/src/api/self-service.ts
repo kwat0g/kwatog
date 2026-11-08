@@ -5,10 +5,12 @@ import type { Payroll } from '@/types/payroll';
 import type { EmployeeTraining } from '@/types/hr';
 import type {
  SelfServiceHome,
+ SelfServiceLoan,
  SelfServiceLoansResponse,
  SelfServiceProfile,
  ProfileUpdateRequestRecord,
  SelfServiceOvertimeResponse,
+ SelfServiceOvertimeMutationResponse,
  ApplyOvertimePayload,
  SelfServiceDocumentsResponse,
  SelfServiceLeaveType,
@@ -64,12 +66,15 @@ export const selfServiceApi = {
 
  applyLoan: (data: { loan_type: string; amount: string | number; periods: number; reason?: string }) =>
   client
-  .post<{ message: string; data: { id: string } }>('/hr/self-service/loans', data)
+  .post<{ message: string; data: { id: string; status: string; loan: SelfServiceLoan } }>('/hr/self-service/loans', data)
   .then((r) => r.data),
 
-  cancelLoan: (id: string) =>
+  cancelLoan: (id: string, version?: string | null) =>
   client
-  .delete<{ message: string; data: { id: string; status: string } }>(`/hr/self-service/loans/${id}/cancel`)
+  .delete<{ message: string; data: { id: string; status: string; loan: SelfServiceLoan } }>(
+   `/hr/self-service/loans/${id}/cancel`,
+   { headers: version ? { 'If-Match': version } : undefined },
+  )
   .then((r) => r.data),
 
  profile: () =>
@@ -96,21 +101,25 @@ export const selfServiceApi = {
 
  applyOvertime: (payload: ApplyOvertimePayload) =>
  client
- .post<{ message: string; data: { id: string; status: string } }>(
+ .post<SelfServiceOvertimeMutationResponse>(
  '/hr/self-service/overtime',
  payload,
  )
  .then((r) => r.data),
 
- cancelOvertime: (id: string) =>
+ cancelOvertime: (id: string, version?: number) =>
  client
- .delete<{ message: string }>(`/hr/self-service/overtime/${id}`)
+ .delete<SelfServiceOvertimeMutationResponse>(`/hr/self-service/overtime/${id}`, {
+  headers: version === undefined ? undefined : { 'If-Match': `"${version}"` },
+ })
  .then((r) => r.data),
 
- restoreOvertime: (id: string) =>
+ restoreOvertime: (id: string, version?: number) =>
  client
- .patch<{ message: string; data: { id: string; status: string } }>(
+ .patch<SelfServiceOvertimeMutationResponse>(
  '/hr/self-service/overtime/' + id + '/restore',
+ {},
+ { headers: version === undefined ? undefined : { 'If-Match': `"${version}"` } },
  )
  .then((r) => r.data),
 

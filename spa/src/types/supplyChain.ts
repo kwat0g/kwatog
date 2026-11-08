@@ -52,9 +52,12 @@ export interface ShipmentContainer {
  volume_cbm: number | null;
  notes: string | null;
  deleted_at: string | null;
+ updated_at?: string;
 }
 
 export interface ShipmentContainerData {
+ expected_version?: string;
+ expected_shipment_version?: string;
  container_number: string;
  seal_number?: string | null;
  size?: ContainerSize;
@@ -83,6 +86,17 @@ export interface Shipment {
  shipment_number: string;
  status: ShipmentStatus;
  status_label?: string;
+ version: string | null;
+ permissions: { manage: boolean };
+ available_actions: {
+  status_transitions: ShipmentStatus[];
+  can_manage_documents: boolean;
+  can_manage_containers: boolean;
+  can_update_metadata: boolean;
+  can_edit_landed_costs: boolean;
+  can_archive: boolean;
+  can_restore: boolean;
+ };
  carrier: string | null;
  vessel: string | null;
  container_number: string | null;
@@ -148,6 +162,7 @@ export interface Delivery extends DeliveryAttemptFields {
  cogs_handoff?: DeliveryCostHandoff;
  loss_handoff?: DeliveryCostHandoff;
  can_confirm?: boolean;
+ available_actions?: { confirm: boolean };
  billing_hold?: { case_id: string; case_number: string; message: string } | null;
  can_cancel?: boolean;
  preparation?: Array<{
@@ -237,6 +252,9 @@ export interface Vehicle {
  status: string;
  notes: string | null;
  deleted_at?: string | null;
+ version?: string | null;
+ permissions?: { manage: boolean };
+ available_actions?: string[];
 }
 
 /** ADV3 — IATF 16949 outgoing shipment lot. One Delivery → one Lot → N WO batches. */

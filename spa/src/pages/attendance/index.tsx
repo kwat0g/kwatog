@@ -38,25 +38,25 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
-import { formatTime, formatDate, localIsoDate } from '@/lib/formatDate';
+import { formatTime, formatDate } from '@/lib/formatDate';
 import { formatInt } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { showUndoToast } from '@/lib/undoToast';
 import { attendanceStatusVariant } from '@/lib/statusVariants';
 import type { Attendance, Shift } from '@/types/attendance';
 import type { Employee } from '@/types/hr';
 
-const today = localIsoDate();
 const DEFAULT_FILTERS: AttendanceListParams = {
   page: 1,
   per_page: 25,
   sort: 'date',
   direction: 'desc',
-  from: today,
-  to: today,
+  from: '',
+  to: '',
 };
 
 const attendanceFormSchema = z.object({
@@ -70,6 +70,12 @@ const attendanceFormSchema = z.object({
 });
 
 type AttendanceFormValues = z.infer<typeof attendanceFormSchema>;
+
+function localToday(): string {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 10);
+}
 
 function isoToTime(value: string | null): string {
   if (!value) return '';
@@ -93,6 +99,7 @@ function AttendanceCorrectionModal({
   onSaved: () => void;
 }) {
   const isEdit = attendance !== null;
+  const today = localToday();
   const form = useForm<AttendanceFormValues>({
     resolver: zodResolver(attendanceFormSchema),
     defaultValues: {
@@ -279,6 +286,7 @@ function AttendanceCorrectionModal({
 }
 
 export default function AttendancePage() {
+  const today = localToday();
   const { can } = usePermission();
   const canViewDepartments = can('hr.departments.view');
   const canEdit = can('attendance.edit');
@@ -298,10 +306,12 @@ export default function AttendancePage() {
     enabled: canViewDepartments,
   });
 
+  const queryKey = ['attendance', 'attendances', filters, archiveScope] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['attendance', 'attendances', filters, archiveScope],
+    queryKey,
     queryFn: () => attendancesApi.list({ ...filters, trashed: archiveToTrashed(archiveScope) }),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
   const { data: attendanceOptions } = useQuery({
     queryKey: ['attendance', 'attendances', 'options'],

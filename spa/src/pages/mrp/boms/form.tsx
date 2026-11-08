@@ -25,6 +25,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { usePermission } from '@/hooks/usePermission';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const identity = z.object({
   id: z.string(),
@@ -184,10 +185,12 @@ export default function BomFormPage({ mode }: { mode: 'create' | 'edit' }) {
       return mode === 'create' ? bomsApi.create(payload) : bomsApi.update(id, payload);
     },
     onSuccess: (bom) => {
-      queryClient.invalidateQueries({ queryKey: ['mrp', 'boms'] });
+      queryClient.setQueryData(['mrp', 'boms', 'detail', bom.id], bom);
+      void invalidateRealtimeChange(queryClient, { entityType: 'bom', entityId: bom.id });
       queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
       toast.success(`BOM version ${bom.version} saved.`);
-      navigate(`/mrp/boms/${bom.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/mrp/boms/${bom.id}`);
     },
     onError: (error) => {
       setLineSearch('');

@@ -19,6 +19,8 @@ import {
 } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
+import { purchaseOrderQueryKeys } from '@/lib/queryKeys/purchasing';
+import { invalidateRealtimeChange, reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -43,6 +45,8 @@ import { purchaseOrderStatusVariant } from '@/lib/statusVariants';
 import type {
   PurchaseOrderResponseStatus,
   PurchaseOrderResponseType,
+  PurchaseOrderResponse,
+  PurchaseOrder,
   RfqCommercialCharges,
   SupplierDispatchStatus,
 } from '@/types/purchasing';
@@ -101,12 +105,12 @@ export default function PurchaseOrderDetailPage() {
   const { can } = usePermission();
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['purchasing', 'purchase-orders', id],
+    queryKey: purchaseOrderQueryKeys.detail(id),
     queryFn: () => purchaseOrdersApi.show(id),
     enabled: !!id,
   });
   const { data: purchaseOrderOptions } = useQuery({
-    queryKey: ['purchasing', 'purchase-orders', 'options'],
+    queryKey: purchaseOrderQueryKeys.options,
     queryFn: purchaseOrdersApi.options,
     staleTime: 300_000,
   });
@@ -115,26 +119,24 @@ export default function PurchaseOrderDetailPage() {
   )?.label;
 
   // PU-13 — the API computes the action map (row scope + step-role match +
-  // self-approval guard). Before the detail response arrives, or if it's an
-  // older cached shape, fall back to the old status+permission guesses so the
-  // page still renders.
-  const actions = data?.actions ?? {
-    can_view: true,
+  // self-approval guard). An absent map is non-actionable until the server
+  // returns the viewer-scoped decision.
+  const actions = data?.available_actions ?? {
+    can_view: false,
     can_update: false,
     can_delete: false,
-    can_submit: data?.status === 'draft' && can('purchasing.po.create'),
-    can_approve: data?.status === 'pending_approval' && can('purchasing.po.approve'),
-    can_reject: data?.status === 'pending_approval' && can('purchasing.po.approve'),
-    can_send: data?.status === 'approved' && can('purchasing.po.send'),
-    can_cancel:
-      !['received', 'closed', 'cancelled'].includes(data?.status ?? '') &&
-      can('purchasing.po.create'),
-    can_close: data?.status === 'received' && can('purchasing.po.create'),
-    can_print: true,
+    can_submit: false,
+    can_approve: false,
+    can_reject: false,
+    can_send: false,
+    can_cancel: false,
+    can_close: false,
+    can_short_close: false,
+    can_print: false,
   };
 
   // Series C — Task C4. Real-time chain progress.
-  useChainProgress('purchase_order', id, ['purchasing', 'purchase-orders', id]);
+  useChainProgress('purchase_order', id, purchaseOrderQueryKeys.detail(id));
 
   const [confirm, setConfirm] = useState<'submit' | 'approve' | 'send' | 'close' | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -144,79 +146,112 @@ export default function PurchaseOrderDetailPage() {
   const [responseRejectOpen, setResponseRejectOpen] = useState(false);
   const [expectedDelivery, setExpectedDelivery] = useState('');
 
-  const invalidate = () =>
-    qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] });
+  const refreshPurchaseOrder = (fresh?: PurchaseOrder) => {
+    if (fresh) {
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'purchase_order', entityId: id },
+        purchaseOrderQueryKeys.detail(id),
+        fresh,
+      );
+      return;
+    }
+    void invalidateRealtimeChange(qc, { entityType: 'purchase_order', entityId: id });
+  };
+  const refreshPurchaseOrderResponse = (response: PurchaseOrderResponse) => {
+    const current = qc.getQueryData<PurchaseOrder>(purchaseOrderQueryKeys.detail(id));
+    if (current?.latest_response?.id === response.id) {
+      qc.setQueryData<PurchaseOrder>(purchaseOrderQueryKeys.detail(id), {
+        ...current,
+        latest_response: response,
+      });
+    }
+    refreshPurchaseOrder();
+  };
   const errMsg = (e: unknown, fallback: string) =>
     (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
+  const isStateConflict = (e: unknown) =>
+    e instanceof AxiosError
+    && e.response?.status === 409
+    && (e.response.data as { code?: string } | undefined)?.code === 'purchase_order_state_conflict';
+  const statusMutationError = (e: unknown, fallback: string) => {
+    if (isStateConflict(e)) {
+      setConfirm(null);
+      setRejectOpen(false);
+      setCancelOpen(false);
+      setShortCloseOpen(false);
+      refreshPurchaseOrder();
+    }
+    toast.error(errMsg(e, fallback));
+  };
 
   const submit = useMutation({
     mutationFn: () => purchaseOrdersApi.submit(id),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('PO submitted for approval.');
       setConfirm(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to submit PO.')),
+    onError: (e) => statusMutationError(e, 'Failed to submit PO.'),
   });
   const approve = useMutation({
     mutationFn: () => purchaseOrdersApi.approve(id),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('PO approved.');
       setConfirm(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to approve PO.')),
+    onError: (e) => statusMutationError(e, 'Failed to approve PO.'),
   });
   const reject = useMutation({
     mutationFn: (reason: string) => purchaseOrdersApi.reject(id, reason),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('PO rejected.');
       setRejectOpen(false);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to reject PO.')),
+    onError: (e) => statusMutationError(e, 'Failed to reject PO.'),
   });
   const send = useMutation({
     mutationFn: () => purchaseOrdersApi.send(id),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('PO marked as sent.');
       setConfirm(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to mark as sent.')),
+    onError: (e) => statusMutationError(e, 'Failed to mark as sent.'),
   });
   const cancel = useMutation({
     mutationFn: (reason: string) => purchaseOrdersApi.cancel(id, reason),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('PO cancelled.');
       setCancelOpen(false);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to cancel PO.')),
+    onError: (e) => statusMutationError(e, 'Failed to cancel PO.'),
   });
   const close = useMutation({
     mutationFn: () => purchaseOrdersApi.close(id),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('PO closed.');
       setConfirm(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to close PO.')),
+    onError: (e) => statusMutationError(e, 'Failed to close PO.'),
   });
   const shortClose = useMutation({
     mutationFn: (reason: string) => purchaseOrdersApi.shortClose(id, reason),
-    onSuccess: () => {
-      invalidate();
-      qc.invalidateQueries({ queryKey: ['mrp'] });
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('PO short-closed');
       setShortCloseOpen(false);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to short-close PO.')),
+    onError: (e) => statusMutationError(e, 'Failed to short-close PO.'),
   });
   const acknowledgeBudget = useMutation({
     mutationFn: () => purchaseOrdersApi.acknowledgeBudget(id),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('Budget warning acknowledged.');
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
@@ -224,9 +259,8 @@ export default function PurchaseOrderDetailPage() {
   // 2026-08-08 — post an auto-created draft bill straight from the chain view.
   const postBill = useMutation({
     mutationFn: (billId: string) => billsApi.postDraft(billId),
-    onSuccess: () => {
-      invalidate();
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+    onSuccess: (bill) => {
+      void invalidateRealtimeChange(qc, { entityType: 'bill', entityId: bill.id });
       toast.success('Draft bill posted to AP + GL.');
       setPostBillId(null);
     },
@@ -241,8 +275,8 @@ export default function PurchaseOrderDetailPage() {
   const updateDelivery = useMutation({
     mutationFn: (date: string) =>
       purchaseOrdersApi.update(id, { expected_delivery_date: date || undefined }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+    onSuccess: (updated) => {
+      refreshPurchaseOrder(updated);
       toast.success('Required delivery date updated.');
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to update delivery date.')),
@@ -250,8 +284,8 @@ export default function PurchaseOrderDetailPage() {
 
   const acceptResponse = useMutation({
     mutationFn: (responseId: string) => purchaseOrdersApi.acceptResponse(responseId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+    onSuccess: (response) => {
+      refreshPurchaseOrderResponse(response);
       toast.success('Supplier response accepted.');
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to accept supplier response.')),
@@ -260,8 +294,8 @@ export default function PurchaseOrderDetailPage() {
   const rejectResponse = useMutation({
     mutationFn: (reason: string) =>
       purchaseOrdersApi.rejectResponse(data!.latest_response!.id, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+    onSuccess: (response) => {
+      refreshPurchaseOrderResponse(response);
       toast.success('Supplier response rejected.');
       setResponseRejectOpen(false);
     },
@@ -392,7 +426,7 @@ export default function PurchaseOrderDetailPage() {
                 Close
               </Button>
             )}
-            {data?.can_short_close && can('purchasing.po.create') && (
+            {actions.can_short_close && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -402,19 +436,21 @@ export default function PurchaseOrderDetailPage() {
                 Short-close
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<LuFileText size={14} />}
-              onClick={() =>
-                void downloadAuthenticatedFile(purchaseOrdersApi.pdfUrl(id), {
-                  openInNewTab: true,
-                  errorMessage: 'Failed to generate purchase order PDF.',
-                })
-              }
-            >
-              PDF
-            </Button>
+            {actions.can_print && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<LuFileText size={14} />}
+                onClick={() =>
+                  void downloadAuthenticatedFile(purchaseOrdersApi.pdfUrl(id), {
+                    openInNewTab: true,
+                    errorMessage: 'Failed to generate purchase order PDF.',
+                  })
+                }
+              >
+                PDF
+              </Button>
+            )}
             {actions.can_cancel && (
               <Button
                 size="sm"
@@ -430,7 +466,7 @@ export default function PurchaseOrderDetailPage() {
         }
       />
       <div className="px-5 py-4 space-y-4">
-        {data.actions?.approve_blocked_by_vendor_sod && (
+        {actions.approve_blocked_by_vendor_sod && (
           <div
             className="rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm"
             role="status"
@@ -626,7 +662,7 @@ export default function PurchaseOrderDetailPage() {
                 </dd>
               </div>
             </dl>
-            {data.status === 'draft' && actions.can_update && (
+            {actions.can_update && (
               <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-subtle pt-3">
                 <Input
                   label="Required delivery date"
@@ -829,26 +865,31 @@ export default function PurchaseOrderDetailPage() {
                     <p className="text-secondary">{latestResponse.resolution_notes}</p>
                   </div>
                 )}
-                {latestResponse.status === 'pending' && can('purchasing.po.responses.resolve') && (
+                {(latestResponse.available_actions?.accept === true
+                  || latestResponse.available_actions?.reject === true) && (
                   <div className="flex justify-end gap-2 border-t border-subtle pt-3">
-                    <Button
-                      size="xs"
-                      variant="secondary"
-                      icon={<LuThumbsDown size={14} />}
-                      onClick={() => setResponseRejectOpen(true)}
-                      disabled={acceptResponse.isPending}
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant="primary"
-                      icon={<LuThumbsUp size={14} />}
-                      onClick={() => acceptResponse.mutate(latestResponse.id)}
-                      loading={acceptResponse.isPending}
-                    >
-                      Accept
-                    </Button>
+                    {latestResponse.available_actions?.reject === true && (
+                      <Button
+                        size="xs"
+                        variant="secondary"
+                        icon={<LuThumbsDown size={14} />}
+                        onClick={() => setResponseRejectOpen(true)}
+                        disabled={acceptResponse.isPending}
+                      >
+                        Reject
+                      </Button>
+                    )}
+                    {latestResponse.available_actions?.accept === true && (
+                      <Button
+                        size="xs"
+                        variant="primary"
+                        icon={<LuThumbsUp size={14} />}
+                        onClick={() => acceptResponse.mutate(latestResponse.id)}
+                        loading={acceptResponse.isPending}
+                      >
+                        Accept
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

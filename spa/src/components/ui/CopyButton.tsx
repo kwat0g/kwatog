@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { LuCheck, LuCopy } from '@/lib/icons';
+import { copyText } from '@/lib/clipboard';
 import { Button } from './Button';
 
 interface CopyButtonProps {
@@ -34,18 +35,14 @@ export function CopyButton({
   }, [copied]);
 
   const copy = async () => {
-    if (!navigator.clipboard) {
-      toast.error('Clipboard is unavailable in this browser.');
+    const copied = await copyText(value);
+    if (copied) {
+      setCopied(true);
+      toast.success(`${label} copied.`);
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      toast.success(`${label} copied.`);
-    } catch {
-      toast.error(`Could not copy ${label.toLowerCase()}.`);
-    }
+    toast.error(`Could not copy ${label.toLowerCase()}. Allow clipboard access for this site and try again.`);
   };
 
   return (

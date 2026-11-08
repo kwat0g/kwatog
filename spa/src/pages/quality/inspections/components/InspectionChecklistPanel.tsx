@@ -1,3 +1,5 @@
+import { usesQuantityForm } from './quantityCapture';
+import { QuantityInspectionPanel } from './QuantityInspectionPanel';
 import { CountedBatchInspectionPanel } from './CountedBatchInspectionPanel';
 import { ChecklistDecisionPanel } from './ChecklistDecisionPanel';
 import { FullCountDecisionPanel } from './FullCountDecisionPanel';
@@ -6,6 +8,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { inspectionsApi } from '@/api/quality/inspections';
+import { inspectionQueryKeys } from '@/lib/queryKeys/inspections';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
@@ -84,6 +88,11 @@ export function InspectionChecklistPanel(props: Props) {
       <p role="status" className="mt-2 text-sm text-warning-fg">Waiting for Production to record {trial?.required_quantity ?? props.inspection.sample_size} trial pieces</p>
     </section>;
   }
+  if (usesQuantityForm(props.inspection)) return <QuantityInspectionPanel key={props.inspection.id} {...props} />;
+  return <LegacyInspectionPanel {...props} />;
+}
+
+export function LegacyInspectionPanel(props: Props) {
   if (props.inspection.counted_capture) return <CountedBatchInspectionPanel key={props.inspection.id} {...props} />;
   return props.inspection.capture_method === 'checklist'
     ? props.inspection.count_only_incoming
@@ -213,22 +222,37 @@ function LegacyInspectionChecklistPanel({ inspection, canManage }: Props) {
         return inspectionsApi.recordItemResults(inspection.id, {
           items: payload.items,
           submit: payload.submit,
+          expected_result_version: payload.expected_result_version ?? current.result_version ?? 0,
         });
       }
+      let latest = current;
       if (payload.measurements?.length) {
-        await inspectionsApi.recordMeasurements(inspection.id, { measurements: payload.measurements });
+        latest = (await inspectionsApi.recordMeasurements(inspection.id, {
+          measurements: payload.measurements,
+          expected_result_version: latest.result_version ?? payload.expected_result_version ?? 0,
+        })) ?? latest;
       }
-      await inspectionsApi.recordItemResults(inspection.id, { items: payload.items, submit: false });
+      latest = (await inspectionsApi.recordItemResults(inspection.id, {
+        items: payload.items,
+        submit: false,
+        expected_result_version: latest.result_version ?? payload.expected_result_version ?? 0,
+      })) ?? latest;
 
-      return inspectionsApi.recordBatchResult(inspection.id, payload.batch);
+      return inspectionsApi.recordBatchResult(inspection.id, {
+        ...payload.batch,
+        expected_result_version: latest.result_version ?? payload.expected_result_version ?? 0,
+      });
     },
     onSuccess: (result, payload) => {
       setSaved(result);
       setDraft({});
-      queryClient.setQueryData(['quality', 'inspections', inspection.id], result);
-      queryClient.invalidateQueries({ queryKey: ['quality', 'inspections'] });
-      queryClient.invalidateQueries({ queryKey: ['quality', 'ncrs'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory', 'grn'] });
+      queryClient.setQueryData(inspectionQueryKeys.detail(inspection.id), result);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'inspection', entityId: inspection.id },
+        [['inventory', 'grn']],
+        [inspectionQueryKeys.detail(inspection.id)],
+      );
       toast.success(
         payload.submit
           ? result.status === 'awaiting_review'
@@ -236,6 +260,14 @@ function LegacyInspectionChecklistPanel({ inspection, canManage }: Props) {
             : 'Inspection completed.'
           : 'Checklist draft saved.',
       );
+    },
+    onError: (error: AxiosError<{ code?: string; message?: string }>) => {
+      if (error.response?.status === 409 && error.response.data?.code === 'inspection_state_conflict') {
+        void invalidateRealtimeChange(queryClient, { entityType: 'inspection', entityId: inspection.id });
+        toast.error('Inspection changed in another session. The latest saved version was loaded; your entries are retained for review.');
+        return;
+      }
+      toast.error(error.response?.data?.message ?? 'Could not save inspection. Your input is retained.');
     },
   });
 
@@ -248,9 +280,22 @@ function LegacyInspectionChecklistPanel({ inspection, canManage }: Props) {
     onSuccess: (result) => {
       setSaved(result);
       setMeasurementDraft({});
-      queryClient.setQueryData(['quality', 'inspections', inspection.id], result);
-      queryClient.invalidateQueries({ queryKey: ['quality', 'inspections'] });
+      queryClient.setQueryData(inspectionQueryKeys.detail(inspection.id), result);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'inspection', entityId: inspection.id },
+        [],
+        [inspectionQueryKeys.detail(inspection.id)],
+      );
       toast.success('Measurements saved.');
+    },
+    onError: (error: AxiosError<{ code?: string; message?: string }>) => {
+      if (error.response?.status === 409 && error.response.data?.code === 'inspection_state_conflict') {
+        void invalidateRealtimeChange(queryClient, { entityType: 'inspection', entityId: inspection.id });
+        toast.error('Inspection changed in another session. The latest saved version was loaded; your entries are retained for review.');
+        return;
+      }
+      toast.error(error.response?.data?.message ?? 'Could not save inspection measurements.');
     },
   });
 
@@ -278,12 +323,15 @@ function LegacyInspectionChecklistPanel({ inspection, canManage }: Props) {
 
   function saveDraft() {
     if (!canSaveDraft || save.isPending || saveMeasurements.isPending) return;
-    save.mutate({ items: draftItems, submit: false });
+    save.mutate({ items: draftItems, submit: false, expected_result_version: current.result_version ?? 0 });
   }
 
   function saveMeasurementDraft() {
     if (changedMeasurements.length === 0 || save.isPending || saveMeasurements.isPending) return;
-    saveMeasurements.mutate({ measurements: changedMeasurements });
+    saveMeasurements.mutate({
+      measurements: changedMeasurements,
+      expected_result_version: current.result_version ?? 0,
+    });
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -295,7 +343,7 @@ function LegacyInspectionChecklistPanel({ inspection, canManage }: Props) {
       ...(resultFor(item) === 'failed' ? { problem_description: problemFor(item).trim() } : {}),
     }));
     if (!isLotChecklist) {
-      save.mutate({ items, submit: true });
+      save.mutate({ items, submit: true, expected_result_version: current.result_version ?? 0 });
 
       return;
     }
@@ -304,7 +352,9 @@ function LegacyInspectionChecklistPanel({ inspection, canManage }: Props) {
       items,
       submit: true,
       measurements: changedMeasurements,
+      expected_result_version: current.result_version ?? 0,
       batch: {
+        expected_result_version: current.result_version ?? 0,
         result,
         coverage_confirmed: true,
         inspected_quantity: inspectedCount as number,

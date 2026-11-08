@@ -30,6 +30,7 @@ class OvertimeRequest extends Model
     ];
 
     protected $casts = [
+        'version'          => 'integer',
         'date'             => 'date',
         'hours_requested'  => 'decimal:1',
         'status'           => OvertimeStatus::class,
@@ -37,6 +38,17 @@ class OvertimeRequest extends Model
         'cancelled_at'     => 'datetime',
         'is_auto_detected' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(static function (self $request): void {
+            $request->version = 1;
+        });
+
+        static::updating(static function (self $request): void {
+            $request->version = (int) $request->getOriginal('version', 0) + 1;
+        });
+    }
 
     public function employee(): BelongsTo
     {

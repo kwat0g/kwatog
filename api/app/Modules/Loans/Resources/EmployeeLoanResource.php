@@ -20,6 +20,7 @@ class EmployeeLoanResource extends JsonResource
         /** @var EmployeeLoan $loan */
         $loan = $this->resource;
         $actions = $this->actions($request, $loan);
+        $permissions = $this->permissions($request, $loan);
 
         return [
             'id'                     => $this->hash_id,
@@ -76,8 +77,22 @@ class EmployeeLoanResource extends JsonResource
                 'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
             'actions'                => $actions,
+            'available_actions'     => $actions,
+            'permissions'           => $permissions,
+            'version'               => optional($this->updated_at)->format('Y-m-d\\TH:i:s.uP'),
             'created_at'             => optional($this->created_at)->toIso8601String(),
             'updated_at'             => optional($this->updated_at)->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string, bool> */
+    private function permissions(Request $request, EmployeeLoan $loan): array
+    {
+        $user = $request->user();
+
+        return [
+            'view' => $user !== null && app(LoanAccessPolicy::class)->canView($user, $loan),
+            'decide' => $user !== null && app(LoanAccessPolicy::class)->canDecide($user, $loan),
         ];
     }
 

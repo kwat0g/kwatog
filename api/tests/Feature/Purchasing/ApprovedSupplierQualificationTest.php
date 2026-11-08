@@ -9,6 +9,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Events\SupplierCatalogChanged;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -18,6 +19,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -89,6 +91,20 @@ class ApprovedSupplierQualificationTest extends TestCase
         ]);
     }
 
+    public function test_po_approval_refreshes_the_approved_supplier_list_when_it_creates_a_link(): void
+    {
+        $buyer = $this->user('purchasing_officer');
+        $vendor = Vendor::factory()->create(['created_by' => null]);
+        $item = Item::factory()->create();
+        $pending = app(PurchaseOrderService::class)->submit($this->poWithItem($buyer, $vendor, $item));
+
+        app(PurchaseOrderService::class)->approve($pending->fresh(), $this->user('finance_officer'));
+
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->count());
+    }
+
     public function test_existing_qualified_link_is_not_demoted(): void
     {
         $buyer = $this->user('purchasing_officer');
@@ -138,5 +154,30 @@ class ApprovedSupplierQualificationTest extends TestCase
 
         $this->assertNotSame($row->id, $replacement->id);
         $this->assertNull($replacement->deleted_at);
+    }
+
+    public function test_approved_supplier_lifecycle_stages_one_refresh_for_each_change(): void
+    {
+        $item = Item::factory()->create();
+        $vendor = Vendor::factory()->create();
+        $service = app(ApprovedSupplierService::class);
+
+        $row = $service->create([
+            'item_id' => $item->id,
+            'vendor_id' => $vendor->id,
+            'lead_time_days' => 5,
+            'last_price' => '125.00',
+        ]);
+        $service->update($row, ['last_price' => '130.00']);
+        $service->delete($row);
+        $service->restore($row);
+
+        $actions = DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->get(['payload'])
+            ->map(fn ($event): string => json_decode((string) $event->payload, true, 512, JSON_THROW_ON_ERROR)['action'])
+            ->all();
+
+        $this->assertSame(['created', 'updated', 'deleted', 'restored'], $actions);
     }
 }

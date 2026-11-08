@@ -1,3 +1,4 @@
+import type { QuantityInspectionSubmission } from '@/types/quality';
 import { client } from '../client';
 import { downloadAuthenticatedFile } from '../download';
 import type { WorkOrderFinalInspection, FinalInspectionEvidence, FinalInspectionSubmission, FinalInspectionManifest } from '@/types/quality-final';
@@ -39,7 +40,7 @@ export const inspectionsApi = {
     client.post<ApiSuccess<WorkOrderFinalInspection>>(`/quality/work-orders/${id}/final-inspection/review`, data).then(r => r.data.data),
   replaceOutgoingEvidenceMethod: (id: string, data: { manifest: FinalInspectionManifest; reason: string }) =>
     client.post<ApiSuccess<WorkOrderFinalInspection>>(`/quality/work-orders/${id}/final-inspection/replace-method`, data).then(r => r.data.data),
-  options: () =>
+  options: (signal?: AbortSignal) =>
     client
       .get<{
         data: {
@@ -49,17 +50,17 @@ export const inspectionsApi = {
           measurement_results: Array<{ value: string; label: string }>;
           sampling_methods: Array<{ stage: string; value: string; label: string }>;
         };
-      }>('/quality/inspections/options')
+      }>('/quality/inspections/options', { signal })
       .then((r) => r.data.data),
-  list: (params?: InspectionListParams) =>
+  list: (params?: InspectionListParams, signal?: AbortSignal) =>
     client
-      .get<PaginatedResponse<Inspection> & { meta: { status_counts?: { to_inspect: number; awaiting_review: number; failed: number; all: number } } }>('/quality/inspections', { params })
+      .get<PaginatedResponse<Inspection> & { meta: { status_counts?: { to_inspect: number; awaiting_review: number; failed: number; all: number } } }>('/quality/inspections', { params, signal })
       .then((r) => r.data),
-  show: (id: string) =>
-    client.get<ApiSuccess<Inspection>>(`/quality/inspections/${id}`).then((r) => r.data.data),
-  chain: (id: string) =>
-    client.get<{ data: ChainStep[] }>(`/quality/inspections/${id}/chain`).then((r) => r.data.data),
-  recordBatchResult: (id: string, data: RecordInspectionBatchResultData | ChecklistSubmission | CountedInspectionSubmission) =>
+  show: (id: string, signal?: AbortSignal) =>
+    client.get<ApiSuccess<Inspection>>(`/quality/inspections/${id}`, { signal }).then((r) => r.data.data),
+  chain: (id: string, signal?: AbortSignal) =>
+    client.get<{ data: ChainStep[] }>(`/quality/inspections/${id}/chain`, { signal }).then((r) => r.data.data),
+  recordBatchResult: (id: string, data: RecordInspectionBatchResultData | ChecklistSubmission | CountedInspectionSubmission | QuantityInspectionSubmission) =>
     client
       .post<ApiSuccess<Inspection>>(`/quality/inspections/${id}/batch-result`, data)
       .then((r) => r.data.data),

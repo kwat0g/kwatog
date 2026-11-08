@@ -121,6 +121,30 @@ export interface DashboardLayoutSnapshot {
  version: string;
 }
 
+/** User and permission identity are part of personal dashboard cache ownership. */
+export const dashboardLayoutQueryKeys = {
+ widgets: (identity: string | undefined) => ['dashboard', 'widgets', identity ?? 'guest'] as const,
+ layout: (identity: string | undefined, rich: boolean) =>
+  ['dashboard', 'layout', identity ?? 'guest', { rich }] as const,
+ widgetData: (identity: string | undefined, widgetKeys: string[]) =>
+  ['dashboard', 'widget-data', identity ?? 'guest', widgetKeys] as const,
+};
+
+/** Apply a fresh write response immediately while retaining rich data for unchanged widgets. */
+export function mergeDashboardLayoutSnapshot(
+ current: DashboardLayoutSnapshot | undefined,
+ updated: DashboardLayoutSnapshot,
+): DashboardLayoutSnapshot {
+ const cachedData = new Map(current?.items.map((item) => [item.key, item.data]));
+ return {
+  ...updated,
+  items: updated.items.map((item) => ({
+   ...item,
+   data: cachedData.get(item.key) ?? null,
+  })),
+ };
+}
+
 interface DashboardLayoutEnvelope extends ApiSuccess<DashboardLayoutItem[]> {
  meta: { layout_version: string };
 }

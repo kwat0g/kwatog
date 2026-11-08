@@ -10,9 +10,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ContactInquiryStatus } from '@/types/crm';
+import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
+import { realtimeIdentityKey } from '@/lib/realtime/identity';
 
 const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'neutral'> = {
  new: 'info',
@@ -21,27 +24,32 @@ const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'ne
 };
 
 export default function InquiryDetailPage() {
+ useRealtimeSignal('contact_inquiries_changed', 'entity.contact_inquiry.visible', '.crm.contact-inquiry.changed');
  const { id = '' } = useParams();
  const queryClient = useQueryClient();
- const { can } = usePermission();
- const canManage = can('crm.inquiries.manage');
+ const user = useAuthStore((state) => state.user);
+ const identity = realtimeIdentityKey(user);
+ const exactKey = ['crm', 'inquiries', id, identity] as const;
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['crm', 'inquiries', id],
+ queryKey: exactKey,
  queryFn: () => inquiriesApi.show(id),
  });
 
- const invalidate = () => {
- queryClient.invalidateQueries({ queryKey: ['crm', 'inquiries'] });
- };
-
  const statusMutation = useMutation({
- mutationFn: (status: ContactInquiryStatus) => inquiriesApi.updateStatus(id, status),
- onSuccess: () => {
- toast.success('Status updated');
- invalidate();
+ mutationFn: (status: ContactInquiryStatus) => inquiriesApi.updateStatus(id, status, data?.status),
+ onSuccess: async (updatedInquiry) => {
+  await queryClient.cancelQueries({ queryKey: exactKey, exact: true }, { revert: true });
+  queryClient.setQueryData(exactKey, updatedInquiry);
+  void invalidateRealtimeSignal(queryClient, 'contact_inquiries_changed', [], [exactKey]);
+  toast.success('Status updated');
  },
- onError: (error) => reportMutationError(error, 'Could not update status'),
+ onError: async (error) => {
+  if ((error as { response?: { status?: number } })?.response?.status === 409) {
+   await queryClient.invalidateQueries({ queryKey: exactKey, exact: true });
+  }
+  reportMutationError(error, 'Could not update status');
+ },
  });
 
  if (isLoading) return <SkeletonDetail />;
@@ -62,22 +70,20 @@ export default function InquiryDetailPage() {
  actions={
  <div className="flex items-center gap-2">
  <Chip variant={variant[data.status]}>{data.status_label}</Chip>
- {canManage && (
  <>
- {data.status !== 'in_progress' && (
+ {data.available_actions?.mark_in_progress === true && (
  <Button variant="secondary" size="sm" disabled={pending}
  onClick={() => statusMutation.mutate('in_progress')}>
  Mark in progress
  </Button>
  )}
- {data.status !== 'closed' && (
+ {data.available_actions?.close === true && (
  <Button variant="secondary" size="sm" disabled={pending}
  onClick={() => statusMutation.mutate('closed')}>
  Close
  </Button>
  )}
  </>
- )}
  </div>
  }
  />

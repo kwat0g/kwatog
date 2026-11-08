@@ -15,6 +15,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { salesOrderStatusVariant } from '@/lib/statusVariants';
 import type { PortalSoSummary } from '@/types/b2b';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 type OrderFilters = { page: number; per_page: number; status?: string; search?: string };
 
@@ -38,10 +39,12 @@ const STATUS_OPTIONS = [
 export default function CustomerOrdersPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useUrlFilters<OrderFilters>(DEFAULT_FILTERS);
+  const queryKey = ['portal', 'customer', 'orders', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'customer', 'orders', filters],
+    queryKey,
     queryFn: () => customerPortalApi.listOrders(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined,
   });
 
   const columns: Column<PortalSoSummary>[] = [

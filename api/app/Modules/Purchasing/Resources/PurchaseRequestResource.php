@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Resources;
 
-use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
+use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -19,6 +19,13 @@ class PurchaseRequestResource extends JsonResource
                 PurchaseRequestPriority::Urgent->value,
                 PurchaseRequestPriority::Critical->value,
             ], true);
+        $isDetailRoute = $request->route('purchaseRequest') !== null;
+        $access = app(PurchaseRequestAccessPolicy::class);
+        $availableActions = $request->user()
+            ? ($isDetailRoute
+                ? $access->actionsFor($request->user(), $this->resource)
+                : $access->listActionsFor($request->user(), $this->resource))
+            : null;
 
         return [
             'id' => $this->hash_id,
@@ -131,12 +138,11 @@ class PurchaseRequestResource extends JsonResource
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),
             'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
-            // Action decisions are needed on row-detail/action responses. Do
-            // not run delegation/pending-step checks once per row on the
-            // paginated list response.
-            'actions' => $request->route('purchaseRequest') !== null && $request->user()
-                ? app(PurchaseRequestAccessPolicy::class)->actionsFor($request->user(), $this->resource)
-                : null,
+            // The paginated list projects its only row action from set-based
+            // exists flags; avoid per-row delegation and approval-step checks.
+            'available_actions' => $availableActions,
+            // Keep the established API field for existing integrations.
+            'actions' => $isDetailRoute ? $availableActions : null,
         ];
     }
 }

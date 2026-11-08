@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
@@ -373,11 +374,14 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         [$delivery, $actor, $quarantine] = $this->dispatchedDelivery();
         $line = $delivery->items()->firstOrFail();
         $service = app(DeliveryAttemptOutcomeService::class);
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
 
         $report = $this->reportPayload($line, '0', '4', '0');
         $report['request_key'] = (string) Str::uuid();
         $firstReport = $service->report($delivery, $actor, $report);
+        $this->assertSame($initialSignals + 1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $replayedReport = $service->report($delivery, $actor, $report);
+        $this->assertSame($initialSignals + 1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $this->assertSame($firstReport->attemptOutcome->id, $replayedReport->attemptOutcome->id);
         $changedReport = $report;
         $changedReport['notes'] = 'Changed after submit';
@@ -395,7 +399,9 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
             'variance_reason' => 'The physical depot count differs from the driver declaration.',
         ];
         $firstReceipt = $service->receive($firstReport, $actor, $receipt);
+        $this->assertSame($initialSignals + 2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $replayedReceipt = $service->receive($firstReport, $actor, $receipt);
+        $this->assertSame($initialSignals + 2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $this->assertSame($firstReceipt->attemptOutcome->id, $replayedReceipt->attemptOutcome->id);
         $changedReceipt = $receipt;
         $changedReceipt['lines'][0]['received_quantity'] = '1';
@@ -462,15 +468,19 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         [$delivery, $actor] = $this->dispatchedDelivery();
         $line = $delivery->items()->firstOrFail();
         $service = app(DeliveryAttemptOutcomeService::class);
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
         $service->report($delivery, $actor, $this->reportPayload($line, '0', '4', '0'));
+        $this->assertSame($initialSignals + 1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $payload = $this->reportPayload($line, '1', '2', '1') + ['expected_version' => 1, 'correction_reason' => 'Customer accepted one; another unit was missing.'];
         $changed = $service->amend($delivery, $actor, $payload);
+        $this->assertSame($initialSignals + 2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $this->assertSame(2, $changed->attemptOutcome->version);
         $this->assertSame('1.000', $changed->items->first()->customer_received_quantity);
         $revision = $changed->attemptOutcome->revisions()->firstOrFail();
         $this->assertSame('0.000', $revision->before_snapshot['lines'][0]['customer_received_quantity']);
         $this->assertSame('1.000', $revision->after_snapshot['lines'][0]['customer_received_quantity']);
         $service->amend($delivery, $actor, $payload);
+        $this->assertSame($initialSignals + 2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $this->assertSame(1, $changed->attemptOutcome->revisions()->count());
         $payload['request_key'] = (string) Str::uuid();
         $this->expectException(BusinessRuleException::class);
@@ -508,9 +518,12 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         [$delivery, $actor, $quarantine, $item] = $this->dispatchedDelivery();
         $line = $delivery->items()->firstOrFail();
         $service = app(DeliveryAttemptOutcomeService::class);
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
         $service->report($delivery, $actor, $this->reportPayload($line, '0', '0', '4'));
+        $this->assertSame($initialSignals + 1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $service->receive($delivery, $actor, ['request_key' => (string) Str::uuid(), 'variance_reason' => 'Not on the truck.',
             'lines' => [['delivery_item_id' => $line->hash_id, 'received_quantity' => '0']]]);
+        $this->assertSame($initialSignals + 2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $payload = ['request_key' => (string) Str::uuid(), 'variance_reason' => 'Found in the carrier holding bay.',
             'quarantine_location_id' => $quarantine->hash_id,
             'lines' => [['delivery_item_id' => $line->hash_id, 'received_quantity' => '1.333']]];
@@ -533,11 +546,14 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
 
         $payload['lines'][0]['received_quantity'] = '1';
         $first = $service->receiveLate($delivery, $actor, $payload);
+        $this->assertSame($initialSignals + 3, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $service->receiveLate($delivery, $actor, $payload);
+        $this->assertSame($initialSignals + 3, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $this->assertSame(1, ReturnRequest::query()->where('delivery_attempt_outcome_id', $first->attemptOutcome->id)->count());
         $payload['request_key'] = (string) Str::uuid();
         $payload['lines'][0]['received_quantity'] = '3';
         $second = $service->receiveLate($delivery, $actor, $payload);
+        $this->assertSame($initialSignals + 4, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $this->assertSame(2, $second->attemptOutcome->returnRequests()->count());
         $this->assertSame('0.000', $second->attemptOutcome->items->first()->unaccounted_quantity);
         $this->assertSame('4.000', $second->attemptOutcome->items->first()->warehouse_received_quantity);

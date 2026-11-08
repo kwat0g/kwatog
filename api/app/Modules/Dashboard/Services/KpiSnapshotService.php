@@ -124,6 +124,10 @@ class KpiSnapshotService
             }
         }
 
+        if ($computed > 0) {
+            app(KpiSnapshotRealtimeService::class)->stage($year, $month);
+        }
+
         return [
             'computed' => $computed,
             'no_data' => $noData,

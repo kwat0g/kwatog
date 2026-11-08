@@ -14,6 +14,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class TrainingService
 {
@@ -47,12 +48,46 @@ class TrainingService
     }
 
     /** @param array<string, mixed> $data */
-    public function update(Training $training, array $data): Training
+    public function update(Training $training, array $data, ?string $ifMatch = null): Training
     {
-        return DB::transaction(function () use ($training, $data) {
-            $training->fill($data)->save();
-            return $training->refresh();
+        return DB::transaction(function () use ($training, $data, $ifMatch) {
+            $locked = Training::withTrashed()->lockForUpdate()->findOrFail($training->getKey());
+            if ($locked->trashed()) {
+                throw new ConflictHttpException('This training has been archived. Reload the catalog before saving.');
+            }
+            if ($ifMatch !== null && ! $this->matchesIfMatch($ifMatch, $locked)) {
+                throw new ConflictHttpException('This training changed after you loaded it. Load the latest version before saving.');
+            }
+
+            $locked->fill($data)->save();
+            return $locked->refresh();
         });
+    }
+
+    private function matchesIfMatch(string $ifMatch, Training $training): bool
+    {
+        $currentVersion = $training->updated_at?->format('Y-m-d\\TH:i:s.uP');
+        if ($currentVersion === null) {
+            return false;
+        }
+
+        foreach (explode(',', $ifMatch) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '*') {
+                return true;
+            }
+            // If-Match uses strong comparison. Weak ETags never match.
+            if (str_starts_with($candidate, 'W/')) {
+                continue;
+            }
+
+            $candidate = trim($candidate, '" ');
+            if ($candidate !== '' && hash_equals($currentVersion, $candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function delete(Training $training): void

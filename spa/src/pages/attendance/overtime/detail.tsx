@@ -13,15 +13,13 @@ import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { usePermission } from '@/hooks/usePermission';
-import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatDate, formatDateTime, formatTime } from '@/lib/formatDate';
 
 import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
 export default function OvertimeDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
- const user = useAuthStore((s) => s.user);
- const { can, canApprove } = usePermission();
+ useRealtimeRecord('overtime_request', id);
  const [reject, setReject] = useState(false);
  const [reason, setReason] = useState('');
  const [confirmApprove, setConfirmApprove] = useState(false);
@@ -46,22 +44,22 @@ export default function OvertimeDetailPage() {
 
  const approveMut = useOptimisticStatusAction({
       detailKey,
-      invalidateKey: ['attendance', 'overtime'],
-      mutationFn: () => overtimeApi.approve(id),
+      realtimeChange: { entityType: 'overtime_request', entityId: id },
+      mutationFn: () => overtimeApi.approve(id, undefined, ot?.version),
       nextStatus: 'approved',
       successMsg: 'Overtime approved.', errorMsg: 'Failed to approve.',
     });
  const rejectMut = useOptimisticStatusAction({
       detailKey,
-      invalidateKey: ['attendance', 'overtime'],
-      mutationFn: () => overtimeApi.reject(id, reason),
+      realtimeChange: { entityType: 'overtime_request', entityId: id },
+      mutationFn: () => overtimeApi.reject(id, reason, ot?.version),
       nextStatus: 'rejected',
       successMsg: 'Overtime rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => { setReject(false); setReason(''); },
     });
  const cancelMut = useOptimisticStatusAction({
       detailKey,
-      invalidateKey: ['attendance', 'overtime'],
-      mutationFn: () => overtimeApi.cancel(id, reason || undefined),
+      realtimeChange: { entityType: 'overtime_request', entityId: id },
+      mutationFn: () => overtimeApi.cancel(id, reason || undefined, ot?.version),
       nextStatus: 'rejected',
       successMsg: 'Overtime request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => { setReason(''); },
     });
@@ -71,9 +69,11 @@ export default function OvertimeDetailPage() {
  return <EmptyState icon="alert-circle" title="Overtime request not found" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
  }
 
- const isOwner = user?.employee?.id === ot.employee?.id;
- const canApproveRequest = ot.status === 'pending' && canApprove('attendance.ot.approve');
- const canCancel = ot.status === 'pending' && (isOwner || can('attendance.ot.approve'));
+ const canApproveRequest = ot.available_actions?.approve === true
+   && !approveMut.isPending && !rejectMut.isPending;
+ const canRejectRequest = ot.available_actions?.reject === true
+   && !approveMut.isPending && !rejectMut.isPending;
+ const canCancel = ot.available_actions?.cancel === true && !cancelMut.isPending;
 
  return (
  <div>
@@ -91,8 +91,10 @@ export default function OvertimeDetailPage() {
  actions={
  <>
  {canApproveRequest && (
- <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveMut.isPending} loading={approveMut.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
+ )}
+ {canRejectRequest && (
+ <>
  <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}

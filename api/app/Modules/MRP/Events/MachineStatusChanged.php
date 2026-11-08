@@ -5,20 +5,17 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Events;
 
 use App\Modules\MRP\Models\Machine;
-use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Sprint 6 — Task 56. Fired by MachineService::transitionStatus().
- * The breakdown listener (HandleMachineBreakdown) listens here and pauses
- * the active WO, opens a downtime row, and notifies maintenance.
+ * Internal domain event for machine lifecycle side effects. The standard
+ * MachineChanged refresh signal owns all machine UI broadcasts.
  */
-class MachineStatusChanged implements ShouldBroadcast
+class MachineStatusChanged implements ShouldDispatchAfterCommit
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, SerializesModels;
 
     public function __construct(
         public Machine $machine,
@@ -26,23 +23,4 @@ class MachineStatusChanged implements ShouldBroadcast
         public string $to,
         public ?string $reason = null,
     ) {}
-
-    /** @return array<int, PrivateChannel> */
-    public function broadcastOn(): array
-    {
-        return [
-            new PrivateChannel('production.machine.'.$this->machine->hash_id),
-            new PrivateChannel('production.dashboard'),
-        ];
-    }
-
-    public function broadcastAs(): string
-    {
-        return 'machine.status_changed';
-    }
-
-    public function broadcastWith(): array
-    {
-        return ['refresh' => true];
-    }
 }

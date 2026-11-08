@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepairScheduleForm, ReworkPanel } from './ReworkPanel';
 import { workOrdersApi } from '@/api/production/workOrders';
-import type { WorkOrderRework, WorkOrderStatus } from '@/types/production';
+import type { WorkOrder, WorkOrderRework, WorkOrderStatus } from '@/types/production';
 
 vi.mock('@/api/production/workOrders', () => ({
   workOrdersApi: {
@@ -93,10 +93,9 @@ function show({
   onClose?: () => void;
 } = {}) {
   cleanup();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <ReworkPanel
           woId="wo-1"
@@ -113,6 +112,7 @@ function show({
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return client;
 }
 
 describe('ReworkPanel', () => {
@@ -282,6 +282,44 @@ describe('ReworkPanel', () => {
         }),
       ),
     );
+  });
+
+  it('installs the start response in the parent WorkOrder cache before an older detail read can win', async () => {
+    const key = ['production', 'work-orders', 'detail', 'wo-1'];
+    const previous = { id: 'wo-1', status: 'completed', rework: [rework] } as WorkOrder;
+    const startedRework = { ...rework, started_at: '2026-11-02T08:00:00Z' };
+    const updated = {
+      ...previous,
+      rework: [startedRework],
+      rework_status: { state: 'in_progress', quantity: rework.quantity },
+    } as WorkOrder;
+    let resolveStaleRead!: (value: WorkOrder) => void;
+    const staleRead = new Promise<WorkOrder>((resolve) => {
+      resolveStaleRead = resolve;
+    });
+    const client = show();
+    client.setQueryData(key, previous);
+    const staleFetch = client.fetchQuery({
+      queryKey: key,
+      queryFn: () => staleRead,
+      staleTime: 0,
+    });
+    vi.mocked(workOrdersApi.startRework).mockResolvedValue(updated);
+
+    const start = await screen.findByRole('button', { name: 'Start rework' });
+    await waitFor(() => expect(start).not.toBeDisabled());
+    fireEvent.click(start);
+    await waitFor(() => expect(workOrdersApi.startRework).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(client.getQueryData<WorkOrder>(key)?.rework?.[0]?.started_at)
+        .toBe(startedRework.started_at);
+    });
+
+    resolveStaleRead(previous);
+    await staleFetch.catch(() => undefined);
+    expect(client.getQueryData<WorkOrder>(key)?.rework?.[0]?.started_at)
+      .toBe(startedRework.started_at);
+    client.clear();
   });
 
   it('blocks repair start until an approved NCR slot exists', async () => {

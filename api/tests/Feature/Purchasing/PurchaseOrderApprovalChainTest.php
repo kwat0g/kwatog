@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Models\WorkflowDefinition;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
@@ -52,14 +53,14 @@ class PurchaseOrderApprovalChainTest extends TestCase
     private function draftPo(User $creator, string $total = '10000.00'): PurchaseOrder
     {
         $po = PurchaseOrder::create([
-            'po_number'    => 'PO-'.substr(uniqid(), -6),
-            'vendor_id'    => Vendor::create([
-                'name'               => 'Vendor-'.substr(uniqid(), -5),
+            'po_number' => 'PO-'.substr(uniqid(), -6),
+            'vendor_id' => Vendor::create([
+                'name' => 'Vendor-'.substr(uniqid(), -5),
                 'payment_terms_days' => 30,
             ])->id,
-            'date'         => now()->toDateString(),
+            'date' => now()->toDateString(),
             'total_amount' => $total,
-            'created_by'   => $creator->id,
+            'created_by' => $creator->id,
         ]);
         $po->forceFill(['status' => PurchaseOrderStatus::Draft->value])->save();
 
@@ -100,6 +101,55 @@ class PurchaseOrderApprovalChainTest extends TestCase
 
         $this->assertSame(PurchaseOrderStatus::Approved, $approved->status);
         $this->assertSame($finance->id, (int) $approved->approved_by);
+    }
+
+    public function test_submitting_a_purchase_order_stages_one_chain_refresh_with_the_status_change(): void
+    {
+        $buyer = $this->user('purchasing_officer');
+        $po = $this->draftPo($buyer);
+
+        app(PurchaseOrderService::class)->submit($po, $buyer);
+
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count());
+        $this->assertDatabaseHas('chain_step_runs', [
+            'entity_type' => 'purchase_order',
+            'entity_id' => $po->id,
+            'step' => 'pending_approval',
+            'event_type' => ChainStepAdvanced::class,
+        ]);
+    }
+
+    public function test_repeated_submit_after_status_change_returns_a_state_conflict(): void
+    {
+        $buyer = $this->user('purchasing_officer');
+        $po = $this->draftPo($buyer);
+        $uri = "/api/v1/purchasing/purchase-orders/{$po->hash_id}/submit";
+
+        $this->actingAs($buyer, 'sanctum')->patchJson($uri)->assertOk();
+
+        $this->patchJson($uri)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'purchase_order_state_conflict');
+    }
+
+    public function test_budget_acknowledgement_stages_one_chain_refresh_with_the_record_update(): void
+    {
+        $buyer = $this->user('purchasing_officer');
+        $finance = $this->user('finance_officer');
+        $po = $this->draftPo($buyer);
+        $po->forceFill([
+            'budget_warning_level' => 'exhausted',
+            'budget_warning_message' => 'Department budget exhausted.',
+        ])->save();
+
+        app(PurchaseOrderService::class)->acknowledgeBudget($po, $finance);
+
+        $this->assertNotNull($po->fresh()->budget_acknowledged_at);
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count());
     }
 
     public function test_high_value_po_requires_finance_then_vp(): void

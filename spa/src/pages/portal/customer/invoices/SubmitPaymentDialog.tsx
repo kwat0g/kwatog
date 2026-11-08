@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { FileInput } from '@/components/ui/FileInput';
 import { Button } from '@/components/ui/Button';
 import type { PortalInvoiceDetail } from '@/types/b2b';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const todayManila = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const proofError = (file: File | null) => !file ? 'Payment proof is required.'
@@ -30,19 +31,30 @@ export function SubmitPaymentDialog({ invoice, onClose }: { invoice: PortalInvoi
   const attempt = useRef<{ signature: string; key: string } | null>(null);
   const fileIdentity = useRef<File | null>(null);
   const schema = z.object({
+    amount: z.string().regex(/^\d{1,13}(?:\.\d{1,2})?$/, 'Enter a valid amount.')
+      .refine((value) => Number(value) > 0 && Number(value) <= Number(reviewed.balance), 'Amount must be greater than zero and no more than the balance due.'),
     sending_bank: z.string().trim().min(1, 'Sending bank is required.').max(100),
     reference_number: z.string().trim().min(1, 'Reference number is required.').max(50),
     payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a payment date.')
       .refine((value) => value >= (reviewed.date ?? '') && value <= todayManila(), 'Payment date must fall between invoice date and today.'),
   });
   const { register, handleSubmit, setError, formState: { errors, isValid } } = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema), mode: 'onChange', defaultValues: { sending_bank: '', reference_number: '', payment_date: todayManila() },
+    resolver: zodResolver(schema), mode: 'onChange', defaultValues: { amount: invoice.balance, sending_bank: '', reference_number: '', payment_date: todayManila() },
   });
   const mutation = useMutation({
     mutationFn: (form: FormData) => customerPortalApi.submitInvoicePayment(invoice.id, form),
-    onSuccess: () => {
+    onSuccess: async (updatedSubmission) => {
       pending.current = false;
-      queries.invalidateQueries({ queryKey: ['portal', 'customer'] });
+      const invoiceKey = ['portal', 'customer', 'invoice', invoice.id] as const;
+      await queries.cancelQueries({ queryKey: invoiceKey, exact: true }, { revert: true });
+      queries.setQueryData<PortalInvoiceDetail>(invoiceKey, (current) => current ? {
+        ...current,
+        payment_submissions: [
+          ...(current.payment_submissions ?? []).filter((row) => row.id !== updatedSubmission.id),
+          updatedSubmission,
+        ],
+      } : current);
+      void invalidateRealtimeChange(queries, { entityType: 'invoice', entityId: invoice.id });
       toast.success('Payment submitted. Await Finance verification.');
       onClose();
     },
@@ -78,7 +90,7 @@ export function SubmitPaymentDialog({ invoice, onClose }: { invoice: PortalInvoi
     }
     const form = new FormData();
     for (const [key, value] of Object.entries(fields)) form.append(key, value);
-    form.append('amount', reviewed.balance);
+    form.append('amount', fields.amount);
     form.append('proof_file', file!);
     form.append('idempotency_key', attempt.current!.key);
     pending.current = true;
@@ -87,7 +99,7 @@ export function SubmitPaymentDialog({ invoice, onClose }: { invoice: PortalInvoi
   return <Modal isOpen title="Submit payment" onClose={() => { if (!pending.current) onClose(); }} size="md" closeOnOverlayClick={false}>
     <form className="space-y-5" onSubmit={handleSubmit(submit)} noValidate>
       <p className="text-sm">{reviewed.invoice_number}</p>
-      <Input label="Amount to settle" value={reviewed.balance} readOnly prefix="₱" helper="Full outstanding balance. Finance verifies receipt before updating this invoice." />
+      <Input label={`Amount to pay (balance ${reviewed.balance})`} type="number" min="0.01" max={reviewed.balance} step="0.01" prefix="₱" {...register('amount')} helper="Finance verifies receipt before updating your invoice balance. Partial payments are accepted." />
       <p className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">This form records a bank transfer; it does not send money. Contact Ogami Finance for verified receiving account details before transferring.</p>
       <Input label="Sending bank" required maxLength={100} autoComplete="organization" {...register('sending_bank')} error={errors.sending_bank?.message} />
       <div className="grid gap-4 sm:grid-cols-2">

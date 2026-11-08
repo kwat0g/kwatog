@@ -20,6 +20,14 @@ class StockAdjustmentResource extends JsonResource
         $pending = $this->status === StockAdjustmentStatus::Pending;
         $isRequester = $actor !== null && $this->requested_by !== null
             && (int) $this->requested_by === (int) $actor->getAuthIdentifier();
+        $canDecide = $pending
+            && $actor !== null
+            && ApprovalDelegation::canActForPermission($actor, 'inventory.adjust.approve', [(int) $this->requested_by])
+            && ! $isRequester;
+        $canWithdraw = $pending
+            && $actor !== null
+            && $actor->hasPermission('inventory.adjust')
+            && $isRequester;
 
         return [
             'id'            => $this->hash_id,
@@ -59,9 +67,14 @@ class StockAdjustmentResource extends JsonResource
             ] : null),
             'resolved_at' => optional($this->resolved_at)->toIso8601String(),
             'resolution_reason' => $this->resolution_reason,
-            'can_approve' => $pending && $actor && ApprovalDelegation::canActForPermission($actor, 'inventory.adjust.approve', [(int) $this->requested_by]) && ! $isRequester,
-            'can_reject' => $pending && $actor && ApprovalDelegation::canActForPermission($actor, 'inventory.adjust.approve', [(int) $this->requested_by]) && ! $isRequester,
-            'can_withdraw' => $pending && $actor?->hasPermission('inventory.adjust') && $isRequester,
+            'can_approve' => $canDecide,
+            'can_reject' => $canDecide,
+            'can_withdraw' => $canWithdraw,
+            'available_actions' => [
+                'approve' => $canDecide,
+                'reject' => $canDecide,
+                'withdraw' => $canWithdraw,
+            ],
             'created_at'    => optional($this->created_at)->toIso8601String(),
         ];
     }

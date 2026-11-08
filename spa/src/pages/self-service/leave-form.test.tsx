@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { leaveBalancesApi, leaveRequestsApi, leaveTypesApi } from '@/api/leave';
 import { selfServiceApi } from '@/api/self-service';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import CreateLeavePage from '@/pages/leaves/create';
 import SelfServiceLeavePage from './leave';
 
@@ -18,6 +19,7 @@ vi.mock('@/api/self-service', () => ({
   },
 }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeList: vi.fn() }));
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => ({ id: 'user-1', employee: { id: 'employee-1' }, role: { slug: 'department_head' } }),
 }));
@@ -43,6 +45,28 @@ beforeEach(() => {
   vi.mocked(selfServiceApi.fileLeaveSelf).mockImplementation(() => new Promise(() => {}));
 });
 afterEach(() => vi.useRealTimers());
+
+describe('self-service leave form', () => {
+  it('subscribes employee leave options to authorized leave-type changes', () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter><SelfServiceLeavePage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(useRealtimeList).toHaveBeenCalledWith('leave_type', 'visible');
+  });
+
+  it('subscribes the HR leave creation form to authorized leave-type changes', () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter><CreateLeavePage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(useRealtimeList).toHaveBeenCalledWith('leave_type', 'visible');
+  });
+});
 
 describe.each(['employee', 'HR'] as const)('%s leave form', (side) => {
   it('blocks today and past dates and end dates before the selected start in Manila time', async () => {

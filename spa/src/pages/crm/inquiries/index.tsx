@@ -12,6 +12,10 @@ import { formatDate } from '@/lib/formatDate';
 import type { ContactInquiry, ContactInquiryStatus } from '@/types/crm';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useAuthStore } from '@/stores/authStore';
+import { realtimeIdentityKey } from '@/lib/realtime/identity';
 const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'neutral'> = {
  new: 'info',
  in_progress: 'warning',
@@ -19,13 +23,18 @@ const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'ne
 };
 
 export default function InquiryListPage() {
+ useRealtimeSignal('contact_inquiries_changed', 'entity.contact_inquiry.visible', '.crm.contact-inquiry.changed');
  const navigate = useNavigate();
+ const user = useAuthStore((state) => state.user);
+ const identity = realtimeIdentityKey(user);
  const [filters, setFilters] = useUrlFilters<InquiryListParams>({ page: 1, per_page: 25 });
 
+ const queryKey = ['crm', 'inquiries', filters, identity] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['crm', 'inquiries', filters],
+ queryKey,
  queryFn: () => inquiriesApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: inquiryOptions } = useQuery({
   queryKey: ['crm', 'inquiries', 'options'],
   queryFn: inquiriesApi.options,

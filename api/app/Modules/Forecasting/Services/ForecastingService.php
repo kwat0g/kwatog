@@ -7,6 +7,7 @@ namespace App\Modules\Forecasting\Services;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Forecasting\Models\DemandForecast;
+use App\Modules\Forecasting\Services\DemandForecastRealtimeService;
 use App\Modules\Forecasting\Support\ForecastConfidence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -167,32 +168,43 @@ class ForecastingService
     ): int {
         $written = 0;
 
-        $productIds = DB::table('products')->where('is_active', true)->pluck('id');
+        DemandForecastRealtimeService::coalesceBatch(function () use (
+            $startMonth,
+            $horizonMonths,
+            $method,
+            $user,
+            $perCustomer,
+            $lookbackMonths,
+            $overwriteManual,
+            &$written,
+        ): void {
+            $productIds = DB::table('products')->where('is_active', true)->pluck('id');
 
-        foreach ($productIds as $pid) {
-            $customerIds = $perCustomer
-                ? DB::table('sales_orders')
-                    ->whereNotNull('customer_id')
-                    ->whereIn('id', function ($q) use ($pid) {
-                        $q->from('sales_order_items')->select('sales_order_id')->where('product_id', $pid);
-                    })->distinct()->pluck('customer_id')->all()
-                : [null];
-            // Always include the "all customers" total row so dashboards have a cross-customer view.
-            if ($perCustomer && ! in_array(null, $customerIds, true)) {
-                $customerIds[] = null;
-            }
+            foreach ($productIds as $pid) {
+                $customerIds = $perCustomer
+                    ? DB::table('sales_orders')
+                        ->whereNotNull('customer_id')
+                        ->whereIn('id', function ($q) use ($pid) {
+                            $q->from('sales_order_items')->select('sales_order_id')->where('product_id', $pid);
+                        })->distinct()->pluck('customer_id')->all()
+                    : [null];
+                // Always include the "all customers" total row so dashboards have a cross-customer view.
+                if ($perCustomer && ! in_array(null, $customerIds, true)) {
+                    $customerIds[] = null;
+                }
 
-            foreach ($customerIds as $cid) {
-                $cursor = $startMonth->copy();
-                for ($i = 0; $i < $horizonMonths; $i++) {
-                    $f = $this->compute((int) $pid, $cid !== null ? (int) $cid : null, $cursor->year, $cursor->month, $method, $lookbackMonths, $user, $overwriteManual);
-                    if ($f !== null) {
-                        $written++;
+                foreach ($customerIds as $cid) {
+                    $cursor = $startMonth->copy();
+                    for ($i = 0; $i < $horizonMonths; $i++) {
+                        $f = $this->compute((int) $pid, $cid !== null ? (int) $cid : null, $cursor->year, $cursor->month, $method, $lookbackMonths, $user, $overwriteManual);
+                        if ($f !== null) {
+                            $written++;
+                        }
+                        $cursor->addMonthNoOverflow();
                     }
-                    $cursor->addMonthNoOverflow();
                 }
             }
-        }
+        });
 
         return $written;
     }

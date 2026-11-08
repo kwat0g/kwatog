@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
 import { stockMovementsApi } from '@/api/inventory/stock';
+import { useInventoryStockRealtime } from '@/hooks/useInventoryStockRealtime';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -299,6 +300,7 @@ function HandoverDetails({
 }
 
 export default function PickingListPage() {
+  useInventoryStockRealtime();
   const { can } = usePermission();
   const [params] = useSearchParams();
   const maintenanceId = params.get('maintenance_work_order_id');
@@ -306,7 +308,7 @@ export default function PickingListPage() {
   const slipId = workOrderId ? null : params.get('material_issue_id');
   const directLookup = Boolean(maintenanceId || workOrderId || slipId);
   const [filters, setFilters] = useState({
-    status: maintenanceId || workOrderId || slipId ? '' : 'pending',
+    status: '',
     search: '',
     page: 1,
     per_page: 25,
@@ -425,11 +427,18 @@ export default function PickingListPage() {
           },
         ]}
         values={filters}
+        savedViewsEnabled={!directLookup}
         onFilter={(_key, value) =>
           changeFilters({ ...filters, status: String(value ?? ''), page: 1 })
         }
         searchPlaceholder="Search WO, slip, material code or name…"
         onSearch={(search) => changeFilters({ ...filters, search, page: 1 })}
+        onApplySavedView={!directLookup ? (saved) => changeFilters({
+          status: saved.status ?? '',
+          search: saved.search ?? '',
+          page: 1,
+          per_page: filters.per_page,
+        }) : undefined}
       />
       <div className={directLookup ? 'py-4 space-y-4 min-w-0' : 'pt-4 min-h-0 flex-1 flex flex-col'}>
         {(maintenanceId || workOrderId || slipId) && (

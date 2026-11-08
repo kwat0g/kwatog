@@ -22,6 +22,8 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class UserInviteService
 {
+    public function __construct(private readonly UserInviteRealtimeService $realtime) {}
+
     /** Default invite lifetime, per plan §WS-A.1. */
     public const DEFAULT_TTL_HOURS = 72;
 
@@ -33,7 +35,7 @@ class UserInviteService
         return DB::transaction(function () use ($data, $inviter) {
             $employee = Employee::query()->whereKey($data['employee_id'])->firstOrFail();
 
-            return UserInvite::create([
+            $invite = UserInvite::create([
                 'employee_id' => $employee->id,
                 'email'       => $data['email'],
                 'token'       => bin2hex(random_bytes(32)),
@@ -41,6 +43,10 @@ class UserInviteService
                 'expires_at'  => Carbon::now()->addHours(self::DEFAULT_TTL_HOURS),
                 'invited_by'  => $inviter->id,
             ]);
+
+            $this->realtime->stage('created', $inviter);
+
+            return $invite;
         });
     }
 
@@ -100,6 +106,7 @@ class UserInviteService
             ]);
 
             $invite->forceFill(['used_at' => Carbon::now()])->save();
+            $this->realtime->stage('accepted', $user);
 
             return $user;
         });
@@ -109,7 +116,11 @@ class UserInviteService
     {
         // Soft-delete acts as our revocation flag — preserves history while
         // making the token unusable in `accept()`.
-        $invite->delete();
+        DB::transaction(function () use ($invite): void {
+            $invite->delete();
+            $actor = auth()->user();
+            $this->realtime->stage('revoked', $actor instanceof User ? $actor : null);
+        });
     }
 
     /**
@@ -119,7 +130,8 @@ class UserInviteService
     {
         $query = UserInvite::query()
             ->with(['employee', 'role', 'inviter'])
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
 
         $status = $filters['status'] ?? 'pending';
         match ($status) {

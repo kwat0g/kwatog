@@ -44,6 +44,7 @@ class MachineController
         // from the optional field would otherwise override the column default.
         unset($payload['status']);
         $m = $this->service->create($payload);
+
         return (new MachineResource($m))->response()->setStatusCode(201);
     }
 
@@ -55,12 +56,14 @@ class MachineController
     public function destroy(Machine $machine): JsonResponse
     {
         $this->service->delete($machine);
+
         return response()->json(null, 204);
     }
 
     public function restore(Machine $machine): JsonResponse
     {
-        $machine->restore();
+        $this->service->restore($machine);
+
         return response()->json(['message' => 'Machine restored.']);
     }
 
@@ -68,6 +71,7 @@ class MachineController
     {
         $to = MachineStatus::from($request->input('to'));
         $m = $this->service->transitionStatus($machine, $to, $request->input('reason'));
+
         return new MachineResource($m);
     }
 }

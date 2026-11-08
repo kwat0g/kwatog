@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { pricingRequestsApi } from '@/api/crm/pricingRequests';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -15,10 +16,11 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ItemCostReview } from '@/types/pricing';
+import type { PaginatedResponse } from '@/types';
 import { PricingNavigation } from './PricingNavigation';
 
 export default function CostReviewsPage() {
-  const { can, canApprove } = usePermission();
+  const { can } = usePermission();
   const [searchParams] = useSearchParams();
   const linkedReviewId = searchParams.get('review');
   const openedReviewId = useRef<string | null>(null);
@@ -27,11 +29,21 @@ export default function CostReviewsPage() {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const qc = useQueryClient();
+  useRealtimeList('item_cost_review', can('inventory.costs.review') ? 'visible' : undefined);
+  const [reviewNeedsAcknowledgement, setReviewNeedsAcknowledgement] = useState(false);
   const query = useQuery({
     queryKey: ['cost-reviews', page, linkedReviewId],
     queryFn: () => pricingRequestsApi.costs(page, linkedReviewId ?? undefined),
-    placeholderData: (p) => p,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === linkedReviewId ? previous : undefined,
   });
+  useEffect(() => {
+    if (!selected || !query.data) return;
+    const latest = query.data.data.find((row) => row.id === selected.id);
+    if (!latest || latest.updated_at === selected.updated_at) return;
+    setSelected(latest);
+    setReviewNeedsAcknowledgement(true);
+  }, [query.data, selected]);
   useEffect(() => {
     if (!linkedReviewId || !query.data || openedReviewId.current === linkedReviewId) return;
     const review = query.data.data.find((row) => row.id === linkedReviewId);
@@ -40,13 +52,19 @@ export default function CostReviewsPage() {
     setSelected(review);
     setNotes('');
     setError('');
+    setReviewNeedsAcknowledgement(false);
   }, [linkedReviewId, query.data]);
   const mutation = useMutation({
-    mutationFn: async (decision: 'approve' | 'reject' | 'renew') => {
-      if (decision === 'renew') await pricingRequestsApi.renewCost(selected!.id, notes);
-      else await pricingRequestsApi.decideCost(selected!.id, decision, notes, selected!.version);
-    },
-    onSuccess: (_, decision) => {
+    mutationFn: (decision: 'approve' | 'reject' | 'renew') => decision === 'renew'
+      ? pricingRequestsApi.renewCost(selected!.id, notes)
+      : pricingRequestsApi.decideCost(selected!.id, decision, notes, selected!.version),
+    onSuccess: (updated, decision) => {
+      qc.setQueriesData<PaginatedResponse<ItemCostReview>>(
+        { queryKey: ['cost-reviews'] },
+        (current) => current
+          ? { ...current, data: current.data.map((row) => row.id === updated.id ? updated : row) }
+          : current,
+      );
       qc.invalidateQueries({ queryKey: ['cost-reviews'] });
       toast.success(
         decision === 'approve'
@@ -57,6 +75,7 @@ export default function CostReviewsPage() {
       );
       setSelected(null);
       setNotes('');
+      setReviewNeedsAcknowledgement(false);
     },
     onError: (e: unknown) => {
       qc.invalidateQueries({ queryKey: ['cost-reviews'] });
@@ -134,19 +153,22 @@ export default function CostReviewsPage() {
             setSelected(r);
             setNotes('');
             setError('');
+            setReviewNeedsAcknowledgement(false);
           }}
         >
-          {r.status === 'pending' && canApprove('inventory.costs.approve')
+          {(r.available_actions?.approve || r.available_actions?.reject)
             ? 'Review'
-            : r.status === 'rejected' && can('inventory.costs.review')
+            : r.available_actions?.renew
               ? 'Renew review'
               : 'Details'}
         </Button>
       ),
     },
   ];
-  const canDecide = selected?.status === 'pending' && canApprove('inventory.costs.approve');
-  const canRenew = selected?.status === 'rejected' && can('inventory.costs.review');
+  const canApproveSelected = selected?.available_actions?.approve === true;
+  const canRejectSelected = selected?.available_actions?.reject === true;
+  const canDecide = canApproveSelected || canRejectSelected;
+  const canRenew = selected?.available_actions?.renew === true;
   return (
     <div className="min-w-0 w-full">
       <PageHeader
@@ -205,6 +227,14 @@ export default function CostReviewsPage() {
       >
         {selected && (
           <div className="space-y-4">
+            {reviewNeedsAcknowledgement && (
+              <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                <p>This review changed while you were viewing it. The latest values are shown and your unsent reason is kept. Review the updated costs before acting.</p>
+                <Button size="sm" variant="secondary" onClick={() => setReviewNeedsAcknowledgement(false)}>
+                  I reviewed the updated values
+                </Button>
+              </div>
+            )}
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium">
@@ -279,14 +309,16 @@ export default function CostReviewsPage() {
                 rejection stays in history.
               </p>
             )}
-            {(canDecide || canRenew) && (
+            {(canDecide || canRenew || (reviewNeedsAcknowledgement && Boolean(notes))) && (
               <Textarea
-                label={canRenew ? 'Corrected cost review reason' : 'Approval or rejection reason'}
-                required
+                label={reviewNeedsAcknowledgement && !canDecide && !canRenew
+                  ? 'Your unsent reason'
+                  : canRenew ? 'Corrected cost review reason' : 'Approval or rejection reason'}
+                required={canDecide || canRenew}
                 value={notes}
                 rows={3}
                 maxLength={1000}
-                disabled={mutation.isPending}
+                disabled={mutation.isPending || reviewNeedsAcknowledgement || (!canDecide && !canRenew)}
                 onChange={(e) => setNotes(e.target.value)}
               />
             )}
@@ -299,36 +331,40 @@ export default function CostReviewsPage() {
               <Button disabled={mutation.isPending} onClick={() => setSelected(null)}>
                 {canDecide || canRenew ? 'Cancel' : 'Close'}
               </Button>
-              {canDecide && (
+              {(canRejectSelected || canApproveSelected) && (
                 <>
-                  <Button
-                    variant="danger"
-                    disabled={!notes.trim() || mutation.isPending}
-                    onClick={() => {
-                      setError('');
-                      mutation.mutate('reject');
-                    }}
-                  >
-                    Reject change
-                  </Button>
-                  <Button
-                    variant="primary"
-                    loading={mutation.isPending && mutation.variables === 'approve'}
-                    disabled={!notes.trim() || mutation.isPending}
-                    onClick={() => {
-                      setError('');
-                      mutation.mutate('approve');
-                    }}
-                  >
-                    Approve standard cost
-                  </Button>
+                  {canRejectSelected && (
+                    <Button
+                      variant="danger"
+                      disabled={!notes.trim() || mutation.isPending || reviewNeedsAcknowledgement}
+                      onClick={() => {
+                        setError('');
+                        mutation.mutate('reject');
+                      }}
+                    >
+                      Reject change
+                    </Button>
+                  )}
+                  {canApproveSelected && (
+                    <Button
+                      variant="primary"
+                      loading={mutation.isPending && mutation.variables === 'approve'}
+                      disabled={!notes.trim() || mutation.isPending || reviewNeedsAcknowledgement}
+                      onClick={() => {
+                        setError('');
+                        mutation.mutate('approve');
+                      }}
+                    >
+                      Approve standard cost
+                    </Button>
+                  )}
                 </>
               )}
               {canRenew && (
                 <Button
                   variant="primary"
                   loading={mutation.isPending}
-                  disabled={!notes.trim()}
+                  disabled={!notes.trim() || reviewNeedsAcknowledgement}
                   onClick={() => {
                     setError('');
                     mutation.mutate('renew');

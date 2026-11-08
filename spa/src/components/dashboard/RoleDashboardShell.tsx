@@ -6,8 +6,10 @@ import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { DashboardGrid, DashboardGridItem } from '@/components/dashboard/DashboardGrid';
 import { LiveDashboardWidget } from '@/components/dashboard/registry';
-import { dashboardLayoutApi } from '@/api/dashboard-layout';
+import { dashboardLayoutApi, dashboardLayoutQueryKeys } from '@/api/dashboard-layout';
 import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
+import { useAuthStore } from '@/stores/authStore';
+import { realtimeIdentityKey } from '@/lib/realtime/identity';
 
 /** The layout envelope the render prop receives. Named so the JSX open tag does
  * not need a four-deep generic argument list, which the TSX parser reads as
@@ -55,15 +57,17 @@ export function RoleDashboardShell({
   emptyTitle,
   emptyDescription,
 }: RoleDashboardShellProps) {
+  const user = useAuthStore((state) => state.user);
+  const dashboardIdentity = realtimeIdentityKey(user);
   const layout = useQuery({
-    queryKey: ['dashboard', 'layout', { rich: true }],
+    queryKey: dashboardLayoutQueryKeys.layout(dashboardIdentity, true),
     queryFn: () => dashboardLayoutApi.layout({ rich: true }),
   });
 
   const widgetKeys = layout.data?.items?.map((widget) => widget.key) ?? [];
 
   const widgetData = useQuery({
-    queryKey: ['dashboard', 'widget-data', widgetKeys],
+    queryKey: dashboardLayoutQueryKeys.widgetData(dashboardIdentity, widgetKeys),
     queryFn: () => dashboardLayoutApi.data(widgetKeys),
     enabled: widgetKeys.length > 0,
     refetchInterval: DASHBOARD_REFRESH_MS,

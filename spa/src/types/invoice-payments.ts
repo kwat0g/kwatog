@@ -12,4 +12,8 @@ export interface InvoicePaymentSubmission {
   reviewed_at: string | null;
   rejection_reason: string | null;
   collection_id: string | null;
+  available_actions?: {
+    verify: boolean;
+    reject: boolean;
+  };
 }

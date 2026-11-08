@@ -17,19 +17,30 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import { leaveStatusVariant } from '@/lib/statusVariants';
 import { reportMutationError } from '@/lib/formErrors';
 import { LeaveTypesManager } from './types';
 import { YearEndLeaveModal } from './year-end';
-import type { LeaveRequest } from '@/types/leave';
+import type { PaginatedResponse } from '@/types';
+import type { LeaveRequest, LeaveRequestAction } from '@/types/leave';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { invalidateRealtimeChange, invalidateRealtimeChanges, invalidateRealtimeList } from '@/lib/realtime/invalidationMap';
 
 const DEFAULT_FILTERS: LeaveListParams = {
  page: 1, per_page: 100, sort: 'created_at', direction: 'desc', status: '', signal: '',
 };
 
+function hasLeaveAction(request: LeaveRequest, action: LeaveRequestAction): boolean {
+ return request.available_actions?.includes(action) ?? false;
+}
+
 export default function LeavesPage() {
+ useRealtimeList('leave_request', 'visible');
+ useRealtimeList('leave_type', 'visible');
  const { can } = usePermission();
  const navigate = useNavigate();
  const qc = useQueryClient();
@@ -39,17 +50,56 @@ export default function LeavesPage() {
  // Bound to the URL so dashboard drill-downs (?status=pending_hr) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<LeaveListParams>(DEFAULT_FILTERS);
+ const listQueryKey = ['leaves', filters] as const;
 
- const [actionTarget, setActionTarget] = useState<{ req: LeaveRequest; mode: 'reject' } | null>(null);
  const [rejectReason, setRejectReason] = useState('');
- const [confirmApproveDept, setConfirmApproveDept] = useState<string | null>(null);
- const [confirmApproveHR, setConfirmApproveHR] = useState<string | null>(null);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['leaves', filters],
+ const { data, isLoading, isFetching, isError, refetch } = useQuery({
+ queryKey: listQueryKey,
  queryFn: () => leaveRequestsApi.list(filters),
- placeholderData: (prev) => prev,
+ placeholderData: (prev, previousQuery) =>
+  sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 1) ? prev : undefined,
  });
+ const all = data?.data ?? [];
+ const rejectActionTarget = useQueryRecordTarget(all, { isFetching, isError });
+ const rejectTarget = rejectActionTarget.target;
+ const approveDeptActionTarget = useQueryRecordTarget(all, { isFetching, isError });
+ const approveDeptTarget = approveDeptActionTarget.target;
+ const approveHRActionTarget = useQueryRecordTarget(all, { isFetching, isError });
+ const approveHRTarget = approveHRActionTarget.target;
+ const reconcileLeaveListResponse = (updated: LeaveRequest) => {
+  qc.setQueryData<PaginatedResponse<LeaveRequest>>(listQueryKey, (current) => {
+   if (!current || !current.data.some((request) => request.id === updated.id)) return current;
+  const remainsActionable = (updated.available_actions?.length ?? 0) > 0;
+   const stillMatches = (!filters.status || filters.status === updated.status)
+    && (filters.signal !== 'awaiting_my_approval' || remainsActionable);
+   const rows = stillMatches
+    ? current.data.map((request) => request.id === updated.id ? updated : request)
+    : current.data.filter((request) => request.id !== updated.id);
+   if (rows.length === current.data.length) return { ...current, data: rows };
+   const total = Math.max(0, current.meta.total - 1);
+   const currentPage = current.meta.current_page;
+   const pageStart = (currentPage - 1) * current.meta.per_page + 1;
+   return {
+    ...current,
+    data: rows,
+    meta: {
+     ...current.meta,
+     total,
+     last_page: Math.max(1, Math.ceil(total / Math.max(1, current.meta.per_page))),
+     from: total === 0 || pageStart > total ? null : pageStart,
+     to: rows.length === 0 ? null : Math.min(total, (current.meta.to ?? pageStart) - 1),
+    },
+   };
+  });
+ };
+ const refreshLeaveMutationViews = async (updated: LeaveRequest) => {
+  reconcileLeaveListResponse(updated);
+  // Preserve the just-installed list response while central invalidation cancels
+  // any older request; then fetch once to refill filtered pages and counts.
+  await invalidateRealtimeChange(qc, { entityType: 'leave_request', entityId: updated.id }, [], [listQueryKey]);
+  await qc.invalidateQueries({ queryKey: listQueryKey, exact: true });
+ };
  const { data: leaveOptions } = useQuery({
  queryKey: ['leaves', 'requests', 'options'],
   queryFn: () => leaveRequestsApi.options(),
@@ -61,22 +111,37 @@ export default function LeavesPage() {
 
  const approveDept = useMutation({
  mutationFn: (id: string) => leaveRequestsApi.approveDept(id),
- onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Approved.'); },
- onError: (error) => reportMutationError(error, 'Approval failed.'),
+ onSuccess: async (request) => {
+  await refreshLeaveMutationViews(request);
+  toast.success('Approved.');
+ },
+ onError: (error) => {
+  void invalidateRealtimeList(qc, 'leave_request');
+  reportMutationError(error, 'Approval failed.');
+ },
  });
  const approveHR = useMutation({
  mutationFn: (id: string) => leaveRequestsApi.approveHR(id),
- onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Approved.'); },
- onError: (error) => reportMutationError(error, 'Approval failed.'),
+ onSuccess: async (request) => {
+  await refreshLeaveMutationViews(request);
+  toast.success('Approved.');
+ },
+ onError: (error) => {
+  void invalidateRealtimeList(qc, 'leave_request');
+  reportMutationError(error, 'Approval failed.');
+ },
  });
  const rejectMut = useMutation({
  mutationFn: ({ id, reason }: { id: string; reason: string }) => leaveRequestsApi.reject(id, reason),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['leaves'] });
+ onSuccess: async (request) => {
+ await refreshLeaveMutationViews(request);
  toast.success('Rejected.');
- setActionTarget(null); setRejectReason('');
+ rejectActionTarget.close(); setRejectReason('');
  },
- onError: (error) => reportMutationError(error, 'Reject failed.'),
+ onError: (error) => {
+  void invalidateRealtimeList(qc, 'leave_request');
+  reportMutationError(error, 'Reject failed.');
+ },
  });
 
  // ─── Bulk approve ───────────────────────────────────────────────
@@ -88,8 +153,8 @@ export default function LeavesPage() {
  // submitted, so the batch cannot half-fail on 403s the UI could have
  // predicted. Anything not submitted is reported as untouched, not as done.
  const splitByStage = (rows: LeaveRequest[]) => {
- const dept = rows.filter((r) => r.can_approve && r.status === 'pending_dept');
- const hr = rows.filter((r) => r.can_approve && r.status === 'pending_hr');
+ const dept = rows.filter((r) => hasLeaveAction(r, 'approve_dept'));
+ const hr = rows.filter((r) => hasLeaveAction(r, 'approve_hr'));
  return { dept, hr, untouched: rows.length - dept.length - hr.length };
  };
 
@@ -112,12 +177,12 @@ export default function LeavesPage() {
  rows: LeaveRequest[],
  submit: (ids: string[]) => Promise<BulkApproveLeaveResult>,
  ) => {
- if (rows.length === 0) return { approved: 0, failed: [] as Array<{ reason: string }>, unconfirmed: 0 };
+ if (rows.length === 0) return { approved: [] as LeaveRequest[], failed: [] as Array<{ reason: string }>, unconfirmed: 0 };
  try {
  const result = await submit(rows.map((r) => r.id));
- return { approved: result.approved.length, failed: result.failed, unconfirmed: 0 };
+ return { approved: result.approved, failed: result.failed, unconfirmed: 0 };
  } catch {
- return { approved: 0, failed: [] as Array<{ reason: string }>, unconfirmed: rows.length };
+ return { approved: [] as LeaveRequest[], failed: [] as Array<{ reason: string }>, unconfirmed: rows.length };
  }
  };
 
@@ -130,7 +195,8 @@ export default function LeavesPage() {
  const hrResult = await runStage(hr, leaveRequestsApi.bulkApproveHR);
  return {
  selected: rows.length,
- approved: deptResult.approved + hrResult.approved,
+ approved: deptResult.approved.length + hrResult.approved.length,
+ approvedRows: [...deptResult.approved, ...hrResult.approved],
  failed: [...deptResult.failed, ...hrResult.failed],
  unconfirmed: deptResult.unconfirmed + hrResult.unconfirmed,
  untouched,
@@ -138,7 +204,22 @@ export default function LeavesPage() {
  },
  // `onSettled` rather than `onSuccess`: a batch that threw partway may still
  // have committed its first half, so the list is stale either way.
- onSettled: () => qc.invalidateQueries({ queryKey: ['leaves'] }),
+ onSettled: async (result) => {
+  const approvedRows = result?.approvedRows ?? [];
+  if (approvedRows.length > 0) {
+   await qc.cancelQueries({ queryKey: listQueryKey, exact: true }, { revert: true });
+   approvedRows.forEach(reconcileLeaveListResponse);
+   await invalidateRealtimeChanges(
+    qc,
+    approvedRows.map((request) => ({ entityType: 'leave_request' as const, entityId: request.id })),
+    [],
+    [listQueryKey],
+   );
+   await qc.invalidateQueries({ queryKey: listQueryKey, exact: true });
+   return;
+  }
+  await invalidateRealtimeList(qc, 'leave_request');
+ },
  onSuccess: (r) => {
  // Unconfirmed first: it is the only outcome the user cannot resolve by
  // reading the list, because the list may itself be stale.
@@ -190,7 +271,6 @@ export default function LeavesPage() {
  },
  ];
 
- const all = data?.data ?? [];
  const counts = {
  pending_dept: all.filter((l) => l.status === 'pending_dept').length,
  pending_hr: all.filter((l) => l.status === 'pending_hr').length,
@@ -229,16 +309,16 @@ export default function LeavesPage() {
  align: 'right',
  cell: (r) => (
  <div className="flex items-center justify-end gap-1">
- {r.status === 'pending_dept' && r.can_approve && (
+ {r.status === 'pending_dept' && hasLeaveAction(r, 'approve_dept') && (
  <>
- <Button variant="primary" size="xs" disabled={approveDept.isPending || bulkApprove.isPending} onClick={() => { setConfirmApproveDept(r.id); }}>Approve</Button>
- <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
+ <Button variant="primary" size="xs" disabled={approveDept.isPending || bulkApprove.isPending} onClick={() => { approveDeptActionTarget.open(r); }}>Approve</Button>
+ {hasLeaveAction(r, 'reject') && <Button variant="danger" size="xs" onClick={() => { rejectActionTarget.open(r); }}>Reject</Button>}
  </>
  )}
- {r.status === 'pending_hr' && r.can_approve && (
+ {r.status === 'pending_hr' && hasLeaveAction(r, 'approve_hr') && (
  <>
- <Button variant="primary" size="xs" disabled={approveHR.isPending || bulkApprove.isPending} onClick={() => { setConfirmApproveHR(r.id); }}>Approve</Button>
- <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
+ <Button variant="primary" size="xs" disabled={approveHR.isPending || bulkApprove.isPending} onClick={() => { approveHRActionTarget.open(r); }}>Approve</Button>
+ {hasLeaveAction(r, 'reject') && <Button variant="danger" size="xs" onClick={() => { rejectActionTarget.open(r); }}>Reject</Button>}
  </>
  )}
  </div>
@@ -321,8 +401,8 @@ export default function LeavesPage() {
  tableKey="leave-requests"
  onRowClick={(r) => navigate(`/hr/leaves/${r.id}`)} columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
- selectable={all.some((r) => r.can_approve)}
- bulkActions={all.some((r) => r.can_approve) ? bulkActions : undefined} /></div>
+ selectable={all.some((r) => hasLeaveAction(r, 'approve_dept') || hasLeaveAction(r, 'approve_hr'))}
+ bulkActions={all.some((r) => hasLeaveAction(r, 'approve_dept') || hasLeaveAction(r, 'approve_hr')) ? bulkActions : undefined} /></div>
  )}
 
  {data && all.length > 0 && view === 'kanban' && (
@@ -334,19 +414,27 @@ export default function LeavesPage() {
  </div>
  )}
 
- {actionTarget && actionTarget.mode === 'reject' && (
- <Modal isOpen onClose={() => { setActionTarget(null); setRejectReason(''); }} size="sm" title="Reject leave request">
+ {rejectActionTarget.targetId && (
+ <Modal isOpen onClose={() => { rejectActionTarget.close(); setRejectReason(''); }} size="sm" title="Reject leave request">
+ {rejectActionTarget.isChecking ? (
+ <p className="text-sm py-2" role="status">Checking the latest request status…</p>
+ ) : rejectActionTarget.isUnverified ? (
+ <p className="text-sm py-2 text-danger-fg" role="alert">The latest request status could not be checked. Refresh the list before rejecting.</p>
+ ) : !rejectTarget || !hasLeaveAction(rejectTarget, 'reject') ? (
+ <p className="text-sm py-2" role="alert">This request is no longer available for rejection. Your reason is kept.</p>
+ ) : (
  <p className="text-sm py-2">
- Reject <span className="font-mono">{actionTarget.req.leave_request_no}</span>?
+ Reject <span className="font-mono">{rejectTarget.leave_request_no}</span>?
  </p>
+ )}
  <Textarea label="Reason for rejection" required value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} />
  <ModalFooter>
- <Button variant="secondary" onClick={() => { setActionTarget(null); setRejectReason(''); }}>Cancel</Button>
+ <Button variant="secondary" onClick={() => { rejectActionTarget.close(); setRejectReason(''); }}>Cancel</Button>
  <Button
  variant="danger"
- disabled={!rejectReason.trim() || rejectMut.isPending}
+ disabled={!rejectReason.trim() || rejectMut.isPending || !rejectActionTarget.isFresh || !rejectTarget || !hasLeaveAction(rejectTarget, 'reject')}
  loading={rejectMut.isPending}
- onClick={() => actionTarget && rejectMut.mutate({ id: actionTarget.req.id, reason: rejectReason })}
+ onClick={() => rejectActionTarget.isFresh && rejectTarget && hasLeaveAction(rejectTarget, 'reject') && rejectMut.mutate({ id: rejectTarget.id, reason: rejectReason })}
  >
  {rejectMut.isPending ? 'Rejecting…' : 'Confirm reject'}
  </Button>
@@ -355,25 +443,47 @@ export default function LeavesPage() {
  )}
 
  <ConfirmDialog
- isOpen={confirmApproveDept !== null}
- onClose={() => setConfirmApproveDept(null)}
- onConfirm={() => { if (confirmApproveDept) approveDept.mutate(confirmApproveDept); setConfirmApproveDept(null); }}
+ isOpen={approveDeptActionTarget.targetId !== null}
+ onClose={approveDeptActionTarget.close}
+ onConfirm={() => {
+  if (!approveDeptActionTarget.isFresh || !approveDeptTarget || !hasLeaveAction(approveDeptTarget, 'approve_dept')) return;
+  approveDept.mutate(approveDeptTarget.id);
+  approveDeptActionTarget.close();
+ }}
  title="Approve leave request?"
- description="This will grant department-level approval."
+ description={approveDeptActionTarget.isChecking
+  ? 'Checking the latest request status and available actions…'
+  : approveDeptActionTarget.isUnverified
+   ? 'The latest request status could not be checked. Refresh the list before approving.'
+   : !approveDeptTarget || !hasLeaveAction(approveDeptTarget, 'approve_dept')
+    ? 'This request is no longer available for department approval.'
+    : 'This will grant department-level approval.'}
  confirmLabel="Approve"
  variant="warning"
  pending={approveDept.isPending}
+ disabled={!approveDeptActionTarget.isFresh || !approveDeptTarget || !hasLeaveAction(approveDeptTarget, 'approve_dept')}
  />
 
  <ConfirmDialog
- isOpen={confirmApproveHR !== null}
- onClose={() => setConfirmApproveHR(null)}
- onConfirm={() => { if (confirmApproveHR) approveHR.mutate(confirmApproveHR); setConfirmApproveHR(null); }}
+ isOpen={approveHRActionTarget.targetId !== null}
+ onClose={approveHRActionTarget.close}
+ onConfirm={() => {
+  if (!approveHRActionTarget.isFresh || !approveHRTarget || !hasLeaveAction(approveHRTarget, 'approve_hr')) return;
+  approveHR.mutate(approveHRTarget.id);
+  approveHRActionTarget.close();
+ }}
  title="Approve leave request?"
- description="This will grant HR-level approval."
+ description={approveHRActionTarget.isChecking
+  ? 'Checking the latest request status and available actions…'
+  : approveHRActionTarget.isUnverified
+   ? 'The latest request status could not be checked. Refresh the list before approving.'
+   : !approveHRTarget || !hasLeaveAction(approveHRTarget, 'approve_hr')
+    ? 'This request is no longer available for HR approval.'
+    : 'This will grant HR-level approval.'}
  confirmLabel="Approve"
  variant="warning"
  pending={approveHR.isPending}
+ disabled={!approveHRActionTarget.isFresh || !approveHRTarget || !hasLeaveAction(approveHRTarget, 'approve_hr')}
  />
 
  {/* Manage Types — PASS 6 consolidation: leave types moved from a standalone page into this modal */}
@@ -385,7 +495,7 @@ export default function LeavesPage() {
  <YearEndLeaveModal
  open={showYearEnd}
  onClose={() => setShowYearEnd(false)}
- onSuccess={() => qc.invalidateQueries({ queryKey: ['leaves'] })}
+ onSuccess={() => { void invalidateRealtimeList(qc, 'leave_request'); }}
  />
  </div>
  );

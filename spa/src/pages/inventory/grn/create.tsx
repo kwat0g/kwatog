@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuTrash2 } from '@/lib/icons';
@@ -21,6 +21,7 @@ import type { CreateGrnData } from '@/types/inventory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 import { localIsoDate } from '@/lib/formatDate';
+import { invalidateRealtimeList } from '@/lib/realtime/invalidationMap';
 import { formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 
 interface Line {
@@ -50,6 +51,7 @@ interface FormErrors {
 
 export default function CreateGrnPage() {
   const nav = useNavigate();
+  const qc = useQueryClient();
   const [search] = useSearchParams();
   const [poId, setPoId] = useState<string>(search.get('po_id') ?? '');
   const [items, setItems] = useState<Line[]>([]);
@@ -157,6 +159,8 @@ export default function CreateGrnPage() {
   const m = useMutation({
     mutationFn: (d: CreateGrnData) => grnApi.create(d, idempotencyKey.current),
     onSuccess: (g) => {
+      qc.setQueryData(['inventory', 'grn', 'detail', g.id], g);
+      void invalidateRealtimeList(qc, 'grn');
       toast.success(`GRN ${g.grn_number} created. Pending QC.`);
       nav(`/inventory/grn/${g.id}`);
     },

@@ -20,8 +20,11 @@ import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { localIsoDate } from '@/lib/formatDate';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 // ─── Validation ──────────────────────────────────────────────────────────────
 
 const itemSchema = z.object({
@@ -57,6 +60,8 @@ function readSubmission(key: string): Submission | null {
 export default function CreateDeliveryPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const { can } = usePermission();
+ useRealtimeList('vehicle', can('supply_chain.view') ? 'visible' : undefined);
  const userId = useAuthStore((state) => state.user?.id);
  const submissionStorageKey = `ogami:formdraft:delivery-submission:${userId}`;
  const [submission, setSubmission] = useState<Submission | null>(() => readSubmission(submissionStorageKey));
@@ -142,12 +147,18 @@ export default function CreateDeliveryPage() {
  })),
   }, idempotencyKey);
  },
- onSuccess: async (delivery) => {
+ onSuccess: (delivery) => {
  rememberSubmission(null);
  safety.draftState.discard();
- await qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
+ reconcileRealtimeMutationResponse(
+   qc,
+   { entityType: 'delivery', entityId: delivery.id },
+   ['supply-chain', 'deliveries', delivery.id],
+   delivery,
+ );
  toast.success('Delivery created');
- navigate(`/supply-chain/deliveries/${delivery.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/supply-chain/deliveries/${delivery.id}`);
  },
  onError: (err) => {
  if (isAxiosError(err) && err.response && err.response.status < 500) rememberSubmission(null);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Resources;
 
+use App\Modules\Leave\Enums\LeaveRequestStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,48 +12,78 @@ class LeaveRequestResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $actor = $request->user();
+        $canApprove = (bool) ($this->can_approve ?? false);
+        $status = $this->status?->value;
+        $isOwner = $actor !== null && (int) $actor->employee_id === (int) $this->employee_id;
+        $canCancel = $isOwner && in_array($status, [
+            LeaveRequestStatus::PendingDept->value,
+            LeaveRequestStatus::PendingHr->value,
+            LeaveRequestStatus::Approved->value,
+        ], true);
+        $availableActions = [];
+        if ($canApprove && $status === LeaveRequestStatus::PendingDept->value) {
+            $availableActions[] = 'approve_dept';
+        }
+        if ($canApprove && $status === LeaveRequestStatus::PendingHr->value) {
+            $availableActions[] = 'approve_hr';
+        }
+        if ($canApprove) {
+            $availableActions[] = 'reject';
+        }
+        if ($canCancel) {
+            $availableActions[] = 'cancel';
+        }
+
         return [
-            'id'               => $this->hash_id,
+            'id' => $this->hash_id,
             'leave_request_no' => $this->leave_request_no,
-            'employee'         => $this->whenLoaded('employee', fn () => $this->employee ? [
-                'id'           => $this->employee->hash_id,
-                'employee_no'  => $this->employee->employee_no,
-                'full_name'    => $this->employee->full_name,
-                'department'   => $this->employee->department?->name,
+            'employee' => $this->whenLoaded('employee', fn () => $this->employee ? [
+                'id' => $this->employee->hash_id,
+                'employee_no' => $this->employee->employee_no,
+                'full_name' => $this->employee->full_name,
+                'department' => $this->employee->department?->name,
             ] : null),
-            'leave_type'       => $this->whenLoaded('leaveType', fn () => $this->leaveType ? [
-                'id'   => $this->leaveType->hash_id,
+            'leave_type' => $this->whenLoaded('leaveType', fn () => $this->leaveType ? [
+                'id' => $this->leaveType->hash_id,
                 'code' => $this->leaveType->code,
                 'name' => $this->leaveType->name,
             ] : null),
-            'start_date'       => optional($this->start_date)->toDateString(),
-            'end_date'         => optional($this->end_date)->toDateString(),
-            'days'             => (string) $this->days,
-            'half_day_period'  => $this->half_day_period?->value,
-            'reason'           => $this->reason,
+            'start_date' => optional($this->start_date)->toDateString(),
+            'end_date' => optional($this->end_date)->toDateString(),
+            'days' => (string) $this->days,
+            'half_day_period' => $this->half_day_period?->value,
+            'reason' => $this->reason,
             // The stored path is on the private disk and is never a client-owned
             // URL. Expose only the fact that a supporting document exists.
-            'has_document'     => $this->document_path !== null,
-            'status'           => $this->status?->value,
-            'status_label'     => $this->status?->label(),
-            'can_approve'      => (bool) ($this->can_approve ?? false),
-            'dept_approver'    => $this->whenLoaded('deptApprover', fn () => $this->deptApprover ? [
+            'has_document' => $this->document_path !== null,
+            'status' => $this->status?->value,
+            'status_label' => $this->status?->label(),
+            'can_approve' => (bool) ($this->can_approve ?? false),
+            'permissions' => [
+                'approve' => $canApprove,
+                'reject' => $canApprove,
+                'cancel' => $canCancel,
+            ],
+            'available_actions' => $availableActions,
+            'dept_approver' => $this->whenLoaded('deptApprover', fn () => $this->deptApprover ? [
                 'id' => $this->deptApprover->hash_id, 'name' => $this->deptApprover->name,
             ] : null),
             'dept_approved_at' => optional($this->dept_approved_at)->toIso8601String(),
-            'hr_approver'      => $this->whenLoaded('hrApprover', fn () => $this->hrApprover ? [
+            'hr_approver' => $this->whenLoaded('hrApprover', fn () => $this->hrApprover ? [
                 'id' => $this->hrApprover->hash_id, 'name' => $this->hrApprover->name,
             ] : null),
-            'hr_approved_at'   => optional($this->hr_approved_at)->toIso8601String(),
-            'cancelled_by'     => $this->whenLoaded('canceller', fn () => $this->canceller ? [
+            'hr_approved_at' => optional($this->hr_approved_at)->toIso8601String(),
+            'cancelled_by' => $this->whenLoaded('canceller', fn () => $this->canceller ? [
                 'id' => $this->canceller->hash_id,
                 'name' => $this->canceller->name,
             ] : null),
-            'cancelled_at'     => optional($this->cancelled_at)->toIso8601String(),
+            'cancelled_at' => optional($this->cancelled_at)->toIso8601String(),
             'rejection_reason' => $this->rejection_reason,
-            'created_at'       => optional($this->created_at)->toIso8601String(),
-            'updated_at'       => optional($this->updated_at)->toIso8601String(),
-            'deleted_at'       => optional($this->deleted_at)?->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
+            'version' => $this->updated_at?->format('Y-m-d\TH:i:s.uP'),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

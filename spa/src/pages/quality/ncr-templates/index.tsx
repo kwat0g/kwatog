@@ -24,6 +24,7 @@ import type { AxiosError } from 'axios';
 import type { NcrTemplate } from '@/types/quality';
 
 import { showUndoToast } from '@/lib/undoToast';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const SEVERITY_CHIP: Record<string, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
  minor: 'neutral',
  major: 'warning',
@@ -34,6 +35,7 @@ export default function NcrTemplatesListPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
  const { can } = usePermission();
+ useRealtimeList('ncr_template', 'visible');
 const [deleteId, setDeleteId] = useState<string | null>(null);
  const [restoreId, setRestoreId] = useState<string | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
@@ -43,7 +45,6 @@ const [deleteId, setDeleteId] = useState<string | null>(null);
   // by the NCR create page. Both routes can be soft-navigated in one session.
   queryKey: ['quality', 'ncr-templates', 'list', scope],
   queryFn: () => ncrTemplatesApi.list({ per_page: 100, trashed: archiveToTrashed(scope) }),
-  placeholderData: (prev) => prev,
  });
  const { data: templateOptions } = useQuery({
  queryKey: ['quality', 'ncr-templates', 'options'],

@@ -10,6 +10,9 @@ class TrainingResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $actor = $request->user();
+        $canManage = $actor?->hasPermission('hr.trainings.manage') ?? false;
+
         return [
             'id'                => $this->hash_id,
             'name'              => $this->name,
@@ -25,6 +28,12 @@ class TrainingResource extends JsonResource
             'created_at'        => $this->created_at?->toISOString(),
             'updated_at'        => $this->updated_at?->toISOString(),
             'deleted_at'        => optional($this->deleted_at)?->toIso8601String(),
+            'version'           => $this->updated_at?->format('Y-m-d\\TH:i:s.uP'),
+            'permissions'       => [
+                'view' => $actor?->hasPermission('hr.trainings.view') ?? false,
+                'manage' => $canManage,
+            ],
+            'available_actions' => ! $canManage ? [] : ($this->trashed() ? ['restore'] : ['update', 'archive']),
         ];
     }
 }

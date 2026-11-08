@@ -5,7 +5,7 @@
  * 8D editor saves on blur (debounced via blur-then-mutate); finalising
  * the report locks all eight disciplines.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { LuTriangleAlert, LuCheck, LuFileDown, LuLock, LuRefreshCw, LuSearch } from '@/lib/icons';
@@ -25,10 +25,12 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ChainHeader } from '@/components/chain';
 import type { ChainStep } from '@/types/chain';
-import { usePermission } from '@/hooks/usePermission';
 import type { ComplaintSeverity, EightDReport } from '@/types/crm';
 import { complaintStatusVariant } from '@/lib/statusVariants';
 import { formatDateTime, formatDateIso } from '@/lib/formatDate';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { scheduleRealtimeChangeInvalidation } from '@/lib/realtime/invalidationMap';
+import type { CustomerComplaint } from '@/types/crm';
 
 const SEVERITY_CHIP: Record<
   ComplaintSeverity,
@@ -79,26 +81,54 @@ const D_LABELS: Array<{ key: keyof EightDPatch; title: string; helper: string }>
   },
 ];
 
+function draftFromReport(report: EightDReport | null | undefined): EightDPatch {
+  return {
+    d1_team: report?.d1_team ?? '',
+    d2_problem: report?.d2_problem ?? '',
+    d3_containment: report?.d3_containment ?? '',
+    d4_root_cause: report?.d4_root_cause ?? '',
+    d5_corrective_action: report?.d5_corrective_action ?? '',
+    d6_verification: report?.d6_verification ?? '',
+    d7_prevention: report?.d7_prevention ?? '',
+    d8_recognition: report?.d8_recognition ?? '',
+  };
+}
+
+function draftsMatch(left: EightDPatch, right: EightDPatch): boolean {
+  return D_LABELS.every(({ key }) => (left[key] ?? '') === (right[key] ?? ''));
+}
+
 type Tab = 'overview' | '8d' | 'linked';
 
 export default function ComplaintDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const { can } = usePermission();
   const [tab, setTab] = useState<Tab>('overview');
   const [draft, setDraft] = useState<EightDPatch>({});
+  const [hasExternalChange, setHasExternalChange] = useState(false);
+  const savedDraft = useRef<EightDPatch | null>(null);
+  const savedVersion = useRef<string | null>(null);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  useRealtimeRecord('customer_complaint', id || undefined);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['crm', 'complaints', id],
     queryFn: () => complaintsApi.show(id),
     enabled: Boolean(id),
-    placeholderData: (prev) => prev,
   });
+  const acceptMutationResult = (updated: CustomerComplaint) => {
+    qc.setQueryData(['crm', 'complaints', id], updated);
+    if (updated.eight_d_report) {
+      savedDraft.current = draftFromReport(updated.eight_d_report);
+      savedVersion.current = updated.eight_d_report.version ?? null;
+    }
+    setHasExternalChange(false);
+    scheduleRealtimeChangeInvalidation(qc, { entityType: 'customer_complaint', entityId: id });
+  };
   const { data: complaintOptions } = useQuery({
-    queryKey: ['crm', 'complaints', 'options'],
+    queryKey: ['crm', 'complaint-options'],
     queryFn: complaintsApi.options,
     staleTime: 5 * 60 * 1000,
   });
@@ -107,37 +137,58 @@ export default function ComplaintDetailPage() {
   );
   const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
 
-  // Hydrate the draft from the latest 8D report fetched.
+  // Follow fresh server values when the local draft is clean. If both the
+  // server report and a local edit changed, retain the draft and require review.
   useEffect(() => {
-    if (!data?.eight_d_report) return;
-    const r = data.eight_d_report;
-    setDraft({
-      d1_team: r.d1_team ?? '',
-      d2_problem: r.d2_problem ?? '',
-      d3_containment: r.d3_containment ?? '',
-      d4_root_cause: r.d4_root_cause ?? '',
-      d5_corrective_action: r.d5_corrective_action ?? '',
-      d6_verification: r.d6_verification ?? '',
-      d7_prevention: r.d7_prevention ?? '',
-      d8_recognition: r.d8_recognition ?? '',
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- id is a stable sentinel; using the full object would cause infinite loops
-  }, [data?.eight_d_report?.id]);
+    const report = data?.eight_d_report;
+    if (!report) return;
+
+    const incoming = draftFromReport(report);
+    const baseline = savedDraft.current;
+    if (baseline && !draftsMatch(draft, baseline)) {
+      const versionChanged = Boolean(
+        report.version && savedVersion.current && report.version !== savedVersion.current,
+      );
+      if (versionChanged || !draftsMatch(incoming, baseline)) setHasExternalChange(true);
+      return;
+    }
+
+    savedDraft.current = incoming;
+    savedVersion.current = report.version ?? null;
+    if (!draftsMatch(draft, incoming)) setDraft(incoming);
+    setHasExternalChange(false);
+  }, [data?.eight_d_report, draft]);
+
+  const reloadLatestReport = async () => {
+    const result = await refetch();
+    if (result.isError || !result.data?.eight_d_report) {
+      toast.error('Could not reload the latest 8D report. Your draft is still here.');
+      return;
+    }
+
+    const latest = draftFromReport(result.data.eight_d_report);
+    savedDraft.current = latest;
+    savedVersion.current = result.data.eight_d_report.version ?? null;
+    setDraft(latest);
+    setHasExternalChange(false);
+  };
 
   const save8D = useMutation({
-    mutationFn: (patch: EightDPatch) => complaintsApi.update8D(id, patch),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['crm', 'complaints', id] });
+    mutationFn: (patch: EightDPatch) => complaintsApi.update8D(id, patch, savedVersion.current),
+    onSuccess: (updated) => {
+      acceptMutationResult(updated);
     },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Save failed'),
+    onError: (e: AxiosError<{ message?: string }>) => {
+      toast.error(e.response?.data?.message ?? 'Save failed');
+      if (e.response?.status === 409) void refetch();
+    },
   });
 
   const finalize = useMutation({
     mutationFn: () => complaintsApi.finalize8D(id),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      acceptMutationResult(updated);
       toast.success('8D report finalised');
-      qc.invalidateQueries({ queryKey: ['crm', 'complaints', id] });
       setConfirmFinalize(false);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
@@ -146,9 +197,9 @@ export default function ComplaintDetailPage() {
 
   const resolveMut = useMutation({
     mutationFn: () => complaintsApi.resolve(id),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      acceptMutationResult(updated);
       toast.success('Complaint marked resolved');
-      qc.invalidateQueries({ queryKey: ['crm', 'complaints', id] });
       setConfirmResolve(false);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
@@ -157,9 +208,9 @@ export default function ComplaintDetailPage() {
 
   const closeMut = useMutation({
     mutationFn: () => complaintsApi.close(id),
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      acceptMutationResult(updated);
       toast.success('Complaint closed');
-      qc.invalidateQueries({ queryKey: ['crm', 'complaints', id] });
       setConfirmClose(false);
     },
     onError: (e: AxiosError<{ message?: string }>) =>
@@ -169,7 +220,7 @@ export default function ComplaintDetailPage() {
   const retryNcrMut = useMutation({
     mutationFn: () => complaintsApi.retryNcr(id),
     onSuccess: (updated) => {
-      qc.invalidateQueries({ queryKey: ['crm', 'complaints', id] });
+      acceptMutationResult(updated);
       toast.success(
         updated.ncr_handoff?.status === 'manual_required'
           ? 'NCR handoff still needs attention.'
@@ -233,8 +284,6 @@ export default function ComplaintDetailPage() {
       date: data.closed_at ? formatDateIso(data.closed_at) : undefined,
     },
   ];
-  const canManage = can('crm.complaints.manage');
-
   // Build LinkedRecords groups
   const linkedGroups: import('@/types/chain').LinkedGroup[] = [];
   if (data.customer) {
@@ -292,7 +341,7 @@ export default function ComplaintDetailPage() {
         backLabel="Complaints"
         actions={
           <div className="flex items-center gap-2">
-            {canManage && data.ncr_handoff?.status === 'manual_required' && (
+            {data.available_actions?.retry_ncr_handoff && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -325,15 +374,12 @@ export default function ComplaintDetailPage() {
                 Download 8D PDF
               </Button>
             )}
-            {canManage &&
-              !isTerminal &&
-              ['open', 'investigating'].includes(data.status) &&
-              qualityCompletionReady && (
-                <Button variant="secondary" size="sm" onClick={() => setConfirmResolve(true)}>
-                  Resolve
-                </Button>
-              )}
-            {canManage && data.status === 'resolved' && qualityCompletionReady && (
+            {data.available_actions?.resolve && (
+              <Button variant="secondary" size="sm" onClick={() => setConfirmResolve(true)}>
+                Resolve
+              </Button>
+            )}
+            {data.available_actions?.close && (
               <Button
                 variant="primary"
                 size="sm"
@@ -403,7 +449,7 @@ export default function ComplaintDetailPage() {
                         'The complaint cannot be resolved or closed until an NCR is linked.'}
                     </div>
                   </div>
-                  {canManage && (
+                  {data.available_actions?.retry_ncr_handoff && (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -454,15 +500,38 @@ export default function ComplaintDetailPage() {
 
         {tab === '8d' && (
           <div className="grid grid-cols-2 gap-4">
+            {hasExternalChange && (
+              <div role="status" className="col-span-2 flex items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+                <p className="text-muted">
+                  This 8D report changed while you had unsaved edits. Your draft is preserved; reload the latest report before editing again.
+                </p>
+                <Button variant="secondary" size="sm" disabled={isFetching} onClick={() => void reloadLatestReport()}>
+                  Reload latest
+                </Button>
+              </div>
+            )}
             {D_LABELS.map((d) => (
               <Panel key={d.key} title={d.title} meta={d.helper} className="col-span-1">
                 <Textarea
                   rows={4}
-                  disabled={isFinalized || !canManage}
+                  disabled={!data.available_actions?.edit_8d || isFinalized || hasExternalChange || save8D.isPending}
                   value={(draft[d.key] as string) ?? ''}
                   onChange={(e) => setDraft((s) => ({ ...s, [d.key]: e.target.value }))}
                   onBlur={() => {
-                    if (isFinalized || !canManage) return;
+                    if (!data.available_actions?.edit_8d || isFinalized || hasExternalChange || save8D.isPending) return;
+                    const baseline = savedDraft.current;
+                    const serverDraft = draftFromReport(report);
+                    const versionChanged = Boolean(
+                      report?.version && savedVersion.current && report.version !== savedVersion.current,
+                    );
+                    if (
+                      baseline &&
+                      !draftsMatch(draft, baseline) &&
+                      (versionChanged || !draftsMatch(serverDraft, baseline))
+                    ) {
+                      setHasExternalChange(true);
+                      return;
+                    }
                     const original = (report?.[d.key as keyof EightDReport] as string) ?? '';
                     const current = (draft[d.key] as string) ?? '';
                     if (original !== current) {
@@ -479,12 +548,13 @@ export default function ComplaintDetailPage() {
                   <LuLock size={12} className="inline mr-1" />
                   Finalised on {formatDateTime(report?.finalized_at)}
                 </span>
-              ) : canManage ? (
+              ) : data.available_actions?.finalize_8d ? (
                 <Button
                   variant="primary"
                   size="sm"
                   icon={<LuLock size={14} />}
                   onClick={() => setConfirmFinalize(true)}
+                  disabled={hasExternalChange}
                 >
                   Finalise 8D
                 </Button>
@@ -516,9 +586,12 @@ export default function ComplaintDetailPage() {
         title="Finalise 8D report?"
         description="Once finalised, none of the 8 disciplines can be edited. The report becomes the audit-trail of record."
         confirmLabel="Finalise"
-        onConfirm={() => finalize.mutate()}
+        onConfirm={() => {
+          if (!hasExternalChange) finalize.mutate();
+        }}
         onClose={() => setConfirmFinalize(false)}
         pending={finalize.isPending}
+        disabled={hasExternalChange}
       />
       <ConfirmDialog
         isOpen={confirmResolve}

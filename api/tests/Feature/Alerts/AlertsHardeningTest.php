@@ -11,6 +11,8 @@ use App\Common\Notifications\CriticalAlertEmail;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Dashboard\Events\BadgesChanged;
+use App\Modules\Dashboard\Services\DashboardCacheGeneration;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -160,6 +162,9 @@ class AlertsHardeningTest extends TestCase
             ->value('value'), true) ?: [];
         unset($catalog['scheduler_stale']);
         $settings->set('alerts.critical.notification_roles', $catalog);
+        $badgeEventsBefore = DB::table('event_outbox')
+            ->where('event_type', BadgesChanged::class)
+            ->count();
 
         $alert = app(AlertEngineService::class)->raise(
             AlertType::SchedulerStale,
@@ -172,6 +177,11 @@ class AlertsHardeningTest extends TestCase
         $this->assertSame('failed', $failed->email_status);
         $this->assertSame(1, $failed->email_attempts);
         $this->assertNotNull($failed->email_next_attempt_at);
+        $this->assertSame(
+            $badgeEventsBefore + 3,
+            DB::table('event_outbox')->where('event_type', BadgesChanged::class)->count(),
+            'Alert creation, retry claim, and final delivery failure must refresh alert-list viewers.',
+        );
 
         app(AlertEngineService::class)->raise(
             AlertType::SchedulerStale,
@@ -273,10 +283,16 @@ class AlertsHardeningTest extends TestCase
             'message' => 'Keep me',
         ]);
         $open->forceFill(['created_at' => now()->subMonths(13)])->save();
+        $alertsWidgetGeneration = DashboardCacheGeneration::current('widget-summary:alerts');
 
         $deleted = app(AlertEngineService::class)->pruneResolved(12);
 
         $this->assertSame(1, $deleted);
+        $this->assertNotSame(
+            $alertsWidgetGeneration,
+            DashboardCacheGeneration::current('widget-summary:alerts'),
+            'Deleting resolved alerts must retire the cached alert-widget count.',
+        );
         $this->assertDatabaseMissing('alerts', ['id' => $old->getKey()]);
         $this->assertDatabaseHas('alerts', ['id' => $open->getKey()]);
     }

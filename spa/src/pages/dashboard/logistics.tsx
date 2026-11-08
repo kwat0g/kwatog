@@ -22,7 +22,7 @@ export default function LogisticsDashboardPage() {
   return (
     <RoleDashboardShell
       title="Logistics"
-      subtitle="Shipments, dispatch and fleet: what is moving, what is late, what needs a driver."
+      subtitle="Shipments, dispatch, and fleet."
       kpiCodes={['on_time_delivery']}
       emptyTitle="No logistics blocks configured"
       emptyDescription="Shipment, delivery and purchasing reads appear here as you hold those module permissions."

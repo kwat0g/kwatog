@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\SettingsService;
@@ -202,6 +203,51 @@ class SalesOrderResponseTest extends TestCase
         // The original order line is untouched until sales accepts.
         $this->assertSame('100.00', (string) $line->fresh()->quantity);
         $this->assertSame('10.00', (string) $line->fresh()->unit_price);
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+        $event = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->firstOrFail();
+        $this->assertSame('updated', json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR)['action']);
+    }
+
+    public function test_sales_delivery_date_proposal_stages_one_parent_record_refresh(): void
+    {
+        $customer = Customer::factory()->create();
+        $so = $this->makeSo($customer);
+        $so->forceFill(['submission_source' => 'customer_portal'])->save();
+        $this->makeLine($so, '5.00', '10.00');
+        $sales = $this->userWithRole('sales_officer');
+
+        $this->svc->proposeDeliveryDate($so, $sales, [
+            'proposed_delivery_date' => today()->addDays(30)->toDateString(),
+            'notes' => 'Capacity moved to a later production window.',
+        ]);
+
+        $this->assertSame('delivery_negotiation', $so->fresh()->status->value);
+        $event = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->firstOrFail();
+        $payload = json_decode($event->payload, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('delivery_negotiation', $payload['newStatus']);
+        $this->assertSame('draft', $payload['activeStep']);
+        $this->assertSame('status_changed', $payload['action']);
+    }
+
+    public function test_cancellation_request_refresh_is_an_update_not_a_status_transition(): void
+    {
+        $customer = Customer::factory()->create();
+        $portalUser = CustomerPortalUser::create([
+            'customer_id' => $customer->id,
+            'name' => 'Portal User',
+            'email' => 'portal-user@example.test',
+            'password' => bcrypt('Password1!'),
+            'is_active' => true,
+        ]);
+        $so = $this->makeSo($customer, 'confirmed');
+        $so->forceFill(['submission_source' => 'customer_portal'])->save();
+
+        $this->svc->requestCancellation($so, $portalUser, 'Customer requested cancellation review.');
+
+        $event = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->firstOrFail();
+        $payload = json_decode($event->payload, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('confirmed', $payload['newStatus']);
+        $this->assertSame('updated', $payload['action']);
     }
 
     public function test_decline_stays_pending(): void
@@ -319,6 +365,7 @@ class SalesOrderResponseTest extends TestCase
         $this->assertSame('256.80', (string) $fresh->vat_amount);
         $this->assertSame('2396.80', (string) $fresh->total_amount);
         $this->assertSame('draft', $fresh->status->value, 'Accepting a proposal must not confirm the order.');
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
 
         Mail::assertQueued(CustomerSalesOrderDecisionMail::class, function ($mail) use ($so) {
             return $mail->decision === 'accept' && (int) $mail->salesOrder->id === (int) $so->id;
@@ -596,5 +643,6 @@ class SalesOrderResponseTest extends TestCase
             ->assertJsonPath('data.customer_confirmation_requested_at', fn ($v) => $v !== null);
 
         $this->assertNotNull($so->fresh()->customer_confirmation_requested_at);
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
     }
 }

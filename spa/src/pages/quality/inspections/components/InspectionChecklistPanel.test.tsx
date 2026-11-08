@@ -5,7 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { inspectionsApi } from '@/api/quality/inspections';
 import type { Inspection } from '@/types/quality';
-import { InspectionChecklistPanel } from './InspectionChecklistPanel';
+import { InspectionChecklistPanel, LegacyInspectionPanel } from './InspectionChecklistPanel';
 
 const apiMocks = vi.hoisted(() => ({ recordMeasurements: vi.fn() }));
 
@@ -22,6 +22,7 @@ const inspection: Inspection = {
   inspection_number: 'QC-DEMO',
   stage: 'outgoing',
   status: 'draft',
+  result_version: 0,
   batch_quantity: 150,
   sample_size: 20,
   accepted_quantity: 0,
@@ -85,12 +86,13 @@ const inspection: Inspection = {
   ],
 };
 
-function mount(record: Inspection = inspection) {
+function mount(record: Inspection = inspection, legacy = true) {
+  const Panel = legacy ? LegacyInspectionPanel : InspectionChecklistPanel;
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <MemoryRouter><InspectionChecklistPanel inspection={record} canManage /></MemoryRouter>
+      <MemoryRouter><Panel inspection={record} canManage /></MemoryRouter>
       <Toaster />
     </QueryClientProvider>,
   );
@@ -101,7 +103,7 @@ describe('InspectionChecklistPanel', () => {
 
   it.each(['measurement', 'checklist'] as const)('blocks %s evidence until real startup pieces exist', (capture_method) => {
     mount({ ...inspection, capture_method, stage: 'in_process', startup_trial_required: true,
-      startup_trial: { required_quantity: 20, recorded_quantity: 0, settled: false, captured_at: null, output_id: null } } as Inspection);
+      startup_trial: { required_quantity: 20, recorded_quantity: 0, settled: false, captured_at: null, output_id: null } } as Inspection, false);
     expect(screen.getByText('Waiting for Production to record 20 trial pieces')).toBeInTheDocument();
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^PASS / })).not.toBeInTheDocument();
@@ -144,6 +146,7 @@ describe('InspectionChecklistPanel', () => {
         { id: 'diameter-1', measured_value: '10' },
         { id: 'diameter-2', measured_value: '10' },
       ],
+      expected_result_version: 0,
     });
     fireEvent.click(screen.getByRole('button', { name: 'PASS Diameter' }));
     expect(screen.getByRole('button', { name: 'Submit inspection' })).toBeDisabled();
@@ -157,6 +160,7 @@ describe('InspectionChecklistPanel', () => {
           { id: 'surface', result: 'passed' },
         ],
         submit: true,
+        expected_result_version: 0,
       }),
     );
     expect(await screen.findByText(/Awaiting checker review/)).toBeInTheDocument();
@@ -164,10 +168,69 @@ describe('InspectionChecklistPanel', () => {
     expect(inspection.measurements?.every((row) => row.measured_value === null)).toBe(true);
   });
 
+  it('keeps typed measurement input when the server reports a stale inspection version', async () => {
+    apiMocks.recordMeasurements.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          code: 'inspection_state_conflict',
+          message: 'This inspection changed. Reload before submitting.',
+        },
+      },
+    });
+    mount({ ...inspection, result_version: 2 });
+
+    const reading = screen.getByRole('spinbutton', { name: 'Diameter sample 1 (mm)' });
+    fireEvent.change(reading, { target: { value: '10.02' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save measurements' }));
+
+    expect(await screen.findByText(/Inspection changed in another session/)).toBeInTheDocument();
+    expect(reading).toHaveValue(10.02);
+    expect(apiMocks.recordMeasurements).toHaveBeenCalledWith('inspection-1', {
+      measurements: [{ id: 'diameter-1', measured_value: '10.02' }],
+      expected_result_version: 2,
+    });
+  });
+
+  it('keeps selected checklist decisions when submission conflicts with a newer inspection version', async () => {
+    vi.mocked(inspectionsApi.recordItemResults).mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          code: 'inspection_state_conflict',
+          message: 'This inspection changed. Reload before submitting.',
+        },
+      },
+    });
+    mount({
+      ...inspection,
+      status: 'in_progress',
+      measurements: inspection.measurements?.map((row) =>
+        row.parameter_name === 'Diameter' ? { ...row, measured_value: 10, is_pass: true } : row,
+      ),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'PASS Diameter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PASS Surface finish' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit inspection' }));
+
+    expect(await screen.findByText(/Inspection changed in another session/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PASS Diameter' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'PASS Surface finish' })).toHaveAttribute('aria-pressed', 'true');
+    expect(inspectionsApi.recordItemResults).toHaveBeenCalledWith('inspection-1', {
+      items: [
+        { id: 'diameter-1', result: 'passed' },
+        { id: 'surface', result: 'passed' },
+      ],
+      submit: true,
+      expected_result_version: 0,
+    });
+  });
+
   it('requires actual sample coverage and uses the batch gate for lot-checklist submission', async () => {
     const lot = { ...inspection, inspection_mode: 'lot_checklist' as const };
     const submitted: Inspection = {
       ...lot,
+      result_version: 3,
       updated_at: '2026-10-04T00:00:02Z',
       status: 'awaiting_review',
       proposed_result: 'passed',
@@ -176,6 +239,7 @@ describe('InspectionChecklistPanel', () => {
     };
     apiMocks.recordMeasurements.mockResolvedValue({
       ...lot,
+      result_version: 1,
       updated_at: '2026-10-04T00:00:00Z',
       measurements: lot.measurements?.map((row) =>
         row.parameter_name === 'Diameter'
@@ -183,7 +247,7 @@ describe('InspectionChecklistPanel', () => {
           : row,
       ),
     });
-    vi.mocked(inspectionsApi.recordItemResults).mockResolvedValue({ ...lot, status: 'in_progress' });
+    vi.mocked(inspectionsApi.recordItemResults).mockResolvedValue({ ...lot, result_version: 2, status: 'in_progress' });
     vi.mocked(inspectionsApi.recordBatchResult).mockResolvedValue(submitted);
     mount(lot);
 
@@ -216,6 +280,7 @@ describe('InspectionChecklistPanel', () => {
         sample_defect_count: 0,
         critical_defect: false,
         defects_removed_confirmed: false,
+        expected_result_version: 2,
       }),
     );
     expect(apiMocks.recordMeasurements).toHaveBeenCalledWith('inspection-1', {
@@ -223,6 +288,7 @@ describe('InspectionChecklistPanel', () => {
         { id: 'diameter-1', measured_value: '10' },
         { id: 'diameter-2', measured_value: '10' },
       ],
+      expected_result_version: 0,
     });
     expect(inspectionsApi.recordItemResults).toHaveBeenCalledWith('inspection-1', {
       items: [
@@ -230,6 +296,7 @@ describe('InspectionChecklistPanel', () => {
         { id: 'surface', result: 'passed' },
       ],
       submit: false,
+      expected_result_version: 1,
     });
     expect(apiMocks.recordMeasurements.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(inspectionsApi.recordItemResults).mock.invocationCallOrder[0],
@@ -277,6 +344,7 @@ describe('InspectionChecklistPanel', () => {
           { id: 'surface', result: 'passed' },
         ],
         submit: true,
+        expected_result_version: 0,
       }),
     );
   });
@@ -302,6 +370,7 @@ describe('InspectionChecklistPanel', () => {
       expect(inspectionsApi.recordItemResults).toHaveBeenCalledWith('inspection-1', {
         items: [{ id: 'diameter-1', result: 'failed', problem_description: 'Out-of-spec housing' }],
         submit: false,
+        expected_result_version: 0,
       }),
     );
     expect(await screen.findByText('Checklist draft saved.')).toBeInTheDocument();
@@ -351,6 +420,7 @@ describe('InspectionChecklistPanel', () => {
           { id: 'diameter-1', measured_value: '10' },
           { id: 'diameter-2', measured_value: '10' },
         ],
+        expected_result_version: 0,
       }),
     );
     expect(await screen.findAllByText('Measurements saved.')).not.toHaveLength(0);

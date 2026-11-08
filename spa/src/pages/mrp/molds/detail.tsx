@@ -19,6 +19,7 @@ import { moldStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { MoldShotMeter } from '@/components/mrp/MoldShotMeter';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 export default function MoldDetailPage() {
  const { id } = useParams<{ id: string }>();
@@ -28,6 +29,7 @@ export default function MoldDetailPage() {
  const canManage = can('production.molds.manage');
  const canRaisePm = can('maintenance.wo.create');
  const [pmConfirmOpen, setPmConfirmOpen] = useState(false);
+ useRealtimeRecord('mold', id);
  const detail = useQuery({
  queryKey: ['mrp', 'molds', 'detail', id],
  queryFn: () => moldsApi.show(id!),

@@ -10,12 +10,14 @@ import { workOrderStatusVariant } from '@/lib/statusVariants';
 import { TouchCardSkeleton } from '@/components/layout/TouchShell';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 export default function ActiveOrders() {
+  useRealtimeList('work_order', 'visible');
+
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['factory', 'active-orders'],
     queryFn: () => factoryApi.activeOrders(),
-    refetchInterval: 30_000, // Auto-refresh every 30s
   });
 
   const orders = (data?.data ?? []) as WorkOrder[];

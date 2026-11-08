@@ -18,11 +18,30 @@ import type { ApiValidationError } from '@/types';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 const schema = z.object({
  period_start: z.string().min(1, 'Start date is required'),
  period_end: z.string().min(1, 'End date is required'),
  payroll_date: z.string().min(1, 'Payroll date is required'),
  scope_label: z.string().max(255).optional().or(z.literal('')),
+}).superRefine((values, context) => {
+ const { period_start: start, period_end: end, payroll_date: payrollDate } = values;
+ if (start && end) {
+  if (end < start) {
+   context.addIssue({ code: z.ZodIssueCode.custom, path: ['period_end'], message: 'Period end must be on or after the period start.' });
+  } else {
+   const startDate = new Date(`${start}T00:00:00`);
+   const endDate = new Date(`${end}T00:00:00`);
+   if (startDate.getFullYear() !== endDate.getFullYear() || startDate.getMonth() !== endDate.getMonth()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['period_end'], message: 'A payroll cutoff must stay within one month.' });
+   } else if ((startDate.getDate() <= 15) !== (endDate.getDate() <= 15)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['period_end'], message: 'A payroll cutoff cannot cross the 15th/16th boundary.' });
+   }
+  }
+ }
+ if (end && payrollDate && payrollDate < end) {
+  context.addIssue({ code: z.ZodIssueCode.custom, path: ['payroll_date'], message: 'Payroll date must be on or after the period end.' });
+ }
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -57,6 +76,8 @@ export default function CreatePayrollPeriodPage() {
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
+ mode: 'onChange',
+ reValidateMode: 'onChange',
  defaultValues: { scope_label: '' },
  });
  const { register, handleSubmit, setError, watch, formState: { errors } } = form;
@@ -128,9 +149,15 @@ export default function CreatePayrollPeriodPage() {
  ...(data.scope_label ? { scope_label: data.scope_label } : {}),
  }),
  onSuccess: (period) => {
- qc.invalidateQueries({ queryKey: ['payroll-periods'] });
+ reconcileRealtimeMutationResponse(
+  qc,
+  { entityType: 'payroll_period', entityId: period.id },
+  ['payroll-period', period.id],
+  period,
+ );
  toast.success('Payroll period created.');
- navigate(`/payroll/periods/${period.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/payroll/periods/${period.id}`);
  },
  onError: (error: AxiosError<ApiValidationError>) => {
  if (!applyServerValidationErrors(error, setError, 'Failed to create payroll period.')) {
@@ -157,7 +184,7 @@ export default function CreatePayrollPeriodPage() {
  <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4">
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <Input label="Period start" type="date" required {...register('period_start')} error={errors.period_start?.message} />
  <Input label="Period end" type="date" required {...register('period_end')} error={errors.period_end?.message} />
  <Input label="Payroll date" type="date" required {...register('payroll_date')} error={errors.payroll_date?.message} />

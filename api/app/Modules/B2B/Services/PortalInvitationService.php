@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Services;
 
-use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Mail\PortalAccessInvitationMail;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class PortalInvitationService
 {
+    public function __construct(private readonly PortalAccessRealtimeService $realtime) {}
+
     /** @return array{user: CustomerPortalUser} */
     public function inviteCustomer(Customer $customer, string $name, string $email): array
     {
@@ -46,7 +48,7 @@ class PortalInvitationService
                 throw new BusinessRuleException('This email is already assigned to a different customer. Remove the existing portal account before assigning it elsewhere.');
             }
 
-            $user ??= new CustomerPortalUser();
+            $user ??= new CustomerPortalUser;
             $user->forceFill([
                 'customer_id' => $customer->id,
                 'name' => $name,
@@ -67,6 +69,7 @@ class PortalInvitationService
             // may predate that migration, so do not leave a stale bearer token
             // behind a freshly rotated password.
             $user->tokens()->delete();
+            $this->realtime->revoked($user);
 
             return $user;
         });
@@ -106,7 +109,7 @@ class PortalInvitationService
                 throw new BusinessRuleException('This supplier account is inactive. Reactivate it before sending a new invitation.');
             }
 
-            $user ??= new SupplierPortalUser();
+            $user ??= new SupplierPortalUser;
             $user->forceFill([
                 'vendor_id' => $vendor->id,
                 'name' => $name,
@@ -125,6 +128,7 @@ class PortalInvitationService
             // A new invitation is a credential rotation. Do not leave an old
             // bearer token usable while the recipient receives a new one.
             $user->tokens()->delete();
+            $this->realtime->revoked($user);
 
             return $user;
         });
@@ -174,5 +178,4 @@ class PortalInvitationService
             );
         }
     }
-
 }

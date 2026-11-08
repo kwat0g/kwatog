@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { inspectionsApi } from '@/api/quality/inspections';
+import { inspectionQueryKeys } from '@/lib/queryKeys/inspections';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
@@ -240,15 +242,13 @@ export function ChecklistDecisionPanel({
         setBatchProblem('');
         setMoreCoverage(false);
       }
-      queryClient.setQueryData(['quality', 'inspections', current.id], saved);
-      queryClient.invalidateQueries({ queryKey: ['quality', 'inspections', current.id, 'chain'] });
-      for (const key of [
-        ['quality', 'inspections'],
-        ['quality', 'ncrs'],
-        ['inventory', 'grn'],
-      ]) {
-        queryClient.invalidateQueries({ queryKey: key });
-      }
+      queryClient.setQueryData(inspectionQueryKeys.detail(current.id), saved);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'inspection', entityId: current.id },
+        [inspectionQueryKeys.chain(current.id), ['inventory', 'grn']],
+        [inspectionQueryKeys.detail(current.id)],
+      );
       toast.success(
         variables.submit
           ? saved.status === 'awaiting_review'
@@ -257,9 +257,14 @@ export function ChecklistDecisionPanel({
           : 'Checklist draft saved.',
       );
     },
-    onError: () => {
-      toast.error('Could not save inspection. Your input is retained.');
-      queryClient.invalidateQueries({ queryKey: ['quality', 'inspections', current.id] });
+    onError: (error: AxiosError<{ code?: string; message?: string }>) => {
+      if (error.response?.status === 409 && error.response.data?.code === 'inspection_state_conflict') {
+        toast.error('Inspection changed in another session. The latest saved version was loaded; your entries are retained for review.');
+        void invalidateRealtimeChange(queryClient, { entityType: 'inspection', entityId: current.id });
+        return;
+      }
+      toast.error(error.response?.data?.message ?? 'Could not save inspection. Your input is retained.');
+      void queryClient.invalidateQueries({ queryKey: inspectionQueryKeys.detail(current.id) });
     },
   });
   function payload(): ChecklistSubmission {

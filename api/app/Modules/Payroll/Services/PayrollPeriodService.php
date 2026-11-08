@@ -8,39 +8,50 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\AuditLog;
+use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Observers\DashboardCacheInvalidationObserver;
+use App\Modules\Dashboard\Services\BadgeService;
 use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\PayType;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\BankFileGenerationStatus;
+use App\Modules\Payroll\Enums\PayrollAnomalyType;
 use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
-use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
-use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
 use App\Modules\Payroll\Events\PayrollGlPostingRequested;
+use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
+use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Events\PayrollPeriodVoided;
+use App\Modules\Payroll\Exceptions\PayrollPeriodStateConflictException;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
+use App\Modules\Payroll\Models\PayrollAnomalyFlag;
+use App\Modules\Payroll\Models\PayrollCycleClaim;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Models\ThirteenthMonthAccrual;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class PayrollPeriodService
 {
     public function __construct(
-        private readonly \App\Common\Services\SettingsService $settings,
+        private readonly SettingsService $settings,
         private readonly PayrollProgressTracker $progress,
         private readonly DisbursementEvidenceService $disbursementEvidence,
     ) {}
@@ -49,10 +60,10 @@ class PayrollPeriodService
     {
         $query = PayrollPeriod::query()->with('creator')->withCount(['payrolls']);
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
-        if (!empty($filters['year'])) {
+        if (! empty($filters['year'])) {
             $query->whereYear('period_start', (int) $filters['year']);
         }
         if (isset($filters['is_first_half']) && $filters['is_first_half'] !== '') {
@@ -97,16 +108,211 @@ class PayrollPeriodService
             $paginator->getCollection()->each(function (PayrollPeriod $p) use ($rows) {
                 $r = $rows->get($p->id);
                 $p->summary = $r ? [
-                    'employee_count'   => (int) $r->employee_count,
-                    'failed_count'     => (int) $r->failed_count,
-                    'total_gross'      => Money::round2((string) $r->total_gross),
+                    'employee_count' => (int) $r->employee_count,
+                    'failed_count' => (int) $r->failed_count,
+                    'total_gross' => Money::round2((string) $r->total_gross),
                     'total_deductions' => Money::round2((string) $r->total_deductions),
-                    'total_net'        => Money::round2((string) $r->total_net),
+                    'total_net' => Money::round2((string) $r->total_net),
                 ] : null;
             });
         }
 
         return $paginator;
+    }
+
+    /**
+     * Server-side action and permission snapshot for an individual period.
+     * This is attached only to period-detail/mutation resources, never list
+     * collections, so eligibility checks do not create list-page N+1 queries.
+     * Every mutation still repeats its authoritative checks while holding the
+     * period row lock.
+     *
+     * @return array{permissions: array<string, bool>, available_actions: array<string, bool>, compute_available_on: ?string}
+     */
+    public function actionContext(PayrollPeriod $period, ?User $actor): array
+    {
+        $permissionChecks = [
+            'view' => 'payroll.periods.view',
+            'compute' => 'payroll.periods.compute',
+            'request_correction' => 'payroll.periods.request_correction',
+            'finalize' => 'payroll.periods.finalize',
+            'bank_file' => 'payroll.periods.bank_file',
+            'disburse' => 'payroll.periods.disburse',
+            'force_unlock' => 'payroll.periods.force_unlock',
+            'void' => 'payroll.periods.void',
+            'retry_gl' => 'accounting.journal.post',
+        ];
+        $permissions = [];
+        foreach ($permissionChecks as $key => $permission) {
+            $permissions[$key] = $actor?->hasPermission($permission) ?? false;
+        }
+        $permissions['approve'] = $actor !== null
+            && ApprovalDelegation::canActForPermission($actor, 'payroll.periods.approve');
+
+        $actions = array_fill_keys([
+            'compute', 'recompute', 'approve', 'request_correction', 'finalize',
+            'bank_file', 'disburse', 'retry_gl', 'force_unlock', 'void',
+            'retry_stale_compute',
+        ], false);
+        if ($actor === null) {
+            return [
+                'permissions' => $permissions,
+                'available_actions' => $actions,
+                'compute_available_on' => null,
+            ];
+        }
+
+        $status = $period->status;
+        $periodEnded = $this->hasPeriodEnded($period);
+        $payrollRowsAfterCutoff = in_array($status, [PayrollPeriodStatus::Computed, PayrollPeriodStatus::Approved], true)
+            && $this->payrollRowsComputedAfterCutoff($period);
+        $computedAfterCutoff = $status === PayrollPeriodStatus::Computed
+            && $periodEnded
+            && $payrollRowsAfterCutoff;
+        $hasEligibleEmployees = ! $permissions['compute']
+            || ! in_array($status, [PayrollPeriodStatus::Draft, PayrollPeriodStatus::Computed, PayrollPeriodStatus::Processing], true)
+            || $period->isCompanyWide()
+            || $this->availableEmployeeQuery($period)->exists();
+        $canOfferCompute = $permissions['compute']
+            && in_array($status, [PayrollPeriodStatus::Draft, PayrollPeriodStatus::Computed], true)
+            && ! $period->is_thirteenth_month
+            && $hasEligibleEmployees;
+        $computeAvailableOn = $canOfferCompute && ! $periodEnded
+            ? $period->period_end->copy()->addDay()->toDateString()
+            : null;
+        $actions['compute'] = $permissions['compute']
+            && $status === PayrollPeriodStatus::Draft
+            && ! $period->is_thirteenth_month
+            && $periodEnded
+            && $hasEligibleEmployees;
+        $actions['recompute'] = $permissions['compute']
+            && $status === PayrollPeriodStatus::Computed
+            && ! $period->is_thirteenth_month
+            && $periodEnded
+            && $hasEligibleEmployees;
+        $actions['retry_stale_compute'] = $permissions['compute']
+            && $status === PayrollPeriodStatus::Processing
+            && ! $period->is_thirteenth_month
+            && $periodEnded
+            && $hasEligibleEmployees
+            && $this->claimIsStale($period);
+        $actions['request_correction'] = $permissions['request_correction']
+            && ($status === PayrollPeriodStatus::Computed
+                || ($status === PayrollPeriodStatus::Approved && $period->approved_by === null));
+
+        if ($status === PayrollPeriodStatus::Computed && $permissions['approve']) {
+            $makerIds = array_map(
+                static fn ($id): int => (int) $id,
+                array_filter([$period->created_by, $period->computed_by], static fn ($id): bool => $id !== null),
+            );
+            $isMaker = in_array((int) $actor->id, $makerIds, true);
+            $mayOverrideMakerChecker = $isMaker && $actor->hasPermission('payroll.periods.self_approve_override');
+            $eligibleEmployees = $this->availableEmployeeQuery($period)
+                ->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+            $computedEmployees = $period->payrolls()
+                ->whereNull('error_message')
+                ->pluck('employee_id')->map(static fn ($id): int => (int) $id)->all();
+            sort($eligibleEmployees);
+            sort($computedEmployees);
+
+            $actions['approve'] = ApprovalDelegation::canActForPermission(
+                $actor,
+                'payroll.periods.approve',
+                $makerIds,
+            )
+                && (! $isMaker || $mayOverrideMakerChecker)
+                && $computedAfterCutoff
+                && $period->payrolls()->count() > 0
+                && ! $period->payrolls()->whereNotNull('error_message')->exists()
+                && ! $period->payrolls()->where('other_deductions', '<>', '0')->exists()
+                && $eligibleEmployees === $computedEmployees;
+        }
+
+        if ($status === PayrollPeriodStatus::Approved && $permissions['finalize']) {
+            $hasUnresolvedAnomalies = PayrollAnomalyFlag::query()
+                ->where('payroll_period_id', $period->id)
+                ->where('is_resolved', false)
+                ->where('flag_type', '!=', PayrollAnomalyType::OpenAttendance->value)
+                ->exists();
+            $hasUnclassifiedDeductions = $period->payrolls()
+                ->where('other_deductions', '<>', '0')
+                ->exists();
+            $actions['finalize'] = $period->approved_by !== null
+                && (int) $period->approved_by !== (int) $actor->id
+                && $payrollRowsAfterCutoff
+                && ! $hasUnclassifiedDeductions
+                && ! (bool) $period->anomaly_detection_failed
+                && ! $hasUnresolvedAnomalies;
+        }
+
+        $actions['bank_file'] = $permissions['bank_file']
+            && in_array($status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true);
+        $actions['disburse'] = $permissions['disburse']
+            && $status === PayrollPeriodStatus::Finalized;
+        $actions['retry_gl'] = $permissions['retry_gl']
+            && in_array($status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)
+            && $period->journal_entry_id === null
+            && in_array($period->gl_handoff_status, [PayrollGlHandoffStatus::ManualRequired, PayrollGlHandoffStatus::NotRequired], true);
+        $actions['force_unlock'] = $permissions['force_unlock'] && $status === PayrollPeriodStatus::Processing;
+        $actions['void'] = $permissions['void'] && $status === PayrollPeriodStatus::Finalized;
+
+        return [
+            'permissions' => $permissions,
+            'available_actions' => $actions,
+            'compute_available_on' => $computeAvailableOn,
+        ];
+    }
+
+    /** A cutoff becomes computable on the day after its end date. */
+    public function hasPeriodEnded(PayrollPeriod $period): bool
+    {
+        return $period->is_thirteenth_month
+            || ($period->period_end !== null
+                && $period->period_end->copy()->startOfDay()->lt(CarbonImmutable::today()));
+    }
+
+    public function computeAvailableOn(PayrollPeriod $period): ?string
+    {
+        return $this->hasPeriodEnded($period)
+            ? null
+            : $period->period_end?->copy()->addDay()->toDateString();
+    }
+
+    /** All payroll rows must come from a run started after the cutoff ended. */
+    public function payrollRowsComputedAfterCutoff(PayrollPeriod $period): bool
+    {
+        if ($period->is_thirteenth_month) {
+            return true;
+        }
+
+        if (! $this->hasPeriodEnded($period)) {
+            return false;
+        }
+
+        $availableAt = $period->period_end->copy()->addDay()->startOfDay();
+
+        return ! $period->payrolls()
+            ->where(fn ($query) => $query
+                ->whereNull('computed_at')
+                ->orWhere('computed_at', '<', $availableAt))
+            ->exists();
+    }
+
+    public function assertPeriodEnded(PayrollPeriod $period): void
+    {
+        if (! $this->hasPeriodEnded($period)) {
+            $periodEnd = $period->period_end?->format('M j, Y') ?? 'the cutoff end date';
+            $availableOn = $this->computeAvailableOn($period);
+            $retryDate = $availableOn !== null
+                ? CarbonImmutable::parse($availableOn)->format('M j, Y')
+                : 'the day after the cutoff ends';
+
+            throw new BusinessRuleException(sprintf(
+                'Payroll actions are unavailable until the cutoff ends on %s. Try again on %s.',
+                $periodEnd,
+                $retryDate,
+            ));
+        }
     }
 
     public function show(PayrollPeriod $period): PayrollPeriod
@@ -121,7 +327,7 @@ class PayrollPeriodService
         // since the JE module ships in Sprint 4. This keeps the linked-records
         // panel working today.
         $entryNo = null;
-        if ($period->journal_entry_id && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
+        if ($period->journal_entry_id && Schema::hasTable('journal_entries')) {
             $entryNo = DB::table('journal_entries')
                 ->where('id', $period->journal_entry_id)
                 ->value('entry_number');
@@ -130,7 +336,7 @@ class PayrollPeriodService
 
         $period->gl_reversal = null;
         if ($period->status === PayrollPeriodStatus::Voided
-            && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
+            && Schema::hasTable('journal_entries')) {
             $original = JournalEntry::query()
                 ->with('reversedBy:id,entry_number')
                 ->where('reference_type', 'payroll_period')
@@ -174,11 +380,11 @@ class PayrollPeriodService
             ->first();
 
         return [
-            'employee_count'   => (int) ($row->employee_count ?? 0),
-            'failed_count'     => (int) ($row->failed_count ?? 0),
-            'total_gross'      => Money::round2((string) ($row->total_gross ?? '0.00')),
+            'employee_count' => (int) ($row->employee_count ?? 0),
+            'failed_count' => (int) ($row->failed_count ?? 0),
+            'total_gross' => Money::round2((string) ($row->total_gross ?? '0.00')),
             'total_deductions' => Money::round2((string) ($row->total_deductions ?? '0.00')),
-            'total_net'        => Money::round2((string) ($row->total_net ?? '0.00')),
+            'total_net' => Money::round2((string) ($row->total_net ?? '0.00')),
             'deduction_breakdown' => [
                 'sss_employee_share' => Money::round2((string) ($row->sss_employee_share ?? '0.00')),
                 'philhealth_employee_share' => Money::round2((string) ($row->philhealth_employee_share ?? '0.00')),
@@ -187,7 +393,7 @@ class PayrollPeriodService
                 'loan_deductions' => Money::round2((string) ($row->loan_deductions ?? '0.00')),
             ],
             'uncategorized_deductions' => Money::round2((string) ($row->uncategorized_deductions ?? '0.00')),
-            'net_adjustments'  => Money::round2((string) ($row->net_adjustments ?? '0.00')),
+            'net_adjustments' => Money::round2((string) ($row->net_adjustments ?? '0.00')),
         ];
     }
 
@@ -201,6 +407,15 @@ class PayrollPeriodService
         }
     }
 
+    private function staleActionConflict(PayrollPeriod $period, string $action): PayrollPeriodStateConflictException
+    {
+        $state = strtolower($period->status?->label() ?? 'unknown');
+
+        return new PayrollPeriodStateConflictException(
+            "Payroll period is now {$state}. Refresh the record and review available actions before {$action}.",
+        );
+    }
+
     /**
      * Compare two payroll periods: delta and % change for gross, net, deductions, headcount.
      */
@@ -210,29 +425,30 @@ class PayrollPeriodService
         $prev = $this->summary($previous);
 
         $delta = fn (string $key): string => Money::sub((string) $curr[$key], (string) $prev[$key]);
-        $pct   = function (string $key) use ($curr, $prev): ?float {
+        $pct = function (string $key) use ($curr, $prev): ?float {
             if (! Money::gt((string) $prev[$key], '0')) {
                 return null;
             }
 
             $change = Money::sub((string) $curr[$key], (string) $prev[$key]);
+
             return round((float) bcdiv(bcmul($change, '100', 4), (string) $prev[$key], 4), 2);
         };
 
         return [
-            'current'    => array_merge($curr, ['period_label' => $current->period_start . ' – ' . $current->period_end]),
-            'previous'   => array_merge($prev, ['period_label' => $previous->period_start . ' – ' . $previous->period_end]),
-            'delta'      => [
-                'gross'      => $delta('total_gross'),
-                'net'        => $delta('total_net'),
+            'current' => array_merge($curr, ['period_label' => $current->period_start.' – '.$current->period_end]),
+            'previous' => array_merge($prev, ['period_label' => $previous->period_start.' – '.$previous->period_end]),
+            'delta' => [
+                'gross' => $delta('total_gross'),
+                'net' => $delta('total_net'),
                 'deductions' => $delta('total_deductions'),
-                'headcount'  => $curr['employee_count'] - $prev['employee_count'],
+                'headcount' => $curr['employee_count'] - $prev['employee_count'],
             ],
             'pct_change' => [
-                'gross'      => $pct('total_gross'),
-                'net'        => $pct('total_net'),
+                'gross' => $pct('total_gross'),
+                'net' => $pct('total_net'),
                 'deductions' => $pct('total_deductions'),
-                'headcount'  => $prev['employee_count'] > 0
+                'headcount' => $prev['employee_count'] > 0
                     ? round(($curr['employee_count'] - $prev['employee_count']) / $prev['employee_count'] * 100, 2)
                     : null,
             ],
@@ -243,7 +459,7 @@ class PayrollPeriodService
     {
         return DB::transaction(function () use ($data, $user) {
             $start = CarbonImmutable::parse($data['period_start']);
-            $end   = CarbonImmutable::parse($data['period_end']);
+            $end = CarbonImmutable::parse($data['period_end']);
             $isThirteenth = (bool) ($data['is_thirteenth_month'] ?? false);
             if ($isThirteenth) {
                 throw new BusinessRuleException('13th-month periods are created only by the 13th-month payroll run.');
@@ -290,11 +506,11 @@ class PayrollPeriodService
                 ->where('is_thirteenth_month', $isThirteenth)
                 ->where(function ($q) use ($start, $end) {
                     $q->whereBetween('period_start', [$start, $end])
-                      ->orWhereBetween('period_end',  [$start, $end])
-                      ->orWhere(function ($q2) use ($start, $end) {
-                          $q2->where('period_start', '<=', $start)
-                             ->where('period_end',   '>=', $end);
-                      });
+                        ->orWhereBetween('period_end', [$start, $end])
+                        ->orWhere(function ($q2) use ($start, $end) {
+                            $q2->where('period_start', '<=', $start)
+                                ->where('period_end', '>=', $end);
+                        });
                 })
                 // A voided run has been withdrawn; it must not block a
                 // replacement covering the same people and dates.
@@ -306,16 +522,16 @@ class PayrollPeriodService
             }
 
             $period = PayrollPeriod::create([
-                'period_start'        => $start->toDateString(),
-                'period_end'          => $end->toDateString(),
-                'payroll_date'        => $data['payroll_date'],
-                'is_first_half'       => $isFirstHalf,
+                'period_start' => $start->toDateString(),
+                'period_end' => $end->toDateString(),
+                'payroll_date' => $data['payroll_date'],
+                'is_first_half' => $isFirstHalf,
                 'is_thirteenth_month' => $isThirteenth,
-                'created_by'          => $user->id,
+                'created_by' => $user->id,
                 'scope_employment_types' => $scope['employment_types'],
-                'scope_department_ids'   => $scope['department_ids'],
-                'scope_pay_types'        => $scope['pay_types'],
-                'scope_label'            => $scope['label'],
+                'scope_department_ids' => $scope['department_ids'],
+                'scope_pay_types' => $scope['pay_types'],
+                'scope_label' => $scope['label'],
             ]);
             // status non-fillable; service-only.
             $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
@@ -359,7 +575,7 @@ class PayrollPeriodService
         }
 
         $graceDays = $this->payrollDateGraceDays();
-        $latest    = $end->addDays($graceDays);
+        $latest = $end->addDays($graceDays);
 
         if ($payrollDate->gt($latest)) {
             throw new BusinessRuleException(sprintf(
@@ -409,7 +625,7 @@ class PayrollPeriodService
         }
 
         $startsFirstHalf = PayrollPeriod::deriveIsFirstHalf($start);
-        $endsFirstHalf   = PayrollPeriod::deriveIsFirstHalf($end);
+        $endsFirstHalf = PayrollPeriod::deriveIsFirstHalf($end);
 
         if ($startsFirstHalf !== $endsFirstHalf) {
             throw new BusinessRuleException(sprintf(
@@ -470,7 +686,7 @@ class PayrollPeriodService
         foreach ($rawDepartments as $raw) {
             $decoded = is_numeric($raw)
                 ? (int) $raw
-                : \App\Modules\HR\Models\Department::tryDecodeHash((string) $raw);
+                : Department::tryDecodeHash((string) $raw);
             if ($decoded) {
                 $departmentIds[] = (int) $decoded;
             }
@@ -478,7 +694,7 @@ class PayrollPeriodService
         $departmentIds = array_values(array_unique($departmentIds));
 
         if ($rawDepartments !== []) {
-            $existing = \App\Modules\HR\Models\Department::query()
+            $existing = Department::query()
                 ->whereIn('id', $departmentIds)
                 ->pluck('id')
                 ->all();
@@ -496,9 +712,9 @@ class PayrollPeriodService
 
         return [
             'employment_types' => $employmentTypes === [] ? null : $employmentTypes,
-            'department_ids'   => $departmentIds === [] ? null : $departmentIds,
-            'pay_types'        => $payTypes === [] ? null : $payTypes,
-            'label'            => $label,
+            'department_ids' => $departmentIds === [] ? null : $departmentIds,
+            'pay_types' => $payTypes === [] ? null : $payTypes,
+            'label' => $label,
         ];
     }
 
@@ -542,8 +758,8 @@ class PayrollPeriodService
             $siblingEnd = CarbonImmutable::parse($sibling->period_end);
             $siblingIds = $this->employeeIdsForScope([
                 'employment_types' => $sibling->scope_employment_types,
-                'department_ids'   => $sibling->scope_department_ids,
-                'pay_types'        => $sibling->scope_pay_types,
+                'department_ids' => $sibling->scope_department_ids,
+                'pay_types' => $sibling->scope_pay_types,
             ], $siblingStart, $siblingEnd);
 
             $shared = [];
@@ -600,8 +816,7 @@ class PayrollPeriodService
         array $scope,
         CarbonImmutable $periodStart,
         CarbonImmutable $periodEnd,
-    ): \Illuminate\Database\Eloquent\Builder
-    {
+    ): Builder {
         $query = Employee::query()
             ->whereDate('date_hired', '<=', $periodEnd->toDateString())
             ->where(function ($query) use ($periodStart) {
@@ -659,13 +874,13 @@ class PayrollPeriodService
     public function scopePreview(array $data): array
     {
         $start = CarbonImmutable::parse($data['period_start']);
-        $end   = CarbonImmutable::parse($data['period_end']);
+        $end = CarbonImmutable::parse($data['period_end']);
         $scope = $this->normalizeScope($data);
 
         $employees = $this->scopedEmployeeQuery([
             'employment_types' => $scope['employment_types'],
-            'department_ids'   => $scope['department_ids'],
-            'pay_types'        => $scope['pay_types'],
+            'department_ids' => $scope['department_ids'],
+            'pay_types' => $scope['pay_types'],
         ], $start, $end)->get(['id', 'employee_no', 'first_name', 'last_name', 'pay_type', 'basic_monthly_salary', 'semi_monthly_rate']);
 
         // Estimated gross = one cutoff of basic for each matched employee. A
@@ -683,30 +898,30 @@ class PayrollPeriodService
         // dates exactly as cycleKey() does, so the preview and the enforcement
         // can never disagree about which cycle is being checked.
         $probe = new PayrollPeriod([
-            'period_start'        => $data['period_start'],
-            'period_end'          => $data['period_end'],
-            'is_first_half'       => PayrollPeriod::deriveIsFirstHalf($data['period_start']),
+            'period_start' => $data['period_start'],
+            'period_end' => $data['period_end'],
+            'is_first_half' => PayrollPeriod::deriveIsFirstHalf($data['period_start']),
             'is_thirteenth_month' => (bool) ($data['is_thirteenth_month'] ?? false),
         ]);
 
-        $claimed = \App\Modules\Payroll\Models\PayrollCycleClaim::query()
+        $claimed = PayrollCycleClaim::query()
             ->whereIn('employee_id', $employees->pluck('id'))
             ->where('cycle_key', $probe->cycleKey())
             ->with(['employee:id,employee_no,first_name,last_name', 'period'])
             ->get();
 
         return [
-            'is_company_wide'    => $scope['employment_types'] === null
+            'is_company_wide' => $scope['employment_types'] === null
                 && $scope['department_ids'] === null
                 && $scope['pay_types'] === null,
-            'employee_count'     => $employees->count(),
+            'employee_count' => $employees->count(),
             'already_paid_count' => $claimed->count(),
             'already_paid_sample' => $claimed->take(5)->map(fn ($c) => [
                 'employee_no' => (string) ($c->employee?->employee_no ?? ''),
-                'name'        => trim(($c->employee?->first_name ?? '').' '.($c->employee?->last_name ?? '')),
-                'period'      => (string) ($c->period?->label() ?? ''),
+                'name' => trim(($c->employee?->first_name ?? '').' '.($c->employee?->last_name ?? '')),
+                'period' => (string) ($c->period?->label() ?? ''),
             ])->values()->all(),
-            'total_active'    => Employee::query()
+            'total_active' => Employee::query()
                 ->where('status', EmployeeStatus::Active->value)
                 ->whereDate('date_hired', '<=', $end->toDateString())
                 ->count(),
@@ -720,15 +935,13 @@ class PayrollPeriodService
      * Honours the period's scope filters. An unscoped period returns every
      * eligible employee, while a future-dated separation remains eligible
      * through its last paid day.
-     *
-     * @return Builder
      */
     public function availableEmployeeQuery(PayrollPeriod $period): Builder
     {
         return $this->scopedEmployeeQuery([
             'employment_types' => $period->scope_employment_types,
-            'department_ids'   => $period->scope_department_ids,
-            'pay_types'        => $period->scope_pay_types,
+            'department_ids' => $period->scope_department_ids,
+            'pay_types' => $period->scope_pay_types,
         ], CarbonImmutable::parse($period->period_start), CarbonImmutable::parse($period->period_end))
             ->orderBy('id');
     }
@@ -906,6 +1119,8 @@ class PayrollPeriodService
             throw new BusinessRuleException('Payroll compute claim is no longer owned by this worker.');
         }
 
+        $this->assertPeriodEnded($owned);
+
         return $owned;
     }
 
@@ -944,6 +1159,12 @@ class PayrollPeriodService
      */
     public function releaseClaim(PayrollPeriod $period, array $extraAttributes = [], ?string $token = null): PayrollPeriod
     {
+        // Keep the state update, audit row, and outbox refresh atomic even if
+        // a future caller forgets to wrap this shared release path.
+        if (DB::transactionLevel() === 0) {
+            return DB::transaction(fn (): PayrollPeriod => $this->releaseClaim($period, $extraAttributes, $token));
+        }
+
         $notificationKey = $token ?? $period->processing_token;
         $oldValues = [
             'status' => $period->status?->value,
@@ -956,7 +1177,7 @@ class PayrollPeriodService
                 : PayrollPeriodStatus::Draft->value,
             'processing_started_at' => null,
             'processing_token' => null,
-        ], $extraAttributes);
+        ], $extraAttributes, ['updated_at' => now()]);
 
         $query = PayrollPeriod::query()->whereKey($period->id);
         if ($token !== null) {
@@ -968,9 +1189,9 @@ class PayrollPeriodService
         if ($released > 0) {
             AuditLog::create([
                 'actor_type' => 'system',
-                'action'     => 'updated',
+                'action' => 'updated',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $period->id,
+                'model_id' => $period->id,
                 'old_values' => $oldValues,
                 'new_values' => [
                     'status' => $attributes['status'],
@@ -983,6 +1204,15 @@ class PayrollPeriodService
         }
 
         $fresh = PayrollPeriod::query()->find($period->id) ?? $period;
+        if ($released > 0) {
+            // The guarded query-builder update above bypasses the registered
+            // Eloquent observers. Retire their dashboard/badge snapshots before
+            // staging the replacement signal in this same transaction.
+            app(DashboardCacheInvalidationObserver::class)->invalidateSource($fresh);
+            BadgeService::touch();
+            app(PayrollPeriodRealtimeService::class)->stage($fresh, 'status_changed');
+            $this->progress->forget($fresh);
+        }
         if ($released > 0 && $fresh->status === PayrollPeriodStatus::Computed) {
             $this->notifyPendingApproval($fresh, $notificationKey);
         }
@@ -1005,7 +1235,7 @@ class PayrollPeriodService
                 && $user->hasPermission('payroll.periods.view'));
         $audience = $candidates->reject(fn (User $user): bool => in_array((int) $user->id, $makers, true));
 
-        app(\App\Common\Services\NotificationService::class)->sendForSubject($period, $audience, 'approval.action_required', [
+        app(NotificationService::class)->sendForSubject($period, $audience, 'approval.action_required', [
             'title' => 'Payroll period needs approval',
             'message' => "Payroll {$period->period_start->toDateString()}–{$period->period_end->toDateString()} is computed and waiting for review.",
             'link_to' => "/payroll/periods/{$period->hash_id}",
@@ -1020,7 +1250,7 @@ class PayrollPeriodService
      * This is the concurrency gate for the Compute button. A single UPDATE …
      * WHERE status IN (draft, computed) flips the row to Processing, and the
      * affected-row count tells us whether WE won the claim. Two simultaneous
-     * clicks therefore produce exactly one dispatch — the loser gets a 422
+     * clicks therefore produce exactly one dispatch — the loser gets a 409
      * instead of queueing a second full recompute of the same period.
      *
      * ShouldBeUnique on the job alone was not sufficient: it de-duplicates
@@ -1053,24 +1283,16 @@ class PayrollPeriodService
             $isStaleClaim = $status === PayrollPeriodStatus::Processing && $this->claimIsStale($period);
 
             if ($status === PayrollPeriodStatus::Processing && ! $isStaleClaim) {
-                throw new BusinessRuleException('This period is already being computed. Wait for the current run to finish.');
+                throw $this->staleActionConflict($period, 'starting Compute');
             }
             if ($status !== null && ! $status->isComputable() && ! $isStaleClaim) {
-                throw new BusinessRuleException(sprintf(
-                    'Cannot compute a %s period. %s',
-                    strtolower($status->label()),
-                    match ($status) {
-                        PayrollPeriodStatus::Approved  => 'Payroll has already been approved — void it or force-unlock to recompute.',
-                        PayrollPeriodStatus::Finalized => 'Finalized payroll is immutable — void the period first.',
-                        PayrollPeriodStatus::Disbursed => 'Salaries have already been disbursed; this run cannot be changed.',
-                        PayrollPeriodStatus::Voided    => 'Create a replacement period instead.',
-                        default                        => '',
-                    },
-                ));
+                throw $this->staleActionConflict($period, 'starting Compute');
             }
             if ($period->is_thirteenth_month) {
                 throw new BusinessRuleException('13th-month periods are generated by the 13th-month run, not by Compute.');
             }
+
+            $this->assertPeriodEnded($period);
 
             // A SCOPED run that matches nobody is almost always a mis-set filter, and
             // left to run it would write zero rows, park back at Draft via
@@ -1093,7 +1315,7 @@ class PayrollPeriodService
             $computedBy = $actor?->id ?? $period->computed_by;
             $claimed = PayrollPeriod::query()
                 ->whereKey($period->id)
-                ->where(function ($q) use ($period) {
+                ->where(function ($q) {
                     $q->whereIn('status', [
                         PayrollPeriodStatus::Draft->value,
                         PayrollPeriodStatus::Computed->value,
@@ -1101,36 +1323,36 @@ class PayrollPeriodService
                     // A stale Processing claim is dead (worker crashed mid-run) —
                     // reclaim it so the next Compute click actually restarts the
                     // batch instead of wedging the period forever.
-                    ->orWhere(fn ($qq) => $qq
-                        ->where('status', PayrollPeriodStatus::Processing->value)
-                        ->where('processing_started_at', '<', CarbonImmutable::now()->subMinutes($this->staleAfterMinutes()))
-                    );
+                        ->orWhere(fn ($qq) => $qq
+                            ->where('status', PayrollPeriodStatus::Processing->value)
+                            ->where('processing_started_at', '<', CarbonImmutable::now()->subMinutes($this->staleAfterMinutes()))
+                        );
                 })
                 ->update([
-                    'status'                => PayrollPeriodStatus::Processing->value,
+                    'status' => PayrollPeriodStatus::Processing->value,
                     'processing_started_at' => $processingStartedAt,
-                    'processing_token'      => (string) Str::uuid(),
-                    'computed_by'           => $computedBy,
-                    'updated_at'            => $processingStartedAt,
+                    'processing_token' => (string) Str::uuid(),
+                    'computed_by' => $computedBy,
+                    'updated_at' => $processingStartedAt,
                 ]);
 
             if ($claimed === 0) {
                 // Lost the race — another request claimed it between our read and
                 // this UPDATE. Report the status that actually won.
                 $current = $period->fresh();
-                throw new BusinessRuleException(
-                    $current?->status === PayrollPeriodStatus::Processing && ! $this->claimIsStale($current)
-                        ? 'This period is already being computed. Wait for the current run to finish.'
-                        : 'This period is no longer computable. Refresh and try again.',
-                );
+                if ($current === null) {
+                    throw new BusinessRuleException('Payroll period not found.');
+                }
+
+                throw $this->staleActionConflict($current, 'starting Compute');
             }
 
             AuditLog::create([
-                'user_id'    => $actor?->id,
+                'user_id' => $actor?->id,
                 'actor_type' => $actor ? 'user' : 'system',
-                'action'     => 'updated',
+                'action' => 'updated',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $period->id,
+                'model_id' => $period->id,
                 'old_values' => [
                     'status' => $status?->value,
                     'processing_started_at' => optional($period->processing_started_at)->toIso8601String(),
@@ -1150,6 +1372,16 @@ class PayrollPeriodService
             // stale "142 / 200" before this run's first broadcast lands.
             $fresh = $period->fresh();
             $this->progress->forget($fresh);
+
+            // This guarded query-builder update intentionally avoids an
+            // observer because it is the concurrency gate. Mirror the write
+            // side effects explicitly so peer period viewers and cached
+            // payroll/dashboard/badge summaries refresh as soon as the claim
+            // commits, rather than waiting for the worker's first progress
+            // event.
+            app(DashboardCacheInvalidationObserver::class)->invalidateSource($fresh);
+            BadgeService::touch();
+            app(PayrollPeriodRealtimeService::class)->stage($fresh, 'status_changed');
 
             return $fresh;
         });
@@ -1202,10 +1434,13 @@ class PayrollPeriodService
             // lock in an empty ₱0 payroll that could then be finalized and posted
             // to the GL.
             if ($locked->status !== PayrollPeriodStatus::Computed) {
+                throw $this->staleActionConflict($locked, 'approving');
+            }
+
+            $this->assertPeriodEnded($locked);
+            if (! $this->payrollRowsComputedAfterCutoff($locked)) {
                 throw new BusinessRuleException(
-                    $locked->status === PayrollPeriodStatus::Draft
-                        ? 'This period has not been computed yet. Run Compute before approving.'
-                        : 'Only computed periods can be approved.',
+                    'Cannot approve: recompute this period after the cutoff ends before approval.',
                 );
             }
 
@@ -1258,7 +1493,7 @@ class PayrollPeriodService
             // status + attribution columns are non-fillable / service-only.
             // Single save() → one audit row per the repo's audit-hygiene rule.
             $locked->forceFill([
-                'status'      => PayrollPeriodStatus::Approved->value,
+                'status' => PayrollPeriodStatus::Approved->value,
                 'approved_by' => $actor->id,
                 'approved_at' => now(),
             ])->save();
@@ -1271,10 +1506,10 @@ class PayrollPeriodService
                 $newAuditValues['maker_checker_override'] = true;
             }
             AuditLog::create([
-                'user_id'    => $actor->id,
-                'action'     => 'payroll.period.approve',
+                'user_id' => $actor->id,
+                'action' => 'payroll.period.approve',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $locked->id,
+                'model_id' => $locked->id,
                 'old_values' => ['status' => $previous],
                 'new_values' => $newAuditValues,
                 'ip_address' => request()?->ip(),
@@ -1300,26 +1535,26 @@ class PayrollPeriodService
             $isComputed = $locked->status === PayrollPeriodStatus::Computed;
             $isUnapprovedLegacyPeriod = $locked->status === PayrollPeriodStatus::Approved && $locked->approved_by === null;
             if (! $isComputed && ! $isUnapprovedLegacyPeriod) {
-                throw new BusinessRuleException('Only computed periods, or approved periods missing an approver, can be returned for correction.');
+                throw $this->staleActionConflict($locked, 'requesting a correction');
             }
 
             $previous = $locked->status->value;
             $previousApproverId = $locked->approved_by;
             $previousApprovedAt = optional($locked->approved_at)->toIso8601String();
             $locked->forceFill([
-                'status'                  => PayrollPeriodStatus::Draft->value,
-                'approved_by'             => null,
-                'approved_at'             => null,
+                'status' => PayrollPeriodStatus::Draft->value,
+                'approved_by' => null,
+                'approved_at' => null,
                 'correction_requested_by' => $actor->id,
                 'correction_requested_at' => now(),
-                'correction_reason'       => $reason,
+                'correction_reason' => $reason,
             ])->save();
 
             AuditLog::create([
-                'user_id'    => $actor->id,
-                'action'     => 'payroll.period.request_correction',
+                'user_id' => $actor->id,
+                'action' => 'payroll.period.request_correction',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $locked->id,
+                'model_id' => $locked->id,
                 'old_values' => [
                     'status' => $previous,
                     'approved_by' => $previousApproverId,
@@ -1351,7 +1586,7 @@ class PayrollPeriodService
                 throw new BusinessRuleException('Payroll period not found.');
             }
             if ($locked->status !== PayrollPeriodStatus::Finalized) {
-                throw new BusinessRuleException('Only finalized periods can be marked as disbursed.');
+                throw $this->staleActionConflict($locked, 'marking the period as disbursed');
             }
 
             // Finance policy: payroll cash cannot leave while the liability is
@@ -1377,6 +1612,7 @@ class PayrollPeriodService
 
             $fresh = $locked->fresh()->load('disburser', 'disbursementProofs.uploader');
             app(OutboxService::class)->record(new PayrollPeriodDisbursed($fresh));
+
             return $fresh;
         });
 
@@ -1399,7 +1635,16 @@ class PayrollPeriodService
                 throw new BusinessRuleException('Payroll period not found.');
             }
             if ($locked->status !== PayrollPeriodStatus::Approved) {
-                throw new BusinessRuleException('Only approved periods can be finalized.');
+                throw $this->staleActionConflict($locked, 'finalizing');
+            }
+
+            if (! $locked->is_thirteenth_month) {
+                $this->assertPeriodEnded($locked);
+                if (! $this->payrollRowsComputedAfterCutoff($locked)) {
+                    throw new BusinessRuleException(
+                        'Cannot finalize: recompute this payroll after the cutoff ends before finalization.',
+                    );
+                }
             }
 
             if ($locked->approved_by === null) {
@@ -1423,10 +1668,10 @@ class PayrollPeriodService
                 );
             }
 
-            $unresolved = \App\Modules\Payroll\Models\PayrollAnomalyFlag::query()
+            $unresolved = PayrollAnomalyFlag::query()
                 ->where('payroll_period_id', $locked->id)
                 ->where('is_resolved', false)
-                ->where('flag_type', '!=', \App\Modules\Payroll\Enums\PayrollAnomalyType::OpenAttendance->value)
+                ->where('flag_type', '!=', PayrollAnomalyType::OpenAttendance->value)
                 ->count();
             if ($unresolved > 0) {
                 throw new BusinessRuleException("Cannot finalize: {$unresolved} unresolved payroll anomaly flag(s). Review and resolve them first.");
@@ -1435,15 +1680,15 @@ class PayrollPeriodService
             $previous = $locked->status?->value;
 
             $locked->forceFill([
-                'status'            => PayrollPeriodStatus::Finalized->value,
-                'finalized_by'      => $actor->id,
-                'finalized_at'      => now(),
-                'bank_file_status'  => BankFileGenerationStatus::Pending,
-                'bank_file_note'    => null,
-                'bank_file_at'      => now(),
+                'status' => PayrollPeriodStatus::Finalized->value,
+                'finalized_by' => $actor->id,
+                'finalized_at' => now(),
+                'bank_file_status' => BankFileGenerationStatus::Pending,
+                'bank_file_note' => null,
+                'bank_file_at' => now(),
                 'gl_handoff_status' => PayrollGlHandoffStatus::Pending,
-                'gl_handoff_note'   => null,
-                'gl_handoff_at'     => now(),
+                'gl_handoff_note' => null,
+                'gl_handoff_at' => now(),
             ])->save();
 
             // A 13th-month run recognises payment HERE, not at compute time.
@@ -1457,10 +1702,10 @@ class PayrollPeriodService
             app(ThirteenthMonthService::class)->markAccrualsPaidOnFinalize($locked);
 
             AuditLog::create([
-                'user_id'    => $actor->id,
-                'action'     => 'payroll.period.finalize',
+                'user_id' => $actor->id,
+                'action' => 'payroll.period.finalize',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $locked->id,
+                'model_id' => $locked->id,
                 'old_values' => ['status' => $previous],
                 'new_values' => ['status' => PayrollPeriodStatus::Finalized->value, 'finalized_by' => $actor->id],
                 'ip_address' => request()?->ip(),
@@ -1508,10 +1753,16 @@ class PayrollPeriodService
                 throw new BusinessRuleException('Payroll period not found.');
             }
             if (! in_array($locked->status, [PayrollPeriodStatus::Finalized, PayrollPeriodStatus::Disbursed], true)) {
-                throw new BusinessRuleException('Only finalized or disbursed periods can retry the GL handoff.');
+                throw $this->staleActionConflict($locked, 'retrying the GL handoff');
             }
             if ($locked->journal_entry_id !== null) {
                 return $locked->fresh();
+            }
+            if (! in_array($locked->gl_handoff_status, [PayrollGlHandoffStatus::ManualRequired, PayrollGlHandoffStatus::NotRequired], true)) {
+                $handoffStatus = $locked->gl_handoff_status?->label() ?? 'unknown';
+                throw new PayrollPeriodStateConflictException(
+                    "The GL handoff is now {$handoffStatus}. Refresh the period and review available actions before retrying.",
+                );
             }
 
             $locked->markGlPending();
@@ -1550,7 +1801,7 @@ class PayrollPeriodService
                 throw new BusinessRuleException('Payroll period not found.');
             }
             if ($locked->status !== PayrollPeriodStatus::Processing) {
-                throw new BusinessRuleException('Only periods stuck at Processing can be force-unlocked.');
+                throw $this->staleActionConflict($locked, 'force-unlocking');
             }
 
             $previous = $locked->status?->value;
@@ -1559,14 +1810,13 @@ class PayrollPeriodService
             // force_unlocked_by — the column existed but was never written, so
             // the audit trail could not attribute the unlock.
             $this->releaseClaim($locked, ['force_unlocked_by' => $actor->id]);
-            $this->progress->forget($locked);
             $unlocked = $locked->fresh();
 
             AuditLog::create([
-                'user_id'    => $actor->id,
-                'action'     => 'payroll.period.force_unlock',
+                'user_id' => $actor->id,
+                'action' => 'payroll.period.force_unlock',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $locked->id,
+                'model_id' => $locked->id,
                 'old_values' => ['status' => $previous],
                 'new_values' => ['status' => $unlocked?->status?->value, 'reason' => $reason],
                 'ip_address' => request()?->ip(),
@@ -1603,7 +1853,7 @@ class PayrollPeriodService
                 throw new BusinessRuleException('Payroll period not found.');
             }
             if ($locked->status !== PayrollPeriodStatus::Finalized) {
-                throw new BusinessRuleException('Only finalized periods can be voided.');
+                throw $this->staleActionConflict($locked, 'voiding');
             }
 
             $previousStatus = $locked->status?->value;
@@ -1614,7 +1864,7 @@ class PayrollPeriodService
             // mirror entry and flags the original as reversed.
             $hadJournalEntry = $locked->journal_entry_id !== null;
             if ($hadJournalEntry
-                && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
+                && Schema::hasTable('journal_entries')) {
                 $je = JournalEntry::find($locked->journal_entry_id);
                 if ($je && $je->status === JournalEntryStatus::Posted && $je->reversed_by_entry_id === null) {
                     $reversal = app(JournalEntryService::class)->reverseSource($je, $actor);
@@ -1624,16 +1874,16 @@ class PayrollPeriodService
             }
 
             $locked->forceFill([
-                'status'            => PayrollPeriodStatus::Voided->value,
-                'voided_at'         => now(),
-                'voided_by'         => $actor->id,
-                'void_reason'       => $reason,
+                'status' => PayrollPeriodStatus::Voided->value,
+                'voided_at' => now(),
+                'voided_by' => $actor->id,
+                'void_reason' => $reason,
                 'thirteenth_month_run_state' => $locked->is_thirteenth_month ? 'voided_correction' : $locked->thirteenth_month_run_state,
                 // P02-02 — a voided period must not keep pointing at its
                 // (now reversed) journal entry, or every re-post path — retry,
                 // operator replay, re-finalize — reads the stale id, treats the
                 // reversal as a live posting, and silently no-ops.
-                'journal_entry_id'  => null,
+                'journal_entry_id' => null,
             ])->save();
             if (! $hadJournalEntry) {
                 $locked->markGlNotRequired('period_voided');
@@ -1644,7 +1894,7 @@ class PayrollPeriodService
             // replacement run — otherwise the double-pay guard would refuse the
             // correction it exists to make possible. The payroll rows stay put
             // (history is never deleted); only the claim on the cycle is freed.
-            \App\Modules\Payroll\Models\PayrollCycleClaim::query()
+            PayrollCycleClaim::query()
                 ->where('payroll_period_id', $locked->id)
                 ->delete();
 
@@ -1652,16 +1902,16 @@ class PayrollPeriodService
             // accruals stay marked paid and the replacement run pays nobody:
             // computeAndPay() only picks up accruals where is_paid = false.
             if ($locked->is_thirteenth_month) {
-                \App\Modules\Payroll\Models\ThirteenthMonthAccrual::query()
+                ThirteenthMonthAccrual::query()
                     ->whereIn('payroll_id', $locked->payrolls()->select('id'))
                     ->update(['is_paid' => false, 'paid_date' => null, 'updated_at' => now()]);
             }
 
             AuditLog::create([
-                'user_id'    => $actor->id,
-                'action'     => 'payroll.period.void',
+                'user_id' => $actor->id,
+                'action' => 'payroll.period.void',
                 'model_type' => PayrollPeriod::class,
-                'model_id'   => $locked->id,
+                'model_id' => $locked->id,
                 'old_values' => ['status' => $previousStatus, 'journal_entry_id' => $locked->journal_entry_id],
                 'new_values' => ['status' => PayrollPeriodStatus::Voided->value, 'reason' => $reason, 'reversal_journal_entry_id' => $reversalId],
                 'ip_address' => request()?->ip(),

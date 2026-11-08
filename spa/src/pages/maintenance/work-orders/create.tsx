@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -61,9 +62,11 @@ export default function CreateMaintenanceWorkOrderPage() {
     mutationFn: (data: FormValues) =>
       workOrdersApi.create(data as Parameters<typeof workOrdersApi.create>[0]),
     onSuccess: (wo) => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      qc.setQueryData(['maintenance', 'work-order', wo.id], wo);
+      void invalidateRealtimeChange(qc, { entityType: 'maintenance_work_order', entityId: wo.id });
       toast.success(`Work order ${wo.mwo_number} created.`);
-      navigate(`/maintenance/work-orders/${wo.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/maintenance/work-orders/${wo.id}`);
     },
     onError: (error) => {
       applyServerValidationErrors(error, setError, 'Failed to create the maintenance work order.');

@@ -62,7 +62,6 @@ export default function AdminCreateUserPage() {
  search: employeeSearch || undefined,
  }, signal),
  enabled: !!departmentId,
- placeholderData: (prev) => prev,
  });
 
  const candidates = candidatesQuery.data ?? [];
@@ -107,7 +106,8 @@ export default function AdminCreateUserPage() {
  if (r.data.temp_password) {
  setTempPasswordModal(r.data.temp_password);
  } else {
- navigate(`/admin/users/${r.data.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/admin/users/${r.data.id}`);
  }
  },
  onError: (err) => {

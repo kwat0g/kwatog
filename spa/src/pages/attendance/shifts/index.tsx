@@ -23,12 +23,14 @@ import { Switch } from '@/components/ui/Switch';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import type { ApiValidationError, ListParams } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { Shift } from '@/types/attendance';
 
 import { formatTime } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { showUndoToast } from '@/lib/undoToast';
 import { useSavedFeedback } from '@/hooks/useSavedFeedback';
 const schema = z.object({
@@ -47,6 +49,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function ShiftsPage() {
  const { can } = usePermission();
+ useRealtimeList('shift', can('attendance.edit') || can('attendance.shifts.manage') ? 'visible' : undefined);
  const navigate = useNavigate();
  const qc = useQueryClient();
  const [filters, setFilters] = useUrlFilters<ListParams>({ page: 1, per_page: 25 });
@@ -57,10 +60,12 @@ export default function ShiftsPage() {
  const [scope, setScope] = useState<ArchiveScope>('active');
  const [selectedId, setSelectedId] = useState<string | null>(null);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['attendance', 'shifts', filters, { trashed: archiveToTrashed(scope) }],
+  const queryKey = ['attendance', 'shifts', filters, { trashed: archiveToTrashed(scope) }] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => shiftsApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
 
  const selected = useMemo(

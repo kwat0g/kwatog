@@ -17,7 +17,10 @@ import type { Machine, MachineStatus } from '@/types/mrp';
 import { machineStatusVariant } from '@/lib/statusVariants';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 export default function MachinesListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
@@ -25,11 +28,14 @@ export default function MachinesListPage() {
  const canManage = can('production.machines.manage');
  const canTransition = can('production.machines.transition');
  const [filters, setFilters] = useUrlFilters<MachineListParams>({ page: 1, per_page: 25 });
+ useRealtimeList('machine', 'visible');
 
+ const queryKey = ['mrp', 'machines', 'list', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['mrp', 'machines', filters],
+ queryKey,
  queryFn: () => machinesApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined });
  const { data: machineOptions } = useQuery({
  queryKey: ['mrp', 'machines', 'options'],
  queryFn: machinesApi.options,
@@ -38,8 +44,12 @@ export default function MachinesListPage() {
 
  const transition = useMutation({
  mutationFn: ({ id, to }: { id: string; to: MachineStatus }) => machinesApi.transitionStatus(id, to),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['mrp', 'machines'] });
+ onSuccess: (machine) => {
+ qc.setQueriesData({ queryKey: ['mrp', 'machines', 'list'] }, (current) => {
+ if (!current || typeof current !== 'object' || !('data' in current) || !Array.isArray(current.data)) return current;
+ return { ...current, data: current.data.map((row) => row?.id === machine.id ? { ...row, ...machine } : row) };
+ });
+ void invalidateRealtimeChange(qc, { entityType: 'machine', entityId: machine.id });
  toast.success('Machine status updated.');
  },
  onError: (e: AxiosError<{ message?: string }>) => {

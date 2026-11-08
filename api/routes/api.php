@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 use App\Common\Controllers\AlertController;
 use App\Common\Controllers\ApprovalBoardController;
+use App\Common\Controllers\BusinessPolicyController;
 use App\Common\Controllers\CalendarController;
 use App\Common\Controllers\ChainBottleneckController;
 use App\Common\Controllers\ChainListenerRecoveryController;
+use App\Common\Controllers\RealtimeHealthController;
 use App\Common\Controllers\RecoveryAccessController;
-use App\Common\Controllers\BusinessPolicyController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +101,11 @@ Route::get('/health', function (Request $request) {
     return response()->json($body, $healthy ? 200 : 503);
 });
 
+// The payload reports one delivery-health bit only; it never exposes queue
+// counts, job metadata, records, or user/scope data to authenticated clients.
+Route::get('/realtime/health', RealtimeHealthController::class)
+    ->middleware('auth:sanctum,supplier_portal,customer_portal');
+
 // Break-glass recovery does not use users, roles, sessions, or the database
 // backup ledger. The short-lived bearer grants only recovery endpoints.
 // Exclude Sanctum's stateful wrapper because its default session store is the database.
@@ -126,15 +132,15 @@ Route::middleware(['auth:sanctum', 'permission:business_policies.view'])
 
 /* ─── Alerts (Task A2) — cross-module so registered here ─────────── */
 Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {
-    Route::get('/options',             [AlertController::class, 'options'])
+    Route::get('/options', [AlertController::class, 'options'])
         ->middleware('permission:alerts.view');
-    Route::get('/',                  [AlertController::class, 'index'])
+    Route::get('/', [AlertController::class, 'index'])
         ->middleware('permission:alerts.view');
-    Route::get('/unread-count',      [AlertController::class, 'unreadCount'])
+    Route::get('/unread-count', [AlertController::class, 'unreadCount'])
         ->middleware('permission:alerts.view');
     Route::patch('/{alert}/dismiss', [AlertController::class, 'dismiss'])
         ->middleware('permission:alerts.dismiss');
-    Route::patch('/{alert}/read',    [AlertController::class, 'markRead'])
+    Route::patch('/{alert}/read', [AlertController::class, 'markRead'])
         ->middleware('permission:alerts.view');
 });
 

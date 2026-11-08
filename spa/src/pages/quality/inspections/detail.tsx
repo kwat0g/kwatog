@@ -1,3 +1,4 @@
+import { usesQuantityForm } from './components/quantityCapture';
 /** Batch decisions replace measurement entry at every inspection stage. */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,9 +21,12 @@ import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { inspectionStatusVariant } from '@/lib/statusVariants';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatQuantity } from '@/lib/formatNumber';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { inspectionQueryKeys } from '@/lib/queryKeys/inspections';
 import { InspectionChecklistPanel } from './components/InspectionChecklistPanel';
 
 export default function InspectionDetailPage() {
@@ -37,26 +41,33 @@ export default function InspectionDetailPage() {
   const [reasonDecision, setReasonDecision] = useState<'failed' | null>(null);
   const [cocLoading, setCocLoading] = useState(false);
 
+  useRealtimeRecord('inspection', id);
+
+  const refreshAfterStateConflict = (error: AxiosError<{ code?: string; message?: string }>) => {
+    if (error.response?.status !== 409 || error.response.data?.code !== 'inspection_state_conflict') {
+      return false;
+    }
+
+    void invalidateRealtimeChange(qc, { entityType: 'inspection', entityId: id });
+    setConfirmReviewPass(false);
+    toast.error('Inspection changed in another session. The latest saved version was loaded; review before acting again.');
+
+    return true;
+  };
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['quality', 'inspections', id],
-    queryFn: () => inspectionsApi.show(id),
+    queryKey: inspectionQueryKeys.detail(id),
+    queryFn: ({ signal }) => inspectionsApi.show(id, signal),
     enabled: Boolean(id),
-    placeholderData: (prev) => prev,
-    // Measurement recording and checker review happen in other sessions.
-    // Poll while the verdict is not final so the page converges on its own.
-    refetchInterval: (query) =>
-      query.state.data && !['passed', 'failed', 'cancelled'].includes(query.state.data.status)
-        ? 15_000
-        : false,
   });
   const { data: inspectionOptions } = useQuery({
-    queryKey: ['quality', 'inspections', 'options'],
-    queryFn: inspectionsApi.options,
+    queryKey: inspectionQueryKeys.options,
+    queryFn: ({ signal }) => inspectionsApi.options(signal),
     staleTime: 300_000,
   });
   const { data: inspectionChain } = useQuery({
-    queryKey: ['quality', 'inspections', id, 'chain'],
-    queryFn: () => inspectionsApi.chain(id),
+    queryKey: inspectionQueryKeys.chain(id),
+    queryFn: ({ signal }) => inspectionsApi.chain(id, signal),
     enabled: Boolean(id),
     staleTime: 30_000,
   });
@@ -88,14 +99,21 @@ export default function InspectionDetailPage() {
       inspectionsApi.cancel(
         id,
         reason,
-        data?.capture_method === 'checklist' || data?.counted_capture ? data.result_version : undefined,
+        data?.result_version ?? 0,
       ),
-    onSuccess: () => {
+    onSuccess: (inspection) => {
+      qc.setQueryData(inspectionQueryKeys.detail(id), inspection);
       toast.success('Inspection cancelled');
-      qc.invalidateQueries({ queryKey: ['quality', 'inspections'] });
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'inspection', entityId: id },
+        [],
+        [inspectionQueryKeys.detail(id)],
+      );
       setConfirmCancel(false);
     },
-    onError: (e: AxiosError<{ message?: string }>) => {
+    onError: (e: AxiosError<{ code?: string; message?: string }>) => {
+      if (refreshAfterStateConflict(e)) return;
       toast.error(e.response?.data?.message ?? 'Could not cancel');
     },
   });
@@ -108,8 +126,10 @@ export default function InspectionDetailPage() {
       toast.success('New PASS/FAIL inspection created. Historical evidence preserved.');
       window.location.assign(`/quality/inspections/${next.id}`);
     },
-    onError: (error: AxiosError<{ message?: string }>) =>
-      toast.error(error.response?.data?.message ?? 'Could not replace this inspection.'),
+    onError: (error: AxiosError<{ code?: string; message?: string }>) => {
+      if (refreshAfterStateConflict(error)) return;
+      toast.error(error.response?.data?.message ?? 'Could not replace this inspection.');
+    },
   });
   const review = useMutation({
     mutationFn: ({ decision, remarks }: { decision: 'passed' | 'failed'; remarks?: string }) =>
@@ -117,16 +137,24 @@ export default function InspectionDetailPage() {
         id,
         decision,
         remarks,
-        data?.capture_method === 'checklist' || data?.counted_capture ? data.result_version : undefined,
+        data?.result_version ?? 0,
       ),
     onSuccess: (insp) => {
+      qc.setQueryData(inspectionQueryKeys.detail(id), insp);
       toast.success(`Inspection ${insp.status === 'passed' ? 'approved' : 'failed'} by checker.`);
-      qc.invalidateQueries({ queryKey: ['quality', 'inspections'] });
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'inspection', entityId: id },
+        [],
+        [inspectionQueryKeys.detail(id)],
+      );
       setConfirmReviewPass(false);
       setReasonDecision(null);
     },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Could not review inspection.'),
+    onError: (e: AxiosError<{ code?: string; message?: string }>) => {
+      if (refreshAfterStateConflict(e)) return;
+      toast.error(e.response?.data?.message ?? 'Could not review inspection.');
+    },
   });
 
   if (isLoading && !data) {
@@ -148,19 +176,19 @@ export default function InspectionDetailPage() {
     );
   }
 
-  const isTerminal = ['awaiting_review', 'passed', 'failed', 'cancelled'].includes(data.status);
+  const availableActions = new Set(data.available_actions ?? []);
   const evidence = (data.measurements ?? []).filter(
     (row) => row.measured_value != null || row.is_pass != null || Boolean(row.notes),
   );
   const thresholds = spcOptions?.capability_thresholds;
   const waitingForTrial = Boolean(data.startup_trial_required && (!data.startup_trial ||
     data.startup_trial.recorded_quantity !== data.startup_trial.required_quantity || !data.startup_trial.output_id));
-  const hasTrial = Boolean(data.startup_trial?.output_id);
   const hasRequiredSizeReadings = Boolean(data.measurements?.some((row) =>
     row.evaluation_mode === 'numeric' ||
     (row.parameter_type === 'dimensional' &&
       (row.tolerance_min != null || row.tolerance_max != null)),
   ));
+  const simpleQuantityInspection = usesQuantityForm(data);
   const nextAction =
     waitingForTrial ? `Production: record ${data.startup_trial?.required_quantity ?? data.sample_size} trial pieces before QC evidence can be entered.` : data.status === 'awaiting_review'
       ? `Independent QC reviewer: review the proposed ${(data.proposed_result ?? 'result').toUpperCase()}.`
@@ -176,7 +204,9 @@ export default function InspectionDetailPage() {
             : 'Inspection passed. Check linked source records for the next production, return, or warehouse action.'
           : data.status === 'cancelled'
             ? 'Cancelled evidence cannot authorize stock release.'
-            : data.counted_capture ? data.sampling_basis === 'lot'
+            : data.counted_capture ? simpleQuantityInspection
+              ? 'QC: enter the defective quantity in the source unit, describe any defects, then submit.'
+              : data.sampling_basis === 'lot'
               ? hasRequiredSizeReadings ? 'QC: confirm material defects and enter required size readings, then submit.' : 'QC: confirm material defects, then submit inspection.'
               : hasRequiredSizeReadings ? 'QC: record defective pieces and required size readings, then submit.' : 'QC: record defective pieces, then submit inspection.'
               : data.count_only_incoming ? 'QC inspector: count every piece, record and segregate defects, then submit.' : 'QC inspector: complete the checklist, then submit inspection.';
@@ -217,9 +247,7 @@ export default function InspectionDetailPage() {
                 Open NCR
               </Button>
             )}
-            {data.work_order_output &&
-              ['passed', 'failed'].includes(data.status) &&
-              can('quality.ncr.manage') && (
+            {availableActions.has('report_defect') && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -228,7 +256,7 @@ export default function InspectionDetailPage() {
                   {data.ncr ? 'Report another defect' : 'Report defect'}
                 </Button>
               )}
-            {!isTerminal && !hasTrial && can('quality.inspections.manage') && (
+            {availableActions.has('cancel') && (
               <>
                 <Button
                   variant="secondary"
@@ -240,15 +268,14 @@ export default function InspectionDetailPage() {
                 </Button>
               </>
             )}
-            {can('quality.inspections.manage') && data.can_replace_checklist && !hasTrial && (
+            {availableActions.has('replace_checklist') && (
               <Button variant="secondary" onClick={() => setConfirmReplace(true)}>
                 Replace with PASS/FAIL checklist
               </Button>
             )}
-            {/* can_review also excludes the maker — the service refuses self-review. */}
-            {data.can_review && !waitingForTrial && (
+            {(availableActions.has('review_pass') || availableActions.has('review_fail')) && (
               <>
-                {data.proposed_result === 'passed' ? (
+                {availableActions.has('review_pass') ? (
                   <Button
                     variant="primary"
                     size="sm"
@@ -351,7 +378,7 @@ export default function InspectionDetailPage() {
                 </div>
                 <div className="min-w-0">
                   <dt className="text-xs text-muted">
-                    {data.counted_capture ? 'Checked quantity' : data.capture_method === 'checklist' &&
+                    {simpleQuantityInspection ? 'Inspection quantity' : data.counted_capture ? 'Checked quantity' : data.capture_method === 'checklist' &&
                     data.sampling_basis === 'piece' &&
                     data.sample_size === data.batch_quantity
                       ? 'Full piece coverage'
@@ -360,8 +387,8 @@ export default function InspectionDetailPage() {
                         : 'Inspect sample'}
                   </dt>
                   <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
-                    {formatQuantity(data.counted_capture?.required_quantity ?? data.sample_size)}
-                    {data.counted_capture ? data.sampling_basis === 'lot' ? ' lot' : ' pieces' : data.capture_method === 'checklist'
+                    {simpleQuantityInspection ? `${data.startup_trial_required ? data.startup_trial?.required_quantity ?? data.sample_size : data.source_quantity ?? data.batch_quantity} ${data.source_uom_code ?? 'PCS'}` : formatQuantity(data.counted_capture?.required_quantity ?? data.sample_size)}
+                    {simpleQuantityInspection ? '' : data.counted_capture ? data.sampling_basis === 'lot' ? ' lot' : ' pieces' : data.capture_method === 'checklist'
                       ? data.sampling_basis === 'lot'
                         ? ' lot'
                         : ' pieces'
@@ -372,7 +399,9 @@ export default function InspectionDetailPage() {
                   <div className="min-w-0 sm:col-span-2">
                     <dt className="text-xs text-muted">Acceptance rule</dt>
                     <dd className="mt-1 text-sm">
-                      {data.counted_capture ? `${data.count_only_incoming
+                      {simpleQuantityInspection
+                        ? `PASS requires 0 defective ${data.source_uom_code ?? 'PCS'}. Any defective quantity is FAIL.`
+                        : data.counted_capture ? `${data.count_only_incoming
                         ? 'Pass requires zero defective pieces.'
                         : data.sampling_basis === 'lot'
                         ? 'Pass requires no material defects or other failed requirements.'
@@ -403,16 +432,16 @@ export default function InspectionDetailPage() {
                     </div>
                   </>
                 )}
-                {!!data.counted_capture?.dimensional_quantity && (
+                {!simpleQuantityInspection && !!data.counted_capture?.dimensional_quantity && (
                   <div className="min-w-0">
                     <dt className="text-xs text-muted">Size sample</dt>
                     <dd className="mt-1 text-sm">{data.counted_capture.dimensional_quantity} pieces</dd>
                   </div>
                 )}
                 <div className="min-w-0">
-                  <dt className="text-xs text-muted">{data.sampling_basis === 'lot' ? 'Material defects' : data.count_only_incoming ? 'Defective pieces' : 'Sample defects'}</dt>
+                  <dt className="text-xs text-muted">{simpleQuantityInspection ? `Defective quantity (${data.source_uom_code ?? 'PCS'})` : data.sampling_basis === 'lot' ? 'Material defects' : data.count_only_incoming ? 'Defective pieces' : 'Sample defects'}</dt>
                   <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
-                    {data.sample_defect_count != null
+                    {data.quantity_result ? `${data.quantity_result.defective_quantity} ${data.quantity_result.unit}` : data.sample_defect_count != null
                       ? data.sampling_basis === 'lot'
                         ? Number(data.sample_defect_count) > 0
                           ? 'Affected lot'
@@ -463,7 +492,7 @@ export default function InspectionDetailPage() {
             <InspectionChecklistPanel
               key={data.id}
               inspection={data}
-              canManage={data.can_manage ?? can('quality.inspections.manage')}
+              canManage={data.can_manage === true}
             />
           </div>
           <aside

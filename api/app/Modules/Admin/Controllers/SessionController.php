@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Controllers;
 
 use App\Common\Models\AuditLog;
+use App\Common\Services\OutboxService;
+use App\Common\Services\UserAccessRefreshService;
+use App\Modules\Admin\Events\AdminSessionsChanged;
 use App\Modules\Auth\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,6 +15,11 @@ use Illuminate\Support\Facades\DB;
 
 class SessionController
 {
+    public function __construct(
+        private readonly OutboxService $outbox,
+        private readonly UserAccessRefreshService $userAccessRefresh,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $sessions = DB::table('sessions')
@@ -31,6 +39,7 @@ class SessionController
             ->map(function ($s) use ($request) {
                 $s->last_activity_at = date('Y-m-d H:i:s', (int) $s->last_activity);
                 $s->is_current = $s->id === $request->session()->getId();
+
                 return $s;
             });
 
@@ -53,7 +62,9 @@ class SessionController
                 ->leftJoin('users', 'sessions.user_id', '=', 'users.id')
                 ->leftJoin('roles', 'users.role_id', '=', 'roles.id')
                 ->where('sessions.id', $sessionId)
-                ->lockForUpdate()
+                // PostgreSQL cannot lock the nullable side of the role/user
+                // LEFT JOIN; only the session row needs serialization here.
+                ->lock('for update of sessions')
                 ->first([
                     'sessions.id',
                     'sessions.user_id',
@@ -83,6 +94,19 @@ class SessionController
                 'user_agent' => $request->userAgent(),
                 'created_at' => now(),
             ]);
+
+            // The session ID is a bearer credential. Notify authorized session
+            // viewers to refetch, without placing that identifier on the wire.
+            $this->outbox->record(new AdminSessionsChanged(
+                action: 'deleted',
+                version: now()->format('Y-m-d\\TH:i:s.uP'),
+                actorHashId: is_string($actor->hash_id) ? $actor->hash_id : null,
+            ));
+
+            // The revoked browser's socket is still connected until its next
+            // API call. Signal that exact user so it refetches /auth/user,
+            // receives 401, and clears its identity-scoped client caches.
+            $this->userAccessRefresh->stageForUsers([$session->user_id]);
 
             return true;
         });

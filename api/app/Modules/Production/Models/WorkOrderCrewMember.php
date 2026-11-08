@@ -20,4 +20,9 @@ class WorkOrderCrewMember extends Model
     {
         return $this->belongsTo(Employee::class);
     }
+
+    public function crew(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrderCrew::class, 'work_order_crew_id');
+    }
 }

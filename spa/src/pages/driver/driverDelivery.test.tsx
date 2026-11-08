@@ -57,6 +57,46 @@ it('tells the driver where to deliver and opens Maps from the address', async ()
   expect(screen.getByRole('link', { name: /call the receiving contact/i })).toHaveAttribute('href', 'tel:0495001234');
 });
 
+it('renders the delivery outcome from the successful API response before a refetch', async () => {
+  const updated: DriverDelivery = {
+    ...delivery,
+    status: 'return_pending',
+    next_status: null,
+    can_report_attempt_outcome: false,
+    attempt_outcome_reasons: [],
+    attempt_outcome: {
+      id: 'outcome-1',
+      reason_code: 'partial_delivery',
+      reason_label: 'Partial delivery',
+      notes: null,
+      reported_at: '2026-10-11T08:00:00Z',
+      lines: [{
+        delivery_item_id: 'item-1',
+        customer_received_quantity: '2',
+        customer_received_damaged_quantity: '0',
+        truck_return_quantity: '1',
+        truck_return_damaged_quantity: '0',
+        unaccounted_quantity: '0',
+      }],
+    },
+  };
+  vi.mocked(driverApi.reportAttempt).mockResolvedValue(updated);
+  const view = show({
+    ...delivery,
+    can_report_attempt_outcome: true,
+    attempt_outcome_reasons: [{ value: 'partial_delivery', label: 'Partial delivery' }],
+    items: [{ id: 'item-1', quantity: '3', product: { name: 'Bracket', part_number: 'BR-1' } }],
+  });
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Report delivery problem' }));
+  fireEvent.change(view.container.querySelector('select[name="reason_code"]')!, { target: { value: 'partial_delivery' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save delivery outcome' }));
+
+  await waitFor(() => expect(driverApi.reportAttempt).toHaveBeenCalled());
+  expect(await screen.findByText('Partial delivery', { exact: true })).toBeVisible();
+  expect(driverApi.showDelivery).toHaveBeenCalledTimes(1);
+});
+
 it('records delivery through photo capture while preserving the problem report', async () => {
   show({ ...delivery, can_report_attempt_outcome: true, items: [{ id: 'item-1', quantity: '3', product: { name: 'Bracket', part_number: 'BR-1' } }] });
   expect(await screen.findByRole('button', { name: 'Report delivery problem' })).toBeVisible();
@@ -77,9 +117,12 @@ it('keeps loading proof separate from the receipt and offers historical receipt 
 });
 
 it('uploads actual evidence before recording delivery', async () => {
-  vi.mocked(driverApi.uploadReceipt).mockResolvedValue({ ...delivery, status: 'delivered' });
+  vi.mocked(driverApi.uploadReceipt).mockResolvedValue({ ...delivery, status: 'delivered', status_label: 'Delivered' });
   const view = show(delivery, true);
   expect(await screen.findByRole('button', { name: 'Record delivery' })).toBeDisabled();
+  await waitFor(() => expect(driverApi.showDelivery).toHaveBeenCalledTimes(1));
+  vi.mocked(driverApi.showDelivery).mockClear();
+  vi.mocked(driverApi.showDelivery).mockImplementation(() => new Promise<DriverDelivery>(() => {}));
   const photo = new File(['photo'], 'receipt.jpg', { type: 'image/jpeg' });
   const input = view.container.querySelector('input[capture="environment"]');
   expect(input).not.toBeNull();
@@ -88,6 +131,9 @@ it('uploads actual evidence before recording delivery', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
   await waitFor(() => expect(driverApi.uploadReceipt).toHaveBeenCalledWith('dr-1', photo));
   expect(await screen.findByText('Delivery details')).toBeVisible();
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Delivered');
+  expect(screen.getByRole('heading', { level: 1 })).not.toHaveTextContent('in transit');
+  await waitFor(() => expect(driverApi.showDelivery).toHaveBeenCalledTimes(1));
 });
 
 it('rejects files above 8 MB without uploading', async () => {

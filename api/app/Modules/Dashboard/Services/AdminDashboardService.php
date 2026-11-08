@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Modules\Auth\Models\User;
 use App\Common\Services\SettingsService;
 use App\Modules\Admin\Enums\LoginHistoryStatus;
@@ -35,8 +36,15 @@ class AdminDashboardService
 
     public function admin(User $user): array
     {
-        return Cache::remember("dashboard:admin:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        $cacheScope = $this->gate->cacheScope($user);
+
+        // This response has its own invalidation scope. User, role, login,
+        // audit, and alert changes must retire the cached snapshot without
+        // evicting unrelated dashboard families.
+        $generation = DashboardCacheGeneration::current('dashboard:admin');
+        return FailOpenCache::remember(Cache::store(), "dashboard:admin:v4:{$generation}:{$user->id}:{$cacheScope}", self::CACHE_TTL, function () use ($user) {
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis'   => $this->systemKpis($user),
                 'panels' => $this->gate->panels($user, [
                     // Who is signed in, and from where — user administration.
@@ -50,7 +58,7 @@ class AdminDashboardService
                     'open_alerts'       => ['alerts.view',            fn () => $this->openSystemAlerts()],
                 ]),
             ];
-        });
+        }, 'dashboard.admin');
     }
 
     // ── KPIs ────────────────────────────────────────────────────────────────

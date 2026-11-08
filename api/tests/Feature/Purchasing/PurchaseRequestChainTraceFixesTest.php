@@ -5,28 +5,33 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Common\Events\ChainStepAdvanced;
-use App\Modules\Accounting\Models\Vendor;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\ChainDefinitions;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
+use App\Modules\Inventory\Listeners\VerifyCoaOnIncomingQcPass;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
-use App\Modules\Inventory\Listeners\VerifyCoaOnIncomingQcPass;
-use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\PurchaseRequestService;
 use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Models\Inspection;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -57,17 +62,18 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
     {
         $pr = PurchaseRequest::factory()->create();
 
-        app(\App\Modules\Purchasing\Services\PurchaseRequestService::class)->submit($pr);
+        app(PurchaseRequestService::class)->submit($pr);
 
         $this->assertDatabaseHas('event_outbox', [
             'event_type' => ChainStepAdvanced::class,
         ]);
-        // The sync test queue dispatches immediately after commit, so the
-        // ledger row is already 'published' rather than 'pending'.
+        // DispatchOutboxMessage deliberately uses the dedicated Redis worker
+        // even when the ordinary test queue is sync; durable staging stays
+        // pending until that worker publishes it.
         $this->assertDatabaseHas('chain_step_runs', [
             'entity_id' => $pr->id,
             'step' => 'pending',
-            'status' => 'published',
+            'status' => 'pending',
         ]);
     }
 
@@ -86,17 +92,17 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
             'cancelled' => 'cancelled',
         ];
         foreach ($expectedSteps as $status => $expectedActive) {
-            [$active, $completed] = \App\Common\Support\ChainDefinitions::resolveStrict('purchase_request', $status);
+            [$active, $completed] = ChainDefinitions::resolveStrict('purchase_request', $status);
             $this->assertSame($expectedActive, $active, $status);
             if (in_array($status, ['rejected', 'cancelled'], true)) {
                 $this->assertSame([], $completed, $status);
             }
         }
 
-        [$approvedActive, $approvedCompleted] = \App\Common\Support\ChainDefinitions::resolveStrict('purchase_request', 'approved');
+        [$approvedActive, $approvedCompleted] = ChainDefinitions::resolveStrict('purchase_request', 'approved');
         $this->assertSame(['draft', 'pending'], $approvedCompleted);
 
-        [$convertedActive, $convertedCompleted] = \App\Common\Support\ChainDefinitions::resolveStrict('purchase_request', 'converted');
+        [$convertedActive, $convertedCompleted] = ChainDefinitions::resolveStrict('purchase_request', 'converted');
         $this->assertSame('converted', $convertedActive);
         $this->assertSame(['draft', 'pending', 'approved'], $convertedCompleted);
     }
@@ -119,7 +125,7 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
             'generated_at' => now(),
         ]);
 
-        $pr = app(\App\Modules\Purchasing\Services\PurchaseRequestService::class)->create(
+        $pr = app(PurchaseRequestService::class)->create(
             [
                 'sourcing_method' => 'direct_po',
                 // Service contract is the raw int; the HTTP layer's
@@ -135,6 +141,65 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
         $this->assertSame($plan->id, $pr->mrp_plan_id);
     }
 
+    public function test_draft_create_update_delete_and_restore_each_stage_one_chain_refresh(): void
+    {
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $service = app(PurchaseRequestService::class);
+
+        $pr = $service->create([
+            'sourcing_method' => 'direct_po',
+            'reason' => 'Realtime refresh regression',
+            'items' => [
+                ['description' => 'Resin sample', 'quantity' => '1', 'unit' => 'pcs', 'estimated_unit_price' => '120.00'],
+            ],
+        ], $admin);
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $pr = $service->update($pr, ['reason' => 'Updated realtime refresh regression']);
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $service->delete($pr);
+        $this->assertSame(3, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $service->restore($pr);
+        $this->assertSame(4, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $actions = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->orderBy('id')
+            ->pluck('payload')
+            ->map(fn (string $payload): string => json_decode($payload, true, 512, JSON_THROW_ON_ERROR)['action'])
+            ->all();
+        $this->assertEqualsCanonicalizing(['created', 'updated', 'deleted', 'restored'], $actions);
+    }
+
+    public function test_conversion_status_helpers_signal_visible_changes_once(): void
+    {
+        $pr = PurchaseRequest::factory()->create(['status' => PurchaseRequestStatus::Approved]);
+
+        $this->assertTrue($pr->markPoConversionPending());
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $this->assertTrue($pr->fresh()->markPoConversionManualRequired('Supplier assignment is required.'));
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $this->assertFalse($pr->fresh()->markPoConversionManualRequired('Supplier assignment is required.'));
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $pr->fresh()->markPoConversionConverted();
+        $this->assertSame(3, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
+
+        $actions = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->orderBy('id')
+            ->pluck('payload')
+            ->map(fn (string $payload): string => json_decode($payload, true, 512, JSON_THROW_ON_ERROR)['action'])
+            ->all();
+        $this->assertSame(['updated', 'updated', 'updated'], $actions);
+    }
+
     // ── §7.7 — CoA verification on incoming pass ───────────────────────────
 
     public function test_accept_verifies_coa_for_a_passed_line_with_document(): void
@@ -144,7 +209,7 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
         // create() already staged a draft per-line inspection (F-06 sync
         // path); complete it as PASSED the way the inspector's verdict would.
         $this->completeLineInspection($grn, 'passed');
-        $inspection = \App\Modules\Quality\Models\Inspection::query()
+        $inspection = Inspection::query()
             ->where('stage', 'incoming')
             ->where('grn_item_id', $grn->items()->firstOrFail()->id)
             ->firstOrFail();
@@ -164,7 +229,7 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
         $grn = $this->makeReceivedGrn(['coa_document_path' => null]);
 
         $this->completeLineInspection($grn, 'passed');
-        $inspection = \App\Modules\Quality\Models\Inspection::query()
+        $inspection = Inspection::query()
             ->where('stage', 'incoming')
             ->where('grn_item_id', $grn->items()->firstOrFail()->id)
             ->firstOrFail();
@@ -190,7 +255,7 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
 
         // The fail-closed gate refuses acceptance on a failed inspection, so
         // the CoA flag cannot flip through this path either.
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         try {
             app(GrnService::class)->accept($grn->fresh(), $qcUser);
         } finally {
@@ -235,7 +300,7 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
         $receiver = User::factory()->create();
         $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $po = PurchaseOrder::factory()->create([
-            'status' => \App\Modules\Purchasing\Enums\PurchaseOrderStatus::Approved->value,
+            'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $receiver->id,
         ]);
         $poItem = PurchaseOrderItem::create([
@@ -268,7 +333,7 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
     /** Finalise the auto-staged per-line incoming inspection to $status. */
     private function completeLineInspection(GoodsReceiptNote $grn, string $status): void
     {
-        $inspection = \App\Modules\Quality\Models\Inspection::query()
+        $inspection = Inspection::query()
             ->where('stage', 'incoming')
             ->where('grn_item_id', $grn->items->first()->id)
             ->firstOrFail();

@@ -10,8 +10,9 @@ const permissions = vi.hoisted(() => new Set(['production.schedule.confirm', 'mr
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ can: (slug: string) => permissions.has(slug) }),
 }));
+vi.mock('@/hooks/useRealtimeEvent', () => ({ useRealtimeEvent: vi.fn() }));
 vi.mock('@/api/mrp/scheduler', () => ({
-  schedulerApi: { options: vi.fn(), snapshot: vi.fn(), run: vi.fn(), confirm: vi.fn() },
+  schedulerApi: { options: vi.fn(), snapshot: vi.fn(), run: vi.fn(), confirm: vi.fn(), move: vi.fn() },
 }));
 vi.mock('@/api/mrp/machines', () => ({
   machinesApi: { list: vi.fn().mockResolvedValue({ data: [] }) },
@@ -77,6 +78,11 @@ beforeEach(() => {
     confirmed_count: 1,
     schedule_ids: ['schedule-0'],
   });
+  vi.mocked(schedulerApi.move).mockResolvedValue({
+    scheduled_start: '2026-11-10T08:00:00+08:00',
+    scheduled_end: '2026-11-10T09:00:00+08:00',
+    updated_at: '2026-11-05T12:00:00.000000Z',
+  });
 });
 
 describe('ProductionSchedulePage', () => {
@@ -127,6 +133,48 @@ describe('ProductionSchedulePage', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     client.clear();
   });
+
+  it('shows the server-confirmed move before the scheduler snapshot refetch settles', async () => {
+    const currentSnapshot: GanttSnapshot = {
+      ...snapshot,
+      from: '2026-11-01T00:00:00+08:00',
+      to: '2026-11-20T00:00:00+08:00',
+      rows: snapshot.rows.map((row) => ({
+        ...row,
+        bars: row.bars.map((bar) => ({
+          ...bar,
+          start: bar.start.replace('2026-10-11', '2026-11-06'),
+          end: bar.end.replace('2026-10-11', '2026-11-06'),
+        })),
+      })),
+    };
+    vi.mocked(schedulerApi.snapshot)
+      .mockResolvedValueOnce(currentSnapshot)
+      .mockImplementation(() => new Promise(() => undefined));
+
+    const client = mount();
+    fireEvent.click(await screen.findByRole('tab', { name: /Schedule list/ }));
+    const moveButtons = await screen.findAllByRole('button', { name: 'Move' });
+    expect(screen.getAllByText('Nov 6, 2026').length).toBeGreaterThan(0);
+
+    fireEvent.click(moveButtons[0]);
+    const dialog = await screen.findByRole('dialog');
+    const dateInput = dialog.querySelector('input[type="datetime-local"]');
+    expect(dateInput).not.toBeNull();
+    fireEvent.change(dateInput!, {
+      target: { value: '2026-11-10T08:00' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+
+    await waitFor(() => expect(schedulerApi.move).toHaveBeenCalledOnce());
+    expect(await vi.mocked(schedulerApi.move).mock.results[0]?.value).toMatchObject({
+      scheduled_start: '2026-11-10T08:00:00+08:00',
+    });
+    expect((await screen.findAllByText('Nov 10, 2026')).length).toBeGreaterThan(0);
+    expect(schedulerApi.snapshot).toHaveBeenCalledTimes(2);
+    client.clear();
+  });
+
   it('preserves crew readiness and distinct failed-run diagnostics after reload', async () => {
     vi.mocked(schedulerApi.snapshot).mockResolvedValue({
       ...snapshot,
@@ -176,7 +224,10 @@ describe('ProductionSchedulePage', () => {
     const client = mount();
     fireEvent.click(await screen.findByRole('tab', { name: /Schedule list/ }));
     expect(await screen.findByText('1,234,567.125')).toBeVisible();
-    expect(screen.getByRole('combobox', { name: 'Density' })).toHaveValue('compact');
+    expect(screen.getByRole('radiogroup', { name: 'Table density' })).toContainElement(
+      screen.getByRole('radio', { name: 'Compact' }),
+    );
+    expect(screen.getByRole('radio', { name: 'Compact' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('button', { name: 'Customize columns' })).toBeVisible();
     client.clear();
   });

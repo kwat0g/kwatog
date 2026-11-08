@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Quality;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
@@ -148,8 +149,11 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
         [$wo, $original] = $this->arrange(unitPrice: '75.00');
         $original->forceFill(['accepted_quantity' => 8])->save();
         $listener = new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class));
+        $signalsBeforeInitialRelease = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
         $listener->handle(new InspectionPassed($original));
         $draft = Delivery::where('sales_order_id', $wo->sales_order_id)->firstOrFail();
+        $signalsAfterInitialDraft = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
+        $this->assertSame($signalsBeforeInitialRelease + 1, $signalsAfterInitialDraft);
         $hold = $draft->stockReservations()->firstOrFail();
         $output = WorkOrderOutput::create([
             'work_order_id' => $wo->id, 'recorded_by' => $wo->created_by, 'recorded_at' => now(),
@@ -159,8 +163,14 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
         $later = $original->replicate();
         $later->forceFill(['inspection_number' => 'QC-LATER-DRAFT', 'work_order_output_id' => $output->id,
             'batch_quantity' => 2, 'sample_size' => 2, 'accepted_quantity' => 2])->save();
+        $signalsBeforeAppend = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
         $listener->handle(new InspectionPassed($later));
         $listener->handle(new InspectionPassed($later));
+        $this->assertSame(
+            $signalsBeforeAppend + 1,
+            DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count(),
+            'A later QC release appending a delivery line must refresh viewers exactly once.',
+        );
         $this->assertSame(1, Delivery::where('sales_order_id', $wo->sales_order_id)->count());
         $this->assertEquals(10, $draft->stockReservations()->sum('quantity'));
         $this->assertSame(2, $draft->stockReservations()->count());

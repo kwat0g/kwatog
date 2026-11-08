@@ -23,6 +23,7 @@ import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { fromCents, toCents } from './money';
 import { localIsoDate } from '@/lib/formatDate';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const amountSchema = z.string()
  .regex(/^\d+(\.\d{1,2})?$/, 'Use an amount with up to two decimals.')
@@ -97,9 +98,16 @@ export default function CreateJournalEntryPage() {
  })),
  }),
  onSuccess: (je) => {
- qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+ qc.setQueryData(['accounting', 'journal-entries', je.id], je);
+ void invalidateRealtimeChange(
+  qc,
+  { entityType: 'journal_entry', entityId: je.id },
+  [],
+  [['accounting', 'journal-entries', je.id]],
+ );
  toast.success(`Draft ${je.entry_number} created.`);
- navigate(`/accounting/journal-entries/${je.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/accounting/journal-entries/${je.id}`);
  },
  onError: (e) => {
    applyServerValidationErrors(e, setError, 'Failed to post the journal entry.');

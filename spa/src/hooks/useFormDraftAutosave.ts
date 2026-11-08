@@ -9,6 +9,7 @@
 //
 // const { hasDraft, draftAge, restore, discard } = useFormDraftAutosave({
 // formKey: 'hr.employees.create',
+// userId: user.id,
 // getValues: form.getValues,
 // setValues: (data) => form.reset(data),
 // enabled: !mutation.isSuccess, // stop after successful submit
@@ -18,6 +19,14 @@
 // Then render <DraftRestoreBanner /> when `hasDraft` is true.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getAuthSessionDraftGeneration } from '@/lib/authSessionSync';
+import { useAuthStore } from '@/stores/authStore';
+import {
+  formDraftScopeFingerprint,
+  formDraftStorageKey,
+  FORM_DRAFT_STORAGE_PREFIX as STORAGE_PREFIX,
+  FORM_DRAFT_TTL_MS as DRAFT_TTL_MS,
+} from '@/lib/formDraftStorage';
 
 const DEFAULT_BLOCKLIST_PATTERNS: RegExp[] = [
   /password/i,
@@ -34,7 +43,6 @@ const DEFAULT_BLOCKLIST_PATTERNS: RegExp[] = [
   /credit.?card|card.?number|cvv/i,
 ];
 
-const STORAGE_PREFIX = 'ogami:formdraft:';
 const SAVE_INTERVAL_MS = 30_000; // 30 s, per spec.
 
 export interface UseFormDraftAutosaveOptions {
@@ -48,10 +56,7 @@ export interface UseFormDraftAutosaveOptions {
   enabled?: boolean;
   /** Extra field names to blocklist on top of the default sensitive patterns. */
   blocklist?: string[];
-  /**
-   * Authenticated user id. When provided, the storage key is scoped to this
-   * user so drafts never leak across accounts on shared terminals.
-   */
+  /** Active authenticated identity; drafts are additionally scoped by access. */
   userId?: string;
 }
 
@@ -79,32 +84,48 @@ function stripSensitive(
   return out;
 }
 
-function readDraft(formKey: string): DraftPayload | null {
-  if (typeof window === 'undefined') return null;
+function readDraft(storageKey: string | null): DraftPayload | null {
+  if (typeof window === 'undefined' || storageKey === null) return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_PREFIX + formKey);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DraftPayload;
-    if (!parsed || typeof parsed.ts !== 'number') return null;
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      !Number.isFinite(parsed.ts) ||
+      parsed.ts > Date.now() + 5 * 60_000 ||
+      !parsed.values ||
+      typeof parsed.values !== 'object' ||
+      Array.isArray(parsed.values)
+    ) {
+      deleteDraft(storageKey);
+      return null;
+    }
+    if (Date.now() - parsed.ts > DRAFT_TTL_MS) {
+      deleteDraft(storageKey);
+      return null;
+    }
     return parsed;
   } catch {
+    deleteDraft(storageKey);
     return null;
   }
 }
 
-function writeDraft(formKey: string, payload: DraftPayload): void {
-  if (typeof window === 'undefined') return;
+function writeDraft(storageKey: string | null, payload: DraftPayload): void {
+  if (typeof window === 'undefined' || storageKey === null) return;
   try {
-    window.localStorage.setItem(STORAGE_PREFIX + formKey, JSON.stringify(payload));
+    window.localStorage.setItem(storageKey, JSON.stringify(payload));
   } catch {
     // Quota exceeded or storage disabled — silently ignore.
   }
 }
 
-function deleteDraft(formKey: string): void {
-  if (typeof window === 'undefined') return;
+function deleteDraft(storageKey: string | null): void {
+  if (typeof window === 'undefined' || storageKey === null) return;
   try {
-    window.localStorage.removeItem(STORAGE_PREFIX + formKey);
+    window.localStorage.removeItem(storageKey);
   } catch {
     /* noop */
   }
@@ -131,7 +152,10 @@ export function useFormDraftAutosave({
   blocklist = [],
   userId,
 }: UseFormDraftAutosaveOptions): UseFormDraftAutosaveResult {
-  const scopedKey = userId ? `${userId}:${formKey}` : formKey;
+  const authUser = useAuthStore((state) => state.user);
+  const scopedKey = userId && authUser?.id === userId
+    ? formDraftStorageKey(userId, formDraftScopeFingerprint(authUser), formKey)
+    : null;
   const initialDraftRef = useRef<DraftPayload | null>(readDraft(scopedKey));
   const [hasDraft, setHasDraft] = useState<boolean>(initialDraftRef.current !== null);
   const draftAge = initialDraftRef.current ? Date.now() - initialDraftRef.current.ts : null;
@@ -173,11 +197,18 @@ export function useFormDraftAutosave({
   // Keep cleanup current when a form becomes saved, switches identity, or
   // changes its result version. Never recreate a completed draft on unmount.
   const cleanupRef = useRef({ enabled, saveNow });
+  const authSessionDraftGeneration = useRef(getAuthSessionDraftGeneration());
   cleanupRef.current = { enabled, saveNow };
   // Save on unmount (best-effort).
   useEffect(() => {
+    const generationAtMount = authSessionDraftGeneration.current;
     return () => {
-      if (cleanupRef.current.enabled) cleanupRef.current.saveNow();
+      if (
+        cleanupRef.current.enabled &&
+        generationAtMount === getAuthSessionDraftGeneration()
+      ) {
+        cleanupRef.current.saveNow();
+      }
     };
   }, []);
 

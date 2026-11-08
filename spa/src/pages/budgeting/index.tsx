@@ -35,6 +35,8 @@ export default function BudgetOverviewPage() {
     queryKey: ['budget-fiscal-years'],
     queryFn: () => budgetingApi.fiscalYears(),
     enabled: canView,
+    staleTime: 300_000,
+    refetchOnWindowFocus: true,
   });
   const fiscalYears = useMemo(() => fiscalYearsQuery.data ?? [], [fiscalYearsQuery.data]);
   useEffect(() => {
@@ -49,6 +51,9 @@ export default function BudgetOverviewPage() {
     queryKey: ['budget-overview', selectedFiscalYearId],
     queryFn: () => budgetingApi.overview(selectedFiscalYearId),
     enabled: canView && !!selectedFiscalYearId,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
   const { data: overview, isLoading: overviewLoading, error } = overviewQuery;
 
@@ -62,12 +67,17 @@ export default function BudgetOverviewPage() {
       per_page: perPage,
     }),
     enabled: !canView || !!selectedFiscalYearId,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const { data: budgetOptions } = useQuery({
     queryKey: ['budgets', 'options'],
     queryFn: () => budgetingApi.options(),
     enabled: canView,
+    staleTime: 300_000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => setPage(1), [selectedFiscalYearId, selectedStatus, awaitingMyApproval, perPage]);

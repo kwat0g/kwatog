@@ -111,7 +111,7 @@ class ShiftAssignmentService
 
         return is_array($days) && $days !== []
             ? in_array($iso, $days, true)
-            : $iso !== 7;
+            : in_array($iso, EmployeeShiftAssignment::DEFAULT_WORKING_DAYS, true);
     }
 
     private function replaceForEmployee(int $employeeId, int $shiftId, Carbon $effective, ?string $endDate, ?array $workingDays): void

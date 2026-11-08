@@ -4,25 +4,27 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Exceptions\BillPaymentStateConflictException;
+use App\Modules\Accounting\Exceptions\BillStateConflictException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\SupplierInvoice;
-use App\Modules\Accounting\Enums\BillStatus;
-use App\Modules\Accounting\Requests\StoreBillPaymentRequest;
 use App\Modules\Accounting\Requests\DecideBillPaymentRequest;
+use App\Modules\Accounting\Requests\StoreBillPaymentRequest;
 use App\Modules\Accounting\Requests\StoreBillRequest;
 use App\Modules\Accounting\Requests\VoidBillPaymentRequest;
 use App\Modules\Accounting\Resources\BillPaymentResource;
 use App\Modules\Accounting\Resources\BillResource;
 use App\Modules\Accounting\Services\BillService;
+use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\Accounting\Exceptions\ClosedPeriodException;
-use App\Modules\B2B\Models\PortalShippingDocument;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 class BillController
@@ -88,6 +90,12 @@ class BillController
                 $request->boolean('allow_override'),
                 $request->input('override_reason'),
             );
+        } catch (BillStateConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors' => [$e->errorKey() => [$e->getMessage()]],
+                'code' => $e->errorCode(),
+            ], 409);
         } catch (ThreeWayMatchException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -173,6 +181,8 @@ class BillController
     {
         try {
             $payment = $this->service->approvePayment($bill, $payment, $request->user());
+        } catch (BillPaymentStateConflictException $e) {
+            return $this->paymentStateConflictResponse($e);
         } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -189,6 +199,8 @@ class BillController
                 $request->user(),
                 (string) ($request->validated()['remarks'] ?? ''),
             );
+        } catch (BillPaymentStateConflictException $e) {
+            return $this->paymentStateConflictResponse($e);
         } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -200,11 +212,22 @@ class BillController
     {
         try {
             $payment = $this->service->voidPayment($bill, $payment, $request->validated(), $request->user());
+        } catch (BillPaymentStateConflictException $e) {
+            return $this->paymentStateConflictResponse($e);
         } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return (new BillPaymentResource($payment))->response()->setStatusCode(200);
+    }
+
+    private function paymentStateConflictResponse(BillPaymentStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
     }
 
     /**

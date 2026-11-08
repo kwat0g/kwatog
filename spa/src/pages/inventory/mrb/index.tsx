@@ -10,7 +10,7 @@ import { mrbApi } from '@/api/inventory/mrb';
 import { itemsApi } from '@/api/inventory/items';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { Button } from '@/components/ui/Button';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
@@ -24,19 +24,16 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatDate } from '@/lib/formatDate';
 import { formatQuantity } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import type { MrbRecord, MrbStatus } from '@/types/inventory';
-
-const mrbStatusVariant = (s: MrbStatus): ChipVariant => {
-  if (s === 'held') return 'warning';
-  if (s === 'released') return 'success';
-  if (s === 'scrapped') return 'danger';
-  return 'info'; // returned
-};
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { MrbRecord } from '@/types/inventory';
+import { mrbStatusVariant } from '@/lib/statusVariants';
 
 const holdSchema = z.object({
   item_id: z.string().min(1, 'Item is required.'),
@@ -58,14 +55,17 @@ export default function MrbListPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const canManage = can('inventory.mrb.manage');
+  useRealtimeList('material_review_record', can('inventory.mrb.view') ? 'visible' : undefined);
 
   const [holdOpen, setHoldOpen] = useState(false);
   const [filters, setFilters] = useUrlFilters({ search: '', status: '', page: 1, per_page: 25 });
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'mrb', filters],
+   const queryKey = ['inventory', 'mrb', filters] as const;
+   const { data, isLoading, isError, refetch } = useQuery({
+     queryKey,
     queryFn: () => mrbApi.list(filters),
-    placeholderData: (prev) => prev,
+     placeholderData: (previous, previousQuery) =>
+       sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
   const { data: options } = useQuery({
     queryKey: ['inventory', 'mrb', 'options'],
@@ -129,7 +129,7 @@ export default function MrbListPage() {
       width: 120,
       minWidth: 110,
       maxWidth: 150,
-      cell: (r) => <Chip variant={mrbStatusVariant(r.status)}>{r.status_label}</Chip>,
+      cell: (r) => <Chip variant={mrbStatusVariant[r.status]}>{r.status_label}</Chip>,
     },
     {
       key: 'location',
@@ -259,8 +259,14 @@ export default function MrbListPage() {
         <HoldModal
           isOpen={holdOpen}
           onClose={() => setHoldOpen(false)}
-          onSuccess={() => {
-            qc.invalidateQueries({ queryKey: ['inventory', 'mrb'] });
+          onSuccess={(record) => {
+            qc.setQueryData(['inventory', 'mrb', record.id], record);
+            void invalidateRealtimeChange(
+              qc,
+              { entityType: 'material_review_record', entityId: record.id },
+              [],
+              [['inventory', 'mrb', record.id]],
+            );
             setHoldOpen(false);
           }}
         />
@@ -276,7 +282,7 @@ function HoldModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (record: MrbRecord) => void;
 }) {
   const {
     register,
@@ -402,7 +408,7 @@ function HoldModal({
       toast.success(`MRB ${rec.mrb_number} raised — stock moved to quarantine.`);
       requestKeyRef.current = null;
       reset();
-      onSuccess();
+      onSuccess(rec);
     },
     onError: (e) => applyServerValidationErrors(e, setError, 'Failed to raise MRB hold.'),
   });

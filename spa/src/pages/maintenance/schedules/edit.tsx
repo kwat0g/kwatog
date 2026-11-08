@@ -16,6 +16,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { maintenanceScheduleQueryKeys } from '@/lib/queryKeys/maintenanceSchedules';
 const schema = z.object({
  description: z.string().min(1).max(200),
  interval_type: z.string().min(1, 'Interval type required'),
@@ -29,10 +30,10 @@ export default function EditMaintenanceSchedulePage() {
  const { id = '' } = useParams<{ id: string }>();
  const navigate = useNavigate();
  const qc = useQueryClient();
- const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
+ const { data: options } = useQuery({ queryKey: maintenanceScheduleQueryKeys.options, queryFn: () => schedulesApi.options() });
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['maintenance', 'schedules', id],
+ queryKey: maintenanceScheduleQueryKeys.detail(id),
  queryFn: () => schedulesApi.show(id),
  enabled: !!id,
  });
@@ -55,9 +56,11 @@ export default function EditMaintenanceSchedulePage() {
  is_active: values.is_active === 'true',
  } as Parameters<typeof schedulesApi.update>[1]),
  onSuccess: (schedule) => {
- qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
+ qc.setQueryData(maintenanceScheduleQueryKeys.detail(schedule.id), schedule);
+ qc.invalidateQueries({ queryKey: maintenanceScheduleQueryKeys.lists });
  toast.success('Schedule updated.');
- navigate(`/maintenance/schedules/${schedule.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/maintenance/schedules/${schedule.id}`);
  },
  onError: (err) => {
    applyServerValidationErrors(err, setError, 'Failed to update schedule.');

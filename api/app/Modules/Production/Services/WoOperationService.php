@@ -55,6 +55,10 @@ class WoOperationService
      */
     public function generateFromRouting(WorkOrder $wo): void
     {
+        if (! config('production.routing_execution_enabled', true)) {
+            return;
+        }
+
         DB::transaction(function () use ($wo) {
             $routing = ProductRouting::query()
                 ->where('product_id', $wo->product_id)
@@ -101,6 +105,10 @@ class WoOperationService
 
     public function refreshPendingSchedule(WorkOrder $wo): void
     {
+        if (! config('production.routing_execution_enabled', true)) {
+            return;
+        }
+
         DB::transaction(function () use ($wo) {
             $operations = $wo->operations()->orderBy('sequence')->with('routingOperation')->lockForUpdate()->get();
             if ($operations->isEmpty()) {
@@ -451,6 +459,10 @@ class WoOperationService
     /** A completed operation's record must not be overwritten by a skip. */
     private function assertSkippable(WoOperation $op): void
     {
+        if (! config('production.routing_execution_enabled', true)) {
+            throw new BusinessRuleException('Routing operation recording is disabled. Record production output on the work order.');
+        }
+
         if ($op->routingOperation?->qc_required) {
             throw new BusinessRuleException('A required QC operation cannot be skipped. Complete its inspection first.');
         }
@@ -494,6 +506,10 @@ class WoOperationService
      */
     private function assertStatus(WoOperation $op, array $allowed, string $action): void
     {
+        if (! config('production.routing_execution_enabled', true)) {
+            throw new BusinessRuleException('Routing operation recording is disabled. Record production output on the work order.');
+        }
+
         if (! in_array($op->status, $allowed, true)) {
             $allowedLabels = implode(', ', array_map(fn (WoOperationStatus $s) => $s->value, $allowed));
             throw new BusinessRuleException(

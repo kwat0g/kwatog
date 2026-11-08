@@ -23,7 +23,9 @@ import toast from 'react-hot-toast';
 import type { ListParams } from '@/types';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 interface DeMinimisRow {
   id: string;
   employee: { id: string; full_name: string } | null;
@@ -58,6 +60,7 @@ type FormValues = z.infer<typeof schema>;
  * calculator reads de_minimis_benefits on every compute run.
  */
 export function DeMinimisManager() {
+  useRealtimeList('payroll_de_minimis', 'visible');
   const { can } = usePermission();
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -66,11 +69,13 @@ export function DeMinimisManager() {
   const [scope, setScope] = useState<ArchiveScope>('active');
   const [filters, setFilters] = useUrlFilters<ListParams & { period_year?: string; period_month?: string; benefit_type?: string }>({ per_page: 25 });
 
+  const queryKey = ['de-minimis', filters, { trashed: archiveToTrashed(scope) }] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['de-minimis', filters, { trashed: archiveToTrashed(scope) }],
+    queryKey,
     // NB: the backend registers de-minimis under /de-minimis (no payroll/ prefix).
     queryFn: () => client.get('/de-minimis', { params: { ...filters, trashed: archiveToTrashed(scope) } }).then((r) => r.data),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined,
   });
 
   const { data: employees } = useQuery({

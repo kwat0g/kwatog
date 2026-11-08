@@ -34,11 +34,13 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { fromApprovalRecords } from '@/lib/approvals';
 import { buildP2pChain } from '@/lib/chains';
-import type { PurchaseRequestSourcingMethod } from '@/types/purchasing';
+import type { PurchaseRequest, PurchaseRequestSourcingMethod } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
 import { purchaseRequestStatusVariant } from '@/lib/statusVariants';
+import { useChainProgress } from '@/hooks/useChainProgress';
 const errMsg = (e: unknown, fallback: string) =>
   (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
@@ -57,17 +59,28 @@ export default function PurchaseRequestDetailPage() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-requests', id],
-    queryFn: () => purchaseRequestsApi.show(id),
+    queryFn: ({ signal }) => purchaseRequestsApi.show(id, signal),
     enabled: !!id,
   });
 
   const detailKey = ['purchasing', 'purchase-requests', id];
+  useChainProgress('purchase_request', id, detailKey);
+  const reconcilePurchaseRequest = async (request: PurchaseRequest) => {
+    qc.setQueryData(detailKey, request);
+    await invalidateRealtimeChange(
+      qc,
+      { entityType: 'purchase_request', entityId: id },
+      [],
+      [detailKey],
+    );
+  };
   useEffect(() => {
     if (data?.sourcing_method && !sourcingMethod) setSourcingMethod(data.sourcing_method);
   }, [data?.sourcing_method, sourcingMethod]);
 
   const submit = useOptimisticStatusAction({
     detailKey,
+    realtimeChange: { entityType: 'purchase_request', entityId: id },
     mutationFn: () => purchaseRequestsApi.submit(id),
     nextStatus: data?.sourcing_method === 'rfq' ? 'approved' : 'pending',
     successMsg: data?.sourcing_method === 'rfq' ? 'Need approved. Ready for bidding.' : 'Submitted for approval.',
@@ -77,15 +90,15 @@ export default function PurchaseRequestDetailPage() {
   const saveSourcingMethod = useMutation({
     mutationFn: () =>
       purchaseRequestsApi.setSourcingMethod(id, sourcingMethod as PurchaseRequestSourcingMethod),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: detailKey });
-      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
+    onSuccess: async (request) => {
+      await reconcilePurchaseRequest(request);
       toast.success('Sourcing method saved.');
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to save sourcing method.')),
   });
   const approve = useOptimisticStatusAction({
     detailKey,
+    realtimeChange: { entityType: 'purchase_request', entityId: id },
     mutationFn: () => purchaseRequestsApi.approve(id),
     nextStatus: 'approved',
     successMsg: 'Purchase request approved.',
@@ -94,6 +107,7 @@ export default function PurchaseRequestDetailPage() {
   });
   const reject = useOptimisticStatusAction<string>({
     detailKey,
+    realtimeChange: { entityType: 'purchase_request', entityId: id },
     mutationFn: (reason) => purchaseRequestsApi.reject(id, reason),
     nextStatus: 'rejected',
     successMsg: 'Purchase request rejected.',
@@ -102,6 +116,7 @@ export default function PurchaseRequestDetailPage() {
   });
   const cancel = useOptimisticStatusAction({
     detailKey,
+    realtimeChange: { entityType: 'purchase_request', entityId: id },
     mutationFn: () => purchaseRequestsApi.cancel(id),
     nextStatus: 'cancelled',
     successMsg: 'Purchase request cancelled.',
@@ -110,8 +125,8 @@ export default function PurchaseRequestDetailPage() {
   });
   const acknowledgeBudget = useMutation({
     mutationFn: () => purchaseRequestsApi.acknowledgeBudget(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: detailKey });
+    onSuccess: async (request) => {
+      await reconcilePurchaseRequest(request);
       toast.success('Budget warning acknowledged.');
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
@@ -119,9 +134,12 @@ export default function PurchaseRequestDetailPage() {
   // 2026-08-08 — post an auto-created draft bill straight from the chain view.
   const postBill = useMutation({
     mutationFn: (billId: string) => billsApi.postDraft(billId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: detailKey });
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+    onSuccess: async (bill) => {
+      await invalidateRealtimeChange(
+        qc,
+        { entityType: 'bill', entityId: bill.id },
+        [detailKey],
+      );
       toast.success('Draft bill posted to AP + GL.');
       setPostBillId(null);
     },
@@ -154,7 +172,7 @@ export default function PurchaseRequestDetailPage() {
                 URGENT
               </Chip>
             )}
-            {data.status === 'draft' && data.actions?.can_submit && (
+            {data.available_actions?.can_submit && (
               <Button
                 size="sm"
                 variant="primary"
@@ -165,34 +183,33 @@ export default function PurchaseRequestDetailPage() {
                 Submit
               </Button>
             )}
-            {data.status === 'pending' &&
-              (data.actions?.can_approve || data.actions?.can_reject) && (
-                <>
-                  {data.actions?.can_reject && (
-                    <Button
-                      size="xs"
-                      variant="secondary"
-                      icon={<LuThumbsDown size={14} />}
-                      onClick={() => setRejectOpen(true)}
-                      loading={reject.isPending}
-                    >
-                      Reject
-                    </Button>
-                  )}
-                  {data.actions?.can_approve && (
-                    <Button
-                      size="xs"
-                      variant="primary"
-                      icon={<LuThumbsUp size={14} />}
-                      onClick={() => setConfirm('approve')}
-                      loading={approve.isPending}
-                    >
-                      Approve
-                    </Button>
-                  )}
-                </>
-              )}
-            {data.status === 'approved' && data.actions?.can_convert && (
+            {(data.available_actions?.can_approve || data.available_actions?.can_reject) && (
+              <>
+                {data.available_actions?.can_reject && (
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    icon={<LuThumbsDown size={14} />}
+                    onClick={() => setRejectOpen(true)}
+                    loading={reject.isPending}
+                  >
+                    Reject
+                  </Button>
+                )}
+                {data.available_actions?.can_approve && (
+                  <Button
+                    size="xs"
+                    variant="primary"
+                    icon={<LuThumbsUp size={14} />}
+                    onClick={() => setConfirm('approve')}
+                    loading={approve.isPending}
+                  >
+                    Approve
+                  </Button>
+                )}
+              </>
+            )}
+            {data.available_actions?.can_convert && (
               <>
                 <Button
                   size="sm"
@@ -204,7 +221,7 @@ export default function PurchaseRequestDetailPage() {
                 </Button>
               </>
             )}
-            {data.status === 'approved' && data.actions?.can_start_rfq && (
+            {data.available_actions?.can_start_rfq && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -213,7 +230,7 @@ export default function PurchaseRequestDetailPage() {
                 Start RFQ
               </Button>
             )}
-            {data.actions?.can_print && (
+            {data.available_actions?.can_print && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -228,7 +245,7 @@ export default function PurchaseRequestDetailPage() {
                 PDF
               </Button>
             )}
-            {(data.status === 'draft' || data.status === 'pending') && data.actions?.can_cancel && (
+            {data.available_actions?.can_cancel && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -243,7 +260,7 @@ export default function PurchaseRequestDetailPage() {
         }
       />
       <div className="px-5 py-4 space-y-4">
-        {data.sourcing_method === null && data.actions?.can_set_sourcing_method && (
+        {data.available_actions?.can_set_sourcing_method && (
           <Panel title="Choose sourcing method">
             <p className="text-sm text-muted mb-3">
               {data.is_auto_generated
@@ -319,7 +336,7 @@ export default function PurchaseRequestDetailPage() {
                   'Some lines were converted to purchase orders; the rest still need a supplier.'}
               </div>
             </div>
-            {data.actions?.can_convert && (
+            {data.available_actions?.can_convert && (
               <Button size="sm" variant="secondary" onClick={() => setConvertOpen(true)}>
                 Finish conversion
               </Button>
@@ -470,7 +487,7 @@ export default function PurchaseRequestDetailPage() {
             </div>
             {['exhausted', 'overdrawn'].includes(data.budget_warning_level) &&
               !data.budget_acknowledged_at &&
-              data.actions?.can_acknowledge_budget && (
+              data.available_actions?.can_acknowledge_budget && (
                 <Button
                   size="sm"
                   variant="secondary"

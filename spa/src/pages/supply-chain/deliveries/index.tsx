@@ -12,6 +12,8 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { deliveryStatusVariant } from '@/lib/statusVariants';
 import type { Delivery } from '@/types/supplyChain';
 
@@ -21,15 +23,18 @@ const DEFAULT_FILTERS: DeliveryListParams = {
 };
 
 export default function DeliveriesListPage() {
+ useRealtimeList('delivery', 'visible');
  // Bound to the URL so dashboard drill-downs (?status=scheduled) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<DeliveryListParams>(DEFAULT_FILTERS);
  const navigate = useNavigate();
  const { can } = usePermission();
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['supply-chain', 'deliveries', filters],
+  const queryKey = ['supply-chain', 'deliveries', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => deliveriesApi.list(filters),
- placeholderData: (prev) => prev });
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: options } = useQuery({
  queryKey: ['supply-chain', 'delivery-options'],
  queryFn: deliveriesApi.options,

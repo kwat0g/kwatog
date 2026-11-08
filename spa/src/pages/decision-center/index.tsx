@@ -20,6 +20,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatImpact, severityVariant } from './helpers';
 import { recommendationStatusVariant } from '@/lib/statusVariants';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import {
   decisionView,
   detectorLabel,
@@ -209,6 +210,7 @@ function ownerLabel(recommendation: Recommendation, options: RecommendationOptio
 }
 
 export default function DecisionCenterPage() {
+  useRealtimeSignal('dss_changed', 'dss.refresh', '.dss.changed');
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [notice, setNotice] = useState('');

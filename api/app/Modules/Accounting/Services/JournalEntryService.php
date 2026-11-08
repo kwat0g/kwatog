@@ -14,6 +14,7 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Exceptions\UnbalancedJournalEntryException;
+use App\Modules\Accounting\Exceptions\JournalEntryStateConflictException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\JournalEntryLine;
@@ -177,7 +178,7 @@ class JournalEntryService
                 ->lockForUpdate()
                 ->findOrFail($je->getKey());
             if (! $lockedJe->isDraft()) {
-                throw new BusinessRuleException('Only draft entries can be edited.');
+                throw new JournalEntryStateConflictException('Only draft entries can be edited. The entry state has changed.');
             }
 
             // Header → lines → accounts is the journal aggregate lock order.
@@ -258,7 +259,7 @@ class JournalEntryService
                 ->lockForUpdate()
                 ->findOrFail($je->getKey());
             if (! $lockedJe->isDraft()) {
-                throw new BusinessRuleException('Only draft entries can be deleted.');
+                throw new JournalEntryStateConflictException('Only draft entries can be deleted. The entry state has changed.');
             }
 
             // Keep the same header → lines → accounts order for draft archive
@@ -290,10 +291,10 @@ class JournalEntryService
                 ->findOrFail($je->getKey());
 
             if (! $lockedJe->trashed()) {
-                throw new BusinessRuleException('Only archived journal entries can be restored.');
+                throw new JournalEntryStateConflictException('This journal entry is no longer archived.');
             }
             if (! $lockedJe->isDraft()) {
-                throw new BusinessRuleException('Only archived draft entries can be restored.');
+                throw new JournalEntryStateConflictException('Only archived draft entries can be restored. The entry state has changed.');
             }
 
             $lockedJe->restore();
@@ -313,7 +314,7 @@ class JournalEntryService
                 ->lockForUpdate()
                 ->findOrFail($je->getKey());
             if ($lockedJe->status !== JournalEntryStatus::Draft) {
-                throw new BusinessRuleException('Only draft entries can be posted.');
+                throw new JournalEntryStateConflictException('Only draft entries can be posted. The entry state has changed.');
             }
             if ($lockedJe->reference_type !== null) {
                 throw new ForbiddenActionException(
@@ -442,10 +443,10 @@ class JournalEntryService
                 ->lockForUpdate()
                 ->findOrFail($je->getKey());
             if ($lockedJe->status !== JournalEntryStatus::Posted) {
-                throw new BusinessRuleException('Only posted entries can be reversed.');
+                throw new JournalEntryStateConflictException('Only posted entries can be reversed. The entry state has changed.');
             }
             if ($lockedJe->reversed_by_entry_id !== null) {
-                throw new BusinessRuleException('This entry has already been reversed.');
+                throw new JournalEntryStateConflictException('This entry has already been reversed.');
             }
 
             $isSourceDocumentEntry = $lockedJe->reference_type !== null

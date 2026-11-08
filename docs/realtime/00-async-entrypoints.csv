@@ -1,0 +1,339 @@
+﻿module,kind,source,runtime_exercised
+Accounting,Jobs,api/app/Modules/Accounting/Jobs/SyncBudgetActuals.php,No; inventoried for Phase 0
+Accounting,Listeners,api/app/Modules/Accounting/Listeners/AutoCreateBillOnGrnAccepted.php,No; inventoried for Phase 0
+Accounting,Listeners,api/app/Modules/Accounting/Listeners/EmailCustomerOnInvoiceFinalized.php,No; inventoried for Phase 0
+Accounting,Listeners,api/app/Modules/Accounting/Listeners/EmailCustomerOnOfficialReceiptIssued.php,No; inventoried for Phase 0
+Accounting,Listeners,api/app/Modules/Accounting/Listeners/EmailPartyOnCreditNoteFinalized.php,No; inventoried for Phase 0
+Accounting,Listeners,api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php,No; inventoried for Phase 0
+Accounting,Listeners,api/app/Modules/Accounting/Listeners/RunBudgetActualsSyncOnRequested.php,No; inventoried for Phase 0
+Accounting,Observers,api/app/Modules/Accounting/Observers/AccountRealtimeObserver.php,No; source-wired in current no-tests slice.
+Accounting,Observers,api/app/Modules/Accounting/Observers/AccountStatementCacheObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Accounting,Observers,api/app/Modules/Accounting/Observers/AccountingPeriodRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Accounting,Observers,api/app/Modules/Accounting/Observers/BudgetRealtimeObserver.php,No; inventoried for Phase 0
+Accounting,Observers,api/app/Modules/Accounting/Observers/BudgetTransferRealtimeObserver.php,No; source-wired in current no-tests slice.
+Accounting,Observers,api/app/Modules/Accounting/Observers/CreditNoteRealtimeObserver.php,No; source-wired in current no-tests slice.
+Accounting,Observers,api/app/Modules/Accounting/Observers/CustomerRealtimeObserver.php,No; Eloquent create/update/delete/restore stage CustomerChanged through the after-commit outbox; channel and UI delivery remain NOT_VERIFIED
+CRM,Observers,api/app/Modules/CRM/Observers/CustomerSubresourceRealtimeObserver.php,No; agreement-document and warranty-override writes stage the existing CustomerChanged refresh after commit on ERP customer channels only. Audience coalescing preserves the profile channel when a real Customer update shares the transaction. Focused feature tests pass; live delivery remains NOT_VERIFIED.
+Accounting,Observers,api/app/Modules/Accounting/Observers/FiscalYearRealtimeObserver.php,No; inventoried for Phase 0
+Accounting,Observers,api/app/Modules/Accounting/Observers/JournalEntryObserver.php,No; inventoried for Phase 0
+Accounting,Observers,api/app/Modules/Accounting/Observers/VendorRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Accounting,Schedule,api/routes/console.php:421::ar:run-dunning,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Accounting,Schedule,api/routes/console.php:469::budget:sync-actuals,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Accounting,Schedule,api/routes/console.php::accounting:relock-periods,"No; scheduled period relock inventoried; event source-wired, not runtime exercised"
+Admin,Listeners,api/app/Modules/Admin/Listeners/RecordActivityFromEvent.php,No; inventoried for Phase 0
+Admin,Listeners,api/app/Modules/Admin/Listeners/RecordAuthActivity.php,No; inventoried for Phase 0
+Admin,Observers,api/app/Modules/Admin/Observers/ActivityEventRealtimeObserver.php,No; source-inventoried only in this pass
+Admin,Observers,api/app/Modules/Admin/Observers/ApprovalDelegationAccessRealtimeObserver.php,No; source-wired in no-tests slice for delegate authorization-scope refresh.
+Admin,Schedule,api/routes/console.php:335::overrides:prune-expired,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+app,Observers,api/app/Modules/HR/Observers/ClearanceRealtimeObserver.php,Yes; ClearanceRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/HR/Observers/DepartmentRealtimeObserver.php,No; source-wired in current no-tests slice.
+app,Observers,api/app/Modules/HR/Observers/PositionRealtimeObserver.php,No; source-wired in current no-tests slice.
+app,Observers,api/app/Modules/Inventory/Observers/GoodsReceiptNoteRealtimeObserver.php,Yes; GoodsReceiptNoteRealtimeTest.php (docs/realtime/00-discovery.md).
+app,Observers,api/app/Modules/Maintenance/Observers/MaintenanceWorkOrderChildRealtimeObserver.php,Yes; MaintenanceRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Maintenance/Observers/MaintenanceWorkOrderRealtimeObserver.php,Yes; MaintenanceRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Payroll/Observers/DeMinimisBenefitRealtimeObserver.php,No; source-wired in current no-tests slice.
+app,Observers,api/app/Modules/Payroll/Observers/PayrollPeriodRealtimeObserver.php,Yes; PayrollPeriodRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Production/Observers/WorkOrderAssignmentRealtimeObserver.php,Yes; WorkOrderCrewRealtimeTest.php (docs/realtime/00-discovery.md).
+app,Observers,api/app/Modules/Purchasing/Observers/ProcurementChainCacheObserver.php,Yes; ProcurementChainCacheInvalidationTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Quality/Observers/InspectionRealtimeObserver.php,Yes; InspectionRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Quality/Observers/InspectionResultAuthorRealtimeObserver.php,No; source-wired for assigned-operator QC readiness; no test/browser run in this slice
+app,Observers,api/app/Modules/Quality/Observers/InspectionSpecItemRealtimeObserver.php,Yes; InspectionSpecRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Quality/Observers/ItemQualityPlanRealtimeObserver.php,Yes; ItemQualityPlanRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Quality/Observers/NcrActionRealtimeObserver.php,Yes; NcrRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Quality/Observers/NcrRealtimeObserver.php,Yes; NcrRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Quality/Observers/PpapElementRealtimeObserver.php,Yes; CalibrationPpapRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/Quality/Observers/QualityRecordRealtimeObserver.php,"Yes; CalibrationPpapRealtimeTest.php, InspectionSpecRealtimeTest.php and NcrTemplateRealtimeTest.php (docs/realtime/PROGRESS.md)."
+app,Observers,api/app/Modules/ReturnManagement/Observers/ReturnCaseAttachmentRealtimeObserver.php,Yes; ReturnCaseRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/ReturnManagement/Observers/ReturnCaseEventRealtimeObserver.php,Yes; ReturnCaseRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/ReturnManagement/Observers/ReturnCaseLineRealtimeObserver.php,Yes; ReturnCaseRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/ReturnManagement/Observers/ReturnCaseRealtimeObserver.php,Yes; ReturnCaseRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/ReturnManagement/Observers/ReturnCaseReceiptAllocationRealtimeObserver.php,Yes; ReturnCaseRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/ReturnManagement/Observers/ReturnRequestRealtimeObserver.php,Yes; ReturnRequestRealtimeTest.php (docs/realtime/PROGRESS.md).
+app,Observers,api/app/Modules/SupplyChain/Observers/ShipmentLotRealtimeObserver.php,Yes; ShipmentLotRealtimeTest.php (docs/realtime/PROGRESS.md).
+Application,Commands,api/app/Console/Commands/ApplyDueSalaryAdjustments.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ArchiveActivityEvents.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ArchiveDssRecommendationEvents.php,Verified source: verified query-builder archive deletes now stage DssChanged inside the same transaction; no command execution or browser trace.
+Application,Commands,api/app/Console/Commands/BackfillApprovedSuppliersCommand.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/CheckCalibrationDue.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/CheckCapaEffectivenessCommand.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/CheckMaintenanceAssignment.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/CheckMaintenanceRepeatBreakdowns.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/CheckRecruitmentBottlenecks.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/CheckTrainingExpiries.php,Source-wired in current slice; scheduled transition and observer path not runtime-exercised under stop-testing instruction.
+Application,Commands,api/app/Console/Commands/CloseDueRfqs.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ComputeMonthlyKpis.php,Source-wired: computeAll stages one authorized KpiSnapshotChanged outbox refresh after successful computed batches; runtime not exercised.
+Application,Commands,api/app/Console/Commands/CreateAutoPayrollPeriod.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/DispatchOutboxCommand.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ExpirePpapSubmissions.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/GenerateDemandForecasts.php,Source-classified: ForecastingService::recomputeBatch() persists DemandForecast through Eloquent; cache generation retires after each committed row and dashboard pings coalesce after the batch. Command not run; Forecasting record UI runtime remains unverified.
+Application,Commands,api/app/Console/Commands/ImportGovContributionTable.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/MaintainDss.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/NotifyMissingTimeOut.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/NotifyUpcomingWorkOrders.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/PreflightMrpReleaseMigrations.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ProcessYearEndLeaveCommand.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/PruneAuditLogs.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/PruneExpiredPermissionOverrides.php,"Yes; each expired row calls UserPermissionOverrideService::remove(), which records PermissionOverrideChanged in the durable outbox and publishes after commit; channel authorization and client refresh remain NOT_VERIFIED"
+Application,Commands,api/app/Console/Commands/PruneLandingPii.php,No; source-wired ContactInquiry retention deletes stage ContactInquiryChanged in the same transaction after at least one inquiry row is removed; NewsletterSubscriber deletion has no authenticated reader. Command was not run.
+Application,Commands,api/app/Console/Commands/PruneOldNotifications.php,Source-wired: command deletes old read notices in bounded recipient batches and stages after-commit NotificationsPruned outbox fan-outs; runtime not exercised.
+Application,Commands,api/app/Console/Commands/PrunePortalPasswordResetTokens.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/PruneResolvedAlerts.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/PruneScheduledExportArtifacts.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/PruneSchedulerLedger.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/PurgePunchCoordinates.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReapStaleMrpRuns.php,Source-wired through observed MrpRun status save; not runtime-exercised in this no-tests slice.
+Application,Commands,api/app/Console/Commands/ReapStalePayrollRuns.php,Source-wired through the shared PayrollPeriodService::releaseClaim query-builder path; it retires dashboard and badge generations then stages PayrollPeriodChanged in the same transaction. No scheduler run.
+Application,Commands,api/app/Console/Commands/RecomputeMachineHours.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RecomputeSafetyStock.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RecomputeSupplierPerformance.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReconcileAutoPayrollPeriods.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReconcileBackupOperations.php,"Source-wired: job mutations update BackupOperation through Eloquent, whose observer stages the permission-gated after-commit refresh. Job execution and broadcast delivery were not run."
+Application,Commands,api/app/Console/Commands/ReconcileDocumentVault.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReconcileForecastActuals.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReconcilePayslipEmails.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReconcileReplenishment.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReconcileSourceReferences.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RecoverSupplierDispatches.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RenderMetricsDoc.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReportRolloutHealth.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RequestMonthlyDepreciation.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RequestPreventiveMaintenanceGeneration.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ResetLeaveBalancesForYear.php,Source-wired: stages one LeaveBalanceChanged after new rows are inserted; not runtime exercised
+Application,Commands,api/app/Console/Commands/RetryCriticalAlertEmails.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RetryPendingIncomingQc.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/ReviewPricingAgreements.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RollbackBackupOperation.php,"Source-wired: job mutations update BackupOperation through Eloquent, whose observer stages the permission-gated after-commit refresh. Job execution and broadcast delivery were not run."
+Application,Commands,api/app/Console/Commands/RolloutBaselineQualityPlans.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunAlertEngine.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunApprovalEscalations.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunArDunning.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunChainBottleneckCheck.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunComplaint8dSlaChecks.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunDailyMrp.php,"Source-wired through observed MrpRun/MrpPlan, purchase-request, and schedule writes; not runtime-exercised in this no-tests slice."
+Application,Commands,api/app/Console/Commands/RunDatabaseBackup.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunDssDetectors.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunDueScheduledExports.php,Source-wired: claim/completion/failure query-builder writes stage a coalesced after-commit ScheduledExportChanged signal in the same transaction; not runtime-exercised.
+Application,Commands,api/app/Console/Commands/RunFullBackup.php,Source-wired: scheduled/recovery-created manifests queue a content-free AdminBackupsChanged signal to the permission-gated private channel; admin-triggered operation completion is signaled by the BackupOperation observer. No command or delivery was runtime-exercised.
+Application,Commands,api/app/Console/Commands/RunMonthlyDepreciation.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunNcrEscalations.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/RunScheduleTick.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/SchedulerHealth.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/SendDailyProductionSummary.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/SendNotificationDigest.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/SendOnboardingReminders.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/SendWeeklyProductionSummary.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/SweepMissingOutgoingQc.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/SyncBudgetActualsCommand.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/TakeStockSnapshots.php,No; inventoried for Phase 0
+Application,Commands,api/app/Console/Commands/VerifyDemoReadiness.php,No; inventoried for Phase 0
+Application,Jobs,api/app/Jobs/RunDssDetectorJob.php,Verified source: DssRunLog and DssRecommendation Eloquent writes stage transaction-coalesced DssChanged through DssRealtimeObserver; job was not executed.
+Application,Scheduler,api/routes/console.php,Scheduled entries inspected; jobs not individually executed
+Assets,Jobs,api/app/Modules/Assets/Jobs/RunMonthlyDepreciationJob.php,No; inventoried for Phase 0
+Assets,Listeners,api/app/Modules/Assets/Listeners/RunMonthlyDepreciationOnRequested.php,No; inventoried for Phase 0
+Assets,Schedule,api/routes/console.php:85::assets:request-monthly-depreciation,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Attendance,Eloquent observer,api/app/Modules/Attendance/Observers/ShiftRealtimeObserver.php,Source-wired: Shift create/update/archive/restore stages ShiftChanged after commit; ShiftService explicitly covers query-builder default flips. No runtime delivery verification.
+Attendance,Eloquent observer + explicit query-builder bridge,api/app/Modules/Attendance/Observers/ShiftAssignmentRealtimeObserver.php,Source-wired: assignment create/update/delete uses ShiftAssignmentChanged after commit; EmployeeService stages the event only when its insertOrIgnore actually inserts the initial assignment. No runtime delivery verification.
+Attendance,Listeners,api/app/Modules/Attendance/Listeners/NotifyOnOvertimeDecided.php,No; inventoried for Phase 0
+Attendance,Listeners,api/app/Modules/Attendance/Listeners/NotifyOnOvertimeSubmitted.php,No; inventoried for Phase 0
+Attendance,Observers,api/app/Modules/Attendance/Observers/AttendanceRealtimeObserver.php,"Source-wired in the current no-tests slice: Eloquent CRUD, restores, imports, device punches and leave-processing attendance saves; delivery and UI behavior remain NOT_VERIFIED."
+Attendance,Observers,api/app/Modules/Attendance/Observers/HolidayRealtimeObserver.php,No; source-wired in no-tests slice.
+Attendance,Observers,api/app/Modules/Attendance/Observers/OvertimeRequestRealtimeObserver.php,Source-wired: Eloquent create/update/delete stages OvertimeRequestChanged via the after-commit outbox; no test/browser/worker scenario run in this slice.
+Attendance,Schedule,api/routes/console.php:55::attendance:notify-missing-timeout,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Attendance,Schedule,api/routes/console.php:60::attendance:purge-punch-coordinates,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Auth,Observers,api/app/Modules/Auth/Observers/EmployeeAccessScopeRealtimeObserver.php,No; source-wired in no-tests slice for linked-user department scope refresh.
+B2B,Eloquent observers,api/app/Modules/B2B/Observers/DeliveryScheduleRealtimeObserver.php|api/app/Modules/B2B/Services/DeliveryScheduleRealtimeService.php,No; delta 330 source-wires create/update/delete projections through the coalesced after-commit outbox. Retired supplier POST/cancel routes remain 410; no runtime delivery was exercised.
+B2B,Listeners,api/app/Modules/B2B/Listeners/EmailSupplierOnInvoiceSubmitted.php,No; inventoried for Phase 0
+B2B,Listeners,api/app/Modules/B2B/Listeners/EmailSupplierOnPurchaseOrderCancelled.php,No; inventoried for Phase 0
+B2B,Schedule,api/routes/console.php:321::portal:prune-reset-tokens,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Commands,api/app/Console/Commands/AuditCache.php,Yes; covered by cache-audit command tests and live audit in docs/realtime/PROGRESS.md.
+Common,Commands,api/app/Console/Commands/PruneUnboundedCache.php,"Yes; dry-run, limit, TTL-race and Redis integration tests plus live apply audit in docs/realtime/PROGRESS.md."
+Common,Eloquent observer,api/app/Common/Observers/ChainListenerRunRealtimeObserver.php,No; replay/resolution/delete transitions stage listener-run refreshes after commit; runtime event delivery NOT_VERIFIED
+Common,Jobs,api/app/Common/Jobs/CreateBackupJob.php,"Source-wired: job mutations update BackupOperation through Eloquent, whose observer stages the permission-gated after-commit refresh. Job execution and broadcast delivery were not run."
+Common,Jobs,api/app/Common/Jobs/DispatchOutboxMessage.php,No; inventoried for Phase 0
+Common,Jobs,api/app/Common/Jobs/ReplayChainListenerJob.php,No; inventoried for Phase 0
+Common,Jobs,api/app/Common/Jobs/RestoreBackupJob.php,"Source-wired: after snapshot restore/rollback, BackupService rotates registered data-cache owners before resuming service and records a deduplicated DatabaseRestoreCompleted outbox row, then publishes it after commit for active internal and portal clients. Job execution, cache rotation and broadcast delivery were not run."
+Common,Listeners,api/app/Common/Listeners/NotifySystemAdminsOnQueueLongWait.php,No; inventoried for Phase 0
+Common,Observers,api/app/Common/Observers/ImportBatchRealtimeObserver.php,"Source-wired in delta 322: ImportBatch create/visible update/status/delete stage a coalesced after-commit ImportBatchChanged event; private import-manager list channel and SPA map refresh only [imports,batches]. Runtime not tested."
+Common,Queue lifecycle event listener,api/app/Common/Services/ChainListenerRunService.php,No; processing/retry/completion/failure/outcome writes now stage listener-run refreshes; runtime event delivery NOT_VERIFIED
+Common,Schedule,api/routes/console.php:16::horizon:snapshot,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:193::approvals:run-escalations,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:20::model:prune,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:252::chain:check-bottlenecks,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:260::outbox:dispatch --limit=100,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:293::exports:run-due,ScheduledExport claim/completion/failure writes stage owner/admin private refresh signals after commit; scheduler and UI not runtime-exercised.
+Common,Schedule,api/routes/console.php:301::exports:prune-artifacts --days=7,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:308::documents:reconcile,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:314::notifications:prune --days=90,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:347::audit:prune --months=12,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:361::activity:archive --months=12,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:370::db:full-backup,Source-wired: the scheduled command creates a manifest then queues AdminBackupsChanged on the private backup channel. This is the scheduled source path; the endpoint and other viewers remain NOT_VERIFIED.
+Common,Schedule,api/routes/console.php:378::backup:reconcile-stale,"Source-wired: stale operation reconciliation updates BackupOperation through Eloquent, triggering the permission-gated after-commit refresh. Scheduler and viewer delivery remain NOT_VERIFIED."
+Common,Schedule,api/routes/console.php:384::scheduler:prune-ledger --days=90,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:392::cache:audit --quiet-keys,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:397::cache:prune-unbounded --apply --limit=500,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Common,Schedule,api/routes/console.php:428::operations:rollout-health,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Common,Schedule,api/routes/console.php:454::notifications:send-digest,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+CRM,Listeners,api/app/Modules/CRM/Listeners/AutoSpawn8DOnNcrRecurrence.php,No; inventoried for Phase 0
+CRM,Listeners,api/app/Modules/CRM/Listeners/CreateNcrOnComplaintRequested.php,No; inventoried for Phase 0
+CRM,Listeners,api/app/Modules/CRM/Listeners/EmailCustomerOnComplaintUpdated.php,No; inventoried for Phase 0
+CRM,Listeners,api/app/Modules/CRM/Listeners/EmailCustomerOnSalesOrderConfirmed.php,No; inventoried for Phase 0
+CRM,Listeners,api/app/Modules/CRM/Listeners/NotifyOnSalesOrderConfirmed.php,No; inventoried for Phase 0
+CRM,Observers,api/app/Modules/CRM/Observers/Complaint8DReportRealtimeObserver.php,Source-wired after-commit outbox producer; runtime delivery not exercised.
+CRM,Observers,api/app/Modules/CRM/Observers/CustomerComplaintRealtimeObserver.php,Source-wired after-commit outbox producer; runtime delivery not exercised.
+CRM,Observers,api/app/Modules/CRM/Observers/PriceAgreementRealtimeObserver.php,Source-wired after-commit outbox producer; runtime delivery not exercised.
+CRM,Observers,api/app/Modules/CRM/Observers/PriceRequestRealtimeObserver.php,Source-wired model lifecycle -> transaction-coalesced durable outbox -> after-commit dedicated broadcast queue. Runtime delivery not exercised.
+CRM,Observers,api/app/Modules/CRM/Observers/ProductRealtimeObserver.php,Source-wired after-commit outbox producer; runtime delivery not exercised.
+CRM,Schedule,api/routes/console.php:205::complaints:check-8d-slas,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+CRM,Schedule,api/routes/console.php:499::pricing:review-agreements,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+CRM,Schedule,api/routes/console.php:502::pricing:review-agreements --dispatch-only,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Dashboard,Observers,api/app/Modules/Dashboard/Observers/BadgeInvalidationObserver.php,No; inventoried for Phase 0
+Dashboard,Mutation service,api/app/Modules/Dashboard/Services/DashboardLayoutService.php::saveUserLayout|resetUserLayout -> DashboardLayoutRealtimeService,"Source-wired: changed personal saves, empty-save clears and resets stage one coalesced DashboardLayoutChanged outbox signal in the mutation transaction; dispatch is after commit to the exact-user private channel. Focused producer and event-contract tests pass. Live queue/Reverb and multi-tab UI remain NOT_VERIFIED."
+Dashboard,Observers,api/app/Modules/Dashboard/Observers/DashboardCacheInvalidationObserver.php,"Source-wired only; retires after-commit dashboard cache generations and stages coalesced AdminDashboardChanged or HrDashboardChanged pings for mapped source models. The HR source map includes Department, Clearance, SalaryAdjustment, ProfileUpdateRequest and Holiday. No runtime event or UI verification under stop-testing instruction."
+Dashboard,Schedule,api/routes/console.php:116::alerts:run,"Source classified: Alert create/update Eloquent paths are covered by the after-commit badge observer; missing-condition bulk resolution now runs transactionally, retires badge/Admin Dashboard generations before queue callbacks, and stages BadgesChanged plus AdminDashboardChanged. Command and delivery were not runtime-exercised; UI freshness remains NOT_VERIFIED."
+Dashboard,Schedule,api/routes/console.php:135::alerts:retry-critical-emails --limit=100,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Dashboard,Schedule,api/routes/console.php:354::alerts:prune --months=12,Source classified: resolved Alert pruning now runs in a transaction; when rows are deleted it retires badge and Admin Dashboard generations before staging BadgesChanged and AdminDashboardChanged after commit. Command and delivery were not runtime-exercised; UI freshness remains NOT_VERIFIED.
+Dashboard,Schedule,api/routes/console.php:492::kpi:compute-monthly,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+DSS,Observers,api/app/Modules/DSS/Observers/DssRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+DSS,Schedule,api/routes/console.php:123::dss:run,Source-classified: queues RunDssDetectorJob; Eloquent DssRunLog/DssRecommendation mutations stage coalesced DssChanged through DssRealtimeObserver. Scheduler/job was not run.
+DSS,Schedule,api/routes/console.php:128::dss:maintain,Source-classified: expires recommendations and marks interrupted runs through Eloquent observers; query-builder run-log pruning explicitly stages DssChanged when rows are removed. Command was not run.
+DSS,Schedule,api/routes/console.php:415::dss:snapshot-stock,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Forecasting,Schedule,api/routes/console.php:101::forecasting:generate,Source-classified: scheduled recompute uses Eloquent DemandForecast writes and retires the Purchasing dashboard generation; DemandForecastChanged coalesces the scheduled burst to one aggregate list/dashboard signal after completion including partial committed progress on failure. Schedule not run; event count and Forecasting record UI runtime remain unverified.
+Forecasting,Schedule,api/routes/console.php:483::forecasting:reconcile-actuals,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+HR,Eloquent observers,api/app/Modules/HR/Observers/EmployeeOnboardingRealtimeObserver.php|EmployeeAccountOnboardingRealtimeObserver.php,"No; delta 329 source-wires linked User account projection refresh through EmployeeChanged, including a separate explicit fan-out for bulk role query-builder writes; channel delivery and active HR views remain NOT_VERIFIED"
+HR,Eloquent observers,api/app/Modules/HR/Observers/JobPostingRealtimeObserver.php|JobApplicationRealtimeObserver.php|ApplicationInterviewRealtimeObserver.php|ApplicationNoteRealtimeObserver.php,No; source wiring only; runtime delivery and cross-user UI remain NOT_VERIFIED
+HR,Listeners,api/app/Modules/HR/Listeners/AutoProvisionUserOnEmployeeHire.php,No; inventoried for Phase 0
+HR,Listeners,api/app/Modules/HR/Listeners/DeactivateAccountOnClearanceComplete.php,"Source-wired: completed clearance triggers account deactivation; UserProvisioningService calls SessionRevocationService, which stages an exact-user UserAccessChanged event after commit when sessions were deleted. No listener runtime, socket, or UI scenario was exercised."
+HR,Listeners,api/app/Modules/HR/Listeners/InitializeLeaveBalances.php,Source-wired through LeaveBalanceService seed; not runtime exercised
+HR,Listeners,api/app/Modules/HR/Listeners/NotifyOnSeparationInitiated.php,No; inventoried for Phase 0
+HR,Observers,api/app/Modules/HR/Observers/EmployeeDocumentsRealtimeObserver.php,"Source-wired in delta 323: EmployeeDocument and Employee-owned Document create/update/delete/restore stage coalesced after-commit EmployeeDocumentsChanged; private employee.documents channel mirrors active-user, documents-view permission and DepartmentScope row visibility. Central SPA map invalidates both employee document collections and options. Runtime not tested."
+HR,Observers,api/app/Modules/HR/Observers/EmployeeRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+HR,Observers,api/app/Modules/HR/Observers/EmployeeSkillRealtimeObserver.php,Source-wired in delta 324: EmployeeSkill create/update/soft-delete/restore stages coalesced after-commit EmployeeSkillChanged. Exact employee channel uses EmployeeCompetenceScope and employee skill view permission; permission-wide list channel omits employee ID. SPA profile list and TrainingMatrixPage use central invalidation hooks. Runtime not tested.
+HR,Observers,api/app/Modules/HR/Observers/EmployeeTrainingRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+HR,Observers,api/app/Modules/HR/Observers/ProfileUpdateRequestRealtimeObserver.php,Source-wired in delta 326: ProfileUpdateRequest submission and Eloquent HR/Finance review writes coalesce by request and transaction into a content-free after-commit outbox signal. HR channels are view-all or department scoped; Finance only receives bank-request signals; requester gets an exact-user channel. No runtime execution.
+HR,Observers,api/app/Modules/HR/Observers/SalaryAdjustmentRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+HR,Observers,api/app/Modules/HR/Observers/SkillRealtimeObserver.php,Source-wired in delta 325: Skill create/update/deactivate and Eloquent delete/restore lifecycle stages coalesced after-commit SkillChanged through the outbox. Private exact/list channels require the HR feature and hr.trainings.view. No runtime execution.
+HR,Observers,api/app/Modules/HR/Observers/TrainingCatalogRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+HR,Schedule,api/routes/console.php:229::hr:onboarding-reminders,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+HR,Schedule,api/routes/console.php:238::hr:apply-due-salary-adjustments,Daily command updates live Employee compensation via Eloquent; EmployeeRealtimeObserver stages a coalesced after-commit EmployeeChanged outbox signal. No command or UI scenario executed.
+HR,Schedule,api/routes/console.php:245::recruitment:check-bottlenecks,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+HR,Schedule,api/routes/console.php:284::hr:reset-leave-balances,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+HR,Schedule,api/routes/console.php::training:check-expiries,"No; daily expiry transition source-wired through Eloquent observer, not runtime-exercised."
+Inventory,Listeners,api/app/Modules/Inventory/Listeners/CheckReorderPoint.php,Source-wired: post-commit StockMovementCompleted invokes AutoReplenishmentService; critical auto-PO now stages the canonical PO ChainStepAdvanced via ChainBroadcaster in its transaction (delta 373). Listener/browser delivery remains unverified.
+Inventory,Listeners,api/app/Modules/Inventory/Listeners/CreateDraftGrnOnPoSent.php,No; inventoried for Phase 0
+Inventory,Listeners,api/app/Modules/Inventory/Listeners/NotifyOnGrnReceived.php,No; inventoried for Phase 0
+Inventory,Listeners,api/app/Modules/Inventory/Listeners/NotifyOnLowStockPrCreated.php,No; inventoried for Phase 0
+Inventory,Listeners,api/app/Modules/Inventory/Listeners/PostStockMovementToGlOnRequested.php,No; inventoried for Phase 0
+Inventory,Listeners,api/app/Modules/Inventory/Listeners/VerifyCoaOnIncomingQcPass.php,No; inventoried for Phase 0
+Inventory,Observers,api/app/Modules/Inventory/Observers/InventoryItemCatalogRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Inventory,Observers,api/app/Modules/Inventory/Observers/ItemRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Inventory,Observers,api/app/Modules/Inventory/Observers/MaterialHandoverRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Inventory,Observers,api/app/Modules/Inventory/Observers/StockAdjustmentRealtimeObserver.php,Source-wired: Eloquent create/update/delete stages a transaction-coalesced StockAdjustmentChanged outbox ping after commit. Focused pending-create test passes; approval/reject/withdraw delivery and viewer UI remain unverified.
+Inventory,Observers,api/app/Modules/Inventory/Observers/StockCountItemRealtimeObserver.php,No; inventoried for Phase 0
+Inventory,Observers,api/app/Modules/Inventory/Observers/StockCountSessionRealtimeObserver.php,No; inventoried for Phase 0
+Inventory,Schedule,api/routes/console.php:39::grn:retry-pending-incoming-qc --limit=50,Source-classified: retries through GrnService; writes GRN handoff fields observed by GoodsReceiptNoteRealtimeObserver and creates/links inspections observed by InspectionRealtimeObserver. No scheduler execution or browser trace.
+Inventory,Schedule,api/routes/console.php:403::inventory:recompute-safety-stock,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Inventory,Schedule,api/routes/console.php:408::inventory:reconcile-replenishment --limit=100,"Source-wired: rechecks active blocked items and can reach the critical auto-PO writer, which now stages a canonical PO ChainStepAdvanced signal via ChainBroadcaster (delta 373). Command and viewer delivery remain unverified."
+Landing,Schedule,api/routes/console.php:328::landing:prune-pii,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Leave,Jobs,api/app/Modules/Leave/Jobs/ProcessYearEndLeave.php,Source-wired: stages one LeaveBalanceChanged after changed balances commit; not runtime exercised
+Leave,Listeners,api/app/Modules/Leave/Listeners/NotifyOnLeaveApproved.php,No; inventoried for Phase 0
+Leave,Listeners,api/app/Modules/Leave/Listeners/NotifyOnLeavePendingHR.php,No; inventoried for Phase 0
+Leave,Listeners,api/app/Modules/Leave/Listeners/NotifyOnLeaveRejected.php,No; inventoried for Phase 0
+Leave,Listeners,api/app/Modules/Leave/Listeners/NotifyOnLeaveSubmitted.php,No; inventoried for Phase 0
+Leave,Listeners,api/app/Modules/Leave/Listeners/RunYearEndLeaveOnRequested.php,"Queues ProcessYearEndLeave, whose balance writes stage one transaction refresh; not runtime exercised"
+Leave,Observers,api/app/Modules/Leave/Observers/LeaveRequestRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Leave,Observers,api/app/Modules/Leave/Observers/LeaveTypeRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Leave,Schedule,api/routes/console.php:278::leave:process-year-end --previous-year,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Leave,Schedule,api/routes/console.php:462::leave:process-year-end,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Loans,"ApprovalRecord create/update/delete when approvable is EmployeeLoan (submit, approve, reject, retire pending steps)",api/app/Modules/Loans/Observers/LoanApprovalRecordRealtimeObserver.php,"No; source-wired, runtime not exercised"
+Loans,"EmployeeLoan Eloquent create/update/delete (LoanService, payroll reconciliation, final-pay and separation reserve/release saves)",api/app/Modules/Loans/Observers/EmployeeLoanRealtimeObserver.php,"No; source-wired, runtime not exercised"
+Loans,Listeners,api/app/Modules/Loans/Listeners/NotifyOnLoanDecided.php,No; inventoried for Phase 0
+Loans,Listeners,api/app/Modules/Loans/Listeners/NotifyOnLoanSubmitted.php,No; inventoried for Phase 0
+Loans,"LoanPayment Eloquent create/update/delete (manual repayment, payroll recompute, final-pay settlement)",api/app/Modules/Loans/Observers/LoanPaymentRealtimeObserver.php,"No; source-wired, runtime not exercised"
+Maintenance,Jobs,api/app/Modules/Maintenance/Jobs/GeneratePreventiveMaintenanceJob.php,No; inventoried for Phase 0
+Maintenance,Listeners,api/app/Modules/Maintenance/Listeners/GeneratePreventiveMaintenanceOnRequested.php,No; inventoried for Phase 0
+Maintenance,Listeners,api/app/Modules/Maintenance/Listeners/NotifyMaintenanceWorkOrder.php,No; inventoried for Phase 0
+Maintenance,Observers,api/app/Modules/Maintenance/Observers/MaintenanceScheduleRealtimeObserver.php,No; inventoried for Phase 0
+Maintenance,Schedule,api/routes/console.php:187::maintenance:recompute-hours,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Maintenance,Schedule,api/routes/console.php:504::maintenance:check-assignment,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Maintenance,Schedule,api/routes/console.php:506::maintenance:check-repeat-breakdowns,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Maintenance,Schedule,api/routes/console.php:74::maintenance:request-preventive-generation,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+MRP,Jobs,api/app/Modules/MRP/Jobs/RunAutomaticMrpJob.php,No; inventoried for Phase 0
+MRP,Listeners,api/app/Modules/MRP/Listeners/QueueMrpOnOutgoingInspectionFailed.php,No; inventoried for Phase 0
+MRP,Listeners,api/app/Modules/MRP/Listeners/QueueMrpOnReplanRequested.php,No; inventoried for Phase 0
+MRP,Listeners,api/app/Modules/MRP/Listeners/QueueMrpOnSalesOrderConfirmed.php,No; inventoried for Phase 0
+MRP,Listeners,api/app/Modules/MRP/Listeners/QueueMrpOnStockMovementCompleted.php,No; inventoried for Phase 0
+MRP,Observers,api/app/Modules/MRP/Observers/BomRealtimeObserver.php,BomRealtimeTest.php exercises create/cost invalidation outbox staging; live browser test covers one version publication.
+MRP,Observers,api/app/Modules/MRP/Observers/MachineRealtimeObserver.php,No; MachineRealtimeTest.php exercises Eloquent lifecycle writes and outbox staging.
+MRP,Observers,api/app/Modules/MRP/Observers/MoldRealtimeObserver.php,No; MoldRealtimeTest exercises create/update/archive/restore Eloquent writes and durable coalescing.
+MRP,Observers,api/app/Modules/MRP/Observers/MrpPlanRealtimeObserver.php,MrpPlanningRealtimeTest.php verifies plan create/status-update coalescing in a transaction; no live route scenario.
+MRP,Observers,api/app/Modules/MRP/Observers/MrpRunRealtimeObserver.php,MrpPlanningRealtimeTest.php verifies run create/completion coalescing in a transaction; no live route scenario.
+MRP,Schedule,api/routes/console.php::mrp:reap-stale-runs,"No; hourly stale-run status transition source-wired through MrpRun observer, not runtime-exercised."
+MRP,Schedule,api/routes/console.php::mrp:run-daily,"No; 06:00 daily transition source-wired through observed model writes, not runtime-exercised."
+Payroll,Jobs,api/app/Modules/Payroll/Jobs/PostPayrollToGlJob.php,No; inventoried for Phase 0
+Payroll,Jobs,api/app/Modules/Payroll/Jobs/ProcessPayrollJob.php,No; inventoried for Phase 0
+Payroll,Jobs,api/app/Modules/Payroll/Jobs/SendPayslipEmailJob.php,No; inventoried for Phase 0
+Payroll,Listeners,api/app/Modules/Payroll/Listeners/EmailPayslipPdfOnPayrollFinalized.php,No; inventoried for Phase 0
+Payroll,Listeners,api/app/Modules/Payroll/Listeners/GenerateBankFileOnPayrollFinalized.php,No; inventoried for Phase 0
+Payroll,Listeners,api/app/Modules/Payroll/Listeners/NotifyEmployeesOnPayrollFinalized.php,No; inventoried for Phase 0
+Payroll,Listeners,api/app/Modules/Payroll/Listeners/PostPayrollToGlOnRequested.php,No; inventoried for Phase 0
+Payroll,Listeners,api/app/Modules/Payroll/Listeners/RunPayrollComputationOnRequested.php,No; inventoried for Phase 0
+Payroll,Observers,api/app/Modules/Payroll/Observers/PayrollAdjustmentRealtimeObserver.php,No runtime transition was exercised in this update; source behavior and UI evidence are recorded in the module rows of the stale-risk matrix.
+Payroll,Schedule,api/routes/console.php:152::payroll:auto-create-period --half=second,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Payroll,Schedule,api/routes/console.php:156::payroll:auto-create-period --half=first,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Payroll,Schedule,api/routes/console.php:164::payroll:reconcile-auto-periods,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Payroll,Schedule,api/routes/console.php:172::payroll:reap-stale-runs,Source-classified: releases Processing periods to Computed or Draft through PayrollPeriodService::releaseClaim; shared query-builder path now stages PayrollPeriodChanged in the same transaction. Scheduler/UI not exercised.
+Payroll,Schedule,api/routes/console.php:180::payroll:reconcile-payslip-emails,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Production,Listeners,api/app/Modules/Production/Listeners/AutoCloseResolvedWorkOrder.php,No; inventoried for Phase 0
+Production,Listeners,api/app/Modules/Production/Listeners/CreateProductionReceiptOnOutputRequested.php,No; inventoried for Phase 0
+Production,Listeners,api/app/Modules/Production/Listeners/HandleMachineBreakdown.php,No; inventoried for Phase 0
+Production,Listeners,api/app/Modules/Production/Listeners/NotifyOnMachineBreakdown.php,No; inventoried for Phase 0
+Production,Listeners,api/app/Modules/Production/Listeners/NotifyOnWorkOrderCompleted.php,No; inventoried for Phase 0
+Production,Listeners,api/app/Modules/Production/Listeners/NotifyOnWorkOrderPaused.php,No; inventoried for Phase 0
+Production,Observers,api/app/Modules/Production/Observers/LateProductionReportRealtimeObserver.php,No; source-wired in no-tests slice.
+Production,Observers,api/app/Modules/Production/Observers/ProductionScheduleRealtimeObserver.php,Producer lifecycle tests exercised; live queue delivery not exercised for MRP.
+Production,Observers,api/app/Modules/Production/Observers/ProductionStaffingObserver.php,No; inventoried for Phase 0
+Production,Observers,api/app/Modules/Production/Observers/WoOperationRealtimeObserver.php,No; inventoried for Phase 0
+Production,Schedule,api/routes/console.php:217::production:send-daily-summary,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Production,Schedule,api/routes/console.php:221::production:send-weekly-summary,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Production,Schedule,api/routes/console.php:25::production:notify-upcoming-work-orders,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/AlertOnSupplierDeterioration.php,No; inventoried for Phase 0
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/CloseSupplierDispatchOnPurchaseOrderCancelled.php,No; inventoried for Phase 0
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php,No; inventoried for Phase 0
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php,No; inventoried for Phase 0
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php,No; inventoried for Phase 0
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php,No; inventoried for Phase 0
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseRequestApproved.php,No; inventoried for Phase 0
+Purchasing,Listeners,api/app/Modules/Purchasing/Listeners/PrepareSupplierDispatch.php,No; inventoried for Phase 0
+Purchasing,Schedule,api/routes/console.php:211::purchasing:recompute-supplier-performance,"No. Source-classified: recomputeAll upserts SupplierPerformanceSnapshot, retires affected cache generations after each successful commit, and stages one private refresh after the batch; scheduler/UI delivery remain NOT_VERIFIED."
+Purchasing,Schedule,api/routes/console.php:268::supplier:dispatch-recover --limit=100,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Purchasing,Schedule,api/routes/console.php:30::purchasing:close-due-rfqs,"No; the scheduled close calls RequestForQuoteService::closeDue, whose shared realtime service now stages the internal RFQ event and a coalesced vendor-scoped SupplierRfqChanged event for active invited vendors when the RFQ was published. Scheduler, outbox delivery and supplier UI remain NOT_VERIFIED."
+Quality,Jobs,api/app/Modules/Quality/Jobs/ProcessNcrRecurrenceScan.php,No; inventoried for Phase 0
+Quality,Listeners,api/app/Modules/Quality/Listeners/AcceptGrnOnIncomingQcPass.php,No; inventoried for Phase 0
+Quality,Listeners,api/app/Modules/Quality/Listeners/CreateDeliveryDraftOnQcPass.php,No; inventoried for Phase 0
+Quality,Listeners,api/app/Modules/Quality/Listeners/NotifyOnInspectionFailed.php,No; inventoried for Phase 0
+Quality,Listeners,api/app/Modules/Quality/Listeners/RejectGRNOnQcFail.php,No; inventoried for Phase 0
+Quality,Listeners,api/app/Modules/Quality/Listeners/TriggerInProcessQC.php,No; inventoried for Phase 0
+Quality,Listeners,api/app/Modules/Quality/Listeners/TriggerIncomingQC.php,No; inventoried for Phase 0
+Quality,Listeners,api/app/Modules/Quality/Listeners/TriggerOutgoingQC.php,No; inventoried for Phase 0
+Quality,Schedule,api/routes/console.php:199::ncr:escalate,Source disposition is recorded in 01-stale-risk-matrix.csv; scheduled command was not runtime-exercised.
+Quality,Schedule,api/routes/console.php:442::calibration:check-due,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Quality,Schedule,api/routes/console.php:448::quality:expire-ppaps,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Quality,Schedule,api/routes/console.php:476::ncr:check-effectiveness,Source-inventoried only; command was not executed in this update. See its transition row and evidence/deferred reason in the stale-risk matrix.
+Quality,Schedule,api/routes/console.php:48::qc:sweep-missing-outgoing --limit=50,Source-classified: repair transaction creates outgoing inspections through InspectionService; InspectionRealtimeObserver stages after-commit inspection refresh and badge invalidation. Escalation uses NotificationService. No scheduler execution or browser trace.
+ReturnManagement,Listeners,api/app/Modules/ReturnManagement/Listeners/CompleteCustomerReplacement.php,No; inventoried for Phase 0
+ReturnManagement,Listeners,api/app/Modules/ReturnManagement/Listeners/CreateReturnInspectionOnRequested.php,No; inventoried for Phase 0
+ReturnManagement,Listeners,api/app/Modules/ReturnManagement/Listeners/EmailPartyOnReturnRequestUpdated.php,No; inventoried for Phase 0
+SupplyChain,"Container, ShipmentDocument, and ShipmentLandedCost Eloquent observers",api/app/Modules/SupplyChain/Observers/ShipmentComponentRealtimeObserver.php,Source-wired; component lifecycle changes resolve the parent Shipment and coalesce with its event in the owning transaction; runtime not exercised.
+SupplyChain,Delivery create/update/delete/restore paths that change Vehicle assignment or active-delivery eligibility,api/app/Modules/SupplyChain/Observers/DeliveryVehicleRealtimeObserver.php,Source-wired; previous/current Vehicle references stage the coalesced VehicleChanged outbox event after commit. Runtime not exercised.
+SupplyChain,Listeners,api/app/Modules/SupplyChain/Listeners/CreateDraftInvoiceOnDeliveryInvoiceRequested.php,No; inventoried for Phase 0
+SupplyChain,Listeners,api/app/Modules/SupplyChain/Listeners/EmailCustomerOnDeliveryConfirmed.php,No; inventoried for Phase 0
+SupplyChain,Shipment and child Eloquent observers,api/app/Modules/SupplyChain/Observers/ShipmentRealtimeObserver.php,Source-wired; Shipment create/update/status/delete/restore records one coalesced ShipmentChanged outbox ping after commit; runtime not exercised.
+SupplyChain,"Vehicle Eloquent lifecycle observer (fleet CRUD, asset association, delivery status/return side effects)",api/app/Modules/SupplyChain/Observers/VehicleRealtimeObserver.php,Source-wired; VehicleChanged is recorded through a transaction-coalesced durable outbox and dispatched after commit. Runtime not exercised.
+Inventory,Observers,api/app/Modules/Inventory/Observers/ItemCostReviewRealtimeObserver.php,No; source-wired through a transaction-coalesced outbox. Focused event and channel tests passed; queue/Reverb delivery and peer UI were not exercised.
+Inventory,Observers,api/app/Modules/Inventory/Observers/MaterialReviewRecordRealtimeObserver.php,"No; source-wired for all Eloquent create/update/delete paths through QuarantineService; focused create/release event tests passed, but runtime queue/Reverb and multi-user UI were not exercised."
+Inventory,Observers,api/app/Modules/Inventory/Observers/MaterialIssueSlipRealtimeObserver.php,"No; source-wired for MaterialIssueService create/cancel Eloquent writes; focused lifecycle/channel tests passed, but runtime queue/Reverb and multi-user UI were not exercised."
+Production,Mutation service,api/app/Modules/Production/Services/ProductionRoutingService.php::create|update|duplicate|activate -> ProductionRoutingRealtimeService,Source-wired for all four service transitions. Create outbox regression passed (1 assertion); channel/payload checks passed. Browser/queue delivery NOT_VERIFIED.
+Production,Mutation service,api/app/Modules/Production/Services/WorkOrderService.php::releaseResources|delete|restore,Source-wired through ChainBroadcaster::refreshWorkOrder; release red-first regression and delete/restore outbox tests pass. No browser delivery run.
+Production,Mutation service,api/app/Modules/Production/Services/WorkOrderOutputService.php::retryProductionReceipt|markProductionReceiptManual,"Source-wired to the private WorkOrder refresh after a successful handoff when status is unchanged, a changed no-receipt/manual state, or a newly persisted manual failure. Actor detail/output caches apply the successful response or refetch on 422. Focused producer and SPA tests pass; browser/queue delivery NOT_VERIFIED."
+Production,Mutation service,api/app/Modules/Production/Services/WorkOrderService.php::createDraft,Source-wired to ChainBroadcaster::refreshWorkOrder when draft creation generated no routing operations; otherwise the existing coalesced WorkOrderOperationChanged signal refreshes the parent. No-routing outbox regression passes; multi-user delivery NOT_VERIFIED.
+HR,Observers,api/app/Modules/HR/Observers/SalaryAdjustmentApprovalRecordRealtimeObserver.php,Source-wired in delta 444: ApprovalRecord create/update/delete for SalaryAdjustment quietly advances the parent version and stages a coalesced SalaryAdjustmentChanged in the same transaction; outbox delivery is after commit on the dedicated queue. Intermediate-step producer test passed; live queue/Reverb/UI not exercised.

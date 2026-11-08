@@ -11,6 +11,11 @@ use App\Modules\DSS\Detectors\MasterHygieneDetector;
 use App\Modules\DSS\Detectors\NcrSlaBreachDetector;
 use App\Modules\DSS\Detectors\PrePayrollChecklistDetector;
 use App\Modules\DSS\Detectors\StuckDocumentDetector;
+use App\Modules\DSS\Models\DssParameter;
+use App\Modules\DSS\Models\DssRecommendation;
+use App\Modules\DSS\Models\DssRecommendationEvent;
+use App\Modules\DSS\Models\DssRunLog;
+use App\Modules\DSS\Observers\DssRealtimeObserver;
 use App\Modules\DSS\Services\DetectorRegistry;
 use Illuminate\Support\ServiceProvider;
 
@@ -38,5 +43,13 @@ class DssServiceProvider extends ServiceProvider
 
             return $registry;
         });
+    }
+
+    public function boot(): void
+    {
+        DssParameter::observe(DssRealtimeObserver::class);
+        DssRecommendation::observe(DssRealtimeObserver::class);
+        DssRecommendationEvent::observe(DssRealtimeObserver::class);
+        DssRunLog::observe(DssRealtimeObserver::class);
     }
 }

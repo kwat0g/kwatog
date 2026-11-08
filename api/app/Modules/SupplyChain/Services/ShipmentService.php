@@ -16,6 +16,7 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Exceptions\ShipmentStateConflictException;
 use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
@@ -180,13 +181,16 @@ class ShipmentService
         });
     }
 
-    public function updateStatus(Shipment $s, ShipmentStatus $next, ?string $note = null): Shipment
+    public function updateStatus(Shipment $s, ShipmentStatus $next, ?string $note = null, ?string $expectedVersion = null): Shipment
     {
-        return DB::transaction(function () use ($s, $next, $note) {
+        return DB::transaction(function () use ($s, $next, $note, $expectedVersion) {
             // Lock-then-guard: re-read so a stale transition cannot overwrite a
             // shipment a concurrent update already advanced (same pattern as
             // DeliveryService::updateStatus).
             $locked = Shipment::query()->lockForUpdate()->findOrFail($s->getKey());
+            if ($expectedVersion !== null && $expectedVersion !== $locked->updated_at?->toISOString()) {
+                throw new ShipmentStateConflictException('Shipment changed since you opened it. Refresh before applying this status.');
+            }
             $current = $locked->status instanceof ShipmentStatus ? $locked->status : ShipmentStatus::from((string) $locked->status);
             if (! $current->canTransitionTo($next)) {
                 throw new BusinessRuleException("Cannot transition shipment {$locked->shipment_number} from {$current->value} to {$next->value}.");
@@ -223,10 +227,13 @@ class ShipmentService
      * Patch carrier/vessel/dates without changing status. Useful for ImpEx
      * Officer correcting tracking metadata mid-flight.
      */
-    public function updateMeta(Shipment $s, array $data): Shipment
+    public function updateMeta(Shipment $s, array $data, ?string $expectedVersion = null): Shipment
     {
-        return DB::transaction(function () use ($s, $data): Shipment {
+        return DB::transaction(function () use ($s, $data, $expectedVersion): Shipment {
             $locked = Shipment::query()->lockForUpdate()->findOrFail($s->id);
+            if ($expectedVersion !== null && $expectedVersion !== $locked->updated_at?->toISOString()) {
+                throw new ShipmentStateConflictException('Shipment changed since you opened it. Refresh before saving these changes.');
+            }
             $allowed = [
                 'carrier', 'vessel', 'container_number', 'bl_number', 'etd', 'eta', 'notes',
                 'freight_cost', 'insurance_cost', 'duties_amount', 'brokerage_fee', 'other_charges',

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { FormOptionsStatus } from './FormOptionsStatus';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import {
   offsetScheduleDate,
   scheduleDate,
@@ -78,8 +79,13 @@ export default function CreateWorkOrderPage() {
       }
     },
     onSuccess: (workOrder) => {
+      reconcileRealtimeMutationResponse(
+        queryClient,
+        { entityType: 'work_order', entityId: workOrder.id },
+        ['production', 'work-orders', 'detail', workOrder.id],
+        workOrder,
+      );
       setSaved(workOrder.id);
-      void queryClient.invalidateQueries({ queryKey: ['production', 'work-orders'] });
       navigate(`/production/work-orders/${workOrder.id}`);
     },
   });

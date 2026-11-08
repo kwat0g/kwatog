@@ -13,7 +13,9 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Clearance } from '@/types/separations';
 import { clearanceStatusVariant } from '@/lib/statusVariants';
 import { usePermission } from '@/hooks/usePermission';
+import { useClearanceListRealtime } from '@/hooks/useRealtimeRecord';
 import { formatPeso } from '@/lib/formatNumber';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 const DEFAULT_FILTERS: SeparationListParams = {
  page: 1, per_page: 25, status: '', signal: '',
@@ -22,14 +24,17 @@ const DEFAULT_FILTERS: SeparationListParams = {
 export default function SeparationsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
+ useClearanceListRealtime();
  // Bound to the URL so dashboard drill-downs (?status=in_progress) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<SeparationListParams>(DEFAULT_FILTERS);
 
+ const queryKey = ['hr', 'separations', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['hr', 'separations', filters],
+ queryKey,
  queryFn: () => separationsApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: separationOptions } = useQuery({
  queryKey: ['hr', 'clearances', 'options'],
  queryFn: separationsApi.options,

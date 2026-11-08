@@ -71,31 +71,31 @@ class AssetController
 
     public function store(StoreAssetRequest $request): JsonResponse
     {
-        $asset = $this->service->create($request->validated());
+        $asset = $this->service->create($request->validated(), $request->user());
 
         return (new AssetResource($asset))->response()->setStatusCode(201);
     }
 
     public function update(UpdateAssetRequest $request, Asset $asset): AssetResource
     {
-        return new AssetResource($this->service->update($asset, $request->validated()));
+        return new AssetResource($this->service->update($asset, $request->validated(), $request->user()));
     }
 
     public function associate(AssociateAssetRequest $request, Asset $asset): AssetResource
     {
-        return new AssetResource($this->service->associate($asset, $request->validated()));
+        return new AssetResource($this->service->associate($asset, $request->validated(), $request->user()));
     }
 
-    public function destroy(Asset $asset): JsonResponse
+    public function destroy(Request $request, Asset $asset): JsonResponse
     {
-        $this->service->delete($asset);
+        $this->service->delete($asset, $request->user());
 
         return response()->json(null, 204);
     }
 
-    public function restore(Asset $asset): JsonResponse
+    public function restore(Request $request, Asset $asset): JsonResponse
     {
-        $asset->restore();
+        $this->service->restore($asset, $request->user());
 
         return response()->json(['message' => 'Asset restored.']);
     }

@@ -83,7 +83,7 @@ class ProductService
             }
         }
 
-        return $q->orderBy('part_number')
+        return $q->orderByDesc('created_at')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
@@ -162,8 +162,23 @@ class ProductService
     {
         return DB::transaction(function () use ($product, $data): Product {
             $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
+            $previousCustomerIds = $locked->portalCustomers()
+                ->orderBy('customers.id')
+                ->pluck('customers.id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+            $nextCustomerIds = array_values(array_unique(array_map(
+                static fn ($id): int => (int) $id,
+                $data['portal_customer_ids'],
+            )));
+            sort($previousCustomerIds);
+            sort($nextCustomerIds);
+            $accessChanged = $previousCustomerIds !== $nextCustomerIds;
             $locked->update(['portal_visibility' => $data['portal_visibility']]);
-            $locked->portalCustomers()->sync($data['portal_customer_ids']);
+            $locked->portalCustomers()->sync($nextCustomerIds);
+            if ($accessChanged && ! $locked->wasChanged('portal_visibility')) {
+                app(ProductRealtimeService::class)->stage($locked, 'updated');
+            }
 
             return $locked->fresh()->load('portalCustomers:id,name');
         });

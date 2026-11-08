@@ -9,6 +9,7 @@ use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Exceptions\GrnStateConflictException;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -53,6 +54,15 @@ class GoodsReceiptNoteController
         private readonly SettingsService $settings,
     ) {}
 
+    private function conflict(GrnStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         return GoodsReceiptNoteResource::collection($this->service->list($request->query()));
@@ -96,20 +106,24 @@ class GoodsReceiptNoteController
     }
 
     /** Retry a failed GRN → Quality incoming-QC handoff without changing receipt facts. */
-    public function retryIncomingQc(GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    public function retryIncomingQc(GoodsReceiptNote $grn): GoodsReceiptNoteResource|JsonResponse
     {
         try {
             return new GoodsReceiptNoteResource($this->service->retryIncomingQcHandoff($grn));
+        } catch (GrnStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
 
     /** Retry an accepted GRN's idempotent GL post after ledger recovery. */
-    public function retryGl(GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    public function retryGl(GoodsReceiptNote $grn): GoodsReceiptNoteResource|JsonResponse
     {
         try {
             $grn = $this->service->retryGlHandoff($grn);
+        } catch (GrnStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -134,7 +148,7 @@ class GoodsReceiptNoteController
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return (new GoodsReceiptNoteResource($grn))->response()->setStatusCode(201);
+        return (new GoodsReceiptNoteResource($this->service->show($grn)))->response()->setStatusCode(201);
     }
 
     /**
@@ -142,10 +156,12 @@ class GoodsReceiptNoteController
      * bin + actual quantity per line, and the GRN becomes pending_qc (incoming
      * QC + stock-on-accept take over from there).
      */
-    public function finalize(FinalizeGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    public function finalize(FinalizeGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource|JsonResponse
     {
         try {
             $result = $this->service->finalizeDraft($grn, $request->validated()['items'], $request->user(), $request->validated()['supplier_shipment_id'] ?? null);
+        } catch (GrnStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -153,7 +169,7 @@ class GoodsReceiptNoteController
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
-    public function accept(AcceptGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    public function accept(AcceptGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource|JsonResponse
     {
         try {
             $map = $request->input('item_accepted_map');
@@ -174,6 +190,8 @@ class GoodsReceiptNoteController
             $result = $map
                 ? $this->service->partialAccept($grn, $map, $request->user())
                 : $this->service->accept($grn, $request->user());
+        } catch (GrnStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             abort(422, $e->getMessage());
         }
@@ -181,10 +199,12 @@ class GoodsReceiptNoteController
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
-    public function reject(RejectGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    public function reject(RejectGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource|JsonResponse
     {
         try {
             $result = $this->service->reject($grn, $request->validated()['reason'], $request->user());
+        } catch (GrnStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -192,10 +212,12 @@ class GoodsReceiptNoteController
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
-    public function rejectRemainder(RejectGrnRemainderRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    public function rejectRemainder(RejectGrnRemainderRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource|JsonResponse
     {
         try {
             $result = $this->service->rejectRemainder($grn, $request->validated()['reason'], $request->user());
+        } catch (GrnStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

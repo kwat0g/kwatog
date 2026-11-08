@@ -11,6 +11,7 @@ use App\Modules\Quality\Enums\EffectivenessStatus;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrDisposition;
+use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Services\NcrService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -34,6 +35,14 @@ class NcrResource extends JsonResource
             'severity_label' => Str::headline((string) ($this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity)),
             'status' => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
             'status_label' => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
+            'available_actions' => [
+                // Keep this projection aligned with NcrService::cancel(); the
+                // service still rechecks these guards while holding the row lock.
+                'can_cancel' => $request->user()?->hasPermission('quality.ncr.manage') === true
+                    && (NcrStatus::tryFrom((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status))?->isTerminal() === false)
+                    && ! (bool) $this->is_late_incoming
+                    && $this->mrb_decided_at === null,
+            ],
             'disposition' => $this->disposition instanceof \BackedEnum ? $this->disposition->value : $this->disposition,
             'disposition_label' => NcrDisposition::tryFrom((string) ($this->disposition instanceof \BackedEnum ? $this->disposition->value : $this->disposition))?->label(),
             'defect_description' => $this->defect_description,

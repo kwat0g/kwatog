@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { useInventoryStockRealtime } from '@/hooks/useInventoryStockRealtime';
 
 const movementChip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
  if (t === 'grn_receipt' || t === 'production_receipt' || t === 'adjustment_in') return 'success';
@@ -19,14 +20,15 @@ const movementChip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'n
 };
 
 export default function InventoryDashboardPage() {
+ useInventoryStockRealtime();
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['inventory', 'dashboard'],
  queryFn: () => inventoryDashboardApi.summary(),
- refetchInterval: 30_000 });
+ });
 
  return (
  <div>
- <PageHeader title="Inventory" subtitle="Live snapshot · refreshes every 30s" />
+ <PageHeader title="Inventory" subtitle="Stock ledger updates live" />
  <div className="px-5 py-4 space-y-4">
  {isLoading && !data && <SkeletonTable rows={6} columns={4} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load dashboard" action={<Button onClick={() => refetch()}>Retry</Button>} />}

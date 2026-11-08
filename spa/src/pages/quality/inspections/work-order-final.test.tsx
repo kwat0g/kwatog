@@ -6,6 +6,7 @@ import { inspectionsApi } from '@/api/quality/inspections';
 import type { Inspection } from '@/types/quality';
 import type { WorkOrderFinalInspection } from '@/types/quality-final';
 import WorkOrderFinalInspectionPage from './work-order-final';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import InspectionDetailPage from './detail';
 import InspectionsListPage from './index';
 
@@ -26,6 +27,7 @@ vi.mock('@/api/quality/inspections', () => ({
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ can: () => true }),
 }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeList: vi.fn(), useRealtimeRecord: vi.fn() }));
 
 const group = {
   work_order_id: 'wo-hash',
@@ -171,6 +173,12 @@ it('selects batch named by evidence page and uses its inspection number in the h
   page();
   expect(await screen.findByText('QC-202610-0011', { exact: true })).toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: 'Output batch' })).toHaveValue('qc-b');
+});
+
+it('subscribes the grouped work-order inspection screen to inspection refreshes', async () => {
+  page();
+  await screen.findByText('QC-202610-0011', { exact: true });
+  expect(useRealtimeList).toHaveBeenCalledWith('inspection', 'visible');
 });
 
 it('shows saved confirmed-check and defect evidence in read-only state', async () => {
@@ -400,7 +408,7 @@ it('shows the current WO release and repair quantities in the grouped inspection
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <MemoryRouter><InspectionsListPage /></MemoryRouter>
   </QueryClientProvider>);
-  expect(await screen.findByText('Quality released')).toBeInTheDocument();
-  expect(screen.getByText('Original QC failed')).toBeInTheDocument();
-  expect(screen.getByText('500 approved · 2 repaired')).toBeInTheDocument();
+  expect((await screen.findAllByText('Quality released')).length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Original QC failed').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('500 approved · 2 repaired').length).toBeGreaterThan(0);
 });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Common\Support\TrashedFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Models\Attendance;
@@ -37,7 +38,6 @@ class HolidayService
         return DB::transaction(function () use ($data) {
             $this->assertDateAvailable((string) $data['date']);
             $h = Holiday::create($data);
-            $this->bustCache($h->date->year);
             $this->recomputeAttendanceForRule($h->date->toDateString(), (bool) $h->is_recurring);
             return $h;
         });
@@ -47,7 +47,6 @@ class HolidayService
     {
         return DB::transaction(function () use ($h, $data) {
             $locked = Holiday::query()->lockForUpdate()->findOrFail($h->getKey());
-            $oldYear = $locked->date->year;
             $oldDate = $locked->date->toDateString();
             $oldRecurring = (bool) $locked->is_recurring;
             if (array_key_exists('date', $data)) {
@@ -55,8 +54,6 @@ class HolidayService
             }
             $locked->update($data);
             $locked->refresh();
-            $this->bustCache($oldYear);
-            $this->bustCache($locked->date->year);
             if (array_key_exists('date', $data) || array_key_exists('is_recurring', $data)) {
                 $this->recomputeAttendanceForRule($oldDate, $oldRecurring);
                 $this->recomputeAttendanceForRule($locked->date->toDateString(), (bool) $locked->is_recurring);
@@ -71,11 +68,9 @@ class HolidayService
     {
         DB::transaction(function () use ($h): void {
             $locked = Holiday::query()->lockForUpdate()->findOrFail($h->getKey());
-            $year = $locked->date->year;
             $date = $locked->date->toDateString();
             $recurring = (bool) $locked->is_recurring;
             $locked->delete();
-            $this->bustCache($year);
             $this->recomputeAttendanceForRule($date, $recurring);
         });
     }
@@ -86,7 +81,6 @@ class HolidayService
             $locked = Holiday::withTrashed()->lockForUpdate()->findOrFail($h->getKey());
             $this->assertDateAvailable((string) $locked->date, $locked->getKey());
             $locked->restore();
-            $this->bustCache($locked->date->year);
             $this->recomputeAttendanceForRule($locked->date->toDateString(), (bool) $locked->is_recurring);
         });
     }
@@ -95,11 +89,13 @@ class HolidayService
     public function forDate(CarbonInterface $date): ?Holiday
     {
         $year = $date->year;
-        $cacheVersion = (int) Cache::get('holidays:cache_version', 0);
-        $cached = Cache::remember(
+        $cacheVersion = HolidayCacheGeneration::current();
+        $cached = FailOpenCache::remember(
+            Cache::store(),
             "holidays:{$year}:{$cacheVersion}",
-            now()->addDay(),
+            now()->addMinutes(5),
             fn () => $this->loadYear($year),
+            self::class.'::forDate',
         );
         $key = $date->toDateString();
         $row = $cached[$key] ?? null;
@@ -190,12 +186,6 @@ class HolidayService
                 "Only one active holiday may be recorded for {$date}. Choose the existing holiday or archive it first.",
             );
         }
-    }
-
-    private function bustCache(int $year): void
-    {
-        Cache::forget("holidays:{$year}");
-        Cache::put('holidays:cache_version', (int) Cache::get('holidays:cache_version', 0) + 1);
     }
 
     private function recomputeAttendanceForRule(string $date, bool $recurring): void

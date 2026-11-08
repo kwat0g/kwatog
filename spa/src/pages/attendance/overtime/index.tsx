@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { LuCheck, LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -18,13 +18,41 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatDate } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 import type { OvertimeRequest } from '@/types/attendance';
+import type { PaginatedResponse } from '@/types';
 
 const DEFAULT_FILTERS: OvertimeListParams = {
  page: 1, per_page: 100, sort: 'date', direction: 'desc', status: '', signal: '',
 };
+
+function reconcileOvertimeList(queryClient: QueryClient, updatedRows: OvertimeRequest[]): void {
+ const updates = new Map(updatedRows.map((request) => [request.id, request]));
+ if (updates.size === 0) return;
+
+ for (const [queryKey, cached] of queryClient.getQueriesData<PaginatedResponse<OvertimeRequest>>({
+  queryKey: ['attendance', 'overtime'],
+ })) {
+  if (!cached || !Array.isArray(cached.data)) continue;
+  const filters = queryKey[2] && typeof queryKey[2] === 'object'
+   ? queryKey[2] as OvertimeListParams
+   : undefined;
+  queryClient.setQueryData<PaginatedResponse<OvertimeRequest>>(queryKey, {
+   ...cached,
+   data: cached.data.flatMap((request) => {
+    const updated = updates.get(request.id);
+    if (!updated) return [request];
+    if (filters?.status && filters.status !== updated.status) return [];
+    if (filters?.signal === 'awaiting_my_approval' && updated.status !== 'pending') return [];
+    return [updated];
+   }),
+  });
+ }
+}
 
 export default function OvertimeListPage() {
  const { can, canApprove } = usePermission();
@@ -34,16 +62,28 @@ export default function OvertimeListPage() {
  // Bound to the URL so dashboard drill-downs (?status=pending) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<OvertimeListParams>(DEFAULT_FILTERS);
- const [reject, setReject] = useState<OvertimeRequest | null>(null);
  const [reason, setReason] = useState('');
- const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
  const [showBulkApprove, setShowBulkApprove] = useState(false);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['attendance', 'overtime', filters],
+ useRealtimeList(
+  'overtime_request',
+  can('attendance.view') || can('attendance.ot.approve') ? 'visible' : undefined,
+ );
+
+  const queryKey = ['attendance', 'overtime', filters] as const;
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => overtimeApi.list(filters),
- placeholderData: (prev) => prev,
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
+ const all = data?.data ?? [];
+ const approveActionTarget = useQueryRecordTarget(all, { isFetching, isError });
+ const rejectActionTarget = useQueryRecordTarget(all, { isFetching, isError });
+ const approveTarget = approveActionTarget.target;
+ const rejectTarget = rejectActionTarget.target;
+ const canApproveTarget = approveActionTarget.isFresh && approveTarget?.available_actions?.approve === true;
+ const canRejectTarget = rejectActionTarget.isFresh && rejectTarget?.available_actions?.reject === true;
  const { data: overtimeOptions } = useQuery({
   queryKey: ['attendance', 'overtime', 'options'],
   queryFn: overtimeApi.options,
@@ -53,23 +93,26 @@ export default function OvertimeListPage() {
  const statusLabel = (value: string) => statusLabels.get(value) ?? value.replaceAll('_', ' ');
 
  const approveMutation = useMutation({
- mutationFn: (id: string) => overtimeApi.approve(id),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] });
+ mutationFn: ({ id, version }: { id: string; version?: number }) => overtimeApi.approve(id, undefined, version),
+ onSuccess: (updated) => {
+ reconcileOvertimeList(qc, [updated]);
  toast.success('Overtime approved.');
- setConfirmApprove(null);
+ approveActionTarget.close();
  },
+ onSettled: () => qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] }),
  onError: (error) => reportMutationError(error, 'Failed to approve overtime.'),
  });
 
  const rejectMutation = useMutation({
- mutationFn: (id: string) => overtimeApi.reject(id, reason),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] });
+ mutationFn: ({ id, reason: rejectionReason, version }: { id: string; reason: string; version?: number }) =>
+ overtimeApi.reject(id, rejectionReason, version),
+ onSuccess: (updated) => {
+ reconcileOvertimeList(qc, [updated]);
  toast.success('Overtime rejected.');
- setReject(null);
+ rejectActionTarget.close();
  setReason('');
  },
+ onSettled: () => qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] }),
  onError: (error) => reportMutationError(error, 'Failed to reject overtime.'),
  });
 
@@ -84,17 +127,20 @@ export default function OvertimeListPage() {
  // and sent the user to "notifications" for reasons the response already had.
  const bulkApproveMutation = useMutation({
  mutationFn: async (rows: OvertimeRequest[]) => {
- // Only pending rows are submittable; anything else would come back as a
- // failure the UI could have predicted. They are still counted, so the
- // report is against what the user selected rather than what we sent.
- const pending = rows.filter((r) => r.status === 'pending');
- const res = await overtimeApi.bulkApprove(pending.map((r) => r.id));
- return { ...res, selected: rows.length, untouched: rows.length - pending.length };
+ // The server owns both state and available actions. Submit only the rows
+ // the current response says this actor may approve.
+ const actionable = rows.filter((r) => r.available_actions?.approve === true);
+ const versions = Object.fromEntries(actionable.flatMap((row) =>
+  row.version === undefined ? [] : [[row.id, String(row.version)]],
+ ));
+ const res = await overtimeApi.bulkApprove(actionable.map((r) => r.id), undefined, versions);
+ return { ...res, selected: rows.length, submitted: actionable.length, untouched: rows.length - actionable.length };
  },
  // A batch that rejects partway may still have committed rows, so refetch
  // regardless of outcome rather than only on success.
  onSettled: () => qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] }),
  onSuccess: (res) => {
+ reconcileOvertimeList(qc, res.data);
  const reason = res.failed[0]?.reason;
  if (res.failed.length > 0) {
  toast.error(
@@ -103,12 +149,10 @@ export default function OvertimeListPage() {
  );
  return;
  }
- if (res.approved_count < res.selected) {
- // No failures and "everything approved" are not the same thing: rows
- // that were not pending were never sent, and the server silently drops
- // ids it cannot decode.
+ if (res.approved_count < res.submitted || res.untouched > 0) {
+ // Rows without server-provided approval authority were not submitted.
  toast(
- `Approved ${res.approved_count} of ${res.selected}. ${res.selected - res.approved_count} left unchanged — not pending approval.`,
+ `Approved ${res.approved_count} of ${res.selected}. ${res.untouched + Math.max(0, res.submitted - res.approved_count)} left unchanged — no longer available for approval.`,
  { duration: 6000 },
  );
  return;
@@ -124,8 +168,8 @@ export default function OvertimeListPage() {
  variant: 'primary',
  icon: <LuCheck size={13} />,
  onClick: (rows) => {
- if (!rows.some((r) => r.status === 'pending')) {
- toast.error('None of the selected requests are pending approval.');
+ if (!rows.some((r) => r.available_actions?.approve === true)) {
+ toast.error('None of the selected requests are available for approval.');
  return;
  }
  bulkApproveMutation.mutate(rows);
@@ -133,7 +177,7 @@ export default function OvertimeListPage() {
  },
  ];
 
- const all = data?.data ?? [];
+ const actionablePending = all.filter((request) => request.available_actions?.approve === true);
  const counts = {
  pending: all.filter((o) => o.status === 'pending').length,
  approved: all.filter((o) => o.status === 'approved').length,
@@ -162,10 +206,10 @@ export default function OvertimeListPage() {
  key: 'actions',
  header: '',
  align: 'right' as const,
- cell: (r: OvertimeRequest) => r.status !== 'pending' ? null : (
+ cell: (r: OvertimeRequest) => r.available_actions?.approve !== true ? null : (
  <div className="flex items-center justify-end gap-1">
- <Button variant="primary" size="xs" onClick={() => { setConfirmApprove(r.id); }} disabled={approveMutation.isPending || bulkApproveMutation.isPending}>Approve</Button>
- <Button variant="danger" size="xs" onClick={() => { setReject(r); }}>Reject</Button>
+ <Button variant="primary" size="xs" onClick={() => approveActionTarget.open(r)} disabled={approveMutation.isPending || bulkApproveMutation.isPending}>Approve</Button>
+ {r.available_actions?.reject === true && <Button variant="danger" size="xs" onClick={() => rejectActionTarget.open(r)} disabled={rejectMutation.isPending || bulkApproveMutation.isPending}>Reject</Button>}
  </div>
  ),
  }] : []),
@@ -185,14 +229,14 @@ export default function OvertimeListPage() {
  subtitle={data ? `${data.meta.total} total · ${counts.pending} pending` : undefined}
  actions={
  <>
- {canApprove('attendance.ot.approve') && counts.pending > 0 && (
+ {canApprove('attendance.ot.approve') && actionablePending.length > 0 && (
  <Button
  variant="secondary"
  size="sm"
  onClick={() => setShowBulkApprove(true)}
  disabled={bulkApproveMutation.isPending}
  >
- Bulk approve ({Math.min(counts.pending, 100)})
+ Bulk approve ({Math.min(actionablePending.length, 100)})
  </Button>
  )}
  <Button variant="secondary" size="xs" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
@@ -264,49 +308,71 @@ export default function OvertimeListPage() {
 
  {data && all.length > 0 && view === 'kanban' && (
  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-5 py-4">
- <KanbanColumn title={statusLabel('pending')} variant="warning" items={grouped.pending} onApprove={(id) => setConfirmApprove(id)} onReject={setReject} canApprove={canApprove('attendance.ot.approve')} approving={approveMutation.isPending} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
+ <KanbanColumn title={statusLabel('pending')} variant="warning" items={grouped.pending} onApprove={approveActionTarget.open} onReject={rejectActionTarget.open} canApprove={canApprove('attendance.ot.approve')} approving={approveMutation.isPending || bulkApproveMutation.isPending} rejecting={rejectMutation.isPending} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
  <KanbanColumn title={statusLabel('approved')} variant="success" items={grouped.approved} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
  <KanbanColumn title={statusLabel('rejected')} variant="danger" items={grouped.rejected} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
  </div>
  )}
 
  <ConfirmDialog
- isOpen={confirmApprove !== null}
- onClose={() => setConfirmApprove(null)}
- onConfirm={() => { if (confirmApprove) approveMutation.mutate(confirmApprove); }}
+ isOpen={approveActionTarget.targetId !== null}
+ onClose={approveActionTarget.close}
+ onConfirm={() => {
+ if (canApproveTarget && approveTarget) approveMutation.mutate({ id: approveTarget.id, version: approveTarget.version });
+ }}
  title="Approve overtime request?"
+ description={canApproveTarget
+ ? `Approve overtime for ${approveTarget.employee?.full_name ?? 'this employee'} on ${formatDate(approveTarget.date)}?`
+ : approveActionTarget.isChecking
+ ? 'Checking the current approval status…'
+ : approveActionTarget.isUnverified
+ ? 'The current approval status could not be verified. Retry the list before continuing.'
+ : 'This overtime request is no longer available for approval. Refresh the list to review its current status.'}
  variant="warning"
  confirmLabel="Approve"
  pending={approveMutation.isPending}
+ disabled={!canApproveTarget}
  />
 
  <ConfirmDialog
  isOpen={showBulkApprove}
  onClose={() => setShowBulkApprove(false)}
  onConfirm={() => {
- const rows = grouped.pending.slice(0, 100);
+ const rows = actionablePending.slice(0, 100);
  if (rows.length > 0) bulkApproveMutation.mutate(rows);
  setShowBulkApprove(false);
  }}
- title={`Approve ${Math.min(counts.pending, 100)} pending overtime request${Math.min(counts.pending, 100) === 1 ? '' : 's'}?`}
+ title={`Approve ${Math.min(actionablePending.length, 100)} pending overtime request${Math.min(actionablePending.length, 100) === 1 ? '' : 's'}?`}
  variant="warning"
  confirmLabel="Approve all"
  pending={bulkApproveMutation.isPending}
  />
 
- {reject && (
- <Modal isOpen onClose={() => { setReject(null); setReason(''); }} size="sm" title="Reject overtime request">
+ {rejectActionTarget.targetId !== null && (
+ <Modal isOpen onClose={() => { rejectActionTarget.close(); setReason(''); }} size="sm" title="Reject overtime request">
+ {canRejectTarget && rejectTarget ? (
  <p className="text-sm py-2">
- Reject overtime for <span className="font-medium">{reject.employee?.full_name}</span> on {formatDate(reject.date)}?
+ Reject overtime for <span className="font-medium">{rejectTarget.employee?.full_name}</span> on {formatDate(rejectTarget.date)}?
  </p>
+ ) : (
+ <p role="status" className="text-sm py-2">
+ {rejectActionTarget.isChecking
+ ? 'Checking the current rejection status…'
+ : rejectActionTarget.isUnverified
+ ? 'The current rejection status could not be verified. Retry the list before continuing.'
+ : 'Rejection is no longer available for this request. Refresh the list to review its current status.'}
+ </p>
+ )}
  <Textarea label="Reason for rejection" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
  <ModalFooter>
- <Button variant="secondary" onClick={() => { setReject(null); setReason(''); }}>Cancel</Button>
+ <Button variant="secondary" onClick={() => { rejectActionTarget.close(); setReason(''); }}>Cancel</Button>
  <Button
  variant="danger"
- disabled={!reason.trim() || rejectMutation.isPending}
+ disabled={!reason.trim() || rejectMutation.isPending || !canRejectTarget}
  loading={rejectMutation.isPending}
- onClick={() => reject && rejectMutation.mutate(reject.id)}
+ onClick={() => {
+ if (canRejectTarget && rejectTarget) rejectMutation.mutate({ id: rejectTarget.id, reason, version: rejectTarget.version });
+ }}
  >
  {rejectMutation.isPending ? 'Rejecting…' : 'Confirm reject'}
  </Button>
@@ -318,15 +384,16 @@ export default function OvertimeListPage() {
 }
 
 function KanbanColumn({
- title, variant, items, onApprove, onReject, canApprove, approving, onOpen,
+ title, variant, items, onApprove, onReject, canApprove, approving, rejecting, onOpen,
 }: {
  title: string;
  variant: 'success' | 'warning' | 'danger';
  items: OvertimeRequest[];
- onApprove?: (id: string) => void;
+ onApprove?: (request: OvertimeRequest) => void;
  onReject?: (r: OvertimeRequest) => void;
  canApprove?: boolean;
  approving?: boolean;
+ rejecting?: boolean;
  onOpen?: (r: OvertimeRequest) => void;
 }) {
  return (
@@ -360,10 +427,10 @@ function KanbanColumn({
  {o.approver?.name && <div className="text-[11px] text-muted mt-1">by {o.approver.name}</div>}
  </div>
  </div>
- {canApprove && o.status === 'pending' && (
+ {canApprove && o.available_actions?.approve === true && (
  <div className="flex gap-1 mt-2" onClick={(e) => e.stopPropagation()}>
- <Button variant="primary" size="xs" disabled={approving} onClick={() => onApprove?.(o.id)}>Approve</Button>
- <Button variant="danger" size="xs" onClick={() => onReject?.(o)}>Reject</Button>
+ <Button variant="primary" size="xs" disabled={approving} onClick={() => onApprove?.(o)}>Approve</Button>
+ {o.available_actions?.reject === true && <Button variant="danger" size="xs" disabled={rejecting || approving} onClick={() => onReject?.(o)}>Reject</Button>}
  </div>
  )}
  </li>

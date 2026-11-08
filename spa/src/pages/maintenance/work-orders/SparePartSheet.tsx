@@ -12,6 +12,7 @@ import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { LuTrash2 } from '@/lib/icons';
 import { createRequestKey } from '@/lib/requestKey';
 import { reportMutationError } from '@/lib/formErrors';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { ApiSuccess } from '@/types';
 import type { MaintenanceWorkOrderLog, SparePartUsage } from '@/types/maintenance';
 
@@ -94,8 +95,7 @@ export function SparePartSheet({
     onSuccess: () => {
       toast.success('Spare parts requested. Awaiting Warehouse handover.');
       close();
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', workOrderId] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      void invalidateRealtimeChange(queryClient, { entityType: 'maintenance_work_order', entityId: workOrderId });
       queryClient.invalidateQueries({ queryKey: ['inventory', 'material-handovers'] });
     },
     onError: (error) => reportMutationError(error, 'Could not request spare parts.'),

@@ -36,6 +36,11 @@ export interface ScheduledExport {
  processing: boolean;
  next_run_at: string | null;
  is_active: boolean;
+ available_actions: {
+  update: boolean;
+  archive: boolean;
+  restore: boolean;
+ };
  owner: { id: string; name: string; email: string } | null;
  created_at: string | null;
 }

@@ -1230,7 +1230,27 @@ class RolePermissionSeeder extends Seeder
     /** @param array<int, int> $permissionIds */
     protected function syncRolePermissions(Role $role, array $permissionIds): void
     {
-        $role->permissions()->sync($permissionIds);
-        Cache::forget("auth:role_perms:{$role->id}");
+        DB::transaction(function () use ($role, $permissionIds): void {
+            $locked = Role::query()->lockForUpdate()->findOrFail($role->getKey());
+            $currentIds = $locked->permissions()
+                ->pluck('permissions.id')
+                ->map(static fn (int|string $id): int => (int) $id)
+                ->sort()
+                ->values()
+                ->all();
+            $targetIds = array_values(array_unique(array_map('intval', $permissionIds)));
+            sort($targetIds);
+
+            if ($currentIds === $targetIds) {
+                return;
+            }
+
+            $locked->permissions()->sync($targetIds);
+            DB::table('roles')->where('id', $locked->getKey())->increment('permissions_version');
+        });
+
+        // Clear the pre-versioned key for any older worker after the outermost
+        // seed transaction commits.
+        DB::afterCommit(static fn () => Cache::forget("auth:role_perms:{$role->id}"));
     }
 }

@@ -40,8 +40,8 @@ use Illuminate\Support\Facades\DB;
  *    + duration_minutes). A row belonging to a still-paused work order is
  *    left open — WorkOrderService closes it on resume or cancel.
  *
- * Implements ShouldQueue so the broadcast event publish doesn't block the
- * status-transition request — but uses the sync queue in tests.
+ * Implements ShouldQueue so breakdown/restoration side effects do not block
+ * status transitions; tests use the sync queue.
  */
 class HandleMachineBreakdown implements ShouldQueue
 {

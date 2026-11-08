@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -66,6 +68,7 @@ export default function CreditNotesPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
+  useRealtimeList('credit_note', can('accounting.credit_notes.view') ? 'visible' : undefined);
   const [filters, setFilters] = useUrlFilters<CreditNoteListParams & { search?: string }>({
     search: '',
     page: 1,
@@ -73,10 +76,12 @@ export default function CreditNotesPage() {
   });
   const [createOpen, setCreateOpen] = useState(false);
 
+  const queryKey = ['accounting', 'credit-notes', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['accounting', 'credit-notes', filters],
+    queryKey,
     queryFn: () => creditNotesApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
   const { data: accountingOptions } = useQuery({
     queryKey: ['accounting', 'options'],

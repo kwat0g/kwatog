@@ -10,6 +10,7 @@ use App\Common\Support\HashIdFilter;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Exceptions\PurchaseRequestStateConflictException;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Purchasing\Requests\ConvertPrToPoRequest;
@@ -38,6 +39,15 @@ class PurchaseRequestController
         private readonly SettingsService $settings,
         private readonly PurchaseRequestAccessPolicy $access,
     ) {}
+
+    private function stateConflict(PurchaseRequestStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
+    }
 
     /** Sprint P9 — printable PR with 4-tier approval signature block. */
     public function printPdf(Request $request, PurchaseRequest $purchaseRequest): Response
@@ -129,15 +139,17 @@ class PurchaseRequestController
     public function restore(Request $request, PurchaseRequest $purchaseRequest): JsonResponse
     {
         abort_unless($this->access->canManageDraft($request->user(), $purchaseRequest), 403, 'You do not have permission to restore this purchase request.');
-        $purchaseRequest->restore();
+        $this->service->restore($purchaseRequest, $request->user());
 
         return response()->json(['message' => 'Purchase request restored.']);
     }
 
-    public function submit(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    public function submit(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource|JsonResponse
     {
         try {
             $pr = $this->service->submit($purchaseRequest, $request->user());
+        } catch (PurchaseRequestStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -156,10 +168,12 @@ class PurchaseRequestController
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
-    public function approve(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    public function approve(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource|JsonResponse
     {
         try {
             $pr = $this->service->approve($purchaseRequest, $request->user(), $request->input('remarks'));
+        } catch (PurchaseRequestStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -167,10 +181,12 @@ class PurchaseRequestController
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
-    public function reject(RejectPurchaseRequestRequest $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    public function reject(RejectPurchaseRequestRequest $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource|JsonResponse
     {
         try {
             $pr = $this->service->reject($purchaseRequest, $request->user(), $request->validated()['reason']);
+        } catch (PurchaseRequestStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -178,10 +194,12 @@ class PurchaseRequestController
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
-    public function cancel(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    public function cancel(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource|JsonResponse
     {
         try {
             $pr = $this->service->cancel($purchaseRequest, $request->user());
+        } catch (PurchaseRequestStateConflictException $e) {
+            return $this->stateConflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

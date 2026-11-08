@@ -95,8 +95,12 @@ function Fact({ label, value }: { label: string; value: string }) {
 export function OrderAgreementsPanel({ orderId, realm, readOnlyData }: Props) {
   const queryClient = useQueryClient();
   const readOnly = readOnlyData !== undefined;
+  const agreementQueryKey = ['order-agreements', realm, orderId] as const;
+  const orderQueryKey = realm === 'internal'
+    ? ['crm', 'sales-orders', 'detail', orderId]
+    : ['portal', 'customer', 'order', orderId];
   const query = useQuery({
-    queryKey: ['order-agreements', realm, orderId],
+    queryKey: agreementQueryKey,
     queryFn: () => realm === 'internal' ? salesOrdersApi.agreements(orderId) : customerPortalApi.agreements(orderId),
     enabled: !readOnly && !!orderId,
   });
@@ -104,20 +108,18 @@ export function OrderAgreementsPanel({ orderId, realm, readOnlyData }: Props) {
   const externalForm = useForm<ExternalValues>({ resolver: zodResolver(externalSchema) });
   const [checkedRevision, setCheckedRevision] = useState('');
   const [actionError, setActionError] = useState('');
-  const refresh = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['order-agreements', realm, orderId] }),
-      queryClient.invalidateQueries({ queryKey: realm === 'internal' ? ['crm', 'sales-orders', 'detail', orderId] : ['portal', 'customer', 'order', orderId] }),
-    ]);
+  const reconcile = async (fresh: OrderAgreements) => {
+    queryClient.setQueryData(agreementQueryKey, fresh);
+    await queryClient.invalidateQueries({ queryKey: orderQueryKey });
   };
   const external = useMutation({
     mutationFn: ({ agreementId, values }: { agreementId: string; values: ExternalValues }) => salesOrdersApi.recordAgreementAcknowledgment(orderId, agreementId, { ...values, acknowledged_at: new Date(values.acknowledged_at).toISOString() }),
-    onSuccess: async () => { externalForm.reset(); setActionError(''); toast.success('External acknowledgment recorded.'); await refresh(); },
+    onSuccess: async (fresh) => { externalForm.reset(); setActionError(''); toast.success('External acknowledgment recorded.'); await reconcile(fresh); },
     onError: (error: ServerError) => { applyServerValidationErrors(error, externalForm.setError, 'Could not record external acknowledgment.'); setActionError(error.response?.data?.message ?? 'Could not record external acknowledgment.'); },
   });
   const acknowledge = useMutation({
     mutationFn: (agreementId: string) => customerPortalApi.acknowledgeAgreement(orderId, agreementId),
-    onSuccess: async () => { setActionError(''); toast.success('Terms acknowledged.'); await refresh(); },
+    onSuccess: async (fresh) => { setActionError(''); toast.success('Terms acknowledged.'); await reconcile(fresh); },
     onError: (error: ServerError) => setActionError(error.response?.data?.message ?? 'Could not acknowledge these terms.'),
   });
 

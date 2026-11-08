@@ -17,7 +17,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { formatPeso } from '@/lib/formatNumber';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import type { PriceRequest } from '@/types/pricing';
+import type { PaginatedResponse } from '@/types';
 
 const schema = z.object({
   product_id: z.string().min(1, 'Select product'),
@@ -45,7 +47,8 @@ export default function CustomerPricingPage() {
   const query = useQuery({
     queryKey: ['portal', 'pricing', page, requestId],
     queryFn: () => customerPortalApi.priceRequests(requestId ? 1 : page, requestId),
-    placeholderData: requestId ? undefined : (p) => p,
+    placeholderData: (previous, previousQuery) =>
+      requestId === undefined && previousQuery?.queryKey[3] === undefined ? previous : undefined,
   });
   const catalog = useQuery({
     queryKey: ['portal', 'catalog', 'pricing'],
@@ -63,8 +66,13 @@ export default function CustomerPricingPage() {
         quantity: Number(v.quantity),
         requested_price: v.requested_price || undefined,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['portal', 'pricing'] });
+    onSuccess: (created: PriceRequest) => {
+      if (page === 1 && !requestId) {
+        qc.setQueryData<PaginatedResponse<PriceRequest>>(['portal', 'pricing', page, requestId], (current) => current
+          ? { ...current, data: [created, ...current.data.filter((row) => row.id !== created.id)] }
+          : current);
+      }
+      void invalidateRealtimeChange(qc, { entityType: 'price_request', entityId: created.id });
       toast.success('Request submitted to sales.');
       form.reset();
       setCreating(false);
@@ -74,15 +82,26 @@ export default function CustomerPricingPage() {
   const decision = useMutation({
     mutationFn: ({ row, decision }: { row: PriceRequest; decision: 'accept' | 'reject' }) =>
       customerPortalApi.respondPrice(row.id, decision, row.version),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['portal'] });
+    onSuccess: (updated: PriceRequest) => {
+      qc.setQueryData<PaginatedResponse<PriceRequest>>(['portal', 'pricing', page, requestId], (current) => current
+        ? { ...current, data: current.data.map((row) => row.id === updated.id ? updated : row) }
+        : current);
+      qc.setQueryData(['portal', 'pricing', updated.id], updated);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'price_request', entityId: updated.id },
+        [],
+        [['portal', 'pricing', updated.id]],
+      );
       toast.success('Decision recorded.');
     },
-    onError: (e: unknown) =>
+    onError: (e: unknown) => {
+      void qc.invalidateQueries({ queryKey: ['portal', 'pricing'], refetchType: 'active' });
       toast.error(
         (e as { response?: { data?: { message?: string } } }).response?.data?.message ??
           'Cannot record decision.',
-      ),
+      );
+    },
   });
   const columns: Column<PriceRequest>[] = [
     {
@@ -156,23 +175,18 @@ export default function CustomerPricingPage() {
       key: 'actions',
       header: 'Your decision',
       className: 'min-w-40',
-      cell: (r) =>
-        r.status === 'offered' ? (
+      cell: (r) => (r.available_actions?.can_accept || r.available_actions?.can_reject) ? (
           <div className="flex gap-2">
-            <Button
-              variant="primary"
-              disabled={decision.isPending}
-              onClick={() => decision.mutate({ row: r, decision: 'accept' })}
-            >
-              Accept terms
-            </Button>
-            <Button
-              variant="danger"
-              disabled={decision.isPending}
-              onClick={() => decision.mutate({ row: r, decision: 'reject' })}
-            >
-              Decline
-            </Button>
+            {r.available_actions?.can_accept && (
+              <Button variant="primary" disabled={decision.isPending} onClick={() => decision.mutate({ row: r, decision: 'accept' })}>
+                Accept terms
+              </Button>
+            )}
+            {r.available_actions?.can_reject && (
+              <Button variant="danger" disabled={decision.isPending} onClick={() => decision.mutate({ row: r, decision: 'reject' })}>
+                Decline
+              </Button>
+            )}
           </div>
         ) : (
           '—'

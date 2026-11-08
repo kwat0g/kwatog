@@ -19,6 +19,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 
 const actionVariant: Record<string, 'success' | 'info' | 'danger' | 'neutral'> = {
  created: 'success',
@@ -87,6 +88,7 @@ function formatDiffValue(value: unknown, row: AuditDiffRow): string {
 }
 
 export default function EntityAuditTrailPage() {
+ useRealtimeSignal('admin_audit_logs_changed', 'admin.audit-logs', '.admin.audit-logs.changed');
  const [searchParams, setSearchParams] = useSearchParams();
  const modelType = searchParams.get('model_type') ?? '';
  const modelId = searchParams.get('model_id') ?? '';
@@ -97,7 +99,12 @@ export default function EntityAuditTrailPage() {
  queryKey: ['admin', 'audit-logs', 'entity', modelType, modelId, page],
  queryFn: () => auditLogsApi.entityTrail(modelType, modelId, { page, per_page: 25 }),
  enabled: !!modelType && !!modelId,
- placeholderData: (previous) => previous,
+ // Keep pagination smooth for this entity, but never show another entity's
+ // audit history while a changed model_type/model_id query is loading.
+ placeholderData: (previous, previousQuery) =>
+  previousQuery?.queryKey[3] === modelType && previousQuery.queryKey[4] === modelId
+   ? previous
+   : undefined,
  });
 
  const goToPage = (nextPage: number) => {

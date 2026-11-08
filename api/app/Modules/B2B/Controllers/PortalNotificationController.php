@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Controllers;
 
+use App\Common\Services\NotificationService;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use Illuminate\Database\Query\Builder;
@@ -13,11 +14,14 @@ use Illuminate\Support\Facades\DB;
 
 class PortalNotificationController
 {
+    public function __construct(private readonly NotificationService $notifications) {}
+
     /** The guard selects the realm; numeric IDs alone cannot identify a notification recipient. */
     private function query(Request $request): Builder
     {
         $user = $request->user();
         abort_unless($user instanceof CustomerPortalUser || $user instanceof SupplierPortalUser, 401);
+
         return DB::table('notifications')->where('notifiable_type', $user::class)->where('notifiable_id', $user->id);
     }
 
@@ -30,9 +34,14 @@ class PortalNotificationController
             'unread_only' => ['sometimes', 'boolean'],
         ]);
         $query = $this->query($request);
-        if ($request->boolean('unread_only')) $query->whereNull('read_at');
-        if (! empty($filters['type'])) $query->where('type', $filters['type']);
+        if ($request->boolean('unread_only')) {
+            $query->whereNull('read_at');
+        }
+        if (! empty($filters['type'])) {
+            $query->where('type', $filters['type']);
+        }
         $rows = $query->orderByDesc('created_at')->orderByDesc('id')->paginate($filters['per_page'] ?? 25);
+
         return response()->json([
             'data' => collect($rows->items())->map(static fn ($row): array => [
                 'id' => $row->id, 'type' => $row->type,
@@ -50,24 +59,59 @@ class PortalNotificationController
     public function markRead(Request $request, string $id): JsonResponse
     {
         $readAt = now();
-        abort_unless($this->query($request)->where('id', $id)->update(['read_at' => $readAt]), 404);
+        DB::transaction(function () use ($request, $id, $readAt): void {
+            abort_unless($this->query($request)->where('id', $id)->update(['read_at' => $readAt]), 404);
+            $this->signal($request, 'read', $id);
+        });
+
         return response()->json(['data' => ['id' => $id, 'read_at' => $readAt->toISOString()]]);
     }
 
     public function markAllRead(Request $request): JsonResponse
     {
-        $count = $this->query($request)->whereNull('read_at')->update(['read_at' => now()]);
+        $count = DB::transaction(function () use ($request): int {
+            $count = $this->query($request)->whereNull('read_at')->update(['read_at' => now()]);
+            if ($count > 0) {
+                $this->signal($request, 'read');
+            }
+
+            return $count;
+        });
+
         return response()->json(['data' => ['marked_read' => $count]]);
     }
 
     public function destroy(Request $request, string $id): JsonResponse
     {
-        abort_unless($this->query($request)->where('id', $id)->delete(), 404);
+        DB::transaction(function () use ($request, $id): void {
+            abort_unless($this->query($request)->where('id', $id)->delete(), 404);
+            $this->signal($request, 'deleted', $id);
+        });
+
         return response()->json(['data' => ['deleted' => true]]);
     }
 
     public function clearRead(Request $request): JsonResponse
     {
-        return response()->json(['data' => ['deleted' => $this->query($request)->whereNotNull('read_at')->delete()]]);
+        $count = DB::transaction(function () use ($request): int {
+            $count = $this->query($request)->whereNotNull('read_at')->delete();
+            if ($count > 0) {
+                $this->signal($request, 'deleted');
+            }
+
+            return $count;
+        });
+
+        return response()->json(['data' => ['deleted' => $count]]);
+    }
+
+    private function signal(Request $request, string $action, ?string $notificationId = null): void
+    {
+        $user = $request->user();
+        if (! $user instanceof CustomerPortalUser && ! $user instanceof SupplierPortalUser) {
+            return;
+        }
+
+        $this->notifications->stagePortalInboxChange($user, $action, $notificationId);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Production;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\ReservationStatus;
@@ -19,6 +20,7 @@ use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\ProductRouting;
 use App\Modules\Production\Models\RoutingOperation;
 use App\Modules\Production\Models\WoOperation;
+use App\Modules\Production\Events\WorkOrderOperationChanged;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Services\WorkOrderService;
@@ -28,6 +30,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\Support\HasAssignedProductionCrew;
 use Tests\TestCase;
@@ -246,6 +249,8 @@ class WorkOrderSplitReservationTest extends TestCase
         ]);
 
         $this->assertCount(1, WoOperation::query()->where('work_order_id', $wo->id)->get());
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', WorkOrderOperationChanged::class)->count());
+        $this->assertSame(0, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
 
         // The routing snapshot is safe to retry without duplicating execution rows.
         app(\App\Modules\Production\Services\WoOperationService::class)->generateFromRouting($wo);

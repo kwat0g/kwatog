@@ -11,6 +11,7 @@ use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
+use App\Modules\Inventory\Exceptions\StockAdjustmentStateConflictException;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\Item;
@@ -28,6 +29,15 @@ use Illuminate\Validation\Rule;
 class StockAdjustmentController
 {
     public function __construct(private readonly StockAdjustmentService $service, private readonly SettingsService $settings) {}
+
+    private function conflict(StockAdjustmentStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
+    }
 
     public function options(): JsonResponse
     {
@@ -122,6 +132,8 @@ class StockAdjustmentController
     {
         try {
             $adjustment = $this->service->approve($stockAdjustment, request()->user());
+        } catch (StockAdjustmentStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -134,6 +146,8 @@ class StockAdjustmentController
     {
         try {
             $adjustment = $this->service->reject($stockAdjustment, $request->user(), $request->validated('reason'));
+        } catch (StockAdjustmentStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -147,6 +161,8 @@ class StockAdjustmentController
     {
         try {
             $adjustment = $this->service->withdraw($stockAdjustment, $request->user());
+        } catch (StockAdjustmentStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

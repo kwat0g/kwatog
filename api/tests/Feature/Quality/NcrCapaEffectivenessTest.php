@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -40,7 +41,7 @@ final class NcrCapaEffectivenessTest extends TestCase
             )->id;
 
         return User::factory()->create([
-            'role_id'   => $roleId,
+            'role_id' => $roleId,
             'is_active' => true,
         ]);
     }
@@ -51,17 +52,17 @@ final class NcrCapaEffectivenessTest extends TestCase
         $by = $this->user();
         $ncr = NonConformanceReport::factory()->create([
             'created_by' => $by->id,
-            'status'     => NcrStatus::Open->value,
+            'status' => NcrStatus::Open->value,
         ]);
         $ncr->forceFill(['disposition' => NcrDisposition::UseAsIs->value])->save();
 
         foreach ([NcrActionType::Containment, NcrActionType::Corrective, NcrActionType::Preventive] as $type) {
             NcrAction::create([
-                'ncr_id'       => $ncr->id,
-                'action_type'  => $type->value,
-                'description'  => "{$type->value} action",
+                'ncr_id' => $ncr->id,
+                'action_type' => $type->value,
+                'description' => "{$type->value} action",
                 'performed_by' => $by->id,
-                'owner_id'     => $by->id,
+                'owner_id' => $by->id,
                 'performed_at' => now(),
             ]);
         }
@@ -97,7 +98,7 @@ final class NcrCapaEffectivenessTest extends TestCase
             ->where('ncr_id', $closed->id)
             ->where('action_type', NcrActionType::Containment->value)
             ->firstOrFail();
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         app(EffectivenessService::class)->verifyAction(
             $containment,
             $by,
@@ -122,13 +123,48 @@ final class NcrCapaEffectivenessTest extends TestCase
             'First verification.',
         );
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $service->verifyAction(
             $corrective->fresh(),
             $by,
             EffectivenessStatus::Ineffective,
             'Attempted overwrite.',
         );
+    }
+
+    public function test_repeated_terminal_effectiveness_verdict_returns_conflict(): void
+    {
+        [$closed, $by] = $this->closedNcr();
+        $corrective = NcrAction::query()
+            ->where('ncr_id', $closed->id)
+            ->where('action_type', NcrActionType::Corrective->value)
+            ->firstOrFail();
+        $service = app(EffectivenessService::class);
+
+        $before = $this->actingAs($by, 'sanctum')
+            ->getJson("/api/v1/quality/ncrs/{$closed->hash_id}")
+            ->assertOk()
+            ->json('data.actions');
+        $this->assertTrue(data_get(collect($before)->firstWhere('id', $corrective->hash_id), 'available_actions.can_verify'));
+
+        $service->verifyAction(
+            $corrective,
+            $by,
+            EffectivenessStatus::Effective,
+            'First verification.',
+        );
+
+        $after = $this->getJson("/api/v1/quality/ncrs/{$closed->hash_id}")
+            ->assertOk()
+            ->json('data.actions');
+        $this->assertFalse(data_get(collect($after)->firstWhere('id', $corrective->hash_id), 'available_actions.can_verify'));
+
+        $this->patchJson("/api/v1/quality/ncrs/{$closed->hash_id}/actions/{$corrective->hash_id}/verify", [
+            'effectiveness_status' => EffectivenessStatus::Ineffective->value,
+            'notes' => 'Stale second verification.',
+        ])
+            ->assertConflict()
+            ->assertJsonPath('code', 'ncr_action_state_conflict');
     }
 
     public function test_all_capa_verdicts_roll_up_to_effective(): void

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -13,7 +13,8 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { supplierInvoiceStatusVariant } from '@/lib/statusVariants';
-import type { SupplierInvoiceSummary } from '@/types/b2b';
+import type { SupplierInvoiceSummary, SupplierPortalUser } from '@/types/b2b';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 type InvoiceFilters = { page: number; per_page: number; status?: string };
 
@@ -21,11 +22,15 @@ const DEFAULT_FILTERS: InvoiceFilters = { page: 1, per_page: 25 };
 
 export default function SupplierInvoicesPage() {
   const navigate = useNavigate();
+  const portalUser = useOutletContext<SupplierPortalUser | undefined>();
+  const vendorHashId = portalUser?.vendor?.id;
   const [filters, setFilters] = useUrlFilters<InvoiceFilters>(DEFAULT_FILTERS);
+  const queryKey = ['portal', 'supplier', 'invoices', vendorHashId, filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'supplier', 'invoices', filters],
+    queryKey,
     queryFn: () => supplierPortalApi.listInvoices(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 4) ? previous : undefined,
   });
 
   const columns: Column<SupplierInvoiceSummary>[] = [

@@ -12,16 +12,23 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import type { EmployeeTraining } from '@/types/hr';
+import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 type TrainingFilters = ListParams & { signal?: 'expired' | 'upcoming' };
 
 export default function EmployeeTrainingRecordsPage() {
   const navigate = useNavigate();
+  const { can } = usePermission();
+  useRealtimeList('employee_training', can('hr.employees.trainings.view') ? 'visible' : undefined);
   const [filters, setFilters] = useUrlFilters<TrainingFilters>({ page: 1, per_page: 25 });
+  const queryKey = ['hr', 'employee-training-records', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['hr', 'employee-training-records', filters],
+    queryKey,
     queryFn: () => employeeTrainingsApi.listAll(filters),
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
 
   const columns = [

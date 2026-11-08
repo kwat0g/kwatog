@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuPencil, LuPlus } from '@/lib/icons';
 import { crmCustomersApi } from '@/api/crm/customers';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { complaintsApi } from '@/api/crm/complaints';
 import { priceAgreementsApi } from '@/api/crm/priceAgreements';
@@ -24,6 +25,7 @@ type Tab = 'details' | 'orders' | 'complaints' | 'prices';
 
 export default function CrmCustomerDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
+ useRealtimeRecord('customer', id);
  const navigate = useNavigate();
  const { can } = usePermission();
  const [tab, setTab] = useState<Tab>('details');

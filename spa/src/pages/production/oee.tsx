@@ -127,7 +127,6 @@ export default function OeeReportPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'oee', 'report', window],
     queryFn: () => oeeApi.report(window),
-    placeholderData: (prev) => prev,
   });
   const { data: downtimeCategories = [] } = useQuery({
     queryKey: ['production', 'downtime-categories'],

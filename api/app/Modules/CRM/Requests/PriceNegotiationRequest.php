@@ -41,7 +41,7 @@ class PriceNegotiationRequest extends FormRequest
             return ['notes' => ['required', 'string', 'max:1000'], 'version' => ['required', 'integer', 'min:1'], 'cost_signature' => ['required', 'string', 'size:64']];
         }
         if ($this->is('*/withdraw')) {
-            return ['notes' => ['required', 'string', 'max:1000']];
+            return ['notes' => ['required', 'string', 'max:1000'], 'version' => ['sometimes', 'integer', 'min:0']];
         }
         if ($this->is('api/v1/b2b/customer/*')) {
             return [
@@ -52,6 +52,7 @@ class PriceNegotiationRequest extends FormRequest
         $references = $this->route('priceRequest') ? 'sometimes' : 'required';
 
         return [
+            'version' => $this->route('priceRequest') ? ['sometimes', 'integer', 'min:0'] : ['prohibited'],
             'product_id' => [$references, 'integer', Rule::exists('products', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'customer_id' => [$references, 'integer', Rule::exists('customers', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'price' => ['required', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'], 'effective_from' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],

@@ -1,4 +1,5 @@
 import { RoleDashboardShell } from '@/components/dashboard/RoleDashboardShell';
+import { useMaintenanceDashboardRealtime } from '@/hooks/useRealtimeRecord';
 
 /**
  * Maintenance dashboard — ONE page for two roles (DSS §D3, M-p2 R12 + M-p3 R13).
@@ -21,10 +22,12 @@ import { RoleDashboardShell } from '@/components/dashboard/RoleDashboardShell';
  * message for every code.
  */
 export default function MaintenanceDashboardPage() {
+  useMaintenanceDashboardRealtime();
+
   return (
     <RoleDashboardShell
       title="Maintenance"
-      subtitle="Breakdowns, preventive windows and machine condition — queued work first."
+      subtitle="Work orders, schedules, and machine status."
       kpiCodes={[]}
       emptyTitle="No maintenance blocks configured"
       emptyDescription="Your work orders, due schedules, machine status and asset reads appear here."

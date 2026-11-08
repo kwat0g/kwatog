@@ -53,6 +53,31 @@ class OvertimeBulkApproveTest extends TestCase
         $this->assertSame(OvertimeStatus::Approved, $okB->fresh()->status);
     }
 
+    public function test_bulk_approve_rejects_a_row_with_a_stale_version(): void
+    {
+        $this->seed([
+            RolePermissionSeeder::class,
+            DepartmentSeeder::class,
+            PositionSeeder::class,
+        ]);
+
+        $approver = User::factory()->create([
+            'role_id' => \App\Modules\Auth\Models\Role::where('slug', 'system_admin')->value('id'),
+        ]);
+        $pending = $this->makeOt($this->makeEmployee(), OvertimeStatus::Pending);
+
+        $this->actingAs($approver)
+            ->postJson('/api/v1/attendance/overtime-requests/bulk-approve', [
+                'ids' => [$pending->hash_id],
+                'versions' => [$pending->hash_id => '0'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('approved_count', 0)
+            ->assertJsonPath('failed.0.id', $pending->hash_id);
+
+        $this->assertSame(OvertimeStatus::Pending, $pending->fresh()->status);
+    }
+
     public function test_bulk_approve_hides_unexpected_exception_details(): void
     {
         $this->seed([

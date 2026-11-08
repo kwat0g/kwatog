@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Events;
 
+use App\Common\Events\BroadcastEventEnvelope;
+use App\Common\Events\Concerns\BroadcastsOnDedicatedQueue;
+use App\Common\Events\Concerns\HasBroadcastEventId;
 use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\CRM\Models\SalesOrder;
+use Carbon\Carbon;
+use DateTimeInterface;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -17,9 +23,11 @@ use Illuminate\Queue\SerializesModels;
  * the MRP engine runs. Drives a "new SO" pulse on the production dashboard
  * (Chain 1 stage breakdown) and the chain header on the SO detail page.
  */
-class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
+class SalesOrderConfirmed implements ShouldBroadcast, ShouldDispatchAfterCommit, ToleratesNewerModelState
 {
+    use BroadcastsOnDedicatedQueue;
     use Dispatchable, InteractsWithSockets, SerializesModels;
+    use HasBroadcastEventId;
 
     /** @var array<string, mixed> */
     public readonly array $emailSnapshot;
@@ -29,9 +37,15 @@ class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
         public SalesOrder $salesOrder,
         ?array $emailSnapshot = null,
         public ?int $actorUserId = null,
+        ?string $eventId = null,
+        ?string $timestamp = null,
     ) {
+        $this->initializeBroadcastEventId($eventId);
         $this->emailSnapshot = $emailSnapshot ?? self::snapshotForEmail($salesOrder);
+        $this->timestamp = $timestamp ?? now()->toISOString();
     }
+
+    public string $timestamp;
 
     /** @return array<string, mixed> */
     public static function snapshotForEmail(SalesOrder $salesOrder): array
@@ -74,6 +88,23 @@ class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
 
     public function broadcastWith(): array
     {
-        return ['refresh' => true];
+        $updatedAt = $this->salesOrder->updated_at;
+        $version = $updatedAt instanceof DateTimeInterface
+            ? Carbon::parse($updatedAt)->utc()->toIso8601String()
+            : $this->timestamp;
+
+        $actorHashId = $this->actorUserId === null
+            ? null
+            : (string) app('hashids')->encode($this->actorUserId);
+
+        return BroadcastEventEnvelope::refresh(
+            eventId: $this->eventId,
+            entityType: 'sales_order',
+            entityId: $this->salesOrder->hash_id,
+            action: 'status_changed',
+            version: $version,
+            actorId: $actorHashId,
+            timestamp: $this->timestamp,
+        );
     }
 }

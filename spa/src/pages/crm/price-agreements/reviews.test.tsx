@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { pricingRequestsApi } from '@/api/crm/pricingRequests';
@@ -18,6 +18,10 @@ vi.mock('@/api/crm/pricingRequests', () => ({
     decideCost: vi.fn(),
     renewCost: vi.fn(),
   },
+}));
+vi.mock('@/hooks/useRealtimeRecord', () => ({
+  useRealtimeList: vi.fn(),
+  useRealtimeRecord: vi.fn(),
 }));
 afterEach(() => {
   cleanup();
@@ -38,6 +42,13 @@ const request: PriceRequest = {
   notes: 'Customer needs volume pricing',
   status: 'pending_finance',
   version: 1,
+  available_actions: {
+    can_propose: true,
+    can_approve: true,
+    can_withdraw: true,
+    can_accept: false,
+    can_reject: false,
+  },
   offer: {
     price: '30.00',
     pricing_method: 'tiered',
@@ -84,13 +95,15 @@ const page = <T,>(data: T[]) => ({
 });
 function show(component: React.ReactNode, permissions: string[], initialEntry = '/') {
   useAuthStore.setState({ permissions: new Set(permissions), user: null });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialEntry]}>{component}</MemoryRouter>
     </QueryClientProvider>,
   );
+  return queryClient;
 }
 it('approves the freshly loaded proposal version and cost signature, retaining notes on error', async () => {
   vi.mocked(pricingRequestsApi.list).mockResolvedValue(page([request]));
@@ -135,7 +148,7 @@ it('lets sales withdraw without exposing Finance approval or losing the withdraw
   vi.mocked(pricingRequestsApi.withdraw).mockRejectedValue(new Error('Offline'));
   show(<PricingRequestsPage />, ['crm.price_agreements.propose']);
   expect(screen.queryByRole('tab', { name: 'Supplier cost reviews' })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole('button', { name: 'Withdraw' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Withdraw' }))[0]);
   fireEvent.change(screen.getByLabelText(/Withdrawal reason/), {
     target: { value: 'Customer changed purchasing plan' },
   });
@@ -148,6 +161,32 @@ it('lets sales withdraw without exposing Finance approval or losing the withdraw
     screen.queryByRole('button', { name: 'Approve for customer review' }),
   ).not.toBeInTheDocument();
   expect(pricingRequestsApi.show).not.toHaveBeenCalled();
+});
+it('disables an open withdrawal when the refreshed server row removes that action', async () => {
+  vi.mocked(pricingRequestsApi.list).mockResolvedValue(page([request]));
+  const queryClient = show(<PricingRequestsPage />, ['crm.price_agreements.propose']);
+
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Withdraw' }))[0]);
+  fireEvent.change(screen.getByLabelText(/Withdrawal reason/), {
+    target: { value: 'Customer changed purchasing plan' },
+  });
+  await act(async () => {
+    queryClient.setQueryData(
+      ['pricing-requests', 1, undefined],
+      page([{
+        ...request,
+        status: 'offered',
+        version: 2,
+        available_actions: { ...request.available_actions!, can_withdraw: false },
+      }]),
+    );
+  });
+
+  await waitFor(() => {
+    expect(screen.getAllByText('Awaiting customer').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Withdraw request' })).toBeDisabled();
+  });
+  expect(screen.getByLabelText(/Withdrawal reason/)).toHaveValue('Customer changed purchasing plan');
 });
 it('preserves supplier review reason on failure and locks dialog dismissal during approval', async () => {
   vi.mocked(pricingRequestsApi.costs).mockResolvedValue(page([cost]));
@@ -190,6 +229,66 @@ it('keeps supplier cost details readable without giving review-only staff approv
   expect(screen.getByText('Awaiting independent Finance review')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Approve standard cost' })).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Approval or rejection reason')).not.toBeInTheDocument();
+});
+
+it('seeds the acting reviewer list from the successful API response', async () => {
+  const approved = {
+    ...cost,
+    status: 'approved' as const,
+    updated_at: '2026-11-02T02:00:00.000Z',
+    notes: 'Reviewed and approved',
+  };
+  vi.mocked(pricingRequestsApi.costs).mockResolvedValue(page([cost]));
+  vi.mocked(pricingRequestsApi.decideCost).mockResolvedValue(approved);
+  const queryClient = show(<CostReviewsPage />, [
+    'inventory.costs.review',
+    'inventory.costs.approve',
+  ]);
+  vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  fireEvent.change(screen.getByLabelText(/Approval or rejection reason/), {
+    target: { value: 'Reviewed supplier evidence' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Approve standard cost' }));
+
+  await waitFor(() => expect(pricingRequestsApi.decideCost).toHaveBeenCalled());
+  expect(queryClient.getQueryData<{ data: ItemCostReview[] }>(['cost-reviews', 1, null])?.data[0]?.status)
+    .toBe('approved');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('updates an open review modal after a peer change and keeps the unsent reason visible', async () => {
+  const updated = {
+    ...cost,
+    status: 'approved' as const,
+    version: 4,
+    updated_at: '2026-11-02T02:00:00.000Z',
+    notes: 'Approved by another reviewer',
+  };
+  vi.mocked(pricingRequestsApi.costs).mockResolvedValue(
+    page([{ ...cost, updated_at: '2026-11-02T01:59:00.000Z' }]),
+  );
+  const queryClient = show(<CostReviewsPage />, [
+    'inventory.costs.review',
+    'inventory.costs.approve',
+  ]);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  fireEvent.change(screen.getByLabelText(/Approval or rejection reason/), {
+    target: { value: 'My unsent review reason' },
+  });
+
+  await act(async () => {
+    queryClient.setQueryData(['cost-reviews', 1, null], page([updated]));
+  });
+  expect(await screen.findByRole('cell', { name: 'Approved' })).toBeVisible();
+
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByText('Approved')).toBeVisible();
+  expect(within(dialog).getByRole('status')).toHaveTextContent(/changed while you were viewing it/i);
+  expect(within(dialog).getByLabelText(/unsent reason/i)).toHaveValue('My unsent review reason');
+  expect(within(dialog).queryByRole('button', { name: 'Approve standard cost' })).not.toBeInTheDocument();
 });
 
 it('opens the exact linked supplier cost review', async () => {

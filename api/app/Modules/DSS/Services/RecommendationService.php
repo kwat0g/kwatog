@@ -10,12 +10,13 @@ use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\DSS\Enums\RecommendationEventType;
+use App\Modules\DSS\Exceptions\RecommendationStateConflictException;
 use App\Modules\DSS\Models\DssRecommendation;
 use App\Modules\DSS\Models\DssRecommendationEvent;
 use App\Modules\DSS\Models\DssRunLog;
 use Closure;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Pagination\CursorPaginator;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -255,6 +256,16 @@ class RecommendationService
         });
     }
 
+    public function expirePastValidity(): int
+    {
+        return $this->expireMatching(
+            DssRecommendation::query()->whereNotNull('expires_at'),
+            static fn (DssRecommendation $recommendation): bool => $recommendation->expires_at !== null && $recommendation->expires_at->lte(now()),
+            'Recommendation validity window ended.',
+            ['source' => 'scheduled_expiry'],
+        );
+    }
+
     public function expireForPause(?string $detectorId = null): int
     {
         $query = DssRecommendation::query();
@@ -317,7 +328,7 @@ class RecommendationService
 
         DB::transaction(function () use ($user, $recommendation): void {
             $now = now();
-            DB::table('dss_recommendation_events')->insertOrIgnore([
+            $inserted = DB::table('dss_recommendation_events')->insertOrIgnore([
                 'recommendation_id' => $recommendation->id,
                 'event' => RecommendationEventType::Viewed->value,
                 'actor_id' => $user->id,
@@ -325,6 +336,13 @@ class RecommendationService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            if ($inserted > 0) {
+                app(DssRealtimeService::class)->stage(
+                    'created',
+                    $now->format('Y-m-d\TH:i:s.uP'),
+                );
+            }
         });
 
         return $recommendation;
@@ -338,7 +356,7 @@ class RecommendationService
     }
 
     /**
-     * @param  array{reason?: string, snoozed_until?: string, outcome?: array}  $data
+     * @param  array{reason?: string, snoozed_until?: string, outcome?: array, expected_version?: int}  $data
      */
     public function act(User $user, DssRecommendation $recommendation, string $action, array $data = []): DssRecommendation
     {
@@ -351,6 +369,10 @@ class RecommendationService
                 ->firstOrFail();
 
             $this->assertVisible($user, $recommendation);
+
+            if (isset($data['expected_version']) && (int) $data['expected_version'] !== (int) $recommendation->version) {
+                throw new RecommendationStateConflictException('This recommendation changed since you opened it. Refresh and review the available actions.');
+            }
 
             if ($this->expireIfPast($recommendation)) {
                 return ['recommendation' => $recommendation, 'expired' => true];

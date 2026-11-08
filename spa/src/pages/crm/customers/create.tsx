@@ -9,6 +9,7 @@ import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { CustomerForm, customerCreateResolver, customerSchema, type CustomerFormValues } from './form';
@@ -69,9 +70,14 @@ export default function CrmCustomerCreatePage() {
  return crmCustomersApi.create(payload);
  },
  onSuccess: (customer) => {
- qc.invalidateQueries({ queryKey: ['crm', 'customers'] });
- qc.invalidateQueries({ queryKey: ['accounting', 'customers'] });
+ reconcileRealtimeMutationResponse(
+   qc,
+   { entityType: 'customer', entityId: customer.id },
+   ['crm', 'customers', 'detail', customer.id],
+   customer,
+ );
  toast.success('Customer created.');
+ safety.allowNavigationAfterSave();
  navigate(`/crm/customers/${customer.id}`);
  },
  onError: (e) => {

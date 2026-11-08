@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Select } from '@/components/ui/Select';
 import { formatDate, localIsoDate } from '@/lib/formatDate';
 import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 
 function statusOf(delegation: ApprovalDelegation, today: string): { label: string; variant: 'success' | 'warning' | 'danger' | 'neutral' } {
   if (!delegation.is_active) return { label: 'Revoked', variant: 'neutral' };
@@ -37,7 +38,20 @@ function serverMessage(error: unknown, fallback: string): string {
 
 export default function ApprovalDelegationsPage() {
   const user = useAuthStore((state) => state.user);
+  const hasDelegationManagerScope = useAuthStore((state) =>
+    state.user?.role?.slug === 'system_admin' || state.permissions.has('admin.delegations.manage_any'),
+  );
   const queryClient = useQueryClient();
+  useRealtimeSignal(
+    'approval_delegations_changed',
+    user?.id ? `approval-delegation.user.${user.id}` : '',
+    '.approval.delegation.changed',
+  );
+  useRealtimeSignal(
+    'approval_delegations_changed',
+    hasDelegationManagerScope ? 'entity.approval_delegation.managers' : '',
+    '.approval.delegation.changed',
+  );
   const [search, setSearch] = useState('');
   const [delegateId, setDelegateId] = useState('');
   const [startsAt, setStartsAt] = useState('');

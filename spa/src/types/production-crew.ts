@@ -183,6 +183,7 @@ export interface StaffingLimits {
 }
 export interface ExecutionReadiness {
   can_assign_crew?: boolean;
+  next_refresh_at?: string | null;
   start_mode?: 'scheduled' | 'early' | 'late' | 'extend' | null;
   estimated_finish?: string | null;
   requires_late_production_approval?: boolean;

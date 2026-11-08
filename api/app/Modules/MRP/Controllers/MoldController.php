@@ -6,8 +6,8 @@ namespace App\Modules\MRP\Controllers;
 
 use App\Common\Services\SettingsService;
 use App\Modules\CRM\Models\Product;
-use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Enums\MoldStatus;
+use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Requests\AssignMoldCompatibilityRequest;
 use App\Modules\MRP\Requests\StoreMoldRequest;
 use App\Modules\MRP\Requests\UpdateMoldRequest;
@@ -54,6 +54,7 @@ class MoldController
             $payload['output_rate_per_hour'] = (int) floor(3600 / (int) $payload['cycle_time_seconds'] * (int) $payload['cavity_count']);
         }
         $m = $this->service->create($payload);
+
         return (new MoldResource($m))->response()->setStatusCode(201);
     }
 
@@ -65,18 +66,21 @@ class MoldController
     public function destroy(Mold $mold): JsonResponse
     {
         $this->service->delete($mold);
+
         return response()->json(null, 204);
     }
 
     public function restore(Mold $mold): JsonResponse
     {
-        $mold->restore();
+        $this->service->restore($mold);
+
         return response()->json(['message' => 'Mold restored.']);
     }
 
     public function syncCompatibility(AssignMoldCompatibilityRequest $request, Mold $mold): MoldResource
     {
         $m = $this->service->syncCompatibility($mold, $request->validated()['machine_ids']);
+
         return new MoldResource($m);
     }
 
@@ -106,6 +110,7 @@ class MoldController
     public function decommission(Request $request, Mold $mold): MoldResource
     {
         $reason = $request->input('reason');
+
         return new MoldResource($this->service->decommission($mold, $reason, $request->user()?->name));
     }
 
@@ -113,16 +118,17 @@ class MoldController
     {
         $defaultMonths = $this->settings->requiredInt('mrp.mold.cost_trend_default_months', 1, 36);
         $months = min((int) $request->query('months', $defaultMonths), 36);
+
         return response()->json([
             'data' => [
                 'mold' => [
-                    'id'                  => $mold->hash_id,
-                    'name'                => $mold->name,
-                    'acquisition_cost'    => (string) $mold->acquisition_cost,
+                    'id' => $mold->hash_id,
+                    'name' => $mold->name,
+                    'acquisition_cost' => (string) $mold->acquisition_cost,
                     'total_maintenance_cost' => (string) $mold->total_maintenance_cost,
-                    'cost_per_shot'       => $mold->cost_per_shot,
-                    'shots_remaining'     => $mold->shots_remaining,
-                    'maintenance_count'   => $mold->maintenance_count,
+                    'cost_per_shot' => $mold->cost_per_shot,
+                    'shots_remaining' => $mold->shots_remaining,
+                    'maintenance_count' => $mold->maintenance_count,
                 ],
                 'trend' => $this->service->costTrend($mold, $months),
             ],

@@ -7,6 +7,8 @@ namespace App\Modules\Attendance\Controllers;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Exceptions\OvertimeStateConflictException;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use App\Modules\Attendance\Requests\ApproveOvertimeRequestRequest;
 use App\Modules\Attendance\Requests\RejectOvertimeRequestRequest;
 use App\Modules\Attendance\Requests\StoreOvertimeRequestRequest;
@@ -69,7 +71,9 @@ class OvertimeController
         // -rule violations (self-approval SoD, non-pending state). Surface them as
         // 422 like the Leave/Loan controllers, instead of leaking an unhandled 500.
         try {
-            $ot = $this->service->approve($overtime, $request->user(), $request->input('remarks'));
+            $ot = $this->service->approve($overtime, $request->user(), $request->input('remarks'), $request->header('If-Match'));
+        } catch (OvertimeStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -80,7 +84,9 @@ class OvertimeController
     public function reject(RejectOvertimeRequestRequest $request, OvertimeRequest $overtime): OvertimeRequestResource
     {
         try {
-            $ot = $this->service->reject($overtime, $request->user(), $request->input('reason'));
+            $ot = $this->service->reject($overtime, $request->user(), $request->input('reason'), $request->header('If-Match'));
+        } catch (OvertimeStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -117,7 +123,9 @@ class OvertimeController
             : 'Cancelled.';
 
         try {
-            $ot = $this->service->cancel($overtime, $user, $reason);
+            $ot = $this->service->cancel($overtime, $user, $reason, $request->header('If-Match'));
+        } catch (OvertimeStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -136,6 +144,8 @@ class OvertimeController
             'ids' => ['required', 'array', 'min:1', 'max:100'],
             'ids.*' => ['required', 'string'],
             'remarks' => ['nullable', 'string', 'max:500'],
+            'versions' => ['sometimes', 'array', 'max:100'],
+            'versions.*' => ['sometimes', 'string', 'max:80'],
         ]);
 
         $decoded = collect($validated['ids'])
@@ -144,17 +154,32 @@ class OvertimeController
             ->values()
             ->all();
 
+        $versions = [];
+        foreach ($validated['versions'] ?? [] as $hashId => $version) {
+            $decodedId = HashIdFilter::decode((string) $hashId, OvertimeRequest::class);
+            if ($decodedId !== null) {
+                $versions[$decodedId] = $version;
+            }
+        }
+
         $result = $this->service->bulkApprove(
             $decoded,
             $request->user(),
             $validated['remarks'] ?? null,
+            $versions,
         );
+
+        $approved = new EloquentCollection($result['approved']);
+        $actionContexts = $this->decisionPolicy->actionContextsForRows($approved, $request->user());
+        foreach ($approved as $overtimeRequest) {
+            $overtimeRequest->setAttribute('realtime_action_context', $actionContexts[$overtimeRequest->getKey()] ?? null);
+        }
 
         return response()->json([
             'message' => sprintf('%d approved, %d failed.', count($result['approved']), count($result['failed'])),
             'approved_count' => count($result['approved']),
             'failed' => $result['failed'],
-            'data' => OvertimeRequestResource::collection($result['approved']),
+            'data' => OvertimeRequestResource::collection($approved),
         ]);
     }
 }

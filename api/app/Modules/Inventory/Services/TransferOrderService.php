@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\TransferOrderStatus;
+use App\Modules\Inventory\Exceptions\TransferOrderStateConflictException;
 use App\Modules\Inventory\Models\TransferOrder;
-use App\Common\Services\DocumentSequenceService;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -19,9 +21,10 @@ class TransferOrderService
         private readonly StockTransferService $transfers,
     ) {}
 
-    public function list(?int $perPage = null): Collection|\Illuminate\Contracts\Pagination\LengthAwarePaginator
+    public function list(?int $perPage = null): Collection|LengthAwarePaginator
     {
         $query = TransferOrder::query()->with(['fromLocation.zone.warehouse', 'toLocation.zone.warehouse', 'item', 'creator', 'transferrer'])->orderByDesc('created_at')->orderByDesc('id');
+
         return $perPage === null ? $query->get() : $query->paginate($perPage);
     }
 
@@ -40,14 +43,14 @@ class TransferOrderService
     {
         return DB::transaction(function () use ($data, $user) {
             return TransferOrder::create([
-                'transfer_number'   => $this->sequences->generate('transfer_order'),
-                'from_location_id'  => $data['from_location_id'],
-                'to_location_id'    => $data['to_location_id'],
-                'item_id'           => $data['item_id'],
-                'quantity'          => $data['quantity'],
-                'reason'            => $data['reason'] ?? null,
-                'status'            => TransferOrderStatus::Pending->value,
-                'created_by'        => $user->id,
+                'transfer_number' => $this->sequences->generate('transfer_order'),
+                'from_location_id' => $data['from_location_id'],
+                'to_location_id' => $data['to_location_id'],
+                'item_id' => $data['item_id'],
+                'quantity' => $data['quantity'],
+                'reason' => $data['reason'] ?? null,
+                'status' => TransferOrderStatus::Pending->value,
+                'created_by' => $user->id,
             ]);
         });
     }
@@ -59,7 +62,7 @@ class TransferOrderService
             // cannot both observe Pending and post the movement twice (P39).
             $order = TransferOrder::query()->lockForUpdate()->findOrFail($id);
             if ($order->status !== TransferOrderStatus::Pending) {
-                throw new BusinessRuleException('Transfer order is not pending.');
+                throw new TransferOrderStateConflictException('This transfer order is no longer pending. Refresh and review its current status.');
             }
             if ((int) $order->created_by === (int) $user->id) {
                 throw new BusinessRuleException('A transfer order creator cannot execute their own transfer.');
@@ -78,7 +81,7 @@ class TransferOrderService
             );
 
             $order->update([
-                'status'         => TransferOrderStatus::Transferred->value,
+                'status' => TransferOrderStatus::Transferred->value,
                 'transferred_by' => $user->id,
                 'transferred_at' => now(),
             ]);
@@ -100,9 +103,10 @@ class TransferOrderService
             // mark an order Cancelled after its stock already moved.
             $order = TransferOrder::query()->lockForUpdate()->findOrFail($id);
             if ($order->status !== TransferOrderStatus::Pending) {
-                throw new BusinessRuleException('Can only cancel pending transfer orders.');
+                throw new TransferOrderStateConflictException('This transfer order is no longer pending. Refresh and review its current status.');
             }
             $order->update(['status' => TransferOrderStatus::Cancelled->value]);
+
             return $order->fresh();
         });
     }

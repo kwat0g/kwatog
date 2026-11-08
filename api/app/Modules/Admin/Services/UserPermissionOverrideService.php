@@ -8,6 +8,7 @@ use App\Common\Enums\PermissionOverrideType;
 use App\Common\Events\PermissionOverrideChanged;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
+use App\Common\Services\UserAccessRefreshService;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
@@ -152,6 +153,8 @@ class UserPermissionOverrideService
                 $type,
                 $reason,
             ));
+            $accessRefresh = app(UserAccessRefreshService::class);
+            $accessRefresh->stageForUsers($accessRefresh->delegateIdsForDelegators([(int) $lockedUser->id]));
 
             return $override;
         });
@@ -208,6 +211,8 @@ class UserPermissionOverrideService
                 null,
                 $reason,
             ));
+            $accessRefresh = app(UserAccessRefreshService::class);
+            $accessRefresh->stageForUsers($accessRefresh->delegateIdsForDelegators([(int) $lockedUser->id]));
 
             return [
                 'user' => $lockedUser,
@@ -272,6 +277,8 @@ class UserPermissionOverrideService
                 $newType,
                 $reason,
             ));
+            $accessRefresh = app(UserAccessRefreshService::class);
+            $accessRefresh->stageForUsers($accessRefresh->delegateIdsForDelegators([(int) $lockedUser->id]));
 
             return [
                 'permissionSlug' => $permissionSlug,

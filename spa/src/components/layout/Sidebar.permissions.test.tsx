@@ -208,7 +208,7 @@ describe('role-aligned sidebar permissions', () => {
     expect(item('/crm/complaints').label).toBe('Customer Complaints');
     expect(item('/production/work-orders').label).toBe('Production Work Orders');
     expect(item('/production/schedule').label).toBe('Production Schedule (Gantt)');
-    expect(item('/production/routings').label).toBe('Production Routings');
+    expect(item('/production/routings')).toBeUndefined();
     expect(item('/mrp/machines').label).toBe('Production Machines');
     expect(item('/mrp/molds').label).toBe('Production Molds');
     expect(item('/inventory/items').label).toBe('Inventory Items');

@@ -17,9 +17,13 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\RfqStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -68,6 +72,90 @@ class PurchaseRequestHardeningTest extends TestCase
         $this->actingAs($head)
             ->getJson("/api/v1/purchasing/purchase-requests/{$hidden->hash_id}")
             ->assertForbidden();
+    }
+
+    public function test_list_projects_convert_action_from_viewer_scope_and_sourcing_eligibility(): void
+    {
+        $buyer = $this->user('purchasing_officer');
+        $eligibleDirect = PurchaseRequest::factory()->create([
+            'requested_by' => $buyer->id,
+            'status' => PurchaseRequestStatus::Approved,
+            'sourcing_method' => PurchaseRequestSourcingMethod::DirectPo,
+        ]);
+        $alreadyOrdered = PurchaseRequest::factory()->create([
+            'requested_by' => $buyer->id,
+            'status' => PurchaseRequestStatus::Approved,
+            'sourcing_method' => PurchaseRequestSourcingMethod::DirectPo,
+        ]);
+        PurchaseOrder::factory()->create(['purchase_request_id' => $alreadyOrdered->id]);
+
+        $activeRfqRequest = PurchaseRequest::factory()->create([
+            'requested_by' => $buyer->id,
+            'status' => PurchaseRequestStatus::Approved,
+            'sourcing_method' => PurchaseRequestSourcingMethod::Rfq,
+        ]);
+        $activeRfq = RequestForQuote::factory()->create([
+            'purchase_request_id' => $activeRfqRequest->id,
+            'created_by' => $buyer->id,
+        ]);
+        $activeRfq->forceFill(['status' => RfqStatus::Open])->save();
+
+        $handedBackRfqRequest = PurchaseRequest::factory()->create([
+            'requested_by' => $buyer->id,
+            'status' => PurchaseRequestStatus::Approved,
+            'sourcing_method' => PurchaseRequestSourcingMethod::Rfq,
+        ]);
+        $handedBackRfq = RequestForQuote::factory()->create([
+            'purchase_request_id' => $handedBackRfqRequest->id,
+            'created_by' => $buyer->id,
+        ]);
+        $handedBackRfq->forceFill(['status' => RfqStatus::Awarded])->save();
+
+        $listed = collect($this->actingAs($buyer)
+            ->getJson('/api/v1/purchasing/purchase-requests')
+            ->assertOk()
+            ->json('data'))
+            ->keyBy('id');
+
+        $this->assertTrue($listed[$eligibleDirect->hash_id]['available_actions']['can_convert']);
+        $this->assertNull($listed[$eligibleDirect->hash_id]['actions']);
+        $this->assertFalse($listed[$alreadyOrdered->hash_id]['available_actions']['can_convert']);
+        $this->assertFalse($listed[$activeRfqRequest->hash_id]['available_actions']['can_convert']);
+        $this->assertTrue($listed[$handedBackRfqRequest->hash_id]['available_actions']['can_convert']);
+    }
+
+    public function test_list_projects_approval_action_for_current_step_and_excludes_self_submission(): void
+    {
+        $finance = $this->user('finance_officer');
+        $buyer = $this->user('purchasing_officer');
+        $awaitingFinance = PurchaseRequest::factory()->create([
+            'requested_by' => $buyer->id,
+            'status' => PurchaseRequestStatus::Pending,
+        ]);
+        $selfSubmitted = PurchaseRequest::factory()->create([
+            'requested_by' => $finance->id,
+            'status' => PurchaseRequestStatus::Pending,
+        ]);
+
+        foreach ([$awaitingFinance, $selfSubmitted] as $request) {
+            ApprovalRecord::create([
+                'approvable_type' => $request->getMorphClass(),
+                'approvable_id' => $request->id,
+                'step_order' => 1,
+                'role_slug' => 'finance_officer',
+                'action' => 'pending',
+                'is_current' => true,
+            ]);
+        }
+
+        $listed = collect($this->actingAs($finance)
+            ->getJson('/api/v1/purchasing/purchase-requests')
+            ->assertOk()
+            ->json('data'))
+            ->keyBy('id');
+
+        $this->assertTrue($listed[$awaitingFinance->hash_id]['available_actions']['can_approve']);
+        $this->assertFalse($listed[$selfSubmitted->hash_id]['available_actions']['can_approve']);
     }
 
     public function test_pending_count_excludes_self_submissions_and_other_roles_steps(): void

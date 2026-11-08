@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Resources;
 
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,6 +12,12 @@ class AccountingPeriodResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $actor = $request->user();
+        $canManage = $actor instanceof User && $actor->hasPermission('accounting.periods.manage');
+        $availableActions = $canManage
+            ? [$this->status?->value === 'closed' ? 'reopen' : 'close']
+            : [];
+
         return [
             'id'            => $this->hash_id,
             'year'          => (int) $this->year,
@@ -28,8 +35,14 @@ class AccountingPeriodResource extends JsonResource
                 'name' => $this->reopenedBy->name,
             ] : null),
             'reopen_reason' => $this->reopen_reason,
+            'available_actions' => $availableActions,
+            'permissions' => [
+                'view' => $actor instanceof User && $actor->hasPermission('accounting.periods.view'),
+                'manage' => $canManage,
+            ],
             'created_at'    => optional($this->created_at)->toIso8601String(),
             'updated_at'    => optional($this->updated_at)->toIso8601String(),
+            'version'       => optional($this->updated_at)->toISOString(),
         ];
     }
 }

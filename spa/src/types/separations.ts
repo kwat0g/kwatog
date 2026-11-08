@@ -31,6 +31,8 @@ export interface Clearance {
  items_total: number;
  progress_pct: number;
  can_view_final_pay?: boolean;
+ permissions?: { view_final_pay: boolean };
+ available_actions?: Array<'sign_checklist_item' | 'compute_final_pay' | 'finalize' | 'cancel'>;
  final_pay_computed: boolean;
  final_pay_amount: string | null;
  final_pay_breakdown: Record<string, string> | null;

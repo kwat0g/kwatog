@@ -54,11 +54,14 @@ it('opens Bank Account Changes on the actionable profile-review queue', () => {
     </MemoryRouter>,
   );
   const bankChanges = screen.getByRole('link', { name: /Bank Account Changes/ });
-  expect(bankChanges).toHaveAttribute(
+  expect(bankChanges).toHaveAttribute('href', '/hr/profile-update-requests');
+  const bankChangesSignals = screen.getByRole('button', { name: /View all Bank Account Changes signals/ });
+  expect(within(bankChangesSignals).getByText('2')).toBeVisible();
+  fireEvent.click(bankChangesSignals);
+  expect(screen.getByRole('link', { name: 'Profile changes you can review: 2' })).toHaveAttribute(
     'href',
     '/hr/profile-update-requests?signal=awaiting_my_action',
   );
-  expect(within(bankChanges).getByText('2')).toBeVisible();
   expect(within(screen.getByRole('link', { name: /Employees/ })).queryByText('2')).not.toBeInTheDocument();
 });
 
@@ -73,7 +76,7 @@ it('opens Overtime on the actionable approval queue', () => {
   );
   expect(screen.getByRole('link', { name: /Overtime/ })).toHaveAttribute(
     'href',
-    '/hr/attendance/overtime?signal=awaiting_my_approval',
+    '/hr/attendance/overtime',
   );
 });
 
@@ -88,7 +91,7 @@ it('opens Separation Clearance on the pending items the user can sign', () => {
   );
   expect(screen.getByRole('link', { name: /Separation Clearance/ })).toHaveAttribute(
     'href',
-    '/hr/separations?signal=clearance_pending',
+    '/hr/separations',
   );
 });
 
@@ -108,7 +111,7 @@ it('opens Attendance on the missing-time-out list filter', () => {
   );
   expect(screen.getByRole('link', { name: /Attendance & DTR/ })).toHaveAttribute(
     'href',
-    '/hr/attendance?missing_time_out=1',
+    '/hr/attendance',
   );
 });
 
@@ -123,7 +126,7 @@ it('opens Supplier Listings on the pending-review queue', () => {
   );
   expect(screen.getByRole('link', { name: /Supplier Listings/ })).toHaveAttribute(
     'href',
-    '/purchasing/supplier-listings?status=pending',
+    '/purchasing/supplier-listings',
   );
 });
 
@@ -138,7 +141,7 @@ it('opens Delivery Fleet on the maintenance vehicle list', () => {
   );
   expect(screen.getByRole('link', { name: /Delivery Fleet/ })).toHaveAttribute(
     'href',
-    '/supply-chain/fleet?status=maintenance',
+    '/supply-chain/fleet',
   );
 });
 
@@ -153,7 +156,7 @@ it('opens Leave Management on the current-stage approval queue', () => {
   );
   expect(screen.getByRole('link', { name: /Leave Management/ })).toHaveAttribute(
     'href',
-    '/hr/leaves?signal=awaiting_my_approval',
+    '/hr/leaves',
   );
 });
 
@@ -174,7 +177,7 @@ it('shows expired and upcoming employee training signals with matching filters',
   );
   expect(screen.getByRole('link', { name: /Employee Training Records/ })).toHaveAttribute(
     'href',
-    '/hr/employee-trainings?signal=upcoming',
+    '/hr/employee-trainings',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Employee Training Records signals/ }));
   expect(screen.getByRole('link', { name: 'Expired employee training: 2' })).toHaveAttribute(
@@ -205,7 +208,7 @@ it('opens the awaiting-approval filter when purchase requests has a positive bad
   );
   expect(screen.getByRole('link', { name: /Purchase Requests/ })).toHaveAttribute(
     'href',
-    '/purchasing/purchase-requests?signal=awaiting_my_approval',
+    '/purchasing/purchase-requests',
   );
 });
 
@@ -227,7 +230,7 @@ it('opens only receipt-overdue purchase orders from the PO badge', () => {
   );
   expect(screen.getByRole('link', { name: /Purchase Orders/ })).toHaveAttribute(
     'href',
-    '/purchasing/purchase-orders?signal=receipt_overdue',
+    '/purchasing/purchase-orders',
   );
 });
 
@@ -258,12 +261,12 @@ it('opens PO actions first and keeps receipt overdue as a separate signal', () =
   );
   expect(screen.getByRole('link', { name: /Purchase Orders/ })).toHaveAttribute(
     'href',
-    '/purchasing/purchase-orders?signal=action',
+    '/purchasing/purchase-orders',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Purchase Orders signals/ }));
   expect(screen.getByRole('link', {
     name: 'Purchase orders you can approve, send, or resolve a supplier response on: 1',
-  })).toHaveAttribute('href', '/purchasing/purchase-orders?signal=action');
+  })).toHaveAttribute('href', '/purchasing/purchase-orders');
   expect(screen.getByRole('link', {
     name: 'Open purchase orders past the expected receipt date with quantity remaining: 2',
   })).toHaveAttribute('href', '/purchasing/purchase-orders?signal=receipt_overdue');
@@ -286,7 +289,7 @@ it('opens out-of-stock items first and keeps low stock as a separate signal', ()
   );
   expect(screen.getByRole('link', { name: /Inventory Items/ })).toHaveAttribute(
     'href',
-    '/inventory/items?signal=out_of_stock',
+    '/inventory/items',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Inventory Items signals/ }));
   expect(screen.getByRole('link', { name: 'Active items with no usable stock: 2' })).toHaveAttribute(
@@ -310,7 +313,7 @@ it('opens Returns on the same non-terminal queue as its badge', () => {
   );
   expect(screen.getByRole('link', { name: /Returns \(RMA\)/ })).toHaveAttribute(
     'href',
-    '/return-management?signal=pending',
+    '/return-management',
   );
 });
 
@@ -331,7 +334,7 @@ it('shows calibration due and overdue as separate filtered signals', () => {
   );
   expect(screen.getByRole('link', { name: /Calibration Register/ })).toHaveAttribute(
     'href',
-    '/quality/calibration?status=overdue',
+    '/quality/calibration',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Calibration Register signals/ }));
   expect(screen.getByRole('link', { name: 'Calibration instruments past their due date: 2' })).toHaveAttribute(
@@ -355,7 +358,7 @@ it('links assigned CAPA effectiveness badges to the current user queue', () => {
   );
   expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
     'href',
-    '/quality/ncrs/effectiveness?signal=awaiting_my_action',
+    '/quality/ncrs',
   );
 });
 
@@ -370,7 +373,7 @@ it('links open NCR badges to the open and in-progress NCR list', () => {
   );
   expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
     'href',
-    '/quality/ncrs?signal=open',
+    '/quality/ncrs',
   );
 });
 
@@ -385,7 +388,7 @@ it('links overdue NCR badges to the severity-SLA queue', () => {
   );
   expect(screen.getByRole('link', { name: /Nonconformance Reports \(NCRs\)/ })).toHaveAttribute(
     'href',
-    '/quality/ncrs?signal=overdue',
+    '/quality/ncrs',
   );
 });
 
@@ -407,7 +410,7 @@ it('opens the overdue filter when Production Work Orders has a positive badge', 
   );
   expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
     'href',
-    '/production/work-orders?signal=overdue',
+    '/production/work-orders',
   );
 });
 
@@ -428,7 +431,7 @@ it('shows and routes the open and unassigned Maintenance work-order signals', ()
   );
   expect(screen.getByRole('link', { name: /Maintenance Work Orders/ })).toHaveAttribute(
     'href',
-    '/maintenance/work-orders?queue=unassigned',
+    '/maintenance/work-orders',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Maintenance Work Orders signals/ }));
   expect(screen.getByRole('link', { name: 'Open maintenance work orders: 4' })).toHaveAttribute(
@@ -464,7 +467,7 @@ it('shows the due-soon Work Orders filter alongside overdue', () => {
   );
   expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
     'href',
-    '/production/work-orders?signal=overdue',
+    '/production/work-orders',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Production Work Orders signals/ }));
   expect(screen.getByRole('link', { name: 'Planned production work orders awaiting confirmation: 3' })).toHaveAttribute(
@@ -503,7 +506,7 @@ it('opens the pending-QC filter when GRN has a positive badge', () => {
   );
   expect(screen.getByRole('link', { name: /Goods Receipts \(GRN\)/ })).toHaveAttribute(
     'href',
-    '/inventory/grn?status=pending_qc',
+    '/inventory/grn',
   );
 });
 
@@ -525,7 +528,7 @@ it('opens held material-review records from the MRB badge', () => {
   );
   expect(screen.getByRole('link', { name: /MRB \/ Quarantine/ })).toHaveAttribute(
     'href',
-    '/inventory/mrb?status=held',
+    '/inventory/mrb',
   );
 });
 
@@ -569,7 +572,7 @@ it('opens all active shipment stages from the inbound shipment badge', () => {
   );
   expect(screen.getByRole('link', { name: /Inbound Shipments/ })).toHaveAttribute(
     'href',
-    '/supply-chain/shipments?status=mid_pipe',
+    '/supply-chain/shipments',
   );
 });
 
@@ -591,7 +594,7 @@ it('opens only new inquiries from the actionable inquiry badge', () => {
   );
   expect(screen.getByRole('link', { name: /Customer Inquiries/ })).toHaveAttribute(
     'href',
-    '/crm/inquiries?status=new',
+    '/crm/inquiries',
   );
 });
 
@@ -632,7 +635,7 @@ it('shows AP signals and sends the main link to the highest-severity queue', () 
   if (financeSection.getAttribute('aria-expanded') === 'false') fireEvent.click(financeSection);
   expect(screen.getByRole('link', { name: /Accounts Payable Bills/ })).toHaveAttribute(
     'href',
-    '/accounting/bills?signal=unpaid',
+    '/accounting/bills',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Accounts Payable Bills signals/ }));
   expect(screen.getByRole('link', { name: 'Overdue bills payable: 2' })).toHaveAttribute(
@@ -702,7 +705,7 @@ it('shows AR signals and links each chip to its matching invoice filter', () => 
   if (financeSection.getAttribute('aria-expanded') === 'false') fireEvent.click(financeSection);
   expect(screen.getByRole('link', { name: /Accounts Receivable Invoices/ })).toHaveAttribute(
     'href',
-    '/accounting/invoices?signal=unpaid',
+    '/accounting/invoices',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Accounts Receivable Invoices signals/ }));
   expect(screen.getByRole('link', { name: 'Open invoices past their due date: 2' })).toHaveAttribute(
@@ -741,7 +744,7 @@ it('opens the to-inspect queue when inspections has a positive badge', () => {
   );
   expect(screen.getByRole('link', { name: /Quality Inspections/ })).toHaveAttribute(
     'href',
-    '/quality/inspections?work_queue=to_inspect',
+    '/quality/inspections',
   );
 });
 
@@ -760,7 +763,7 @@ it('opens the current-user review queue when inspection reviews have a positive 
   );
   expect(screen.getByRole('link', { name: /Quality Inspections/ })).toHaveAttribute(
     'href',
-    '/quality/inspections?status=awaiting_review&signal=awaiting_my_review',
+    '/quality/inspections',
   );
 });
 
@@ -782,7 +785,7 @@ it('opens the assigned complaint queue when complaints has a positive badge', ()
   );
   expect(screen.getByRole('link', { name: /Customer Complaints/ })).toHaveAttribute(
     'href',
-    '/crm/complaints?signal=open',
+    '/crm/complaints',
   );
 });
 
@@ -812,7 +815,7 @@ it('opens the actionable pending-transfer list when transfers have a positive ba
   );
   expect(screen.getByRole('link', { name: /Budget Transfers/ })).toHaveAttribute(
     'href',
-    '/budgeting/transfers?status=pending&actionable=1',
+    '/budgeting/transfers',
   );
 });
 
@@ -834,7 +837,7 @@ it('opens budgets filtered to approvals waiting on the current user', () => {
   );
   expect(screen.getByRole('link', { name: /Budgeting/ })).toHaveAttribute(
     'href',
-    '/budgeting?signal=awaiting_my_approval',
+    '/budgeting',
   );
 });
 
@@ -862,7 +865,7 @@ it('expands the active module, expires unvisited peeks, and keeps visited module
 it('keeps a filtered sidebar destination active', () => {
   render(<MemoryRouter initialEntries={['/crm/inquiries?status=new']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
   const link = screen.getByRole('link', { name: 'Customer Inquiries' });
-  expect(link).toHaveAttribute('href', '/crm/inquiries?status=new');
+  expect(link).toHaveAttribute('href', '/crm/inquiries');
   expect(link).toHaveAttribute('aria-current', 'page');
 });
 

@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Controllers;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Accounting\Exceptions\JournalEntryStateConflictException;
 use App\Modules\Accounting\Exceptions\UnbalancedJournalEntryException;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Requests\ReverseJournalEntryRequest;
@@ -67,6 +68,8 @@ class JournalEntryController
                 'message' => $e->getMessage(),
                 'errors'  => ['lines' => [$e->getMessage()]],
             ], 422);
+        } catch (JournalEntryStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -77,6 +80,8 @@ class JournalEntryController
     {
         try {
             $this->service->delete($journalEntry);
+        } catch (JournalEntryStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -87,6 +92,8 @@ class JournalEntryController
     {
         try {
             $this->service->restore($journalEntry);
+        } catch (JournalEntryStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -109,6 +116,8 @@ class JournalEntryController
         // the sentence still lands.
         try {
             $je = $this->service->post($journalEntry, $request->user());
+        } catch (JournalEntryStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException|ClosedPeriodException|UnbalancedJournalEntryException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -124,9 +133,19 @@ class JournalEntryController
                 $request->filled('reverse_date') ? Carbon::parse($request->input('reverse_date')) : null,
                 $request->string('reason')->toString(),
             );
+        } catch (JournalEntryStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new JournalEntryResource($reversal))->response()->setStatusCode(201);
+    }
+
+    private function stateConflictResponse(JournalEntryStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'code' => $exception->errorCode(),
+        ], 409);
     }
 }

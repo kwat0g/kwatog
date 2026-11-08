@@ -19,6 +19,7 @@ import type { ApiValidationError } from '@/types';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 const schema = z.object({
  original_payroll_id: z.string().min(1, 'Source payroll is required'),
  type: z.string().min(1, 'Adjustment type is required'),
@@ -54,10 +55,16 @@ export default function CreatePayrollAdjustmentPage() {
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) => adjustmentsApi.create(data as Parameters<typeof adjustmentsApi.create>[0]),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
+ onSuccess: (created) => {
+ reconcileRealtimeMutationResponse(
+  qc,
+  { entityType: 'payroll_adjustment', entityId: created.id },
+  ['payroll-adjustment', created.id],
+  created,
+ );
  toast.success('Adjustment submitted for approval.');
- navigate('/payroll/adjustments');
+  safety.allowNavigationAfterSave();
+navigate('/payroll/adjustments');
  },
  onError: (error: AxiosError<ApiValidationError>) => {
  if (!applyServerValidationErrors(error, setError, 'Failed to submit adjustment.')) {

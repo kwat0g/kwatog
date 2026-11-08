@@ -9,7 +9,10 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Shared service-account resolver.
@@ -26,19 +29,30 @@ use Illuminate\Support\Str;
 class SystemUserResolver
 {
     public const CACHE_KEY         = 'system:user_id';
+    private const CACHE_TTL_SECONDS = 86400;
 
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
-     * Resolve (or lazily provision) the system user id. Cached forever
-     * once seeded; re-provisioned if the cached id is stale.
+     * Resolve (or lazily provision) the system user id. The cache is scoped
+     * to the configured email and expires daily; a settings change cannot
+     * keep routing audit writes to a previous service account.
      */
     public function id(): int
     {
-        $email = $this->settings->requiredString('system_user.email');
+        $email = strtolower(trim($this->settings->requiredString('system_user.email')));
         $name = $this->settings->requiredString('system_user.name');
-        $cached = Cache::get(self::CACHE_KEY);
-        if (is_int($cached) && User::query()->whereKey($cached)->exists()) {
+        $cacheKey = self::CACHE_KEY.':'.hash('sha256', $email);
+        try {
+            $cached = Cache::get($cacheKey);
+        } catch (Throwable $exception) {
+            Log::warning('System user cache read failed; resolving the configured account from the source table.', [
+                'key_hash' => hash('sha256', $cacheKey),
+                'exception' => $exception::class,
+            ]);
+            $cached = null;
+        }
+        if (is_int($cached) && User::query()->whereKey($cached)->where('email', $email)->exists()) {
             return $cached;
         }
 
@@ -56,8 +70,20 @@ class SystemUserResolver
                 'password_changed_at' => now(),
             ]);
         }
-        Cache::forever(self::CACHE_KEY, $user->id);
-        return $user->id;
+        $userId = (int) $user->id;
+        DB::afterCommit(static function () use ($cacheKey, $userId): void {
+            try {
+                Cache::put($cacheKey, $userId, self::CACHE_TTL_SECONDS);
+                // Remove the pre-scope key after durable settings/user state is visible.
+                Cache::forget(self::CACHE_KEY);
+            } catch (Throwable $exception) {
+                Log::warning('System user cache refresh failed after commit.', [
+                    'exception' => $exception::class,
+                ]);
+            }
+        });
+
+        return $userId;
     }
 
     /**

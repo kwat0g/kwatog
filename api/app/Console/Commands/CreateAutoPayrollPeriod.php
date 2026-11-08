@@ -9,9 +9,8 @@ use App\Modules\Payroll\Services\AutoPayrollPeriodService;
 use Illuminate\Console\Command;
 
 /**
- * Task A3 — Run on the 14th @ 23:00 (second half) and last day of month
- *
- * @ 23:00 (first half of next month).
+ * Task A3 — Create the next payroll period on the 14th and last day of month.
+ * The daily reconciliation queues its compute after the cutoff has ended.
  *
  *   php artisan payroll:auto-create-period --half=second
  *   php artisan payroll:auto-create-period --half=first
@@ -21,7 +20,7 @@ class CreateAutoPayrollPeriod extends Command
 {
     protected $signature = 'payroll:auto-create-period {--half=second} {--year= : Target period year (requires --month)} {--month= : Target period month (requires --year)}';
 
-    protected $description = 'Auto-create the next payroll period and queue computation (Task A3)';
+    protected $description = 'Auto-create the next payroll period (Task A3)';
 
     public function handle(AutoPayrollPeriodService $svc): int
     {
@@ -59,7 +58,21 @@ class CreateAutoPayrollPeriod extends Command
             return self::SUCCESS;
         }
 
-        if ($period->fresh()->status !== PayrollPeriodStatus::Processing) {
+        $fresh = $period->fresh();
+        $stillInCutoff = $fresh->period_end->copy()->startOfDay()->gte(now()->startOfDay());
+        if ($fresh->status === PayrollPeriodStatus::Draft && $stillInCutoff) {
+            $this->info(sprintf(
+                'Auto-created payroll period #%d (%s – %s). Computation will be staged on %s, after the cutoff ends.',
+                $fresh->id,
+                $fresh->period_start->toDateString(),
+                $fresh->period_end->toDateString(),
+                $fresh->period_end->copy()->addDay()->toDateString(),
+            ));
+
+            return self::SUCCESS;
+        }
+
+        if ($fresh->status !== PayrollPeriodStatus::Processing) {
             $this->error("Auto-created payroll period #{$period->id}, but its durable compute request was not staged; HR action is required.");
 
             return self::FAILURE;

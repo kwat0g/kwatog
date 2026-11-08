@@ -63,6 +63,7 @@ use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\ReturnManagement\Events\ReturnRequestUpdated;
+use App\Modules\ReturnManagement\Exceptions\ReturnRequestStateConflictException;
 use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnReceipt;
 use App\Modules\ReturnManagement\Models\ReturnReceiptItem;
@@ -2252,7 +2253,7 @@ class ReturnRequestService
         return DB::transaction(function () use ($rma, $by): ReturnRequest {
             $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             if (! in_array($rma->status, [ReturnRequestStatus::Received, ReturnRequestStatus::Inspected], true)) {
-                throw new BusinessRuleException(
+                throw new ReturnRequestStateConflictException(
                     "Only received or previously inspected RMAs can retry Quality inspection staging; got {$rma->status->value}."
                 );
             }
@@ -2298,11 +2299,14 @@ class ReturnRequestService
     /** Mark an RMA handoff as operator-actionable when the worker has no actor. */
     public function markInspectionHandoffManual(int $rmaId, ?string $message = null): void
     {
-        ReturnRequest::query()->whereKey($rmaId)->update([
-            'inspection_handoff_status' => ReturnInspectionHandoffStatus::ManualRequired,
-            'inspection_handoff_message' => $message ?: 'Quality inspection staging requires manual action.',
-            'inspection_handoff_at' => now(),
-        ]);
+        DB::transaction(function () use ($rmaId, $message): void {
+            $request = ReturnRequest::query()->lockForUpdate()->findOrFail($rmaId);
+            $request->update([
+                'inspection_handoff_status' => ReturnInspectionHandoffStatus::ManualRequired,
+                'inspection_handoff_message' => $message ?: 'Quality inspection staging requires manual action.',
+                'inspection_handoff_at' => now(),
+            ]);
+        });
     }
 
     /**
@@ -2418,8 +2422,10 @@ class ReturnRequestService
     {
         $updated = DB::transaction(function () use ($rma, $lineId, $splitQuantity): ReturnRequest {
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
-            if (! in_array($locked->status, [ReturnRequestStatus::Received, ReturnRequestStatus::Inspected], true)
-                || $locked->disposition_status === 'disposed' || $locked->finance_only
+            if (! in_array($locked->status, [ReturnRequestStatus::Received, ReturnRequestStatus::Inspected], true)) {
+                throw new ReturnRequestStateConflictException('This return request is no longer available for splitting. Refresh and review its current status.');
+            }
+            if ($locked->disposition_status === 'disposed' || $locked->finance_only
                 || $locked->delivery_attempt_outcome_id || $locked->credit_note_id || $locked->credit_memo_id) {
                 throw new BusinessRuleException('Split physical return lines after final receipt and before disposition or credit issuance. Truck and finance-only returns cannot be split.');
             }
@@ -2536,7 +2542,7 @@ class ReturnRequestService
             $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
             $this->ensureInspectionHandoffReady($rma);
             if ($rma->disposition_status === 'disposed') {
-                throw new BusinessRuleException('RMA has already been disposed.');
+                throw new ReturnRequestStateConflictException('This RMA has already been disposed. Refresh and review its current status.');
             }
 
             $rma->load(['items', 'bill.items', 'purchaseOrder.items']);
@@ -3360,29 +3366,10 @@ class ReturnRequestService
             $this->ensureInspectionHandoffReady($locked);
             $locked->load(['items.product', 'items.materialReviewRecord']);
 
-            if ($locked->type === ReturnRequestType::CustomerReturn) {
-                foreach ($locked->items as $line) {
-                    if (! in_array($line->disposition, [DispositionType::Restock->value, DispositionType::Rework->value], true)) {
-                        continue;
-                    }
-
-                    $mrb = $line->materialReviewRecord;
-                    // Preserve completed pre-MRB returns, but never let a stale or
-                    // imported movement stamp bypass an MRB that still exists.
-                    if (! $mrb && bccomp((string) $line->stock_movement_quantity, '0', 3) > 0) {
-                        continue;
-                    }
-                    $released = $mrb
-                        && in_array($mrb->status, [MrbStatus::Released, MrbStatus::Scrapped], true)
-                        && $mrb->release_movement_id !== null
-                        && (int) $line->quarantine_release_movement_id === (int) $mrb->release_movement_id
-                        && bccomp((string) $line->stock_movement_quantity, $this->settledQuantity($line), 3) === 0;
-                    if (! $released) {
-                        throw new BusinessRuleException(
-                            'Every customer-return restock or rework line needs a completed MRB disposition before the RMA can complete.'
-                        );
-                    }
-                }
+            if ($this->hasIncompleteCustomerMrb($locked)) {
+                throw new BusinessRuleException(
+                    'Every customer-return restock or rework line needs a completed MRB disposition before the RMA can complete.'
+                );
             }
 
             if (! $locationId && $this->hasPendingMovement($locked)) {
@@ -3626,8 +3613,8 @@ class ReturnRequestService
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             $this->assertNotTruckReturn($locked, 'reject');
             if ($locked->status !== ReturnRequestStatus::PendingApproval) {
-                throw new BusinessRuleException(
-                    'Only a pending-approval RMA can be rejected. Physical receipt and Quality handoff require a compensating workflow.'
+                throw new ReturnRequestStateConflictException(
+                    'This return request is no longer pending approval. Refresh and review its current status.'
                 );
             }
 
@@ -3664,20 +3651,12 @@ class ReturnRequestService
                 ReturnRequestStatus::PendingApproval,
                 ReturnRequestStatus::Approved,
             ], true)) {
-                throw new BusinessRuleException('Only draft, pending-approval, or approved returns can be cancelled.');
+                throw new ReturnRequestStateConflictException('This return request can no longer be cancelled. Refresh and review its current status.');
             }
 
             $locked->load('items');
-            if ($locked->received_at !== null || $locked->items->contains(
-                static fn (ReturnRequestItem $line): bool => $line->receipt_recorded
-                    || (bool) $line->reversal_already_applied
-                    || bccomp((string) $line->returned_quantity, '0', 3) > 0
-                    || bccomp((string) ($line->stock_movement_quantity ?? '0'), '0', 3) > 0
-                    || $line->stock_movement_id !== null
-                    || $line->quarantine_movement_id !== null
-                    || $line->quarantine_release_movement_id !== null,
-            )) {
-                throw new BusinessRuleException('A return cannot be cancelled after any physical receipt or stock effect has been recorded.');
+            if ($this->hasPhysicalReceiptOrStockEffects($locked)) {
+                throw new ReturnRequestStateConflictException('A return cannot be cancelled after receipt or stock effects. Refresh and review its current status.');
             }
             if ($locked->status === ReturnRequestStatus::PendingApproval) {
                 ApprovalRecord::query()
@@ -3728,6 +3707,79 @@ class ReturnRequestService
         return $updated;
     }
 
+    /** The state/physical-effects part of the existing cancel guard, for viewer action projection. */
+    public function canCancelState(ReturnRequest $rma): bool
+    {
+        if ($rma->delivery_attempt_outcome_id !== null || ! in_array($rma->status, [
+            ReturnRequestStatus::Draft,
+            ReturnRequestStatus::PendingApproval,
+            ReturnRequestStatus::Approved,
+        ], true)) {
+            return false;
+        }
+
+        $rma->loadMissing('items');
+
+        return ! $this->hasPhysicalReceiptOrStockEffects($rma);
+    }
+
+    /** State and related-record checks used to project the viewer's Complete action. */
+    public function canCompleteState(ReturnRequest $rma): bool
+    {
+        if ($rma->status !== ReturnRequestStatus::Inspected
+            || $rma->inspection_handoff_status === ReturnInspectionHandoffStatus::ManualRequired
+            || $rma->disposition_status !== 'disposed') {
+            return false;
+        }
+
+        $rma->loadMissing('items.materialReviewRecord');
+
+        return ! $this->hasIncompleteCustomerMrb($rma);
+    }
+
+    private function hasIncompleteCustomerMrb(ReturnRequest $rma): bool
+    {
+        if ($rma->type !== ReturnRequestType::CustomerReturn) {
+            return false;
+        }
+
+        foreach ($rma->items as $line) {
+            if (! in_array($line->disposition, [DispositionType::Restock->value, DispositionType::Rework->value], true)) {
+                continue;
+            }
+
+            $mrb = $line->materialReviewRecord;
+            // Preserve completed pre-MRB returns, but never let a stale or
+            // imported movement stamp bypass an MRB that still exists.
+            if (! $mrb && bccomp((string) $line->stock_movement_quantity, '0', 3) > 0) {
+                continue;
+            }
+            $released = $mrb
+                && in_array($mrb->status, [MrbStatus::Released, MrbStatus::Scrapped], true)
+                && $mrb->release_movement_id !== null
+                && (int) $line->quarantine_release_movement_id === (int) $mrb->release_movement_id
+                && bccomp((string) $line->stock_movement_quantity, $this->settledQuantity($line), 3) === 0;
+            if (! $released) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasPhysicalReceiptOrStockEffects(ReturnRequest $rma): bool
+    {
+        return $rma->received_at !== null || $rma->items->contains(
+            static fn (ReturnRequestItem $line): bool => $line->receipt_recorded
+                || (bool) $line->reversal_already_applied
+                || bccomp((string) $line->returned_quantity, '0', 3) > 0
+                || bccomp((string) ($line->stock_movement_quantity ?? '0'), '0', 3) > 0
+                || $line->stock_movement_id !== null
+                || $line->quarantine_movement_id !== null
+                || $line->quarantine_release_movement_id !== null,
+        );
+    }
+
     private function releaseSourceAllocations(ReturnRequest $rma): void
     {
         $rma->sourceAllocations()
@@ -3763,8 +3815,8 @@ class ReturnRequestService
     private function ensureStatus(ReturnRequest $rma, ReturnRequestStatus $expected): void
     {
         if ($rma->status !== $expected) {
-            throw new BusinessRuleException(
-                "Expected status {$expected->value}, got {$rma->status->value}."
+            throw new ReturnRequestStateConflictException(
+                "This return request is no longer {$expected->value}; its current status is {$rma->status->value}. Refresh and review its available actions."
             );
         }
     }

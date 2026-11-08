@@ -26,15 +26,16 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { DraftRestoreBanner } from '@/components/ui/DraftRestoreBanner';
 import { createRequestKey } from '@/lib/requestKey';
 import { workOrderStatusVariant } from '@/lib/statusVariants';
+import { useAssignedWorkOrderRealtime } from '@/hooks/useAssignedWorkOrderRealtime';
 
 export default function MyWorkOrdersPage() {
+  useAssignedWorkOrderRealtime();
   const userId = useAuthStore((state) => state.user?.id);
   const employeeId = useAuthStore((state) => state.user?.employee?.id);
   const [page, setPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
   const orders = useQuery({
     queryKey: ['my-work-orders', userId, page],
-    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: () => workOrdersApi.myWorkOrders(page),
   });
@@ -206,6 +207,7 @@ export function MyWorkOrderDetailPage() {
   );
 }
 function MyWorkOrderDetail() {
+  useAssignedWorkOrderRealtime();
   const userId = useAuthStore((state) => state.user?.id);
   const { id } = useParams<{ id: string }>();
   const [params] = useSearchParams();
@@ -214,7 +216,6 @@ function MyWorkOrderDetail() {
   const qc = useQueryClient();
   const order = useQuery({
     queryKey: ['my-work-orders', userId, id, ncrId, crewId],
-    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: () => workOrdersApi.myWorkOrder(id!, ncrId, crewId),
     enabled: !!id,

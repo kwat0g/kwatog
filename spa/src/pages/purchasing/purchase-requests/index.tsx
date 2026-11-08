@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { LuPlus, LuShoppingCart, LuZap } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -14,17 +14,19 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
 import { purchaseRequestStatusVariant } from '@/lib/statusVariants';
-import type { ListParams } from '@/types';
+import type { ListParams, PaginatedResponse } from '@/types';
 import type {
   PurchaseRequest,
   PurchaseRequestPriority,
 } from '@/types/purchasing';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 const priorityVariant: Record<PurchaseRequestPriority, 'neutral' | 'warning' | 'danger'> = {
   normal: 'neutral',
   urgent: 'warning',
@@ -48,12 +50,69 @@ const DEFAULT_FILTERS: PurchaseRequestListParams = {
   signal: '',
 };
 
+function reconcileBulkApprovedRequests(
+  queryClient: QueryClient,
+  ids: string[],
+  approvedLabel: string,
+): void {
+  const approvedIds = new Set(ids);
+  if (approvedIds.size === 0) return;
+
+  for (const [queryKey, cached] of queryClient.getQueriesData<PaginatedResponse<PurchaseRequest>>({
+    queryKey: ['purchasing', 'purchase-requests'],
+  })) {
+    if (!cached || !Array.isArray(cached.data) || !cached.meta) continue;
+
+    const filters = queryKey[2] && typeof queryKey[2] === 'object'
+      ? queryKey[2] as Pick<PurchaseRequestListParams, 'status' | 'signal'>
+      : undefined;
+    let changed = 0;
+    let removed = 0;
+    const data = cached.data.flatMap((request) => {
+      if (!approvedIds.has(request.id)) return [request];
+      changed += 1;
+      if ((filters?.status && filters.status !== 'approved') || filters?.signal === 'awaiting_my_approval') {
+        removed += 1;
+        return [];
+      }
+      return [{ ...request, status: 'approved' as const, status_label: approvedLabel }];
+    });
+    if (changed === 0) continue;
+
+    if (removed === 0) {
+      queryClient.setQueryData<PaginatedResponse<PurchaseRequest>>(queryKey, { ...cached, data });
+      continue;
+    }
+
+    const total = Math.max(0, cached.meta.total - removed);
+    const pageStart = (cached.meta.current_page - 1) * cached.meta.per_page + 1;
+    queryClient.setQueryData<PaginatedResponse<PurchaseRequest>>(queryKey, {
+      ...cached,
+      data,
+      meta: {
+        ...cached.meta,
+        total,
+        last_page: Math.max(1, Math.ceil(total / Math.max(1, cached.meta.per_page))),
+        from: total === 0 || pageStart > total ? null : pageStart,
+        to: data.length === 0 ? null : Math.min(total, cached.meta.current_page * cached.meta.per_page),
+      },
+    });
+  }
+}
+
+function canSelectPurchaseRequestForApproval(row: PurchaseRequest): boolean {
+  return row.available_actions?.can_approve === true;
+}
+
 export default function PurchaseRequestsListPage() {
+  useRealtimeList('purchase_request', 'visible');
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<PurchaseRequestListParams>(DEFAULT_FILTERS);
   const [convertTarget, setConvertTarget] = useState<PurchaseRequest | null>(null);
+  const [selectionResetKey, setSelectionResetKey] = useState(0);
+  const listQueryKey = ['purchasing', 'purchase-requests', filters] as const;
 
   // Dashboard drill-downs use the short flag (?is_auto_generated=1); the
   // FilterBar select options use 'true'/'false' — reconcile once at mount.
@@ -65,9 +124,10 @@ export default function PurchaseRequestsListPage() {
   }, [filters.is_auto_generated, setFilters]);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['purchasing', 'purchase-requests', filters],
+    queryKey: listQueryKey,
     queryFn: ({ signal }) => purchaseRequestsApi.list(filters, signal),
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? prev : undefined,
   });
   const { data: requestOptions } = useQuery({
     queryKey: ['purchasing', 'purchase-request-options'],
@@ -86,7 +146,13 @@ export default function PurchaseRequestsListPage() {
     // regardless of outcome rather than only on success.
     onSettled: () => qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] }),
     onSuccess: ({ results, selected }) => {
+      reconcileBulkApprovedRequests(
+        qc,
+        results.filter((result) => result.status === 'approved').map((result) => result.id),
+        statusLabels.get('approved') ?? 'Approved',
+      );
       const approved = results.filter((r) => r.status === 'approved').length;
+      if (approved > 0) setSelectionResetKey((key) => key + 1);
       const skipped = results.filter((r) => r.status !== 'approved');
       // This used to be `toast.success('N approved, M skipped')`: a green banner
       // for a partial failure, with the server's per-row reason — which is the
@@ -198,7 +264,7 @@ export default function PurchaseRequestsListPage() {
             header: '',
             align: 'right' as const,
             cell: (r: PurchaseRequest) =>
-              r.status === 'approved' && r.sourcing_method !== 'rfq' ? (
+              r.available_actions?.can_convert === true ? (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -302,6 +368,8 @@ export default function PurchaseRequestsListPage() {
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
             selectable={can('purchasing.pr.approve')}
+            isRowSelectable={canSelectPurchaseRequestForApproval}
+            selectionResetKey={selectionResetKey}
             bulkActions={can('purchasing.pr.approve') ? bulkActions : undefined}
           />
         </div>

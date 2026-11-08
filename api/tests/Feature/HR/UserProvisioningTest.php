@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\HR;
 
 use App\Common\Services\NotificationService;
+use App\Modules\Admin\Events\UserAccessChanged;
 use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
-use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
+use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use App\Modules\HR\Services\UserProvisioningService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -126,6 +127,13 @@ class UserProvisioningTest extends TestCase
 
         $this->assertFalse((bool) $user->fresh()->is_active);
         $this->assertSame(0, DB::table('sessions')->where('user_id', $user->id)->count());
+        $accessRefresh = DB::table('event_outbox')
+            ->where('event_type', UserAccessChanged::class)
+            ->sole();
+        $this->assertSame(
+            [$user->hash_id],
+            json_decode((string) $accessRefresh->payload, true, flags: JSON_THROW_ON_ERROR)['userHashIds'],
+        );
     }
 
     public function test_reset_password_force_change_and_notifies(): void
@@ -134,6 +142,12 @@ class UserProvisioningTest extends TestCase
         $svc = app(UserProvisioningService::class);
         $employee = $this->makeEmployee();
         $user = $svc->provisionForEmployee($employee);
+        DB::table('sessions')->insert([
+            'id' => str_pad('reset'.bin2hex(random_bytes(16)), 40, 'r'),
+            'user_id' => $user->id,
+            'payload' => 'reset target',
+            'last_activity' => now()->timestamp,
+        ]);
 
         $oldHash = $user->password;
         $temp = $svc->resetPasswordForEmployee($employee->fresh());
@@ -143,6 +157,14 @@ class UserProvisioningTest extends TestCase
         $this->assertNotSame($oldHash, $fresh->password);
         $this->assertTrue((bool) $fresh->must_change_password);
         $this->assertTrue(Hash::check($temp, $fresh->password));
+        $this->assertSame(0, DB::table('sessions')->where('user_id', $user->id)->count());
+        $accessRefresh = DB::table('event_outbox')
+            ->where('event_type', UserAccessChanged::class)
+            ->sole();
+        $this->assertSame(
+            [$user->hash_id],
+            json_decode((string) $accessRefresh->payload, true, flags: JSON_THROW_ON_ERROR)['userHashIds'],
+        );
         Notification::assertSentTo($fresh, AdminPasswordResetNotification::class, function (AdminPasswordResetNotification $notification) use ($fresh, $temp): bool {
             $html = (string) $notification->toMail($fresh)->render();
 

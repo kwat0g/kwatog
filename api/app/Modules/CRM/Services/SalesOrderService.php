@@ -24,6 +24,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
@@ -619,6 +620,17 @@ class SalesOrderService
                 $so->items()->create($line + ['fulfillment_policy' => 'stock_first']);
             }
 
+            // The list/detail pages subscribe to the same durable chain
+            // refresh path used for subsequent status transitions. Stage the
+            // initial draft only after all lines exist, inside this
+            // transaction, so other viewers cannot refetch a partial order.
+            app(ChainBroadcaster::class)->broadcastFor(
+                $so->fresh(),
+                $so->status->value,
+                User::query()->find($userId),
+                action: 'created',
+            );
+
             return $this->show($so->fresh());
         });
     }
@@ -670,6 +682,13 @@ class SalesOrderService
             if (! $so->items()->exists()) {
                 throw new BusinessRuleException('Verified case quantities do not identify a product for replacement.');
             }
+
+            app(ChainBroadcaster::class)->broadcastFor(
+                $so,
+                $so->status->value,
+                $approver,
+                action: 'created',
+            );
 
             return $so->load('items');
         });
@@ -791,7 +810,16 @@ class SalesOrderService
             }
             $lockedSo->items()->whereNotIn('id', $keepIds)->forceDelete();
 
-            return $this->show($lockedSo->fresh());
+            $fresh = $lockedSo->fresh();
+            $currentActor = auth()->user();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                $fresh->status->value,
+                $currentActor instanceof User ? $currentActor : null,
+                action: 'updated',
+            );
+
+            return $this->show($fresh);
         });
     }
 
@@ -866,7 +894,7 @@ class SalesOrderService
                 ->lockForUpdate()
                 ->findOrFail($so->id);
             if (! $lockedSo->status->isBeforeConfirmation()) {
-                throw new BusinessRuleException('Only unconfirmed sales orders can be confirmed.');
+                throw new SalesOrderStateConflictException('This sales order is no longer awaiting confirmation. Refresh and review its current status.');
             }
             app(SalesOrderAgreementService::class)->assertConfirmable($lockedSo);
             if ($lockedSo->hasPendingDeliveryProposal()) {
@@ -947,6 +975,13 @@ class SalesOrderService
             }
             $lockedSo->update(['customer_confirmation_requested_at' => now()]);
             $this->notifyCustomer($lockedSo, 'review_requested', 'Sales sent an order for your review. Open it to accept, propose changes, or decline.');
+            $currentActor = auth()->user();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $lockedSo->fresh(),
+                $lockedSo->status->value,
+                $currentActor instanceof User ? $currentActor : null,
+                action: 'updated',
+            );
 
             return $this->show($lockedSo->fresh());
         });
@@ -1266,6 +1301,13 @@ class SalesOrderService
             }
             $this->assertCustomerOrderMutation($lockedSo, null);
             $lockedSo->delete();
+            $currentActor = auth()->user();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $lockedSo,
+                $lockedSo->status->value,
+                $currentActor instanceof User ? $currentActor : null,
+                action: 'deleted',
+            );
         });
     }
 
@@ -1277,6 +1319,13 @@ class SalesOrderService
                 ->findOrFail($so->id);
             if ($lockedSo->trashed()) {
                 $lockedSo->restore();
+                $currentActor = auth()->user();
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $lockedSo,
+                    $lockedSo->status->value,
+                    $currentActor instanceof User ? $currentActor : null,
+                    action: 'restored',
+                );
             }
 
             return $lockedSo->fresh();

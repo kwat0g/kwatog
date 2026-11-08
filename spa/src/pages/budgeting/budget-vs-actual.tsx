@@ -15,11 +15,12 @@ import { Chip } from '@/components/ui/Chip';
 import { cn } from '@/lib/cn';
 import { formatPeso, formatCompactCurrency } from '@/lib/formatNumber';
 import { formatDateTime } from '@/lib/formatDate';
-import type { BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
+import type { BudgetSyncRun, BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { chartColor } from '@/lib/chartPalette';
 import { usePermission } from '@/hooks/usePermission';
+import { invalidateRealtimeList } from '@/lib/realtime/invalidationMap';
 import toast from 'react-hot-toast';
 
 export default function BudgetVsActualPage() {
@@ -28,7 +29,12 @@ export default function BudgetVsActualPage() {
   const { can } = usePermission();
   const queryClient = useQueryClient();
 
-  const fiscalYearsQuery = useQuery({ queryKey: ['budget-fiscal-years'], queryFn: () => budgetingApi.fiscalYears() });
+  const fiscalYearsQuery = useQuery({
+    queryKey: ['budget-fiscal-years'],
+    queryFn: () => budgetingApi.fiscalYears(),
+    staleTime: 300_000,
+    refetchOnWindowFocus: true,
+  });
   const fiscalYears = useMemo(() => fiscalYearsQuery.data ?? [], [fiscalYearsQuery.data]);
   useEffect(() => {
     if (!selectedFiscalYearId && fiscalYears.length > 0) setSelectedFiscalYearId(fiscalYears.find((fy) => fy.status === 'active')?.id ?? fiscalYears[0].id);
@@ -39,19 +45,39 @@ export default function BudgetVsActualPage() {
     queryKey: ['budget-vs-actual', selectedFiscalYearId],
     queryFn: () => budgetingApi.budgetVsActual(selectedFiscalYearId),
     enabled: !!selectedFiscalYearId,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
   const syncStatusQuery = useQuery({
     queryKey: ['budget-sync-status', selectedFiscalYearId],
     queryFn: () => budgetingApi.syncStatus(selectedFiscalYearId),
     enabled: !!selectedFiscalYearId,
-    refetchInterval: 5000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
   const syncActuals = useMutation({
     mutationFn: () => budgetingApi.syncActuals(selectedFiscalYearId),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const now = new Date().toISOString();
+      queryClient.setQueryData<BudgetSyncRun | null>(
+        ['budget-sync-status', selectedFiscalYearId],
+        (current) => ({
+          request_id: result.request_id ?? current?.request_id ?? '',
+          fiscal_year_id: result.fiscal_year_id ?? selectedFiscalYearId,
+          status: result.run_status ?? 'queued',
+          processed_lines: current?.processed_lines ?? 0,
+          total_lines: current?.total_lines ?? 0,
+          last_error: null,
+          queued_at: current?.queued_at ?? now,
+          started_at: current?.started_at ?? null,
+          completed_at: null,
+          failed_at: null,
+        }),
+      );
       toast.success('Budget actuals rebuild queued.');
-      void syncStatusQuery.refetch();
-      queryClient.invalidateQueries({ queryKey: ['budget-vs-actual', selectedFiscalYearId] });
+      void invalidateRealtimeList(queryClient, 'budget');
     },
     onError: (error) => reportMutationError(error, 'Failed to queue the budget actuals rebuild.'),
   });

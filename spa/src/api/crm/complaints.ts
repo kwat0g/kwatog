@@ -30,8 +30,11 @@ export const complaintsApi = {
  client.post<ApiSuccess<CustomerComplaint>>('/crm/complaints', data).then((r) => r.data.data),
  retryNcr: (id: string) =>
   client.post<ApiSuccess<CustomerComplaint>>(`/crm/complaints/${id}/retry-ncr`).then((r) => r.data.data),
- update8D: (id: string, data: EightDPatch) =>
- client.patch<ApiSuccess<CustomerComplaint>>(`/crm/complaints/${id}/8d`, data).then((r) => r.data.data),
+ update8D: (id: string, data: EightDPatch, expectedVersion?: string | null) =>
+ client.patch<ApiSuccess<CustomerComplaint>>(`/crm/complaints/${id}/8d`, {
+  ...data,
+  expected_version: expectedVersion,
+ }).then((r) => r.data.data),
  finalize8D: (id: string) =>
  client.post<ApiSuccess<CustomerComplaint>>(`/crm/complaints/${id}/8d/finalize`).then((r) => r.data.data),
  resolve: (id: string) =>

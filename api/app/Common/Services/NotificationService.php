@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Events\PortalNotificationChanged;
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Mail\UserNotificationMail;
 use App\Common\Support\NotificationSubjectAccessRegistry;
@@ -25,14 +26,10 @@ use Illuminate\Support\Str;
  *
  * Three properties this class guarantees, in order of importance:
  *
- * 1. **Nothing escapes an uncommitted transaction.** Almost every caller runs
- *    inside `DB::transaction()` (NcrService, DeliveryService, the approval
- *    listeners…). Broadcasting or emailing inline meant a rollback still left
- *    the recipient with a toast and an inbox message for an event that never
- *    happened. The row insert stays inline (it rolls back with its caller);
- *    the two *irreversible* side effects are deferred through
- *    `DB::afterCommit()`, which runs them immediately when no transaction is
- *    open, so single-statement callers behave exactly as before.
+ * 1. **Nothing escapes an uncommitted transaction.** Notification rows and
+ *    durable realtime outbox entries commit together. The outbox publishes
+ *    after commit, and preference-controlled email is also deferred until
+ *    commit so a rollback cannot leave an inbox toast or email behind.
  * 2. **Cost is per-send, not per-recipient.** Preferences load in one query
  *    for the whole audience and rows insert in one statement. A 60-person
  *    role broadcast used to cost 180 queries.
@@ -100,21 +97,63 @@ class NotificationService
         }
         $now = now();
         $rows = [];
+        $eventsById = [];
         foreach ($users as $user) {
+            $id = (string) Str::uuid();
             $rows[] = [
-                'id' => (string) Str::uuid(), 'type' => $type,
+                'id' => $id, 'type' => $type,
                 'notifiable_type' => $user::class, 'notifiable_id' => $user->id,
                 'dedupe_key' => $dedupeKey, 'data' => json_encode($data),
                 'read_at' => null, 'created_at' => $now, 'updated_at' => $now,
             ];
+            $eventsById[$id] = new PortalNotificationChanged(
+                $user instanceof CustomerPortalUser ? 'customer' : 'supplier',
+                (string) $user->hash_id,
+                'created',
+                $id,
+                $type,
+            );
         }
-        foreach (array_chunk($rows, self::INSERT_CHUNK) as $chunk) {
-            if ($dedupeKey === null) {
-                DB::table('notifications')->insert($chunk);
-            } else {
-                DB::table('notifications')->insertOrIgnore($chunk);
+
+        if ($rows === []) {
+            return;
+        }
+
+        DB::transaction(function () use ($rows, $dedupeKey, $eventsById): void {
+            $insertedIds = [];
+            foreach (array_chunk($rows, self::INSERT_CHUNK) as $chunk) {
+                if ($dedupeKey === null) {
+                    DB::table('notifications')->insert($chunk);
+                    foreach ($chunk as $row) {
+                        $insertedIds[] = $row['id'];
+                    }
+                } else {
+                    foreach ($chunk as $row) {
+                        if (DB::table('notifications')->insertOrIgnore([$row]) === 1) {
+                            $insertedIds[] = $row['id'];
+                        }
+                    }
+                }
             }
-        }
+
+            $events = array_intersect_key($eventsById, array_fill_keys($insertedIds, true));
+            foreach ($events as $notificationEvent) {
+                app(OutboxService::class)->record($notificationEvent);
+            }
+        });
+    }
+
+    public function stagePortalInboxChange(
+        CustomerPortalUser|SupplierPortalUser $user,
+        string $action,
+        ?string $notificationId = null,
+    ): void {
+        app(OutboxService::class)->record(new PortalNotificationChanged(
+            $user instanceof CustomerPortalUser ? 'customer' : 'supplier',
+            (string) $user->hash_id,
+            $action,
+            $notificationId,
+        ));
     }
 
     /**
@@ -363,9 +402,9 @@ class NotificationService
             return;
         }
 
-        $insertedIds = [];
-        foreach (array_chunk($rows, self::INSERT_CHUNK) as $chunk) {
-            if ($chunk !== []) {
+        DB::transaction(function () use ($rows, $events, $dedupeKey): void {
+            $insertedIds = [];
+            foreach (array_chunk($rows, self::INSERT_CHUNK) as $chunk) {
                 if ($dedupeKey === null) {
                     DB::table('notifications')->insert($chunk);
                     foreach ($chunk as $row) {
@@ -384,34 +423,20 @@ class NotificationService
                     }
                 }
             }
-        }
 
-        if ($dedupeKey !== null) {
-            $events = array_values(array_filter(
-                $events,
-                static fn (UserNotificationCreated $event): bool => isset($insertedIds[$event->notificationId]),
-            ));
-        }
+            $eventsToPublish = $dedupeKey === null
+                ? $events
+                : array_values(array_filter(
+                    $events,
+                    static fn (UserNotificationCreated $event): bool => isset($insertedIds[$event->notificationId]),
+                ));
 
-        // Deferred: a rollback after this point must not leave a broadcast or
-        // an email behind. Runs inline when no transaction is open.
-        DB::afterCommit(function () use ($events, $emails, $type, $data, $dedupeKey, $failureSubject): void {
-            foreach ($events as $notificationEvent) {
-                try {
-                    // The notification row is the durable business result.
-                    // Realtime delivery is an optimization: a broker/Reverb
-                    // outage must not make the caller retry the notification
-                    // insert and create duplicate inbox rows.
-                    event($notificationEvent);
-                } catch (\Throwable $e) {
-                    Log::warning('Notification realtime broadcast failed; inbox row remains durable.', [
-                        'user_id' => $notificationEvent->userId ?? null,
-                        'type' => $type,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
+            app(OutboxService::class)->recordManyAndDispatchInlineAfterCommit($eventsToPublish);
+        });
 
+        // Realtime signals are staged with their rows above; only email needs
+        // a separate callback after commit.
+        DB::afterCommit(function () use ($emails, $type, $data, $dedupeKey, $failureSubject): void {
             foreach ($emails as $email) {
                 $recipientUserIds = array_values(array_unique($email['userIds']));
                 $name = count($recipientUserIds) === 1 ? $email['names'][0] : null;

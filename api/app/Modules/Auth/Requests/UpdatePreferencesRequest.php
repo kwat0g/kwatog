@@ -35,8 +35,8 @@ class UpdatePreferencesRequest extends FormRequest
                         if ($preference === null) {
                             continue;
                         }
-                        if (! is_array($preference) || array_diff(array_keys($preference), ['density', 'hiddenColumns', 'columnWidths'])) {
-                            $fail('Each table preference may contain only density, hiddenColumns, and columnWidths.');
+                        if (! is_array($preference) || array_diff(array_keys($preference), ['density', 'hiddenColumns', 'columnWidths', 'savedViews'])) {
+                            $fail('Each table preference may contain only density, hiddenColumns, columnWidths, and savedViews.');
                             continue;
                         }
                         if (array_key_exists('density', $preference)
@@ -59,6 +59,34 @@ class UpdatePreferencesRequest extends FormRequest
                                 if (! is_string($column) || strlen($column) > 120 || ! is_numeric($width) || $width < 64 || $width > 1200) {
                                     $fail('Each column width must use a column key up to 120 characters and a width from 64 to 1200 pixels.');
                                     break;
+                                }
+                            }
+                        }
+                        if (array_key_exists('savedViews', $preference)) {
+                            $views = $preference['savedViews'];
+                            if (! is_array($views) || count($views) > 12) {
+                                $fail('savedViews must contain at most 12 named views.');
+                                continue;
+                            }
+                            foreach ($views as $view) {
+                                if (! is_array($view)
+                                    || array_diff(array_keys($view), ['id', 'name', 'filters'])
+                                    || ! is_string($view['id'] ?? null)
+                                    || strlen($view['id']) > 80
+                                    || ! is_string($view['name'] ?? null)
+                                    || trim($view['name']) === ''
+                                    || strlen($view['name']) > 48
+                                    || ! is_array($view['filters'] ?? null)
+                                    || count($view['filters']) > 40) {
+                                    $fail('Each saved view must have an id, name, and at most 40 filters.');
+                                    break;
+                                }
+                                foreach ($view['filters'] as $filterKey => $filterValue) {
+                                    if (! is_string($filterKey) || strlen($filterKey) > 80
+                                        || ! is_string($filterValue) || strlen($filterValue) > 200) {
+                                        $fail('Saved view filters must use short string keys and values.');
+                                        break 2;
+                                    }
                                 }
                             }
                         }

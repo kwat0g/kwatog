@@ -8,6 +8,7 @@ use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Models\Alert;
 use App\Common\Services\AlertEngineService;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
@@ -16,6 +17,8 @@ use App\Common\Services\SystemActorService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Events\LowStockPrCreated;
+use App\Modules\Dashboard\Events\BadgesChanged;
+use App\Modules\Dashboard\Services\BadgeService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\DemandBasis;
@@ -27,6 +30,7 @@ use App\Modules\Purchasing\Services\AutoPurchaseOrderService;
 use App\Modules\Purchasing\Services\OpenSupplyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Watches stock movements and auto-creates a draft PR for any item that crosses
@@ -157,6 +161,12 @@ class AutoReplenishmentService
                 'estimated_unit_price' => (string) $item->standard_cost,
                 'purpose' => 'Replenish below reorder point',
             ]);
+            app(ChainBroadcaster::class)->broadcastFor(
+                $pr->fresh(),
+                PurchaseRequestStatus::Draft->value,
+                $systemUser,
+                action: 'created',
+            );
             app(OutboxService::class)->record(
                 new LowStockPrCreated($item->fresh(), $pr->fresh()),
             );
@@ -191,10 +201,20 @@ class AutoReplenishmentService
 
     private function clearBlocked(Item $item): void
     {
-        Alert::query()
+        $resolved = Alert::query()
             ->where('condition_key', Alert::conditionKeyFor(AlertType::ReplenishmentBlocked, $item->getMorphClass(), $item->getKey()))
             ->whereNull('resolved_at')
             ->update(['resolved_at' => now()]);
+
+        if ($resolved > 0) {
+            // Query-builder resolution bypasses Alert model events. Refresh
+            // the permission-scoped Action Center/badges after this transaction.
+            BadgeService::touch();
+            app(OutboxService::class)->record(
+                new BadgesChanged(),
+                'badges:replenishment-alert-resolved:'.$item->getKey().':'.Str::uuid(),
+            );
+        }
     }
 
     private function computeOrderQuantity(Item $item, string $position): ?string

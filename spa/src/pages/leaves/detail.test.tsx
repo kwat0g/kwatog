@@ -109,7 +109,11 @@ describe('LeaveDetailPage balance panel', () => {
   });
 
   it('shows approval actions only when the API marks this request actionable', async () => {
-    vi.mocked(leaveRequestsApi.show).mockResolvedValue({ ...request, can_approve: true });
+    vi.mocked(leaveRequestsApi.show).mockResolvedValue({
+      ...request,
+      can_approve: true,
+      available_actions: ['approve_hr', 'reject'],
+    });
     vi.mocked(leaveRequestsApi.options).mockResolvedValue({ statuses: [], half_day_periods: [] } as never);
     vi.mocked(leaveBalancesApi.forEmployee).mockResolvedValue([liveBalance]);
 
@@ -117,5 +121,35 @@ describe('LeaveDetailPage balance panel', () => {
 
     expect(await screen.findByRole('button', { name: 'Approve' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Reject' })).toBeVisible();
+  });
+
+  it('uses an explicit empty server action list even when the legacy flag is true', async () => {
+    vi.mocked(leaveRequestsApi.show).mockResolvedValue({
+      ...request,
+      can_approve: true,
+      available_actions: [],
+    });
+    vi.mocked(leaveRequestsApi.options).mockResolvedValue({ statuses: [], half_day_periods: [] } as never);
+    vi.mocked(leaveBalancesApi.forEmployee).mockResolvedValue([liveBalance]);
+
+    renderPage();
+
+    expect(await screen.findByText('Family matter')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  });
+
+  it('fails closed when the server action projection is missing', async () => {
+    const legacyRequest = { ...request, status: 'pending_dept', can_approve: true } as LeaveRequest;
+    delete legacyRequest.available_actions;
+    vi.mocked(leaveRequestsApi.show).mockResolvedValue(legacyRequest);
+    vi.mocked(leaveRequestsApi.options).mockResolvedValue({ statuses: [], half_day_periods: [] } as never);
+    vi.mocked(leaveBalancesApi.forEmployee).mockResolvedValue([liveBalance]);
+
+    renderPage();
+
+    expect(await screen.findByText('Family matter')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
   });
 });

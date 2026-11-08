@@ -5,17 +5,20 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\SupplierListingStatus;
+use App\Modules\Purchasing\Events\SupplierCatalogChanged;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
@@ -137,6 +140,22 @@ class SupplierListingBulkTest extends TestCase
         $this->assertDatabaseCount('approved_suppliers', 0);
     }
 
+    public function test_bulk_submit_coalesces_catalog_refresh_to_one_event(): void
+    {
+        $a = Item::factory()->create(['is_active' => true]);
+        $b = Item::factory()->create(['is_active' => true]);
+
+        $this->actingAsSupplier();
+        $this->postJson('/api/v1/b2b/supplier/item-listings/bulk', [
+            'items' => [
+                ['item_id' => $a->hash_id, 'price' => '10.00', 'lead_time_days' => 3],
+                ['item_id' => $b->hash_id, 'price' => '20.00', 'lead_time_days' => 4],
+            ],
+        ])->assertOk();
+
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', SupplierCatalogChanged::class)->count());
+    }
+
     public function test_bulk_submit_reports_duplicate_without_failing_the_batch(): void
     {
         $dupe = Item::factory()->create(['is_active' => true]);
@@ -183,6 +202,61 @@ class SupplierListingBulkTest extends TestCase
             'vendor_id' => $this->vendor->id,
             'qualification_status' => ApprovedSupplier::QUALIFICATION_APPROVED,
         ]);
+    }
+
+    public function test_bulk_approve_coalesces_catalog_refresh_to_one_event(): void
+    {
+        $otherVendor = Vendor::factory()->create();
+        $listings = collect([
+            $this->makeListing(['item_id' => Item::factory()->create()->id]),
+            $this->makeListing([
+                'vendor_id' => $otherVendor->id,
+                'item_id' => Item::factory()->create()->id,
+            ]),
+        ]);
+
+        $this->actingAs($this->purchasingOfficer)
+            ->patchJson('/api/v1/purchasing/supplier-listings/bulk-approve', [
+                'ids' => $listings->pluck('hash_id')->all(),
+            ])
+            ->assertOk();
+
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', SupplierCatalogChanged::class)->count());
+        $payload = json_decode((string) DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->value('payload'), true, 512, JSON_THROW_ON_ERROR);
+        $event = app(OutboxEventCodec::class)->decode(SupplierCatalogChanged::class, $payload);
+        $channels = array_map(static fn ($channel): string => $channel->name, $event->broadcastOn());
+        $this->assertContains("private-supplier.vendor.{$this->vendor->hash_id}", $channels);
+        $this->assertContains("private-supplier.vendor.{$otherVendor->hash_id}", $channels);
+    }
+
+    public function test_bulk_reject_coalesces_catalog_refresh_to_one_event(): void
+    {
+        $otherVendor = Vendor::factory()->create();
+        $listings = collect([
+            $this->makeListing(['item_id' => Item::factory()->create()->id]),
+            $this->makeListing([
+                'vendor_id' => $otherVendor->id,
+                'item_id' => Item::factory()->create()->id,
+            ]),
+        ]);
+
+        $this->actingAs($this->purchasingOfficer)
+            ->patchJson('/api/v1/purchasing/supplier-listings/bulk-reject', [
+                'ids' => $listings->pluck('hash_id')->all(),
+                'reason' => 'Does not meet the required specification.',
+            ])
+            ->assertOk();
+
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', SupplierCatalogChanged::class)->count());
+        $payload = json_decode((string) DB::table('event_outbox')
+            ->where('event_type', SupplierCatalogChanged::class)
+            ->value('payload'), true, 512, JSON_THROW_ON_ERROR);
+        $event = app(OutboxEventCodec::class)->decode(SupplierCatalogChanged::class, $payload);
+        $channels = array_map(static fn ($channel): string => $channel->name, $event->broadcastOn());
+        $this->assertContains("private-supplier.vendor.{$this->vendor->hash_id}", $channels);
+        $this->assertContains("private-supplier.vendor.{$otherVendor->hash_id}", $channels);
     }
 
     public function test_bulk_reject_requires_reason_and_permission(): void

@@ -9,8 +9,10 @@ export const trainingsApi = {
  client.get<ApiSuccess<Training>>(`/hr/trainings/${id}`).then((r) => r.data.data),
  create: (data: CreateTrainingData) =>
  client.post<ApiSuccess<Training>>('/hr/trainings', data).then((r) => r.data.data),
- update: (id: string, data: UpdateTrainingData) =>
- client.patch<ApiSuccess<Training>>(`/hr/trainings/${id}`, data).then((r) => r.data.data),
+ update: (id: string, data: UpdateTrainingData, version?: string) =>
+ client.patch<ApiSuccess<Training>>(`/hr/trainings/${id}`, data, {
+  headers: version ? { 'If-Match': `"${version}"` } : undefined,
+ }).then((r) => r.data.data),
   delete: (id: string) =>
   client.delete(`/hr/trainings/${id}`),
   restore: (id: string) =>

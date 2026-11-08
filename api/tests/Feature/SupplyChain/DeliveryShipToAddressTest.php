@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -12,6 +14,7 @@ use App\Modules\SupplyChain\Services\DeliveryReceiptService;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\HasDeliveryStock;
 use Tests\TestCase;
@@ -66,6 +69,38 @@ class DeliveryShipToAddressTest extends TestCase
             'driver_id' => $this->driver()->id,
             'reason' => 'Ship-to test assignment.',
         ], $actor);
+    }
+
+    public function test_assignment_stages_a_personal_refresh_for_the_assigned_driver(): void
+    {
+        $actor = $this->staff();
+        $customer = $this->customer();
+        [$delivery] = $this->deliveryWithApprovedStock($actor, $customer);
+        $driver = $this->driver();
+        $vehicle = Vehicle::create([
+            'plate_number' => 'LIVE-'.substr(uniqid(), -8),
+            'name' => 'Realtime test vehicle',
+            'vehicle_type' => 'van',
+            'capacity_kg' => '1000.00',
+            'status' => 'available',
+        ]);
+
+        app(DeliveryService::class)->assign($delivery, [
+            'vehicle_id' => $vehicle->id,
+            'driver_id' => $driver->id,
+            'reason' => 'Realtime driver assignment test.',
+        ], $actor);
+
+        $outbox = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->firstOrFail();
+        $event = app(OutboxEventCodec::class)->decode(
+            ChainStepAdvanced::class,
+            json_decode((string) $outbox->payload, true, 512, JSON_THROW_ON_ERROR),
+        );
+        $channels = array_map(static fn ($channel): string => $channel->name, $event->broadcastOn());
+        $this->assertContains("private-user.{$driver->hash_id}", $channels);
+        $this->assertArrayNotHasKey('driverHashIds', $event->broadcastWith());
     }
 
     public function test_customer_delivery_address_is_saved_and_returned(): void

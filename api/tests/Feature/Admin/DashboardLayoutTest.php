@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Common\Events\DashboardLayoutChanged;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Models\DashboardLayout;
@@ -12,6 +14,7 @@ use Database\Seeders\DashboardRoleLayoutSeeder;
 use Database\Seeders\DashboardWidgetSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -210,11 +213,104 @@ class DashboardLayoutTest extends TestCase
             ->all());
     }
 
+    public function test_saving_personal_dashboard_layout_stages_an_exact_user_refresh_signal(): void
+    {
+        $user = $this->seedUserWithRole('hr_officer');
+        $service = app(DashboardLayoutService::class);
+
+        $service->saveUserLayout($user, [
+            ['key' => 'approvals.pending', 'x' => 0, 'y' => 0, 'w' => 12, 'h' => 4],
+        ], $service->userLayoutVersion($user));
+
+        $messages = DB::table('event_outbox')
+            ->where('event_type', DashboardLayoutChanged::class)
+            ->get();
+
+        $this->assertCount(1, $messages);
+        $payload = json_decode((string) $messages->first()->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame((string) $user->hash_id, $payload['userHashId']);
+        $this->assertSame('updated', $payload['action']);
+        $this->assertEqualsCanonicalizing(['userHashId', 'action', 'version', 'eventId', 'timestamp'], array_keys($payload));
+        $this->assertArrayNotHasKey('widgets', $payload);
+
+        /** @var DashboardLayoutChanged $event */
+        $event = app(OutboxEventCodec::class)->decode(DashboardLayoutChanged::class, $payload);
+        $this->assertSame('dashboard.layout.changed', $event->broadcastAs());
+        $this->assertSame('private-user.preferences.'.$user->hash_id, $event->broadcastOn()->name);
+        $this->assertEqualsCanonicalizing(
+            ['refresh', 'event_id', 'entity_type', 'action', 'version', 'timestamp'],
+            array_keys($event->broadcastWith()),
+        );
+        $this->assertArrayNotHasKey('userHashId', $event->broadcastWith());
+    }
+
+    public function test_reset_stages_a_user_refresh_only_when_the_layout_changes(): void
+    {
+        $user = $this->seedUserWithRole('hr_officer');
+        $service = app(DashboardLayoutService::class);
+        DashboardLayout::query()->create([
+            'owner_type' => DashboardLayout::OWNER_USER,
+            'owner_id' => $user->id,
+            'widget_key' => 'approvals.pending',
+            'position_x' => 0,
+            'position_y' => 0,
+            'width' => 12,
+            'height' => 4,
+        ]);
+        $service->resetUserLayout($user, $service->userLayoutVersion($user));
+
+        $message = DB::table('event_outbox')
+            ->where('event_type', DashboardLayoutChanged::class)
+            ->firstOrFail();
+        $payload = json_decode((string) $message->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('reset', $payload['action']);
+        $this->assertSame((string) $user->hash_id, $payload['userHashId']);
+    }
+
+    public function test_saving_an_empty_layout_stages_a_refresh_when_it_clears_existing_rows(): void
+    {
+        $user = $this->seedUserWithRole('hr_officer');
+        $service = app(DashboardLayoutService::class);
+        DashboardLayout::query()->create([
+            'owner_type' => DashboardLayout::OWNER_USER,
+            'owner_id' => $user->id,
+            'widget_key' => 'approvals.pending',
+            'position_x' => 0,
+            'position_y' => 0,
+            'width' => 12,
+            'height' => 4,
+        ]);
+
+        $service->saveUserLayout($user, [], $service->userLayoutVersion($user));
+
+        $message = DB::table('event_outbox')
+            ->where('event_type', DashboardLayoutChanged::class)
+            ->firstOrFail();
+        $payload = json_decode((string) $message->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('updated', $payload['action']);
+        $this->assertSame(0, DashboardLayout::query()
+            ->where('owner_type', DashboardLayout::OWNER_USER)
+            ->where('owner_id', $user->id)
+            ->count());
+    }
+
+    public function test_resetting_an_already_empty_personal_layout_emits_no_signal(): void
+    {
+        $user = $this->seedUserWithRole('hr_officer');
+        $service = app(DashboardLayoutService::class);
+
+        $service->resetUserLayout($user, $service->userLayoutVersion($user));
+
+        $this->assertSame(0, DB::table('event_outbox')
+            ->where('event_type', DashboardLayoutChanged::class)
+            ->count());
+    }
+
     private function seedUserWithRole(string $slug): User
     {
         return User::factory()->create([
             'role_id' => Role::where('slug', $slug)->value('id'),
-            'email'   => $slug.'+'.uniqid().'@t.test',
+            'email' => $slug.'+'.uniqid().'@t.test',
         ]);
     }
 }

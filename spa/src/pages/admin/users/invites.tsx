@@ -29,10 +29,13 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
 
 const STATUS_OPTIONS: { value: NonNullable<InviteListParams['status']>; label: string }[] = [
+  { value: 'all',     label: 'All' },
   { value: 'pending', label: 'Pending' },
   { value: 'used',    label: 'Accepted' },
   { value: 'expired', label: 'Expired' },
@@ -43,19 +46,26 @@ export default function PortalInvitesPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const canManage = can('auth.users.invite');
+  useRealtimeSignal(
+    'user_invites_changed',
+    canManage ? 'entity.user_invite.visible' : '',
+    '.auth.user-invite.changed',
+  );
 
   const [filters, setFilters] = useState<InviteListParams>({
     page: 1,
     per_page: 25,
-    status: 'pending',
+    status: 'all',
   });
   const [inviteOpen, setInviteOpen] = useState(false);
   const [revoking, setRevoking] = useState<UserInvite | null>(null);
 
+  const queryKey = ['admin', 'invites', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['admin', 'invites', filters],
+    queryKey,
     queryFn: () => userInvitesApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
 
   const revoke = useMutation({
@@ -77,11 +87,9 @@ export default function PortalInvitesPage() {
       <PageHeader
         title="Self-Service Invites"
         subtitle={
-          data ? (
-            <>
-              {data.meta.total} {filters.status} invite{data.meta.total === 1 ? '' : 's'}
-            </>
-          ) : undefined
+          data
+            ? `${data.meta.total} ${filters.status === 'all' ? '' : `${filters.status} `}invite${data.meta.total === 1 ? '' : 's'}`
+            : undefined
         }
         actions={
           canManage ? (
@@ -123,9 +131,9 @@ export default function PortalInvitesPage() {
         ) : !data || data.data.length === 0 ? (
           <EmptyState
             icon="inbox"
-            title={`No ${filters.status} invites`}
+            title={filters.status === 'all' ? 'No invites' : `No ${filters.status} invites`}
             description={
-              filters.status === 'pending'
+              filters.status === 'pending' || filters.status === 'all'
                 ? 'Issue an invite from the employee detail page or via the "New invite" button.'
                 : undefined
             }

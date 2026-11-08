@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -15,6 +16,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 const schema = z.object({
  name: z.string().min(1, 'Name required').max(150),
  description: z.string().max(500).optional().or(z.literal('')),
@@ -25,6 +27,7 @@ export default function EditAccountPage() {
  const { id = '' } = useParams<{ id: string }>();
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const [serverChanged, setServerChanged] = useState(false);
 
  const { data: account, isLoading } = useQuery({
  queryKey: ['accounting', 'accounts', id],
@@ -34,12 +37,20 @@ export default function EditAccountPage() {
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
- values: account ? {
- name: account.name,
- description: account.description ?? '',
- } : undefined,
+ defaultValues: { name: '', description: '' },
  });
- const { register, handleSubmit, setError, formState: { errors } } = form;
+ const { register, handleSubmit, setError, reset, formState: { errors, isDirty } } = form;
+ const handleRecordSignal = useCallback(() => {
+  if (isDirty) setServerChanged(true);
+ }, [isDirty]);
+ useRealtimeRecord('account', id, [], handleRecordSignal);
+
+ useEffect(() => {
+  if (!account || isDirty) return;
+  const nextValues = { name: account.name, description: account.description ?? '' };
+  reset(nextValues);
+  setServerChanged(false);
+ }, [account, isDirty, reset]);
 
  const mutation = useMutation({
  mutationFn: async (data: FormValues) => {
@@ -51,7 +62,8 @@ export default function EditAccountPage() {
  onSuccess: (account) => {
  qc.invalidateQueries({ queryKey: ['accounting', 'accounts'] });
  toast.success(`Account ${account.code} updated.`);
- navigate('/accounting/coa');
+  safety.allowNavigationAfterSave();
+navigate('/accounting/coa');
  },
  onError: (err) => {
    applyServerValidationErrors(err, setError, 'Failed to update account.');
@@ -66,6 +78,15 @@ export default function EditAccountPage() {
  <PageHeader title={`Edit ${account.code}`} backTo="/accounting/coa" backLabel="Chart of Accounts"
  />
       <FormDraftBanner safety={safety} />
+ {serverChanged && (
+  <div role="status" className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-md border border-default bg-panel px-3 py-2 text-sm text-secondary">
+   <span>This account changed on the server. Your edits are safe; load the latest values to review before saving.</span>
+   <Button type="button" variant="secondary" size="sm" onClick={() => {
+    reset({ name: account.name, description: account.description ?? '' });
+    setServerChanged(false);
+   }}>Load latest</Button>
+  </div>
+ )}
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="min-w-0 w-full px-5 py-4 space-y-4">
 
@@ -93,7 +114,7 @@ export default function EditAccountPage() {
 
  <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/accounting/coa')}>Cancel</Button>
- <Button type="submit" variant="primary" loading={mutation.isPending}>Save changes</Button>
+ <Button type="submit" variant="primary" loading={mutation.isPending} disabled={serverChanged}>Save changes</Button>
  </FormActions>
  </form>
  </div>

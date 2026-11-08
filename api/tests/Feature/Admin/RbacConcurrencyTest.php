@@ -12,6 +12,7 @@ use App\Modules\Admin\Services\UserPermissionOverrideService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Services\RolePermissionCacheGeneration;
 use Illuminate\Database\DatabaseTransactionsManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
@@ -315,7 +316,10 @@ class RbacConcurrencyTest extends TestCase
             $this->fixturePermissionIds[] = $permission->id;
         }
 
-        $permissionCacheKey = "auth:role_perms:{$role->id}";
+        $permissionCacheKey = app(RolePermissionCacheGeneration::class)->keyFor(
+            (int) $role->id,
+            (int) $role->permissions_version,
+        );
         $this->assertTrue($target->fresh()->hasPermission($permission->slug));
         $this->assertTrue(Cache::has($permissionCacheKey));
 
@@ -345,13 +349,13 @@ class RbacConcurrencyTest extends TestCase
             DB::setDefaultConnection(self::CONCURRENCY_CONNECTION);
             $connection->commit();
 
-            $this->assertFalse(
+            $this->assertTrue(
                 Cache::has($permissionCacheKey),
-                'The after-commit callback must clear a role cache warmed during the transaction.',
+                'The old versioned entry may remain until TTL but must be unreachable by the committed role version.',
             );
             $this->assertFalse(
                 User::query()->findOrFail($target->id)->hasPermission($permission->slug),
-                'The stale cache entry repopulated before commit must be invalidated after the permission change commits.',
+                'The committed version must not reuse a permission snapshot warmed before commit.',
             );
         } finally {
             if ($connection->transactionLevel() > 0) {

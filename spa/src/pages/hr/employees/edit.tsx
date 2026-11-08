@@ -15,6 +15,8 @@ import type { ApiValidationError } from '@/types';
 import { usePermission } from '@/hooks/usePermission';
 import { summarizeServerErrors } from '@/lib/formErrors';
 import { localIsoDate } from '@/lib/formatDate';
+import { useEmployeeShiftRealtime } from '@/hooks/useRealtimeRecord';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 /** Field names the API uses whose plain label differs from a title-cased key. */
 const SERVER_FIELD_LABELS: Record<string, string> = {
@@ -48,6 +50,7 @@ export default function EditEmployeePage() {
   const setErrorRef = useRef<((field: keyof EmployeeFormValues, msg: string) => void) | null>(null);
   const { can } = usePermission();
   const canAssignShift = can('attendance.shifts.manage');
+  useEmployeeShiftRealtime(id);
 
   const {
     data: employee,
@@ -96,10 +99,13 @@ export default function EditEmployeePage() {
 
       return employee;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['hr', 'employees'] });
-      qc.invalidateQueries({ queryKey: ['hr', 'employee', id] });
-      qc.invalidateQueries({ queryKey: ['attendance', 'employee-shift', id] });
+    onSuccess: (updated) => {
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'employee', entityId: id },
+        ['hr', 'employee', id],
+        updated,
+      );
       toast.success('Employee updated.');
       navigate(`/hr/employees/${id}`);
     },

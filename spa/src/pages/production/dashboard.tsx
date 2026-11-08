@@ -2,10 +2,10 @@ import { formatTime } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
 /**
  * Sprint 6 — Task 58. Production dashboard.
- * Subscribes to production.dashboard for live invalidation; falls back to
- * 60s polling if Reverb is unavailable.
+ * Subscribes to production.dashboard for live invalidation; the shared
+ * RealtimeProvider owns catch-up while delivery is unavailable.
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { LuActivity } from '@/lib/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { productionDashboardApi } from '@/api/production/dashboard';
@@ -20,48 +20,16 @@ import { MetricPanel } from '@/components/dashboard/MetricPanel';
 import { OeeGauge } from '@/components/production/OeeGauge';
 import { BreakdownAlertCard } from '@/components/production/BreakdownAlertCard';
 import { ShopFloorMap } from '@/components/production/ShopFloorMap';
-import { useEcho } from '@/hooks/useEcho';
+import { useProductionDashboardRealtime } from '@/hooks/useProductionDashboardRealtime';
 import { formatInt } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function ProductionDashboardPage() {
   const navigate = useNavigate();
-  const qc = useQueryClient();
+  useProductionDashboardRealtime();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'dashboard'],
     queryFn: () => productionDashboardApi.payload(),
-    refetchInterval: 60_000,
-    placeholderData: (prev) => prev,
-  });
-
-  // Live invalidate on output recorded.
-  useEcho('production.dashboard', '.output.recorded', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-  });
-  // Live invalidate on machine status change.
-  useEcho('production.dashboard', '.machine.status_changed', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-  });
-  // Sprint 6 audit §1.7: also react to chain pulses, plan generation,
-  // breakdown alerts, and mold shot-limit alerts so the dashboard stays
-  // current without manual refresh.
-  useEcho('production.dashboard', '.sales_order.confirmed', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-  });
-  useEcho('production.dashboard', '.mrp.plan_generated', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-  });
-  useEcho('production.dashboard', '.machine.breakdown_detected', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-  });
-  useEcho('production.dashboard', '.mold.shot_limit_nearing', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-  });
-  useEcho('production.dashboard', '.mold.shot_limit_reached', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-  });
-  useEcho('production.dashboard', '.work_order.status_changed', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
   });
 
   if (isLoading && !data) {

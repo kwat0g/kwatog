@@ -15,15 +15,18 @@ import type { Vendor } from '@/types/accounting';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 export default function VendorsPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  const [filters, setFilters] = useUrlFilters<VendorListParams>({ page: 1, per_page: 25 });
 
+ const queryKey = ['accounting', 'vendors', filters] as const;
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['accounting', 'vendors', filters],
+ queryKey,
  queryFn: () => vendorsApi.list(filters),
- placeholderData: (prev) => prev });
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
 
  const columns: Column<Vendor>[] = [
  { key: 'name', header: 'Vendor', cell: (r) => r.name },

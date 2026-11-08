@@ -66,6 +66,7 @@ export interface StockCountItem {
   source_lots?: { lot_number: string; net: string; expiry_date?: string | null }[];
   status: StockCountItemStatus;
   status_label?: string;
+  available_actions?: string[];
   counted_by: { id: string; name: string } | null;
   counted_at: string | null;
   verified_by: { id: string; name: string } | null;
@@ -82,6 +83,7 @@ export interface StockCountSession {
   zone: { id: string; name: string; code: string } | null;
   status: StockCountStatus;
   status_label?: string;
+  available_actions?: string[];
   total_locations: number;
   counted_locations: number;
   variance_count: number;
@@ -123,6 +125,10 @@ export interface TransferOrder {
   reason: string | null;
   status: TransferOrderStatus;
   status_label?: string;
+  available_actions?: {
+    execute: boolean;
+    cancel: boolean;
+  };
   created_by: { id: string; name: string } | null;
   transferred_by: { id: string; name: string } | null;
   transferred_at: string | null;

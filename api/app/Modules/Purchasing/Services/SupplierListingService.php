@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Log;
 
 class SupplierListingService
 {
+    public function __construct(private readonly SupplierCatalogRealtimeService $realtime) {}
+
     /**
      * Read-only Ogami item catalog shown to suppliers in the portal so they
      * can anchor their offers to real items. Active, purchasable items only.
@@ -79,9 +81,9 @@ class SupplierListingService
      * Supplier submits an offer anchored to an Ogami item. Lands as pending;
      * nothing touches approved_suppliers until Purchasing approves it.
      */
-    public function submit(int $vendorId, array $data): SupplierItemListing
+    public function submit(int $vendorId, array $data, bool $emitRealtime = true): SupplierItemListing
     {
-        return DB::transaction(function () use ($vendorId, $data) {
+        return DB::transaction(function () use ($vendorId, $data, $emitRealtime) {
             $itemId = $data['item_id'];
             unset($data['item_id']);
 
@@ -101,6 +103,9 @@ class SupplierListingService
             $listing->status = SupplierListingStatus::Pending;
             $listing->submitted_at = now();
             $listing->save();
+            if ($emitRealtime) {
+                $this->realtime->changed('created', $vendorId);
+            }
 
             $this->notifyReviewers($listing);
 
@@ -120,6 +125,7 @@ class SupplierListingService
         return DB::transaction(function () use ($listing, $data) {
             $listing->fill($data);
             $listing->save();
+            $this->realtime->changed('updated', $listing->vendor_id);
 
             return $listing->fresh(['item:id,code,name,unit_of_measure']);
         });
@@ -131,7 +137,7 @@ class SupplierListingService
      * per BASE unit (the unit MRP, auto-PO and PO lines all price in); the
      * supplier's quoted basis is kept alongside for display.
      */
-    public function approve(SupplierItemListing $listing, User $reviewer): SupplierItemListing
+    public function approve(SupplierItemListing $listing, User $reviewer, bool $emitRealtime = true): SupplierItemListing
     {
         if (! ApprovalDelegation::canActForPermission($reviewer, 'purchasing.supplier_listings.review')) {
             throw new BusinessRuleException('You do not have permission to review supplier listings.');
@@ -140,7 +146,7 @@ class SupplierListingService
             throw new BusinessRuleException('Only pending listings can be approved.');
         }
 
-        return DB::transaction(function () use ($listing, $reviewer) {
+        return DB::transaction(function () use ($listing, $reviewer, $emitRealtime) {
             SupplierItemListing::query()
                 ->where('vendor_id', $listing->vendor_id)
                 ->where('item_id', $listing->item_id)
@@ -171,12 +177,15 @@ class SupplierListingService
                 'supplier_listing_id' => $listing->id,
             ]);
             $row->save();
+            if ($emitRealtime) {
+                $this->realtime->changed('approved', $listing->vendor_id);
+            }
 
             return $listing->load(['item:id,code,name,unit_of_measure', 'vendor:id,name']);
         });
     }
 
-    public function reject(SupplierItemListing $listing, User $reviewer, string $reason): SupplierItemListing
+    public function reject(SupplierItemListing $listing, User $reviewer, string $reason, bool $emitRealtime = true): SupplierItemListing
     {
         if (! ApprovalDelegation::canActForPermission($reviewer, 'purchasing.supplier_listings.review')) {
             throw new BusinessRuleException('You do not have permission to review supplier listings.');
@@ -185,13 +194,16 @@ class SupplierListingService
             throw new BusinessRuleException('Only pending listings can be rejected.');
         }
 
-        return DB::transaction(function () use ($listing, $reviewer, $reason) {
+        return DB::transaction(function () use ($listing, $reviewer, $reason, $emitRealtime) {
             $listing->forceFill([
                 'status' => SupplierListingStatus::Rejected,
                 'rejection_reason' => $reason,
                 'reviewed_by' => $reviewer->id,
                 'reviewed_at' => now(),
             ])->save();
+            if ($emitRealtime) {
+                $this->realtime->changed('rejected', $listing->vendor_id);
+            }
 
             return $listing->load(['item:id,code,name,unit_of_measure', 'vendor:id,name']);
         });
@@ -249,7 +261,7 @@ class SupplierListingService
 
         foreach ($rows as $index => $row) {
             try {
-                $created[] = $this->submit($vendorId, $row);
+                $created[] = $this->submit($vendorId, $row, false);
             } catch (\Throwable $e) {
                 if (! $e instanceof BusinessRuleException) {
                     Log::warning('supplier_listing bulk submit row failed: '.$e->getMessage());
@@ -263,6 +275,10 @@ class SupplierListingService
                     'message' => $e->getMessage(),
                 ];
             }
+        }
+
+        if ($created !== []) {
+            $this->realtime->changed('created', $vendorId);
         }
 
         return ['created' => $created, 'failed' => $failed];
@@ -279,11 +295,13 @@ class SupplierListingService
     public function bulkApprove(array $ids, User $reviewer): array
     {
         $results = [];
+        $changedVendorIds = [];
 
         foreach ($ids as $id) {
             try {
                 $listing = SupplierItemListing::query()->findOrFail($id);
-                $approved = $this->approve($listing, $reviewer);
+                $approved = $this->approve($listing, $reviewer, false);
+                $changedVendorIds[] = (int) $approved->vendor_id;
                 $results[] = [
                     'id' => $approved->hash_id,
                     'status' => 'approved',
@@ -296,6 +314,10 @@ class SupplierListingService
                     'message' => $e->getMessage(),
                 ];
             }
+        }
+
+        if ($changedVendorIds !== []) {
+            $this->realtime->changedForVendors('approved', $changedVendorIds);
         }
 
         return $results;
@@ -311,11 +333,13 @@ class SupplierListingService
     public function bulkReject(array $ids, User $reviewer, string $reason): array
     {
         $results = [];
+        $changedVendorIds = [];
 
         foreach ($ids as $id) {
             try {
                 $listing = SupplierItemListing::query()->findOrFail($id);
-                $rejected = $this->reject($listing, $reviewer, $reason);
+                $rejected = $this->reject($listing, $reviewer, $reason, false);
+                $changedVendorIds[] = (int) $rejected->vendor_id;
                 $results[] = [
                     'id' => $rejected->hash_id,
                     'status' => 'rejected',
@@ -328,6 +352,10 @@ class SupplierListingService
                     'message' => $e->getMessage(),
                 ];
             }
+        }
+
+        if ($changedVendorIds !== []) {
+            $this->realtime->changedForVendors('rejected', $changedVendorIds);
         }
 
         return $results;

@@ -18,6 +18,7 @@ vi.mock('@/api/production/workOrders', () => ({
     show: vi.fn(),
     complete: vi.fn(),
     cancel: vi.fn(),
+    retryProductionReceipt: vi.fn(),
     assignmentSuggestion: vi.fn(),
     crewOptions: vi.fn().mockResolvedValue([]),
     crew: vi.fn().mockResolvedValue({
@@ -79,6 +80,16 @@ const workOrder = {
   actual_end: null,
   status: 'in_progress',
   status_label: 'In progress',
+  available_actions: {
+    confirm: false,
+    start: false,
+    pause: true,
+    resume: false,
+    complete: true,
+    close: false,
+    cancel: false,
+    record_output: true,
+  },
   next_statuses: [],
   pause_reason: null,
   priority: 50,
@@ -144,6 +155,106 @@ describe('work order rework dialog', () => {
   });
 });
 
+describe('work order finished-goods receipt recovery', () => {
+  it('applies a successful API receipt response to the actor cache immediately', async () => {
+    permissions.allow = true;
+    const output = {
+      id: 'output-1',
+      recorded_at: '2026-09-25T01:00:00Z',
+      batch_code: 'BATCH-001',
+      good_count: 5,
+      reject_count: 0,
+      crew_snapshot: { members: [] },
+      recorder: { name: 'Operator' },
+      production_receipt_handoff: {
+        status: 'manual_required',
+        status_label: 'Inventory action required',
+        message: 'Check the finished-goods item.',
+      },
+    };
+    const postedOutput = {
+      ...output,
+      production_receipt_handoff: {
+        status: 'generated',
+        status_label: 'Finished-goods receipt posted',
+        message: null,
+      },
+    };
+    vi.mocked(workOrdersApi.show).mockResolvedValue({
+      ...workOrder,
+      outputs: [output],
+    } as unknown as WorkOrder);
+    vi.mocked(workOrdersApi.retryProductionReceipt).mockResolvedValue(postedOutput as never);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined as never);
+    client.setQueryData(['production', 'work-orders', 'outputs', 'wo-1'], [output]);
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <WorkOrderDetailPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => {
+      expect(client.getQueryData<WorkOrder>(['production', 'work-orders', 'detail', 'wo-1'])?.outputs?.[0]
+        .production_receipt_handoff?.status).toBe('generated');
+      expect(client.getQueryData<typeof output[]>(['production', 'work-orders', 'outputs', 'wo-1'])?.[0]
+        .production_receipt_handoff.status).toBe('generated');
+    });
+
+    client.clear();
+    permissions.allow = false;
+  });
+
+  it('refetches the acting detail and output caches after a failed receipt retry', async () => {
+    permissions.allow = true;
+    vi.mocked(workOrdersApi.show).mockResolvedValue({
+      ...workOrder,
+      outputs: [{
+        id: 'output-1',
+        recorded_at: '2026-09-25T01:00:00Z',
+        batch_code: 'BATCH-001',
+        good_count: 5,
+        reject_count: 0,
+        crew_snapshot: { members: [] },
+        recorder: { name: 'Operator' },
+        production_receipt_handoff: {
+          status: 'manual_required',
+          status_label: 'Inventory action required',
+          message: 'Check the finished-goods item.',
+        },
+      }],
+    } as unknown as WorkOrder);
+    vi.mocked(workOrdersApi.retryProductionReceipt).mockRejectedValue({
+      response: { data: { message: 'Finished-goods receipt still needs Inventory setup.' } },
+    });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['production', 'work-orders', 'outputs', 'wo-1'], []);
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <WorkOrderDetailPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const detailReadsBeforeRetry = vi.mocked(workOrdersApi.show).mock.calls.length;
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(vi.mocked(workOrdersApi.show).mock.calls.length).toBeGreaterThan(detailReadsBeforeRetry));
+    expect(workOrdersApi.retryProductionReceipt).toHaveBeenCalledWith('wo-1', 'output-1');
+    expect(client.getQueryState(['production', 'work-orders', 'outputs', 'wo-1'])?.isInvalidated).toBe(true);
+
+    client.clear();
+    permissions.allow = false;
+  });
+});
+
 describe('work order schedule warnings', () => {
   it.each([
     ['required', 'Rework Required', true],
@@ -176,10 +287,9 @@ describe('work order schedule warnings', () => {
           </MemoryRouter>
         </QueryClientProvider>,
       );
-      expect(await screen.findByText(label, { exact: true })).toBeVisible();
-      expect(
-        within(screen.getByRole('table')).queryByText('Completed', { exact: true }),
-      ).toBeNull();
+      const workOrderRow = await screen.findByRole('row', { name: new RegExp(workOrder.wo_number) });
+      expect(within(workOrderRow).getByText(label, { exact: true })).toBeVisible();
+      expect(within(workOrderRow).queryByText('Completed', { exact: true })).toBeNull();
       if (needsAttention) {
         expect(
           screen.getByRole('region', { name: 'Work orders needing attention' }),
@@ -243,12 +353,13 @@ describe('work order schedule warnings', () => {
           </QueryClientProvider>,
         );
         if (surface === 'table') {
-          expect(await screen.findByText(label, { exact: true })).toBeVisible();
+          const workOrderRow = await screen.findByRole('row', { name: new RegExp(workOrder.wo_number) });
+          expect(within(workOrderRow).getByText(label, { exact: true })).toBeVisible();
           if (kind !== 'proposal_expired')
             expect(screen.queryByText('Needs attention', { exact: true })).toBeNull();
         } else {
           expect(await screen.findByRole('status')).toHaveTextContent(message);
-          expect(screen.getAllByText(message, { exact: true })).toHaveLength(1);
+          expect(screen.getAllByRole('status')).toHaveLength(1);
         }
         expect(screen.queryByText('Start overdue', { exact: true })).toBeNull();
         view.unmount();
@@ -283,7 +394,10 @@ describe('work order schedule warnings', () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText('Needs attention', { exact: true })).toBeVisible();
-    expect(screen.getByText('Start available', { exact: true })).toBeVisible();
+    const workOrderRow = await screen.findByRole('row', {
+      name: new RegExp(workOrder.wo_number),
+    });
+    expect(within(workOrderRow).getByText('Start available', { exact: true })).toBeVisible();
     expect(screen.getByText(/Production due Sep/)).toBeVisible();
     client.clear();
   });
@@ -314,7 +428,10 @@ describe('work order schedule warnings', () => {
         </QueryClientProvider>,
       );
       if (surface === 'table') {
-        expect(await screen.findByText('Start overdue', { exact: true })).toBeVisible();
+        const workOrderRow = await screen.findByRole('row', {
+          name: new RegExp(workOrder.wo_number),
+        });
+        expect(within(workOrderRow).getByText('Start overdue', { exact: true })).toBeVisible();
       } else {
         expect(await screen.findByRole('status')).toHaveTextContent(warning.message);
         expect(screen.getByRole('status')).toHaveTextContent(
@@ -354,8 +471,11 @@ describe('work order schedule warnings', () => {
         </QueryClientProvider>,
       );
       if (surface === 'table') {
-        expect(await screen.findByText('Schedule passed', { exact: true })).toBeVisible();
-        expect(screen.getByTitle(warning.message)).toBeVisible();
+        const workOrderRow = await screen.findByRole('row', {
+          name: new RegExp(workOrder.wo_number),
+        });
+        expect(within(workOrderRow).getByText('Schedule passed', { exact: true })).toBeVisible();
+        expect(within(workOrderRow).getByTitle(warning.message)).toBeVisible();
       } else {
         expect(await screen.findByRole('status')).toHaveTextContent(warning.message);
         expect(screen.getByRole('status')).toHaveTextContent('Oct 7, 2026 · 4:38 AM (Asia/Manila)');
@@ -556,8 +676,9 @@ describe('WorkOrderDetailPage', () => {
     );
     expect(screen.queryByText('Startup production')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'Operations' }));
-    expect(await screen.findByRole('button', { name: 'Setup' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
+    const operationRow = await screen.findByRole('row', { name: /Molding/ });
+    expect(within(operationRow).getByRole('button', { name: 'Setup' })).toBeEnabled();
+    expect(within(operationRow).getByRole('button', { name: 'Start' })).toBeDisabled();
     view.unmount();
     client.clear();
     permissions.allow = false;
@@ -591,7 +712,8 @@ describe('WorkOrderDetailPage', () => {
 
 it('opens stock production assignment review only from Confirm on the saved record', async () => {
   permissions.allow = true;
-  vi.mocked(workOrdersApi.show).mockResolvedValue({ ...workOrder, status: 'planned', production_purpose: 'stock', sales_order: null });
+  vi.mocked(workOrdersApi.show).mockResolvedValue({ ...workOrder, status: 'planned', production_purpose: 'stock', sales_order: null,
+    available_actions: { ...workOrder.available_actions!, confirm: true, pause: false, complete: false, record_output: false } });
   vi.mocked(workOrdersApi.crew).mockResolvedValue({
     current: null,
     history: [],
@@ -832,7 +954,8 @@ it('shows saved timing approval history on the WO record', async () => {
 describe('stock work order cancellation', () => {
   afterEach(() => { permissions.only = null; permissions.allow = false; });
   const stock = { ...workOrder, production_purpose: 'stock' as const, status: 'confirmed' as const,
-    actual_start: null, quantity_produced: 0, quantity_good: 0, outputs: [], sales_order: null };
+    actual_start: null, quantity_produced: 0, quantity_good: 0, outputs: [], sales_order: null,
+    available_actions: { confirm: false, start: false, pause: false, resume: false, complete: false, close: false, cancel: true, record_output: false } };
   function page(data: WorkOrder = stock) {
     permissions.only = ['production.work_orders.view', 'production.wo.cancel_stock'];
     vi.mocked(workOrdersApi.show).mockResolvedValue(data);
@@ -857,10 +980,10 @@ describe('stock work order cancellation', () => {
     view.unmount();
   });
   it.each([
-    { ...stock, status: 'paused' as const },
-    { ...stock, actual_start: '2026-10-09T01:00:00Z' },
-    { ...stock, parent: { id: 'parent-1', wo_number: 'WO-PARENT' } },
-    { ...stock, production_purpose: 'order' as const },
+    { ...stock, status: 'paused' as const, available_actions: { ...stock.available_actions, cancel: false } },
+    { ...stock, actual_start: '2026-10-09T01:00:00Z', available_actions: { ...stock.available_actions, cancel: false } },
+    { ...stock, parent: { id: 'parent-1', wo_number: 'WO-PARENT' }, available_actions: { ...stock.available_actions, cancel: false } },
+    { ...stock, production_purpose: 'order' as const, available_actions: { ...stock.available_actions, cancel: false } },
   ])('hides cancellation when state or scope disallows it', async data => {
     const view = page(data);
     await screen.findByRole('heading', { name: new RegExp(stock.wo_number) });
@@ -938,4 +1061,13 @@ describe('pause downtime category guidance', () => {
     expect(within(dialog).queryByText(/corrective maintenance/)).toBeNull();
     view.unmount();
   });
+});
+
+
+it('omits operation entry when routing execution is disabled', async () => {
+  permissions.allow = true;
+  vi.mocked(workOrdersApi.show).mockResolvedValue({ ...workOrder, routing_execution_enabled: false } as WorkOrder);
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><WorkOrderDetailPage /></MemoryRouter></QueryClientProvider>);
+  expect((await screen.findAllByText(workOrder.wo_number)).length).toBeGreaterThan(0);
+  expect(screen.queryByRole('tab', { name: 'Operations' })).not.toBeInTheDocument();
 });

@@ -12,6 +12,7 @@ use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
+use App\Modules\Attendance\Exceptions\OvertimeStateConflictException;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -243,7 +244,13 @@ class OvertimeService
             $q->whereRaw('1 = 0');
         }
 
-        return $q->orderByDesc('date')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        $paginator = $q->orderByDesc('date')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        $actionContexts = $this->decisionPolicy->actionContextsForRows($paginator->getCollection(), $user);
+        foreach ($paginator->getCollection() as $request) {
+            $request->setAttribute('realtime_action_context', $actionContexts[$request->getKey()] ?? null);
+        }
+
+        return $paginator;
     }
 
     public function create(array $data): OvertimeRequest
@@ -260,9 +267,9 @@ class OvertimeService
         return $ot;
     }
 
-    public function approve(OvertimeRequest $ot, User $approver, ?string $remarks = null): OvertimeRequest
+    public function approve(OvertimeRequest $ot, User $approver, ?string $remarks = null, ?string $expectedVersion = null): OvertimeRequest
     {
-        $result = DB::transaction(function () use ($ot, $approver, $remarks) {
+        $result = DB::transaction(function () use ($ot, $approver, $remarks, $expectedVersion) {
             $authoritative = OvertimeRequest::query()
                 ->lockForUpdate()
                 ->findOrFail($ot->id)
@@ -280,11 +287,12 @@ class OvertimeService
             );
 
             if ($authoritative->status !== OvertimeStatus::Pending) {
-                throw new BusinessRuleException('Only pending overtime requests can be approved.');
+                throw $this->staleStateConflict($authoritative, 'approved');
             }
 
             $this->decisionPolicy->assertNotSelfDecision($authoritative, $approver);
             $this->decisionPolicy->assertCanDecide($authoritative, $approver);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
 
             $authoritative->fill([
                 'approved_by' => $approver->id,
@@ -312,7 +320,7 @@ class OvertimeService
      * @param array<int, int> $otIds raw integer IDs (post HashID decode)
      * @return array{approved: array<int, OvertimeRequest>, failed: array<int, array{id:string, reason:string}>}
      */
-    public function bulkApprove(array $otIds, User $approver, ?string $remarks = null): array
+    public function bulkApprove(array $otIds, User $approver, ?string $remarks = null, array $expectedVersions = []): array
     {
         $approved = [];
         $failed   = [];
@@ -324,7 +332,7 @@ class OvertimeService
                     $failed[] = ['id' => app('hashids')->encode($id), 'reason' => 'Not found.'];
                     continue;
                 }
-                $approved[] = $this->approve($ot, $approver, $remarks);
+                $approved[] = $this->approve($ot, $approver, $remarks, $expectedVersions[$id] ?? null);
             } catch (\Throwable $e) {
                 $reason = $e instanceof BusinessRuleException || $e instanceof ForbiddenActionException
                     ? $e->getMessage()
@@ -344,9 +352,9 @@ class OvertimeService
         return ['approved' => $approved, 'failed' => $failed];
     }
 
-    public function reject(OvertimeRequest $ot, User $approver, string $reason): OvertimeRequest
+    public function reject(OvertimeRequest $ot, User $approver, string $reason, ?string $expectedVersion = null): OvertimeRequest
     {
-        $result = DB::transaction(function () use ($ot, $approver, $reason) {
+        $result = DB::transaction(function () use ($ot, $approver, $reason, $expectedVersion) {
             $authoritative = OvertimeRequest::query()
                 ->lockForUpdate()
                 ->findOrFail($ot->id)
@@ -361,10 +369,11 @@ class OvertimeService
             );
 
             if ($authoritative->status !== OvertimeStatus::Pending) {
-                throw new BusinessRuleException('Only pending overtime requests can be rejected.');
+                throw $this->staleStateConflict($authoritative, 'rejected');
             }
             $this->decisionPolicy->assertNotSelfDecision($authoritative, $approver);
             $this->decisionPolicy->assertCanDecide($authoritative, $approver);
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             $authoritative->fill([
                 'approved_by'      => $approver->id,
                 'approved_at'      => now(),
@@ -388,9 +397,9 @@ class OvertimeService
      * (e.g. the work was already covered). Reuses the rejected-state columns
      * so the employee sees the withdrawal reason in their history.
      */
-    public function cancel(OvertimeRequest $ot, User $user, string $reason = 'Cancelled.'): OvertimeRequest
+    public function cancel(OvertimeRequest $ot, User $user, string $reason = 'Cancelled.', ?string $expectedVersion = null): OvertimeRequest
     {
-        $result = DB::transaction(function () use ($ot, $user, $reason) {
+        $result = DB::transaction(function () use ($ot, $user, $reason, $expectedVersion) {
             $authoritative = OvertimeRequest::query()
                 ->lockForUpdate()
                 ->findOrFail($ot->id)
@@ -404,12 +413,13 @@ class OvertimeService
             );
 
             if ($authoritative->status !== OvertimeStatus::Pending) {
-                throw new BusinessRuleException('Only pending overtime requests can be cancelled.');
+                throw $this->staleStateConflict($authoritative, 'cancelled');
             }
             $isOwner = (int) $user->employee_id === (int) $authoritative->employee_id;
             if (! $isOwner) {
                 $this->decisionPolicy->assertCanDecide($authoritative, $user);
             }
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
             $authoritative->fill([
                 'approved_by'      => null,
                 'approved_at'      => null,
@@ -431,19 +441,24 @@ class OvertimeService
      * Reopen only a request that this same employee explicitly cancelled.
      * An approver's rejection is intentionally not restorable from self-service.
      */
-    public function restore(OvertimeRequest $ot, User $user): OvertimeRequest
+    public function restore(OvertimeRequest $ot, User $user, ?string $expectedVersion = null): OvertimeRequest
     {
-        return DB::transaction(function () use ($ot, $user): OvertimeRequest {
+        return DB::transaction(function () use ($ot, $user, $expectedVersion): OvertimeRequest {
             $authoritative = OvertimeRequest::query()
                 ->lockForUpdate()
                 ->findOrFail($ot->id);
 
-            if ($authoritative->status !== OvertimeStatus::Rejected
-                || $authoritative->cancelled_at === null
+            if ($authoritative->status !== OvertimeStatus::Rejected) {
+                throw $this->staleStateConflict($authoritative, 'restored');
+            }
+
+            if ($authoritative->cancelled_at === null
                 || (int) $authoritative->cancelled_by !== (int) $user->id
                 || (int) $authoritative->employee_id !== (int) $user->employee_id) {
                 throw new BusinessRuleException('Only your own cancelled overtime request can be restored.');
             }
+
+            $this->assertExpectedVersion($authoritative, $expectedVersion);
 
             $authoritative->fill([
                 'approved_by'      => null,
@@ -460,6 +475,38 @@ class OvertimeService
 
             return $result;
         });
+    }
+
+    private function staleStateConflict(OvertimeRequest $request, string $action): OvertimeStateConflictException
+    {
+        $status = strtolower($request->status?->label() ?? 'unknown');
+
+        return new OvertimeStateConflictException(
+            "Cannot {$action} overtime request: its status is now {$status}. Refresh the request and review available actions.",
+        );
+    }
+
+    private function assertExpectedVersion(OvertimeRequest $request, ?string $expectedVersion): void
+    {
+        if ($expectedVersion === null || trim($expectedVersion) === '' || trim($expectedVersion) === '*') {
+            return;
+        }
+
+        foreach (explode(',', $expectedVersion) as $candidate) {
+            $candidate = trim($candidate);
+            if (str_starts_with($candidate, 'W/')) {
+                continue;
+            }
+
+            $candidate = trim($candidate, '" ');
+            if ($candidate !== '' && hash_equals((string) $request->version, $candidate)) {
+                return;
+            }
+        }
+
+        throw new OvertimeStateConflictException(
+            'This overtime request changed since you loaded it. Refresh the request and review the current actions.',
+        );
     }
 
     /**

@@ -14,9 +14,10 @@ import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 const STATUS_VARIANT: Record<string, ChipVariant> = {
@@ -27,7 +28,7 @@ export default function JournalEntryDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const navigate = useNavigate();
  const qc = useQueryClient();
- const { can } = usePermission();
+ useRealtimeRecord('journal_entry', id);
  const [showPost, setShowPost] = useState(false);
  const [showDelete, setShowDelete] = useState(false);
  const [showReverse, setShowReverse] = useState(false);
@@ -39,48 +40,69 @@ export default function JournalEntryDetailPage() {
  enabled: !!id,
  });
 
+ const handleMutationError = (error: unknown, fallback: string) => {
+  const response = (error as {
+   response?: { status?: number; data?: { code?: string; message?: string } };
+  })?.response;
+  if (response?.status === 409 && response.data?.code === 'journal_entry_state_conflict') {
+   void invalidateRealtimeChange(qc, { entityType: 'journal_entry', entityId: id });
+   toast.error(response.data.message ?? 'Journal entry changed. The latest state is loading.');
+   return;
+  }
+  toast.error(response?.data?.message ?? fallback);
+ };
+
  const postMut = useMutation({
  mutationFn: () => journalEntriesApi.post(id),
- onSuccess: () => {
+ onSuccess: (updated) => {
+ qc.setQueryData(['accounting', 'journal-entries', id], updated);
  toast.success('Entry posted.');
- qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+ void invalidateRealtimeChange(
+  qc,
+  { entityType: 'journal_entry', entityId: id },
+  [],
+  [['accounting', 'journal-entries', id]],
+ );
  },
- onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to post.'),
+ onError: (e) => handleMutationError(e, 'Failed to post.'),
  });
  const reverseMut = useMutation({
  mutationFn: () => journalEntriesApi.reverse(id, { reason: reverseReason.trim() }),
  onSuccess: (rev) => {
+ qc.setQueryData(['accounting', 'journal-entries', rev.id], rev);
  toast.success(`Reversal ${rev.entry_number} posted.`);
- qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+ void invalidateRealtimeChange(
+  qc,
+  { entityType: 'journal_entry', entityId: rev.id },
+  [],
+  [['accounting', 'journal-entries', rev.id]],
+ );
  navigate(`/accounting/journal-entries/${rev.id}`);
  },
- onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to reverse.'),
+ onError: (e) => handleMutationError(e, 'Failed to reverse.'),
  });
  const deleteMut = useMutation({
   mutationFn: () => journalEntriesApi.delete(id),
   onSuccess: () => {
   toast.success('Draft archived.');
-  qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
+  void invalidateRealtimeChange(qc, { entityType: 'journal_entry', entityId: id });
   navigate('/accounting/journal-entries');
   },
-  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to delete.'),
+  onError: (e) => handleMutationError(e, 'Failed to delete.'),
   });
  const restoreMut = useMutation({
   mutationFn: () => journalEntriesApi.restore(id),
   onSuccess: () => {
   toast.success('Entry restored.');
-  qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
-  refetch();
+  void invalidateRealtimeChange(qc, { entityType: 'journal_entry', entityId: id });
   },
-  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to restore entry.'),
+  onError: (e) => handleMutationError(e, 'Failed to restore entry.'),
   });
 
  if (isLoading || (!je && !isError)) return <SkeletonDetail />;
  if (isError) return <EmptyState icon="alert-circle" title="Failed to load entry" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
  if (!je) return null;
 
- const isDraft = je.status === 'draft';
- const isPosted = je.status === 'posted';
  const isArchived = !!je.deleted_at;
 
  return (
@@ -100,27 +122,27 @@ export default function JournalEntryDetailPage() {
  {!isArchived && (
   <Button variant="secondary" size="sm" icon={<LuPrinter size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
  )}
- {isDraft && !isArchived && can('accounting.journal.create') && (
+ {je.available_actions?.can_edit && (
  <Button variant="secondary" size="sm" icon={<LuPencil size={14} />} onClick={() => navigate(`/accounting/journal-entries/${je.id}/edit`)}>
  Edit
  </Button>
  )}
- {isDraft && !isArchived && je.reference_type === null && can('accounting.journal.post') && (
+ {je.available_actions?.can_post && (
  <Button variant="primary" size="sm" onClick={() => setShowPost(true)} disabled={postMut.isPending}>
  Post
  </Button>
  )}
- {isDraft && !isArchived && can('accounting.journal.create') && (
+ {je.available_actions?.can_delete && (
   <Button variant="danger" size="sm" onClick={() => setShowDelete(true)} disabled={deleteMut.isPending}>
   Delete
   </Button>
   )}
- {isArchived && can('accounting.journal.create') && (
+ {je.available_actions?.can_restore && (
   <Button variant="secondary" size="sm" icon={<LuArchiveRestore size={14} />} onClick={() => restoreMut.mutate()} loading={restoreMut.isPending} disabled={restoreMut.isPending}>
   Restore
   </Button>
   )}
- {isPosted && !je.reversed_by_entry_id && (je.reference_type === null || je.reference_type === 'journal_entry_reversal') && can('accounting.journal.reverse') && (
+ {je.available_actions?.can_reverse && (
  <Button variant="secondary" size="sm" onClick={() => { setReverseReason(''); setShowReverse(true); }} loading={reverseMut.isPending} disabled={reverseMut.isPending}>
  Reverse
  </Button>

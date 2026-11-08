@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
@@ -17,9 +18,11 @@ use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\HasPassedInProcessQc;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
@@ -42,12 +45,14 @@ final class DeliveryCreateIdempotencyTest extends TestCase
         $service = app(DeliveryService::class);
 
         $first = $service->create($payload, $user, 'delivery-retry-1');
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
         $second = $service->create($payload, $user, 'delivery-retry-1');
 
         $this->assertSame($first->id, $second->id);
         $this->assertSame($first->delivery_number, $second->delivery_number);
         $this->assertSame(1, $first->items()->count());
-        $this->assertSame(1, \App\Modules\SupplyChain\Models\Delivery::query()->count());
+        $this->assertSame(1, Delivery::query()->count());
+        $this->assertSame(1, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
     }
 
     public function test_same_key_with_changed_payload_is_rejected(): void
@@ -72,7 +77,8 @@ final class DeliveryCreateIdempotencyTest extends TestCase
         $second = $service->create($payload, $user);
 
         $this->assertNotSame($first->id, $second->id);
-        $this->assertSame(2, \App\Modules\SupplyChain\Models\Delivery::query()->count());
+        $this->assertSame(2, Delivery::query()->count());
+        $this->assertSame(2, DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count());
     }
 
     public function test_invalid_key_is_rejected_by_the_service_contract(): void

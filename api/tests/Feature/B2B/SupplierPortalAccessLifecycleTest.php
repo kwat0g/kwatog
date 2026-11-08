@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Events\PortalAccountAccessRevoked;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Services\PortalInvitationService;
-use App\Common\Exceptions\BusinessRuleException;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
@@ -216,6 +218,9 @@ class SupplierPortalAccessLifecycleTest extends TestCase
         $fresh = $user->fresh();
         $this->assertSame(0, $fresh->tokens()->count());
         $this->assertTrue((bool) $fresh->is_active, 'Revoking sessions is not the same decision as revoking access.');
+        $this->assertSame(1, DB::table('event_outbox')
+            ->where('event_type', PortalAccountAccessRevoked::class)
+            ->count());
     }
 
     public function test_inactive_vendor_parent_blocks_supplier_sessions_and_reactivation(): void

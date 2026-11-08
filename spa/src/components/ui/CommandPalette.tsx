@@ -231,9 +231,6 @@ export function CommandPalette({ open, onClose }: Props) {
         .get<SearchResponse>('/search', { params: { q: debouncedTerm }, signal })
         .then((r) => r.data.data),
     enabled,
-    // Keep the previous term's rows on screen while the next ones load,
-    // rather than blanking the list on every keystroke.
-    placeholderData: (prev) => prev,
     // The global default is `retry: 1`. On this endpoint that is actively
     // harmful: `/search` is throttled at 30/min, so an automatic retry spends
     // a second token against the limit that just rejected us and pushes the
@@ -241,10 +238,9 @@ export function CommandPalette({ open, onClose }: Props) {
     retry: false,
   });
 
-  // `placeholderData` keeps the PREVIOUS term's rows in `data` across a
-  // failure, so on error the list would show stale records under a fresh
-  // query with no indication either was wrong. Drop them and render the
-  // failure instead — M009-F06.
+  // A failed refetch must not keep displaying the last successful records as
+  // though the current search term had been checked. Hide cached rows on
+  // error and render the explicit recovery state instead — M009-F06.
   const groups = isError ? NO_GROUPS : fetchedGroups;
   const failure = isError ? describeFailure(error) : null;
 
@@ -284,7 +280,6 @@ export function CommandPalette({ open, onClose }: Props) {
             url: r.url,
             label: r.label,
             sublabel: r.sublabel,
-            status: r.status,
             type: r.type,
             icon: r.type === 'page' ? LuArrowRight : iconForType(r.type),
             mono: r.type !== 'page',
@@ -368,7 +363,6 @@ export function CommandPalette({ open, onClose }: Props) {
         url: row.url,
         label: row.label,
         sublabel: row.sublabel,
-        status: row.status,
         type: row.type,
       });
       navigate(row.url);

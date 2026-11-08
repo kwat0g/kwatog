@@ -21,8 +21,10 @@ import { formatDate } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { usePermission } from '@/hooks/usePermission';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { cn } from '@/lib/cn';
-import type { QualityPlanParameter } from '@/types/inventory';
+import type { ItemQualityPlan, QualityPlanParameter } from '@/types/inventory';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
 type DraftParameter = QualityPlanParameter & { key: string; acceptance_criterion: string };
@@ -34,6 +36,7 @@ export default function ItemQualityPlansPage() {
  const queryClient = useQueryClient();
  const { can } = usePermission();
  const canManage = can('quality.specs.manage');
+ useRealtimeRecord('quality_plan', id);
  const [vendorId, setVendorId] = useState('');
  const [sampling, setSampling] = useState<string>('');
  const [fixedSize, setFixedSize] = useState('');
@@ -60,11 +63,21 @@ export default function ItemQualityPlansPage() {
  notes: notes || null,
  parameters: parameters.map(p => ({ parameter_name: p.parameter_name.trim(), acceptance_criterion: p.acceptance_criterion.trim(), parameter_type: p.parameter_type, is_critical: p.is_critical })),
  }),
- onSuccess: () => {
+ onSuccess: (createdPlan) => {
+ queryClient.setQueryData<ItemQualityPlan[]>(['inventory', 'quality-plans', id], (current = []) => [
+   createdPlan,
+   ...current.map((plan) => plan.is_active && plan.vendor?.id === createdPlan.vendor?.id
+     ? { ...plan, is_active: false }
+     : plan),
+ ]);
  toast.success('Quality-plan revision published.');
  setNotes(''); setParameters([blankParameter()]); setFieldErrors({});
- queryClient.invalidateQueries({ queryKey: ['inventory', 'quality-plans', id] });
- queryClient.invalidateQueries({ queryKey: ['inventory', 'items', id] });
+ void invalidateRealtimeChange(
+   queryClient,
+   { entityType: 'quality_plan', entityId: createdPlan.id },
+   [],
+   [['inventory', 'quality-plans', id]],
+ );
  },
  onError: (error: AxiosError<{ errors?: Record<string, string[]> }>) => { setFieldErrors(error.response?.data?.errors ?? {}); reportMutationError(error, 'Could not publish the quality-plan revision.'); },
  });
@@ -72,10 +85,17 @@ export default function ItemQualityPlansPage() {
  const deactivate = useMutation({
  mutationFn: itemQualityPlansApi.deactivate,
  onError: (error: AxiosError) => reportMutationError(error, 'Could not deactivate the quality plan.'),
- onSuccess: () => {
+ onSuccess: (updatedPlan) => {
+ queryClient.setQueryData<ItemQualityPlan[]>(['inventory', 'quality-plans', id], (current = []) =>
+   current.map((plan) => plan.id === updatedPlan.id ? updatedPlan : plan),
+ );
  toast.success('Quality plan deactivated.');
- queryClient.invalidateQueries({ queryKey: ['inventory', 'quality-plans', id] });
- queryClient.invalidateQueries({ queryKey: ['inventory', 'items', id] });
+ void invalidateRealtimeChange(
+   queryClient,
+   { entityType: 'quality_plan', entityId: updatedPlan.id },
+   [],
+   [['inventory', 'quality-plans', id]],
+ );
  },
  });
 

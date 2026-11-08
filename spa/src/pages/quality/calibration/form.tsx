@@ -20,6 +20,8 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { useSavedFeedback } from '@/hooks/useSavedFeedback';
 import { localIsoDate } from '@/lib/formatDate';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const today = () => localIsoDate();
 
@@ -71,6 +73,7 @@ export default function CalibrationFormPage() {
   const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
+  useRealtimeRecord('calibration', id);
   const { saved: showSaved, markSaved } = useSavedFeedback();
   const form = useForm<z.input<typeof schema>, unknown, FormValues>({ resolver: zodResolver(schema), defaultValues: EMPTY_VALUES });
   const {
@@ -116,14 +119,21 @@ export default function CalibrationFormPage() {
     },
     onSuccess: (record, values) => {
       reset(values);
-      void queryClient.invalidateQueries({ queryKey: ['quality', 'calibration'] });
+      queryClient.setQueryData(['quality', 'calibration', 'detail', record.id], record);
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'calibration', entityId: record.id },
+        [],
+        [['quality', 'calibration', 'detail', record.id]],
+      );
       toast.success(
         isEdit ? 'Calibration instrument updated' : 'Calibration instrument registered',
       );
       if (isEdit) {
         markSaved();
       } else {
-        navigate(`/quality/calibration/${record.id}/edit`);
+                safety.allowNavigationAfterSave();
+navigate(`/quality/calibration/${record.id}/edit`);
       }
     },
     onError: (error) =>

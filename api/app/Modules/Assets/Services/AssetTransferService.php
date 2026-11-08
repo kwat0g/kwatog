@@ -114,6 +114,7 @@ class AssetTransferService
             $this->transition($locked, TransferStatus::Approved);
 
             $asset->forceFill(['department_id' => $locked->to_department_id])->save();
+            app(AssetRealtimeService::class)->stage($asset, 'updated', $by);
 
             $this->transition($locked, TransferStatus::Completed);
 

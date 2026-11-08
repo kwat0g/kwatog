@@ -9,6 +9,7 @@ use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
+use App\Modules\Inventory\Exceptions\TransferOrderStateConflictException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\TransferOrder;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -21,6 +22,15 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class TransferOrderController
 {
     public function __construct(private readonly TransferOrderService $service) {}
+
+    private function conflict(TransferOrderStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
+    }
 
     /**
      * Route params here are plain `{id}`, not model-bound, so nothing decodes
@@ -84,7 +94,7 @@ class TransferOrderController
         ])))->response()->setStatusCode(201);
     }
 
-    public function execute(string $id, Request $request): TransferOrderResource
+    public function execute(string $id, Request $request): TransferOrderResource|JsonResponse
     {
         // Kept outside the try. This used to be load-bearing: abort(404) raises
         // NotFoundHttpException, which extends RuntimeException, so the old
@@ -96,6 +106,8 @@ class TransferOrderController
 
         try {
             $order = $this->service->execute($orderId, $request->user());
+        } catch (TransferOrderStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             abort(422, $e->getMessage());
         }
@@ -108,6 +120,8 @@ class TransferOrderController
 
         try {
             $this->service->cancel($orderId);
+        } catch (TransferOrderStateConflictException $e) {
+            return $this->conflict($e);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

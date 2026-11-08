@@ -10,6 +10,7 @@ import { vendorsApi } from '@/api/accounting/vendors';
 import { accountsApi } from '@/api/accounting/accounts';
 import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
+import { purchaseOrderQueryKeys } from '@/lib/queryKeys/purchasing';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import { uomsApi } from '@/api/inventory/uoms';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +23,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -100,7 +102,7 @@ export default function CreateBillPage() {
   // REC-02 — billable POs for the optional link selector. The API exposes the
   // authoritative billability rule alongside each purchase order.
   const { data: posResp } = useQuery({
-    queryKey: ['purchasing', 'purchase-orders', 'billable'],
+    queryKey: purchaseOrderQueryKeys.billable,
     queryFn: () => purchaseOrdersApi.list({ per_page: 200 }),
   });
   const { data: policies } = useQuery({
@@ -171,7 +173,7 @@ export default function CreateBillPage() {
   // REC-02 — when a PO is picked, fetch it and prefill the vendor + line items
   // (one bill line per PO item, carrying the item_id FK for match alignment).
   const { data: selectedPo } = useQuery({
-    queryKey: ['purchasing', 'purchase-orders', purchaseOrderId],
+    queryKey: purchaseOrderQueryKeys.detail(purchaseOrderId as string),
     queryFn: () => purchaseOrdersApi.show(purchaseOrderId as string),
     enabled: !!purchaseOrderId,
   });
@@ -265,11 +267,17 @@ export default function CreateBillPage() {
         })),
       }),
     onSuccess: (b) => {
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'bill', entityId: b.id },
+        ['accounting', 'bills', b.id],
+        b,
+      );
       toast.success(b.status === 'draft'
         ? `Bill ${b.bill_number} staged. Supplier invoice required before posting.`
         : `Bill ${b.bill_number} recorded.`);
-      navigate(`/accounting/bills/${b.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/accounting/bills/${b.id}`);
     },
     onError: (e) => {
       applyServerValidationErrors(e, setError, 'Failed to create the bill.');

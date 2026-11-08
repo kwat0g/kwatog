@@ -24,8 +24,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { TrialProductionPanel } from '@/components/production/TrialProductionPanel';
 import { MaterialHandoverNotice } from '@/components/production/MaterialHandoverNotice';
+import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { usePermission } from '@/hooks/usePermission';
-import { useEcho } from '@/hooks/useEcho';
+import { useFormSafety } from '@/hooks/useFormSafety';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatInt } from '@/lib/formatNumber';
 import type { DefectType, RecordOutputData } from '@/types/production';
 
@@ -88,11 +90,17 @@ export default function RecordOutputPage() {
     enabled: !!id,
   });
 
-  // Subscribe to live updates so the cumulative panel reflects every recording.
-  useEcho(`production.wo.${id}`, '.output.recorded', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
-  });
+  useChainProgress(
+    'work_order',
+    id,
+    ['production', 'work-orders', 'detail', id],
+    [['production', 'crew', id]],
+  );
 
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { produced_count: undefined, good_count: undefined, recording_reason: '', remarks: '', defects: [] },
+  });
   const {
     register,
     control,
@@ -100,10 +108,7 @@ export default function RecordOutputPage() {
     setError,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { produced_count: undefined, good_count: undefined, recording_reason: '', remarks: '', defects: [] },
-  });
+  } = form;
   const { fields, append, remove } = useFieldArray({ control, name: 'defects' });
 
   // Live-compute reject count from defect rows.
@@ -126,6 +131,7 @@ export default function RecordOutputPage() {
         toast.success(`Output ${output.batch_code ?? ''} recorded.`);
       }
       reset({ produced_count: undefined, good_count: undefined, recording_reason: '', remarks: '', defects: [] });
+      formSafety.draftState.discard();
       setPending(null);
       setUncertain(false);
       setHandoverAcknowledged(false);
@@ -136,7 +142,8 @@ export default function RecordOutputPage() {
           query.queryKey[1] === 'work-orders' &&
           query.queryKey[2] !== 'form-options',
       });
-      navigate(`/production/work-orders/${id}`);
+            formSafety.allowNavigationAfterSave();
+navigate(`/production/work-orders/${id}`);
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
@@ -153,6 +160,13 @@ export default function RecordOutputPage() {
     },
   });
 
+  const formSafety = useFormSafety({
+    form,
+    saved: submit.isSuccess,
+    formKey: `production.output:${id ?? 'new'}`,
+    draft: Boolean(id),
+  });
+
   const check = useMutation({
     mutationFn: () => workOrdersApi.myOutputReceipt(id!, pending!.key),
     onSuccess: () => {
@@ -160,7 +174,8 @@ export default function RecordOutputPage() {
       setUncertain(false);
       qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
       toast.success('Output receipt found. Recording saved.');
-      navigate(`/production/work-orders/${id}`);
+            formSafety.allowNavigationAfterSave();
+navigate(`/production/work-orders/${id}`);
     },
     onError: (error) =>
       toast.error(
@@ -287,6 +302,7 @@ export default function RecordOutputPage() {
             </p>
           )}
           <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())}>
+            <FormDraftBanner safety={formSafety} inset={false} />
             <Panel title="New recording">
               <div className="mb-3">
                 <MaterialHandoverNotice

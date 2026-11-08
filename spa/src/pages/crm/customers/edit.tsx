@@ -11,6 +11,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { CustomerForm, customerResolver, customerSchema, type CustomerFormValues } from './form';
 
@@ -99,10 +100,15 @@ export default function CrmCustomerEditPage() {
  return crmCustomersApi.update(id!, payload);
  },
  onSuccess: (customer) => {
- qc.invalidateQueries({ queryKey: ['crm', 'customers'] });
- qc.invalidateQueries({ queryKey: ['accounting', 'customers'] });
+ reconcileRealtimeMutationResponse(
+  qc,
+  { entityType: 'customer', entityId: customer.id },
+  ['crm', 'customers', 'detail', customer.id],
+  customer,
+ );
  toast.success('Customer updated.');
- navigate(`/crm/customers/${customer.id}`);
+  safety.allowNavigationAfterSave();
+navigate(`/crm/customers/${customer.id}`);
  },
  onError: (e) => {
    applyServerValidationErrors(e, setError, 'Failed to save the customer.');

@@ -185,6 +185,21 @@ class PurchaseRequestTest extends TestCase
             ->assertJsonPath('data.status', 'pending');
     }
 
+    public function test_repeated_submit_after_status_change_returns_a_state_conflict(): void
+    {
+        $admin = $this->makeAdmin();
+        $pr = app(PurchaseRequestService::class)->create($this->validPayload(), $admin);
+        $this->actingAs($admin);
+
+        $this->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/submit")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/submit")
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'purchase_request_state_conflict');
+    }
+
     public function test_legacy_approved_pr_requires_explicit_sourcing_choice_before_conversion(): void
     {
         $admin = $this->makeAdmin();

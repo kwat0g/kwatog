@@ -15,6 +15,9 @@ import { isStrongPassword, passwordMinimumLength } from '@/components/ui/passwor
 import { authApi } from '@/api/auth';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { supplierPortalApi } from '@/api/b2b/supplier';
+import { publishAuthSessionSignal, serializeAuthSessionMutation } from '@/lib/authSessionSync';
+import { clearPwaCaches } from '@/sw-register';
+import { clearLocalAuthSession, useAuthStore } from '@/stores/authStore';
 
 export default function PortalChangePasswordPage() {
   const { type = 'customer' } = useParams<{ type: 'customer' | 'supplier' }>();
@@ -34,9 +37,14 @@ export default function PortalChangePasswordPage() {
       return;
     }
     setLoading(true);
+    publishAuthSessionSignal('all', 'changing');
+    clearLocalAuthSession();
+    const pwaCacheCleanup = clearPwaCaches();
     try {
       const payload = { current_password: current, new_password: password, new_password_confirmation: confirmation };
-      await (type === 'supplier' ? supplierPortalApi.changePassword(payload) : customerPortalApi.changePassword(payload));
+      await serializeAuthSessionMutation(() => (
+        type === 'supplier' ? supplierPortalApi.changePassword(payload) : customerPortalApi.changePassword(payload)
+      ));
       toast.success('Password updated. Please sign in again.');
       // The portal session is invalidated by the password-change endpoint;
       // calling logout again would correctly return 401 and mask the success.
@@ -45,6 +53,13 @@ export default function PortalChangePasswordPage() {
       const body = (error as AxiosError<{ message?: string }>).response?.data;
       toast.error(body?.message ?? 'Could not update your password.');
     } finally {
+      // Portal password change invalidates the shared Laravel session too.
+      // Peers revalidate immediately; shell cleanup may finish afterward.
+      publishAuthSessionSignal('all', 'changed');
+      void useAuthStore.getState().bootstrap();
+      void pwaCacheCleanup.then((cleared) => {
+        if (!cleared) console.warn('Could not clear all Ogami service-worker caches after password change.');
+      });
       setLoading(false);
     }
   };

@@ -216,6 +216,7 @@ export function TouchConfirmSheet({
   confirmLabel,
   variant = 'primary',
   pending,
+  disabled,
   className,
   children,
 }: {
@@ -227,6 +228,8 @@ export function TouchConfirmSheet({
   /** `danger` for anything that records a failure, a loss, or a terminal state. */
   variant?: 'primary' | 'danger';
   pending?: boolean;
+  /** Disable confirmation while the record's current server action is unavailable. */
+  disabled?: boolean;
   /**
    * Sheet sizing. Defaults to a full-width bottom sheet, which is right on a
    * phone. A surface that also renders on a desk screen passes a max width so
@@ -255,6 +258,7 @@ export function TouchConfirmSheet({
             variant={variant}
             size="touch"
             loading={pending}
+            disabled={disabled || pending}
             onClick={onConfirm}
           >
             {confirmLabel}

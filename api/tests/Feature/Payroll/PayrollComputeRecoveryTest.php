@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
-use App\Common\Jobs\DispatchOutboxMessage;
+use App\Common\Services\OutboxService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -12,6 +12,7 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
+use App\Modules\Payroll\Events\PayrollPeriodChanged;
 use App\Modules\Payroll\Events\PayrollProgressEvent;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\Payroll\Models\Payroll;
@@ -69,7 +70,7 @@ class PayrollComputeRecoveryTest extends TestCase
     {
         $p = PayrollPeriod::factory()->create();
         $p->forceFill([
-            'status'                => $status,
+            'status' => $status,
             'processing_started_at' => $processingStartedAt,
         ])->save();
 
@@ -80,7 +81,7 @@ class PayrollComputeRecoveryTest extends TestCase
     {
         return Employee::factory()->create([
             'department_id' => Department::factory()->create()->id,
-            'position_id'   => Position::factory()->create()->id,
+            'position_id' => Position::factory()->create()->id,
         ]);
     }
 
@@ -89,7 +90,7 @@ class PayrollComputeRecoveryTest extends TestCase
     public function test_a_live_claim_is_still_refused(): void
     {
         Queue::fake();
-        $hr     = $this->userWithRole('hr_officer');
+        $hr = $this->userWithRole('hr_officer');
         $period = $this->period(PayrollPeriodStatus::Processing->value, now()->subMinutes(2)->toDateTimeString());
 
         $this->actingAs($hr)
@@ -111,7 +112,7 @@ class PayrollComputeRecoveryTest extends TestCase
     public function test_a_stale_claim_is_taken_over_by_the_next_compute_click(): void
     {
         Queue::fake();
-        $hr     = $this->userWithRole('hr_officer');
+        $hr = $this->userWithRole('hr_officer');
         $period = $this->period(PayrollPeriodStatus::Processing->value, now()->subHours(3)->toDateTimeString());
 
         $this->actingAs($hr)
@@ -142,7 +143,7 @@ class PayrollComputeRecoveryTest extends TestCase
      */
     public function test_stale_threshold_is_floored_above_the_job_timeout(): void
     {
-        $service  = app(PayrollPeriodService::class);
+        $service = app(PayrollPeriodService::class);
         $jobFloor = (int) ceil(ProcessPayrollJob::TIMEOUT_SECONDS / 60);
 
         $this->assertGreaterThanOrEqual($jobFloor, $service->staleAfterMinutes());
@@ -150,7 +151,7 @@ class PayrollComputeRecoveryTest extends TestCase
         // Even a nonsensical stored value degrades safely rather than
         // endangering a live run.
         Cache::flush();
-        \Illuminate\Support\Facades\DB::table('settings')
+        DB::table('settings')
             ->updateOrInsert(
                 ['key' => 'payroll.compute.stale_after_minutes'],
                 ['value' => json_encode(1), 'group' => 'payroll', 'updated_at' => now(), 'created_at' => now()],
@@ -216,7 +217,7 @@ class PayrollComputeRecoveryTest extends TestCase
     public function test_compute_request_is_durable_when_the_worker_queue_is_not_consumed(): void
     {
         Queue::fake();
-        $hr     = $this->userWithRole('hr_officer');
+        $hr = $this->userWithRole('hr_officer');
         $period = $this->period();
 
         $this->actingAs($hr)
@@ -277,6 +278,40 @@ class PayrollComputeRecoveryTest extends TestCase
         $this->assertSame($period->id, $payroll->payroll_period_id);
     }
 
+    public function test_single_employee_recompute_stages_period_refresh_inside_its_transaction(): void
+    {
+        $period = $this->period(PayrollPeriodStatus::Computed->value);
+        $employee = $this->employee();
+        $testTransactionLevel = DB::transactionLevel();
+        $eventInsertTransactionLevel = null;
+        $parentRefreshCount = 0;
+        $outbox = app(OutboxService::class);
+        $outboxSpy = \Mockery::mock(OutboxService::class);
+        $outboxSpy->shouldReceive('recordCoalesced')
+            ->andReturnUsing(function (object $event, string $dedupeKey) use ($outbox, &$eventInsertTransactionLevel, &$parentRefreshCount) {
+                if ($event instanceof PayrollPeriodChanged) {
+                    $parentRefreshCount++;
+                    $this->assertSame('related_updated', $event->action);
+                    $eventInsertTransactionLevel = DB::transactionLevel();
+                }
+
+                return $outbox->recordCoalesced($event, $dedupeKey);
+            });
+        $this->app->instance(OutboxService::class, $outboxSpy);
+
+        $payroll = app(PayrollCalculatorService::class)->computeForEmployee($period, $employee);
+
+        $this->assertSame($period->id, $payroll->payroll_period_id);
+        $this->assertSame(1, $parentRefreshCount, 'A single-row recompute should stage one parent refresh.');
+        $this->assertNotNull($eventInsertTransactionLevel, 'Recompute must stage a durable parent refresh.');
+        $this->assertGreaterThan(
+            $testTransactionLevel,
+            $eventInsertTransactionLevel,
+            'The refresh outbox row must be inserted inside the payroll-row transaction.',
+        );
+        $this->assertDatabaseHas('event_outbox', ['event_type' => PayrollPeriodChanged::class]);
+    }
+
     /* ── 4. Progress visibility ──────────────────────────────────── */
 
     /**
@@ -286,24 +321,35 @@ class PayrollComputeRecoveryTest extends TestCase
      */
     public function test_progress_broadcasts_privately_under_a_stable_event_name(): void
     {
-        $period = $this->period();
-        $event  = new PayrollProgressEvent($period, 40, 200, 1);
+        $period = $this->period(PayrollPeriodStatus::Processing->value);
+        $event = new PayrollProgressEvent($period, 40, 200, 1);
 
         $this->assertInstanceOf(PrivateChannel::class, $event->broadcastOn());
         $this->assertSame("private-payroll.period.{$period->hash_id}", $event->broadcastOn()->name);
         $this->assertSame('payroll.progress', $event->broadcastAs());
 
-        $payload = $event->broadcastWith();
-        $this->assertSame(20, $payload['percent']);
-        $this->assertSame(1, $payload['failures']);
-        // Carries status so the page can leave the processing state on the
-        // final emit instead of waiting for the next poll.
-        $this->assertArrayHasKey('status', $payload);
+        $this->assertSame([
+            'refresh' => true,
+            'action' => 'progress',
+            'event_id' => $event->eventId,
+        ], $event->broadcastWith());
+    }
+
+    public function test_terminal_progress_broadcast_is_still_only_a_refresh_signal(): void
+    {
+        $period = $this->period(PayrollPeriodStatus::Computed->value);
+        $event = new PayrollProgressEvent($period, 200, 200, 0);
+
+        $this->assertSame([
+            'refresh' => true,
+            'action' => 'completed',
+            'event_id' => $event->eventId,
+        ], $event->broadcastWith());
     }
 
     public function test_progress_snapshot_survives_a_page_reload_mid_run(): void
     {
-        $period  = $this->period(PayrollPeriodStatus::Processing->value, now()->toDateTimeString());
+        $period = $this->period(PayrollPeriodStatus::Processing->value, now()->toDateTimeString());
         $tracker = app(PayrollProgressTracker::class);
 
         $tracker->put($period, 142, 200, 0);
@@ -314,12 +360,33 @@ class PayrollComputeRecoveryTest extends TestCase
         );
     }
 
+    /** Progress is shared only within one authorized payroll period. */
+    public function test_progress_snapshots_are_isolated_per_period_and_restore_generation(): void
+    {
+        $first = $this->period(PayrollPeriodStatus::Processing->value, now()->toDateTimeString());
+        $second = $this->period(PayrollPeriodStatus::Processing->value, now()->toDateTimeString());
+        $tracker = app(PayrollProgressTracker::class);
+
+        $tracker->put($first, 25, 100, 1);
+        $tracker->put($second, 80, 100, 0);
+        $oldFirstKey = $tracker->key($first);
+
+        $this->assertNotSame($oldFirstKey, $tracker->key($second));
+        $this->assertSame(25, $tracker->get($first)['processed']);
+        $this->assertSame(80, $tracker->get($second)['processed']);
+
+        $this->assertTrue($tracker->invalidateForDatabaseRestore());
+        $this->assertNotSame($oldFirstKey, $tracker->key($first));
+        $this->assertNull($tracker->get($first));
+        $this->assertNull($tracker->get($second));
+    }
+
     /** A new run must never open showing the previous run's numbers. */
     public function test_claiming_a_period_clears_the_previous_runs_snapshot(): void
     {
         Queue::fake();
-        $hr      = $this->userWithRole('hr_officer');
-        $period  = $this->period(PayrollPeriodStatus::Computed->value);
+        $hr = $this->userWithRole('hr_officer');
+        $period = $this->period(PayrollPeriodStatus::Computed->value);
         $tracker = app(PayrollProgressTracker::class);
 
         $tracker->put($period, 200, 200, 0);
@@ -330,8 +397,8 @@ class PayrollComputeRecoveryTest extends TestCase
 
     public function test_the_period_endpoint_exposes_run_telemetry_for_the_progress_bar(): void
     {
-        $hr      = $this->userWithRole('hr_officer');
-        $period  = $this->period(PayrollPeriodStatus::Processing->value, now()->subHours(3)->toDateTimeString());
+        $hr = $this->userWithRole('hr_officer');
+        $period = $this->period(PayrollPeriodStatus::Processing->value, now()->subHours(3)->toDateTimeString());
         app(PayrollProgressTracker::class)->put($period, 90, 200, 2);
 
         $this->actingAs($hr)
@@ -346,7 +413,7 @@ class PayrollComputeRecoveryTest extends TestCase
     /** Telemetry is short-circuited off status so list views stay cheap. */
     public function test_a_period_that_is_not_running_reports_no_progress(): void
     {
-        $hr     = $this->userWithRole('hr_officer');
+        $hr = $this->userWithRole('hr_officer');
         $period = $this->period(PayrollPeriodStatus::Computed->value);
 
         $this->actingAs($hr)

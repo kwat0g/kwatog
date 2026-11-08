@@ -133,7 +133,14 @@ export default function UomCatalogPage() {
     <FilterBar
      inset={false}
      className="w-full"
+     values={{ search, archive_scope: scope }}
      onSearch={setSearch}
+     onApplySavedView={(saved) => {
+      setSearch(saved.search ?? '');
+      if (saved.archive_scope === 'active' || saved.archive_scope === 'with' || saved.archive_scope === 'only') {
+       setScope(saved.archive_scope);
+      }
+     }}
      searchPlaceholder="Search units..."
      actions={<ArchiveFilter value={scope} onChange={setScope} />}
     />

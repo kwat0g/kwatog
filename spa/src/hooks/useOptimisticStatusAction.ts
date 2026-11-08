@@ -16,14 +16,28 @@ import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-quer
 import toast from 'react-hot-toast';
 import { optimisticUpdate, rollback, type OptimisticContext } from '@/lib/optimistic';
 import { reportMutationError } from '@/lib/formErrors';
+import { invalidateQueryPrefixExcept } from '@/lib/queryInvalidation';
+import { invalidateRealtimeChange, type RealtimeChangeRef } from '@/lib/realtime/invalidationMap';
 
-type StatusBearing = { status?: unknown } | undefined;
+type StatusBearing = { id?: unknown; status?: unknown; [key: string]: unknown } | undefined;
+
+function serverRecord(value: unknown): Exclude<StatusBearing, undefined> | null {
+  let candidate = value;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!candidate || typeof candidate !== 'object') return null;
+    if ('status' in candidate && 'id' in candidate) return candidate as Exclude<StatusBearing, undefined>;
+    candidate = 'data' in candidate ? (candidate as { data?: unknown }).data : null;
+  }
+  return null;
+}
 
 export interface OptimisticStatusActionArgs<TVar> {
   /** queryKey of the record being transitioned. Patched, and rolled back on failure. */
   detailKey: QueryKey;
   /** Invalidated once settled — usually the list this record belongs to. */
   invalidateKey?: QueryKey;
+  /** Central record map for linked lists, balances, badges and dashboards. */
+  realtimeChange?: RealtimeChangeRef;
   mutationFn: (v: TVar) => Promise<unknown>;
   /** Status to show immediately, before the server confirms it. */
   nextStatus: string;
@@ -48,6 +62,7 @@ export interface OptimisticStatusActionArgs<TVar> {
 export function useOptimisticStatusAction<TVar = void>({
   detailKey,
   invalidateKey,
+  realtimeChange,
   mutationFn,
   nextStatus,
   successMsg,
@@ -71,12 +86,34 @@ export function useOptimisticStatusAction<TVar = void>({
       // what actually happened.
       reportMutationError(err, errorMsg);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      const freshRecord = serverRecord(response);
+      if (freshRecord) {
+        queryClient.setQueryData<StatusBearing>(detailKey, (current) => ({ ...current, ...freshRecord }));
+      }
       toast.success(successMsg);
       afterSuccess?.();
     },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: invalidateKey ?? detailKey });
+    onSettled: (response) => {
+      const hasFreshRecord = serverRecord(response) !== null;
+      if (realtimeChange) {
+        void invalidateRealtimeChange(
+          queryClient,
+          realtimeChange,
+          [],
+          hasFreshRecord ? [detailKey] : [],
+        );
+        return;
+      }
+      // A related-family prefix (for example ['leaves']) also matches this
+      // exact detail query. The mutation response is already the authoritative
+      // snapshot for the actor; don't refetch it and risk replacing that fresh
+      // state with an older in-flight/cache result. Refresh other family rows.
+      void invalidateQueryPrefixExcept(
+        queryClient,
+        invalidateKey ?? detailKey,
+        hasFreshRecord ? [detailKey] : [],
+      );
     },
   });
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\ChainListenerRecoveryService;
 use App\Common\Services\SettingsService;
@@ -16,6 +17,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\PriceRequestStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Dashboard\Support\WidgetScope;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
@@ -53,6 +55,7 @@ class DashboardWidgetDataService
     public function __construct(
         private readonly SettingsService $settings,
         private readonly ForecastingDashboardService $forecasts,
+        private readonly PanelGate $cacheScopes,
         private readonly WidgetScope $scope,
         private readonly ApprovalBoardService $approvals,
         private readonly BudgetConsumptionService $budgetConsumption,
@@ -63,22 +66,21 @@ class DashboardWidgetDataService
     public function summaries(array $keys, User $user): array
     {
         $result = [];
+        $cacheScope = $this->cacheScopes->cacheScope($user);
         foreach (array_values(array_unique($keys)) as $key) {
-            $cacheKey = "dashboard:widget:summary:{$user->id}:{$key}";
-            $missing = new \stdClass();
-            $cached = Cache::get($cacheKey, $missing);
-            if ($cached !== $missing) {
-                $result[$key] = $cached;
-                continue;
-            }
-
+            $version = DashboardCacheGeneration::current("widget-summary:{$key}");
+            $cacheKey = "dashboard:widget:summary:v3:{$version}:{$user->id}:{$cacheScope}:{$key}";
             try {
-                $summary = array_merge(
-                    ['key' => $key, 'available' => true, 'updated_at' => now()->toIso8601String()],
-                    $this->summary($key, $user),
+                $result[$key] = FailOpenCache::remember(
+                    Cache::store(),
+                    $cacheKey,
+                    self::CACHE_TTL_SECONDS,
+                    fn (): array => array_merge(
+                        ['key' => $key, 'available' => true, 'updated_at' => now()->toIso8601String()],
+                        $this->summary($key, $user),
+                    ),
+                    'dashboard.widget.summary',
                 );
-                Cache::put($cacheKey, $summary, self::CACHE_TTL_SECONDS);
-                $result[$key] = $summary;
             } catch (Throwable $exception) {
                 Log::error('Dashboard widget data source failed.', [
                     'widget' => $key,

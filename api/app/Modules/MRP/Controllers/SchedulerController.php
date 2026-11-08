@@ -9,6 +9,7 @@ use App\Common\Support\HashIdFilter;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Requests\ConfirmScheduleRequest;
+use App\Modules\MRP\Requests\MoveScheduleRequest;
 use App\Modules\MRP\Requests\RunSchedulerRequest;
 use App\Modules\MRP\Services\CapacityPlanningService;
 use App\Modules\Production\Models\ProductionSchedule;
@@ -70,6 +71,22 @@ class SchedulerController
         $this->service->reassign($schedule->id, $machineId, $moldId);
 
         return response()->json(['message' => 'Reassigned.']);
+    }
+
+    public function move(MoveScheduleRequest $request, ProductionSchedule $schedule): JsonResponse
+    {
+        $data = $request->validated();
+        $moved = $this->service->move(
+            $schedule->id,
+            Carbon::parse($data['scheduled_start']),
+            Carbon::parse($data['expected_updated_at']),
+        );
+
+        return response()->json(['data' => [
+            'scheduled_start' => $moved->scheduled_start->toIso8601String(),
+            'scheduled_end' => $moved->scheduled_end->toIso8601String(),
+            'updated_at' => $moved->updated_at->toISOString(),
+        ]]);
     }
 
     public function options(): JsonResponse

@@ -20,6 +20,9 @@ import { formatPercent, formatPeso } from '@/lib/formatNumber';
 import { toCentavos } from '@/lib/money';
 import { formatDate } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { isAxiosError } from 'axios';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function LoanDetailPage() {
@@ -30,25 +33,48 @@ export default function LoanDetailPage() {
  const [confirmApprove, setConfirmApprove] = useState(false);
  const [confirmCancel, setConfirmCancel] = useState(false);
 
+ useRealtimeRecord('employee_loan', id);
+
  const { data: loan, isLoading, isError, refetch } = useQuery({
  queryKey: ['loans', 'show', id],
  queryFn: () => loansApi.show(id),
  });
 
  const approve = useMutation({
- mutationFn: () => loansApi.approve(id),
- onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Approved.'); },
- onError: (error) => reportMutationError(error, 'Could not approve the loan.'),
+ mutationFn: () => loansApi.approve(id, undefined, loan?.version),
+ onSuccess: (updatedLoan) => {
+ qc.setQueryData(['loans', 'show', id], updatedLoan);
+ void invalidateRealtimeChange(qc, { entityType: 'employee_loan', entityId: id });
+ toast.success('Approved.');
+ },
+ onError: (error) => {
+ if (isLoanStateConflict(error)) { void refetch(); toast.error(loanConflictMessage(error)); return; }
+ reportMutationError(error, 'Could not approve the loan.');
+ },
  });
  const rejectMut = useMutation({
- mutationFn: () => loansApi.reject(id, reason),
- onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Rejected.'); setReject(false); setReason(''); },
- onError: (error) => reportMutationError(error, 'Could not reject the loan.'),
+ mutationFn: () => loansApi.reject(id, reason, loan?.version),
+ onSuccess: (updatedLoan) => {
+ qc.setQueryData(['loans', 'show', id], updatedLoan);
+ void invalidateRealtimeChange(qc, { entityType: 'employee_loan', entityId: id });
+ toast.success('Rejected.'); setReject(false); setReason('');
+ },
+ onError: (error) => {
+ if (isLoanStateConflict(error)) { void refetch(); toast.error(loanConflictMessage(error)); return; }
+ reportMutationError(error, 'Could not reject the loan.');
+ },
  });
  const cancel = useMutation({
- mutationFn: () => loansApi.cancel(id),
- onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Cancelled.'); },
- onError: (error) => reportMutationError(error, 'Could not cancel the loan.'),
+ mutationFn: () => loansApi.cancel(id, loan?.version),
+ onSuccess: (updatedLoan) => {
+ qc.setQueryData(['loans', 'show', id], updatedLoan);
+ void invalidateRealtimeChange(qc, { entityType: 'employee_loan', entityId: id });
+ toast.success('Cancelled.');
+ },
+ onError: (error) => {
+ if (isLoanStateConflict(error)) { void refetch(); toast.error(loanConflictMessage(error)); return; }
+ reportMutationError(error, 'Could not cancel the loan.');
+ },
  });
 
  if (isLoading) return <SkeletonDetail />;
@@ -67,6 +93,7 @@ export default function LoanDetailPage() {
  const remainingPercent = totalDueCentavos > 0
  ? Math.min(100, (paidCentavos / totalDueCentavos) * 100)
  : 0;
+ const availableActions = loan.available_actions ?? loan.actions;
 
  return (
  <div>
@@ -82,13 +109,13 @@ export default function LoanDetailPage() {
  backLabel="Loans"
  actions={
  <>
-  {loan.actions?.can_approve && (
+  {availableActions?.can_approve && (
  <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
  <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}
-  {loan.actions?.can_cancel && (
+  {availableActions?.can_cancel && (
  <Button variant="secondary" size="sm" onClick={() => setConfirmCancel(true)} disabled={cancel.isPending}>Cancel</Button>
  )}
  </>
@@ -218,6 +245,18 @@ export default function LoanDetailPage() {
  />
  </div>
  );
+}
+
+function isLoanStateConflict(error: unknown): boolean {
+ return isAxiosError(error) && error.response?.status === 409;
+}
+
+function loanConflictMessage(error: unknown): string {
+ if (!isAxiosError(error)) return 'This loan changed. Review its current status and actions.';
+ const data = error.response?.data as { message?: unknown } | undefined;
+ return typeof data?.message === 'string'
+ ? data.message
+ : 'This loan changed. Review its current status and actions.';
 }
 
 function Stat({ label, value, variant = 'neutral' }: { label: string; value: string; variant?: 'success' | 'warning' | 'danger' | 'neutral' }) {

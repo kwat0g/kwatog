@@ -9,6 +9,7 @@ use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Requests\Supplier\StoreSupplierQuoteRequest;
 use App\Modules\B2B\Requests\Supplier\UploadRfqDocumentRequest;
 use App\Modules\B2B\Resources\SupplierRfqInvitationResource;
+use App\Modules\Purchasing\Exceptions\SupplierQuoteStateConflictException;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RfqDocument;
 use App\Modules\Purchasing\Resources\SupplierQuoteResource;
@@ -60,6 +61,8 @@ class SupplierRfqController
         $data = $request->validated();
         try {
             $quote = $this->quotes->save($rfq, $user->vendor_id, $data, (bool) $data['submit'], $user);
+        } catch (SupplierQuoteStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -71,6 +74,8 @@ class SupplierRfqController
     {
         try {
             return new SupplierQuoteResource($this->quotes->withdraw($rfq, $this->user($request)->vendor_id));
+        } catch (SupplierQuoteStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -81,6 +86,8 @@ class SupplierRfqController
         $user = $this->user($request);
         try {
             $document = $this->quotes->uploadDocument($rfq, $user->vendor_id, $user, $request->file('file'), (string) $request->validated('document_type'));
+        } catch (SupplierQuoteStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }

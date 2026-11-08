@@ -81,6 +81,7 @@ class WorkOrderController
     public function options(): JsonResponse
     {
         return response()->json(['data' => [
+            'routing_execution_enabled' => (bool) config('production.routing_execution_enabled', true),
             'statuses' => array_map(static fn (WorkOrderStatus $status): array => [
                 'value' => $status->value,
                 'label' => $status->label(),

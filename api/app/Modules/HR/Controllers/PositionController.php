@@ -51,7 +51,7 @@ class PositionController
 
     public function restore(Position $position): JsonResponse
     {
-        $position->restore();
+        $this->service->restore($position);
         return response()->json(['message' => 'Position restored.']);
     }
 }

@@ -148,7 +148,15 @@ class RecommendationLifecycleTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->getJson("/api/v1/dss/recommendations/{$rec->id}")
             ->assertOk()
-            ->assertJsonPath('data.id', $rec->hash_id);
+            ->assertJsonPath('data.id', $rec->hash_id)
+            ->assertJsonPath('data.permissions.view', true)
+            ->assertJsonPath('data.permissions.act', true)
+            ->assertJsonPath('data.available_actions.accept', true)
+            ->assertJsonPath('data.available_actions.dismiss', true)
+            ->assertJsonPath('data.available_actions.snooze', true)
+            ->assertJsonPath('data.available_actions.start_follow_up', true)
+            ->assertJsonPath('data.available_actions.execute', false)
+            ->assertJsonPath('data.available_actions.record_outcome', false);
 
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'start_follow_up'])
@@ -164,12 +172,17 @@ class RecommendationLifecycleTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'accept'])
             ->assertOk()
-            ->assertJsonPath('data.status', 'accepted');
+            ->assertJsonPath('data.status', 'accepted')
+            ->assertJsonPath('data.available_actions.accept', false)
+            ->assertJsonPath('data.available_actions.execute', true)
+            ->assertJsonPath('data.available_actions.record_outcome', true);
 
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'execute'])
             ->assertOk()
-            ->assertJsonPath('data.status', 'executed');
+            ->assertJsonPath('data.status', 'executed')
+            ->assertJsonPath('data.available_actions.execute', false)
+            ->assertJsonPath('data.available_actions.record_outcome', true);
 
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/dss/recommendations/{$rec->id}/outcome", ['outcome' => ['note' => 'Stock-out avoided']])
@@ -319,6 +332,27 @@ class RecommendationLifecycleTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/dss/recommendations/{$open->id}/outcome", ['outcome' => ['note' => 'Not decided']])
             ->assertStatus(422);
+    }
+
+    public function test_stale_recommendation_action_returns_a_state_conflict(): void
+    {
+        $actor = $this->userWithPermissions(['dss.view']);
+        $viewer = $this->userWithPermissions(['dss.view']);
+        $rec = $this->makeRecommendation();
+        $staleVersion = $rec->version;
+
+        $this->actingAs($actor, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'accept'])
+            ->assertOk();
+
+        $this->actingAs($viewer, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", [
+                'action' => 'accept',
+                'expected_version' => $staleVersion,
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'dss_recommendation_state_conflict')
+            ->assertJsonStructure(['errors' => ['version']]);
     }
 
     public function test_expired_rows_vanish_lazily(): void

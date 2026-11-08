@@ -7,6 +7,13 @@ export interface TablePrefs {
   density?: TableDensity;
   hiddenColumns?: string[];
   columnWidths?: Record<string, number>;
+  savedViews?: SavedFilterView[];
+}
+
+export interface SavedFilterView {
+  id: string;
+  name: string;
+  filters: Record<string, string>;
 }
 
 interface TablePrefsState {
@@ -17,6 +24,7 @@ interface TablePrefsState {
   setDensity: (tableKey: string, density: TableDensity) => void;
   setHiddenColumns: (tableKey: string, hidden: string[]) => void;
   setColumnWidths: (tableKey: string, widths: Record<string, number>) => void;
+  setSavedViews: (tableKey: string, savedViews: SavedFilterView[]) => void;
   reset: (tableKey: string) => void;
 }
 
@@ -60,6 +68,19 @@ export const useTablePrefsStore = create<TablePrefsState>((set, get) => ({
     }));
     if (get().userId) {
       void authApi.updatePreferences({ table_preferences: { [tableKey]: { columnWidths } } }).catch(() => {
+        /* The local choice remains active; the next session load syncs from the server. */
+      });
+    }
+  },
+  setSavedViews: (tableKey, savedViews) => {
+    set((state) => ({
+      byTable: {
+        ...state.byTable,
+        [tableKey]: { ...(state.byTable[tableKey] ?? {}), savedViews },
+      },
+    }));
+    if (get().userId) {
+      void authApi.updatePreferences({ table_preferences: { [tableKey]: { savedViews } } }).catch(() => {
         /* The local choice remains active; the next session load syncs from the server. */
       });
     }

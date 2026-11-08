@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
@@ -33,13 +34,17 @@ use App\Modules\MRP\Services\MrpEngineService;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Services\StockProductionPlanningService;
+use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\OpenSupplyService;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionSpecService;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use App\Modules\SupplyChain\Services\DeliveryStockReservationService;
+use App\Modules\SupplyChain\Services\DeliveryStockService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
@@ -49,10 +54,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\Support\HasPassedInProcessQc;
-use App\Modules\Purchasing\Services\OpenSupplyService;
-use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\Production\Services\WorkOrderService;
-use App\Modules\SupplyChain\Services\DeliveryStockService;
 use Tests\TestCase;
 
 class SalesOrderStockFulfillmentTest extends TestCase
@@ -169,6 +170,157 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $this->assertSame(1, Delivery::where('sales_order_id', $so->id)->count());
     }
 
+    public function test_refilling_an_existing_qc_delivery_draft_stages_a_refresh(): void
+    {
+        [$so, $line, $item, $location, $actor, $sourceInspection] = $this->stockFixture();
+        $line->update(['fulfillment_policy' => 'produce_new']);
+        $workOrder = WorkOrder::create([
+            'wo_number' => 'WO-QC-DRAFT-'.substr(uniqid(), -6),
+            'product_id' => $line->product_id,
+            'production_purpose' => 'order',
+            'sales_order_id' => $so->id,
+            'sales_order_item_id' => $line->id,
+            'quantity_target' => 5,
+            'quantity_good' => 5,
+            'quantity_produced' => 5,
+            'quantity_rejected' => 0,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $actor->id,
+        ]);
+        $this->passInProcessQc($workOrder);
+        $output = WorkOrderOutput::create([
+            'work_order_id' => $workOrder->id,
+            'recorded_by' => $actor->id,
+            'recorded_at' => now(),
+            'good_count' => 5,
+            'reject_count' => 0,
+            'batch_code' => 'QC-DRAFT-'.substr(uniqid(), -6),
+        ]);
+        $receipt = StockMovement::create([
+            'item_id' => $item->id,
+            'to_location_id' => $location->id,
+            'movement_type' => 'production_receipt',
+            'quantity' => '5.000',
+            'unit_cost' => '4.5000',
+            'total_cost' => '22.50',
+            'lot_number' => $output->batch_code,
+            'reference_type' => 'work_order_output',
+            'reference_id' => $output->id,
+            'created_by' => $actor->id,
+        ]);
+        app(MovementGlPostingService::class)->postFor($receipt);
+        $output->update([
+            'production_receipt_movement_id' => $receipt->id,
+            'production_receipt_handoff_status' => 'generated',
+        ]);
+        $inspection = Inspection::create([
+            'inspection_number' => 'QC-DRAFT-'.substr(uniqid(), -6),
+            'stage' => 'outgoing',
+            'status' => 'passed',
+            'inspector_id' => $actor->id,
+            'reviewed_by' => User::factory()->create()->id,
+            'reviewed_at' => now(),
+            'product_id' => $line->product_id,
+            'entity_type' => 'work_order',
+            'entity_id' => $workOrder->id,
+            'work_order_output_id' => $output->id,
+            'batch_quantity' => 5,
+            'accepted_quantity' => 5,
+            'sample_size' => 1,
+            'accept_count' => 1,
+            'reject_count' => 0,
+            'defect_count' => 0,
+            'completed_at' => now(),
+            'inspection_spec_id' => $sourceInspection->inspection_spec_id,
+            'inspection_spec_revision_id' => $sourceInspection->inspection_spec_revision_id,
+        ]);
+
+        $service = app(DeliveryService::class);
+        $delivery = $service->draftReleasedWorkOrder($workOrder->fresh());
+        $this->assertNotNull($delivery);
+        $batch = $delivery->stockReservationBatch()->firstOrFail();
+        foreach ($batch->reservations()->get() as $reservation) {
+            $remaining = $reservation->remainingQuantity();
+            $level = StockLevel::query()->where('item_id', $reservation->item_id)
+                ->where('location_id', $reservation->location_id)->firstOrFail();
+            $level->forceFill([
+                'reserved_quantity' => bcsub((string) $level->reserved_quantity, $remaining, 3),
+            ])->save();
+        }
+        $batch->reservations()->delete();
+        $batch->delete();
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
+
+        $service->draftReleasedWorkOrder($workOrder->fresh());
+
+        $this->assertSame(
+            $initialSignals + 1,
+            DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count(),
+            'Refilling an existing automatic delivery reservation changes detail and must stage one refresh.',
+        );
+
+        $secondOutput = WorkOrderOutput::create([
+            'work_order_id' => $workOrder->id,
+            'recorded_by' => $actor->id,
+            'recorded_at' => now(),
+            'good_count' => 5,
+            'reject_count' => 0,
+            'batch_code' => 'QC-DRAFT-SECOND-'.substr(uniqid(), -6),
+        ]);
+        $secondReceipt = StockMovement::create([
+            'item_id' => $item->id,
+            'to_location_id' => $location->id,
+            'movement_type' => 'production_receipt',
+            'quantity' => '5.000',
+            'unit_cost' => '4.5000',
+            'total_cost' => '22.50',
+            'lot_number' => $secondOutput->batch_code,
+            'reference_type' => 'work_order_output',
+            'reference_id' => $secondOutput->id,
+            'created_by' => $actor->id,
+        ]);
+        app(MovementGlPostingService::class)->postFor($secondReceipt);
+        $secondOutput->update([
+            'production_receipt_movement_id' => $secondReceipt->id,
+            'production_receipt_handoff_status' => 'generated',
+        ]);
+        StockLevel::where('item_id', $item->id)->where('location_id', $location->id)
+            ->update(['quantity' => '20.000']);
+        Inspection::create([
+            'inspection_number' => 'QC-DRAFT-SECOND-'.substr(uniqid(), -6),
+            'stage' => 'outgoing',
+            'status' => 'passed',
+            'inspector_id' => $actor->id,
+            'reviewed_by' => User::factory()->create()->id,
+            'reviewed_at' => now(),
+            'product_id' => $line->product_id,
+            'entity_type' => 'work_order',
+            'entity_id' => $workOrder->id,
+            'work_order_output_id' => $secondOutput->id,
+            'batch_quantity' => 5,
+            'accepted_quantity' => 5,
+            'sample_size' => 1,
+            'accept_count' => 1,
+            'reject_count' => 0,
+            'defect_count' => 0,
+            'completed_at' => now(),
+            'inspection_spec_id' => $sourceInspection->inspection_spec_id,
+            'inspection_spec_revision_id' => $sourceInspection->inspection_spec_revision_id,
+        ]);
+        $signalsBeforeAppend = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
+
+        $updatedDraft = $service->draftReleasedWorkOrder($workOrder->fresh());
+
+        $this->assertSame(2, $updatedDraft?->items()->count());
+        $this->assertSame(
+            $signalsBeforeAppend + 1,
+            DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count(),
+            'Appending a newly QC-released line to an existing automatic draft must stage one refresh.',
+        );
+    }
+
     public function test_stock_creation_reuses_request_and_rejects_changed_quantity(): void
     {
         [$so, $line, $item, $location, $actor] = $this->stockFixture();
@@ -186,6 +338,22 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $this->assertSame('stock', $first->production_purpose);
         $this->assertNull($first->sales_order_id);
         $this->assertSame(1, PurchaseRequest::where('stock_production_work_order_id', $first->id)->count());
+        $stockRequest = PurchaseRequest::where('stock_production_work_order_id', $first->id)->firstOrFail();
+        $this->assertDatabaseHas('chain_step_runs', [
+            'entity_type' => 'purchase_request',
+            'entity_id' => $stockRequest->id,
+            'step' => 'draft',
+            'event_type' => ChainStepAdvanced::class,
+        ]);
+        $actions = DB::table('chain_step_runs')
+            ->join('event_outbox', 'event_outbox.id', '=', 'chain_step_runs.outbox_id')
+            ->where('chain_step_runs.entity_type', 'purchase_request')
+            ->where('chain_step_runs.entity_id', $stockRequest->id)
+            ->where('chain_step_runs.event_type', ChainStepAdvanced::class)
+            ->pluck('event_outbox.payload')
+            ->map(fn (string $payload): string => json_decode($payload, true, flags: JSON_THROW_ON_ERROR)['action'])
+            ->all();
+        $this->assertEqualsCanonicalizing(['created', 'updated'], $actions);
         $this->expectException(BusinessRuleException::class);
         $planner->create(array_replace($data, ['quantity_target' => 4]), $actor);
     }
@@ -499,8 +667,12 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $delivery = Delivery::where('sales_order_id', $so->id)->firstOrFail();
         $this->prepareShipmentForDispatch($delivery);
         $this->assertFalse(app(DeliveryService::class)->isUntouchedAutomaticSupply($delivery->fresh()));
-        try { app(SalesOrderService::class)->cancel($so, 'Customer changed order.'); $this->fail('Assigned shipment must remain protected.'); }
-        catch (BusinessRuleException $error) { $this->assertNotEmpty($error->getMessage()); }
+        try {
+            app(SalesOrderService::class)->cancel($so, 'Customer changed order.');
+            $this->fail('Assigned shipment must remain protected.');
+        } catch (BusinessRuleException $error) {
+            $this->assertNotEmpty($error->getMessage());
+        }
         $this->assertSame('scheduled', $delivery->fresh()->status->value);
         app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
         $deliveryViewerRole = Role::firstOrCreate(['slug' => 'notification_invalid_supply_viewer'], ['name' => 'Notification Invalid Supply Viewer']);
@@ -538,7 +710,9 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $second = $this->stockPlan($fixture);
         $planner = app(StockProductionPlanningService::class);
         foreach ([[$first, $second], [$second, $first]] as $order) {
-            foreach ($order as $work) $planner->reconcile($work, $fixture[4]);
+            foreach ($order as $work) {
+                $planner->reconcile($work, $fixture[4]);
+            }
             $requests = PurchaseRequest::whereIn('stock_production_work_order_id', [$first->id, $second->id])->where('status', '!=', 'cancelled')->get();
             $this->assertSame('3.000', bcadd((string) $requests->sum(fn ($request) => $request->items()->sum('quantity')), '0', 3));
         }
@@ -576,8 +750,12 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $root = $this->stockPlan($fixture);
         $request = PurchaseRequest::where('stock_production_work_order_id', $root->id)->firstOrFail();
         $request->forceFill(['status' => 'approved'])->save();
-        try { app(WorkOrderService::class)->cancel($root, 'Replenishment no longer needed.'); $this->fail('Approved purchasing must block automatic cancellation.'); }
-        catch (BusinessRuleException $error) { $this->assertStringContainsString($request->pr_number, $error->getMessage()); }
+        try {
+            app(WorkOrderService::class)->cancel($root, 'Replenishment no longer needed.');
+            $this->fail('Approved purchasing must block automatic cancellation.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString($request->pr_number, $error->getMessage());
+        }
         $this->assertSame('planned', $root->fresh()->status->value);
         $this->assertSame('approved', $request->fresh()->status->value);
     }

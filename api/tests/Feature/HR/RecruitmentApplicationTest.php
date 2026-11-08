@@ -4,21 +4,22 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
-use App\Modules\Auth\Models\Role;
+use App\Common\Services\SettingsService;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Enums\JobPostingStatus;
-use App\Modules\HR\Models\Department;
-use App\Modules\HR\Models\ApplicationInterview;
-use App\Modules\HR\Models\JobApplication;
-use App\Modules\HR\Models\JobPosting;
-use App\Modules\HR\Models\Position;
 use App\Modules\HR\Mail\ApplicationReceivedMail;
 use App\Modules\HR\Mail\ApplicationStatusUpdatedMail;
 use App\Modules\HR\Mail\InterviewDetailsUpdatedMail;
 use App\Modules\HR\Mail\InterviewScheduledMail;
-use App\Common\Support\NotificationSubjectAccessRegistry;
+use App\Modules\HR\Models\ApplicationInterview;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\JobApplication;
+use App\Modules\HR\Models\JobPosting;
+use App\Modules\HR\Models\Position;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,7 +33,9 @@ class RecruitmentApplicationTest extends TestCase
     use RefreshDatabase;
 
     private User $hrUser;
+
     private JobPosting $posting;
+
     private JobApplication $application;
 
     protected function setUp(): void
@@ -46,32 +49,32 @@ class RecruitmentApplicationTest extends TestCase
         $this->hrUser = User::factory()->create(['role_id' => $hrRole->id, 'is_active' => true]);
 
         $dept = Department::factory()->create();
-        $this->posting = new JobPosting();
+        $this->posting = new JobPosting;
         $this->posting->fill([
-            'posting_number'  => 'JP-T-' . substr(uniqid(), -5),
-            'title'           => 'Test Position',
-            'department_id'   => $dept->id,
-            'description'     => 'Desc',
-            'requirements'    => 'Reqs',
+            'posting_number' => 'JP-T-'.substr(uniqid(), -5),
+            'title' => 'Test Position',
+            'department_id' => $dept->id,
+            'description' => 'Desc',
+            'requirements' => 'Reqs',
             'employment_type' => 'regular',
-            'created_by'      => $this->hrUser->id,
-            'posted_at'       => now(),
+            'created_by' => $this->hrUser->id,
+            'posted_at' => now(),
         ]);
         $this->posting->status = JobPostingStatus::Open;
         $this->posting->save();
 
-        $this->application = new JobApplication();
+        $this->application = new JobApplication;
         $this->application->fill([
-            'application_number'   => 'JA-T-' . substr(uniqid(), -5),
-            'job_posting_id'       => $this->posting->id,
-            'tracking_code'        => 'RCT-TEST01',
-            'first_name'           => 'Juan',
-            'last_name'            => 'Test',
-            'email'                => 'juan@test.com',
-            'phone'                => '09170000000',
-            'resume_path'          => 'recruitment/resumes/test.pdf',
+            'application_number' => 'JA-T-'.substr(uniqid(), -5),
+            'job_posting_id' => $this->posting->id,
+            'tracking_code' => 'RCT-TEST01',
+            'first_name' => 'Juan',
+            'last_name' => 'Test',
+            'email' => 'juan@test.com',
+            'phone' => '09170000000',
+            'resume_path' => 'recruitment/resumes/test.pdf',
             'resume_original_name' => 'test.pdf',
-            'applied_at'           => now(),
+            'applied_at' => now(),
         ]);
         $this->application->stage = ApplicationStage::New;
         $this->application->save();
@@ -82,6 +85,39 @@ class RecruitmentApplicationTest extends TestCase
         $response = $this->actingAs($this->hrUser)->getJson('/api/v1/hr/recruitment/applications');
         $response->assertOk();
         $response->assertJsonCount(1, 'data');
+    }
+
+    public function test_application_resource_projects_server_actions_for_the_current_actor(): void
+    {
+        $this->actingAs($this->hrUser)
+            ->getJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions', ['advance', 'reject', 'add_note'])
+            ->assertJsonPath('data.permissions', [
+                'view' => true,
+                'manage_applications' => true,
+                'hire' => true,
+            ]);
+
+        $applicationsRole = Role::create([
+            'name' => 'Recruitment Applications Only',
+            'slug' => 'recruitment_applications_only_actions',
+            'is_system' => false,
+        ]);
+        $applicationsRole->permissions()->sync(Permission::query()
+            ->whereIn('slug', ['hr.recruitment.view', 'hr.recruitment.applications'])
+            ->pluck('id'));
+        $applicationsOnly = User::factory()->create([
+            'role_id' => $applicationsRole->id,
+            'is_active' => true,
+        ]);
+        $this->application->forceFill(['stage' => ApplicationStage::Offer])->save();
+
+        $this->actingAs($applicationsOnly)
+            ->getJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.available_actions', ['reject', 'add_note'])
+            ->assertJsonPath('data.permissions.hire', false);
     }
 
     public function test_conversion_prefills_posting_department_position_and_employment_type(): void
@@ -138,7 +174,7 @@ class RecruitmentApplicationTest extends TestCase
     public function test_hr_application_filters_and_pagination_are_server_side(): void
     {
         $other = $this->application->replicate();
-        $other->application_number = 'JA-T-' . substr(uniqid(), -5);
+        $other->application_number = 'JA-T-'.substr(uniqid(), -5);
         $other->tracking_code = 'RCT-OTHER1';
         $other->first_name = 'Ana';
         $other->last_name = 'Other';
@@ -275,6 +311,23 @@ class RecruitmentApplicationTest extends TestCase
                 && str_contains($html, 'View application status')
                 && ! str_contains($html, 'screening');
         });
+    }
+
+    public function test_stale_expected_stage_returns_conflict_before_current_stage_validation(): void
+    {
+        $this->application->forceFill(['stage' => ApplicationStage::Screening])->save();
+
+        $response = $this->actingAs($this->hrUser)
+            ->patchJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}/stage", [
+                'action' => 'advance',
+                'expected_stage' => ApplicationStage::New->value,
+            ]);
+
+        $response->assertStatus(409)
+            ->assertJsonPath('code', 'recruitment_state_conflict')
+            ->assertJsonPath('message', 'This application changed from New to Screening. Refresh and review the current stage.');
+        $this->assertSame(ApplicationStage::Screening, $this->application->fresh()->stage);
+        Mail::assertNothingOutgoing();
     }
 
     public function test_application_received_email_keeps_submission_time_values(): void
@@ -467,7 +520,7 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('data.stage', 'rejected');
         $this->assertDatabaseHas('job_applications', [
-            'id'                => $this->application->id,
+            'id' => $this->application->id,
             'rejected_at_stage' => 'new',
         ]);
         Mail::assertQueued(ApplicationStatusUpdatedMail::class, function (ApplicationStatusUpdatedMail $mail): bool {
@@ -486,8 +539,8 @@ class RecruitmentApplicationTest extends TestCase
 
         $response = $this->actingAs($this->hrUser)
             ->postJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}/interviews", [
-                'scheduled_at'     => now()->addDays(3)->toIso8601String(),
-                'location'         => 'HR Office, 2nd Floor',
+                'scheduled_at' => now()->addDays(3)->toIso8601String(),
+                'location' => 'HR Office, 2nd Floor',
                 'interviewer_name' => 'Maria Santos',
             ]);
 
@@ -526,21 +579,20 @@ class RecruitmentApplicationTest extends TestCase
 
     public function test_interview_email_renders_when_company_address_is_missing(): void
     {
-        app(\App\Common\Services\SettingsService::class)->set('company.address', '');
+        app(SettingsService::class)->set('company.address', '');
 
         $this->application->stage = ApplicationStage::Interview;
         $this->application->save();
 
         $this->actingAs($this->hrUser)
             ->postJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}/interviews", [
-                'scheduled_at'     => now()->addDays(3)->toIso8601String(),
-                'location'         => 'HR Office',
+                'scheduled_at' => now()->addDays(3)->toIso8601String(),
+                'location' => 'HR Office',
                 'interviewer_name' => 'Maria Santos',
             ])
             ->assertStatus(201);
 
-        Mail::assertQueued(InterviewScheduledMail::class, fn (InterviewScheduledMail $mail): bool =>
-            $mail->hasTo('juan@test.com')
+        Mail::assertQueued(InterviewScheduledMail::class, fn (InterviewScheduledMail $mail): bool => $mail->hasTo('juan@test.com')
             && str_contains((string) $mail->render(), 'FCIE Complex')
         );
     }
@@ -669,7 +721,7 @@ class RecruitmentApplicationTest extends TestCase
 
         $response->assertStatus(201);
         $this->assertDatabaseHas('application_notes', [
-            'body'    => 'Strong candidate, proceed to screening.',
+            'body' => 'Strong candidate, proceed to screening.',
             'user_id' => $this->hrUser->id,
         ]);
     }

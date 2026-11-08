@@ -52,13 +52,17 @@ class PayrollAnomalyService
         // so orphans are normally impossible — but flags raised against rows that
         // were skipped this run would otherwise linger and block finalize()
         // forever with no way to reach them from the UI.
-        PayrollAnomalyFlag::query()
+        $deleted = PayrollAnomalyFlag::query()
             ->where('payroll_period_id', $period->id)
             ->whereNotIn('payroll_id', $payrolls->pluck('id'))
             ->delete();
 
         foreach ($payrolls as $payroll) {
             $created += $this->detectForPayroll($payroll, $period);
+        }
+
+        if ($created > 0 || $deleted > 0) {
+            app(PayrollAnomalyRealtimeService::class)->stage($period, 'updated');
         }
 
         return $created;
@@ -268,6 +272,7 @@ class PayrollAnomalyService
                 'resolved_at'        => $resolvedAt,
                 'resolution_remarks' => $remarks,
             ]);
+            app(PayrollAnomalyRealtimeService::class)->stage($period, 'resolved');
 
             AuditLog::create([
                 'user_id' => $userId,

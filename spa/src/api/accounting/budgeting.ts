@@ -54,23 +54,25 @@ export const budgetingApi = {
  create: (data: CreateBudgetData) =>
  client.post<ApiSuccess<Budget>>('/budgets', data).then((r) => r.data.data),
 
- update: (id: string, data: UpdateBudgetData) =>
- client.put<ApiSuccess<Budget>>(`/budgets/${id}`, data).then((r) => r.data.data),
+ update: (id: string, data: UpdateBudgetData, expectedUpdatedAt?: string) =>
+ client.put<ApiSuccess<Budget>>(`/budgets/${id}`, data, {
+  headers: expectedUpdatedAt ? { 'If-Match': expectedUpdatedAt } : undefined,
+ }).then((r) => r.data.data),
 
  submit: (id: string) =>
- client.post(`/budgets/${id}/submit`).then((r) => r.data),
+ client.post<ApiSuccess<Budget>>(`/budgets/${id}/submit`).then((r) => r.data.data),
 
   approve: (id: string) =>
-  client.post(`/budgets/${id}/approve`).then((r) => r.data),
+  client.post<ApiSuccess<Budget>>(`/budgets/${id}/approve`).then((r) => r.data.data),
 
   reject: (id: string, reason: string) =>
-  client.post(`/budgets/${id}/reject`, { reason }).then((r) => r.data),
+  client.post<ApiSuccess<Budget>>(`/budgets/${id}/reject`, { reason }).then((r) => r.data.data),
 
   destroy: (id: string) =>
   client.delete(`/budgets/${id}`).then((r) => r.data),
 
  close: (id: string) =>
- client.post(`/budgets/${id}/close`).then((r) => r.data),
+ client.post<ApiSuccess<Budget>>(`/budgets/${id}/close`).then((r) => r.data.data),
 
  // Overview & Reports
  overview: (fiscalYearId?: string) =>
@@ -104,9 +106,9 @@ export const budgetingApi = {
   client.post<ApiSuccess<BudgetTransfer>>('/budget-transfers', data).then((r) => r.data.data),
 
   approveTransfer: (id: string) =>
-  client.post(`/budget-transfers/${id}/approve`).then((r) => r.data),
+  client.post<ApiSuccess<BudgetTransfer>>(`/budget-transfers/${id}/approve`).then((r) => r.data.data),
 
   rejectTransfer: (id: string) =>
-  client.post(`/budget-transfers/${id}/reject`).then((r) => r.data),
+  client.post<ApiSuccess<BudgetTransfer>>(`/budget-transfers/${id}/reject`).then((r) => r.data.data),
 
 };

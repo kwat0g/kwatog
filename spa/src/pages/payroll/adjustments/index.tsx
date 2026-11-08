@@ -20,28 +20,45 @@ import { formatDate } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
 import { payrollAdjustmentStatusVariant } from '@/lib/statusVariants';
 import type { PayrollAdjustment } from '@/types/payroll';
+import type { PaginatedResponse } from '@/types';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 export default function PayrollAdjustmentsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can, canApprove } = usePermission();
+  const { can } = usePermission();
+  useRealtimeList('payroll_adjustment', 'visible');
   const [filters, setFilters] = useUrlFilters<AdjustmentListParams>({
     page: 1,
     per_page: 25,
     sort: 'created_at',
     direction: 'desc',
   });
-  const [rejectTarget, setRejectTarget] = useState<PayrollAdjustment | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
-  const [confirmApprove, setConfirmApprove] = useState<PayrollAdjustment | null>(null);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['payroll-adjustments', filters],
+  const reconcileAdjustment = (updated: PayrollAdjustment) => {
+    qc.setQueryData<PaginatedResponse<PayrollAdjustment>>(['payroll-adjustments', filters], (current) =>
+      current ? { ...current, data: current.data.map((row) => row.id === updated.id ? updated : row) } : current,
+    );
+    void qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
+  };
+
+  const queryKey = ['payroll-adjustments', filters] as const;
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
+    queryKey,
     queryFn: () => adjustmentsApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined,
   });
+  const adjustments = data?.data ?? [];
+  const rejectActionTarget = useQueryRecordTarget(adjustments, { isFetching, isError });
+  const approveActionTarget = useQueryRecordTarget(adjustments, { isFetching, isError });
+  const rejectTarget = rejectActionTarget.target;
+  const approveTarget = approveActionTarget.target;
   const { data: adjustmentOptions } = useQuery({
     queryKey: ['payroll-adjustments', 'options'],
     queryFn: adjustmentsApi.options,
@@ -56,23 +73,29 @@ export default function PayrollAdjustmentsPage() {
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => adjustmentsApi.approve(id),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Adjustment approved.');
-      qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
-      setConfirmApprove(null);
+      reconcileAdjustment(updated);
+      approveActionTarget.close();
     },
-    onError: (error) => reportMutationError(error, 'Could not approve the payroll adjustment.'),
+    onError: (error) => {
+      void qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
+      reportMutationError(error, 'Could not approve the payroll adjustment.');
+    },
   });
   const rejectMutation = useMutation({
     mutationFn: ({ id, remarks }: { id: string; remarks: string }) =>
       adjustmentsApi.reject(id, remarks),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success('Adjustment rejected.');
-      qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
-      setRejectTarget(null);
+      reconcileAdjustment(updated);
+      rejectActionTarget.close();
       setRejectRemarks('');
     },
-    onError: (error) => reportMutationError(error, 'Could not reject the payroll adjustment.'),
+    onError: (error) => {
+      void qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
+      reportMutationError(error, 'Could not reject the payroll adjustment.');
+    },
   });
 
   const filterConfig: FilterConfig[] = [
@@ -146,25 +169,26 @@ export default function PayrollAdjustmentsPage() {
       key: 'actions',
       header: 'Actions',
       cell: (r) =>
-        r.status === 'pending' && (canApprove('payroll.adjustments.approve') || canApprove('payroll.adjustments.reject')) ? (
+        (r.available_actions.approve || r.available_actions.reject) ? (
           <div className="flex items-center gap-1">
-            {canApprove('payroll.adjustments.approve') && (
+            {r.available_actions.approve && (
               <Button
                 size="xs"
                 variant="ghost"
                 icon={<LuCheck size={12} />}
-                onClick={() => setConfirmApprove(r)}
-                disabled={approveMutation.isPending}
+                onClick={() => approveActionTarget.open(r)}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
               >
                 Approve
               </Button>
             )}
-            {canApprove('payroll.adjustments.reject') && (
+            {r.available_actions.reject && (
               <Button
                 size="xs"
                 variant="ghost"
                 icon={<LuX size={12} />}
-                onClick={() => setRejectTarget(r)}
+                onClick={() => rejectActionTarget.open(r)}
+                disabled={approveMutation.isPending || rejectMutation.isPending}
               >
                 Reject
               </Button>
@@ -245,16 +269,24 @@ export default function PayrollAdjustmentsPage() {
 
       {/* Reject modal */}
       <Modal
-        isOpen={!!rejectTarget}
-        onClose={() => setRejectTarget(null)}
+        isOpen={rejectActionTarget.targetId !== null}
+        onClose={rejectActionTarget.close}
         size="sm"
         title="Reject adjustment"
       >
         <div className="py-3">
-          <p className="text-xs text-muted mb-2">
+          {rejectActionTarget.isChecking && <p role="status" className="text-xs text-muted mb-2">Checking the latest adjustment status. Your reason is kept.</p>}
+          {rejectActionTarget.isUnverified && <p role="alert" className="text-xs text-danger-fg mb-2">The latest status could not be checked. Your reason is kept; retry the refresh before rejecting.</p>}
+          {!rejectActionTarget.isChecking && !rejectActionTarget.isUnverified && rejectActionTarget.isUnavailable && (
+            <p role="alert" className="text-xs text-warning-fg mb-2">This adjustment is no longer available for rejection. Your reason is kept.</p>
+          )}
+          {rejectActionTarget.isFresh && rejectTarget && !rejectTarget.available_actions.reject && (
+            <p role="alert" className="text-xs text-warning-fg mb-2">This adjustment is no longer available for rejection. Your reason is kept.</p>
+          )}
+          {rejectActionTarget.isFresh && rejectTarget?.available_actions.reject && <p className="text-xs text-muted mb-2">
             Reject {rejectTarget?.employee?.full_name}'s {rejectTarget?.type_label.toLowerCase()} of{' '}
             <span className="font-mono">{formatPeso(rejectTarget?.amount)}</span>?
-          </p>
+          </p>}
           <Textarea
             label="Reason for rejection"
             value={rejectRemarks}
@@ -266,7 +298,7 @@ export default function PayrollAdjustmentsPage() {
         <ModalFooter>
           <Button
             variant="secondary"
-            onClick={() => setRejectTarget(null)}
+            onClick={rejectActionTarget.close}
             disabled={rejectMutation.isPending}
           >
             Cancel
@@ -276,7 +308,12 @@ export default function PayrollAdjustmentsPage() {
             onClick={() =>
               rejectTarget && rejectMutation.mutate({ id: rejectTarget.id, remarks: rejectRemarks })
             }
-            disabled={!rejectRemarks.trim() || rejectMutation.isPending}
+            disabled={
+              !rejectRemarks.trim() ||
+              rejectMutation.isPending ||
+              !rejectActionTarget.isFresh ||
+              !rejectTarget?.available_actions.reject
+            }
             loading={rejectMutation.isPending}
           >
             Confirm reject
@@ -285,25 +322,29 @@ export default function PayrollAdjustmentsPage() {
       </Modal>
 
       <ConfirmDialog
-        isOpen={!!confirmApprove}
-        onClose={() => setConfirmApprove(null)}
+        isOpen={approveActionTarget.targetId !== null}
+        onClose={approveActionTarget.close}
         onConfirm={() => {
-          if (confirmApprove) approveMutation.mutate(confirmApprove.id);
+          if (approveActionTarget.isFresh && approveTarget?.available_actions.approve) approveMutation.mutate(approveTarget.id);
         }}
         title="Approve payroll adjustment?"
         description={
-          confirmApprove ? (
+          approveActionTarget.isChecking ? 'Checking the latest adjustment status.'
+          : approveActionTarget.isUnverified ? 'The latest status could not be checked. Retry the refresh before approving.'
+          : approveActionTarget.isUnavailable ? 'This adjustment is no longer available for approval.'
+          : approveActionTarget.isFresh && approveTarget && !approveTarget.available_actions.approve ? 'This adjustment is no longer available for approval.'
+          : approveTarget ? (
             <>
               <span className="font-mono tabular-nums text-primary">
-                {formatPeso(confirmApprove.amount)}
+                {formatPeso(approveTarget.amount)}
               </span>{' '}
-              {labels.get(confirmApprove.type)?.toLowerCase() ??
-                confirmApprove.type_label.toLowerCase()}{' '}
+              {labels.get(approveTarget.type)?.toLowerCase() ??
+                approveTarget.type_label.toLowerCase()}{' '}
               for{' '}
               <span className="text-primary">
-                {confirmApprove.employee?.full_name ?? 'this employee'}
+                {approveTarget.employee?.full_name ?? 'this employee'}
               </span>
-              {confirmApprove.period?.label ? <> against {confirmApprove.period.label}</> : null}.
+              {approveTarget.period?.label ? <> against {approveTarget.period.label}</> : null}.
               Once approved it is applied to the employee&rsquo;s next payroll run.
             </>
           ) : undefined
@@ -311,6 +352,7 @@ export default function PayrollAdjustmentsPage() {
         variant="warning"
         confirmLabel="Approve"
         pending={approveMutation.isPending}
+        disabled={!approveActionTarget.isFresh || !approveTarget?.available_actions.approve}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const formatRelativeTime = (closesAt: string): string => {
@@ -44,10 +45,15 @@ export default function SupplierRfqDetailPage() {
       setConfirmWithdraw(false);
       toast.success('Quotation withdrawn. It is a draft again and will not be evaluated unless you submit it.');
     },
-    onError: (e) =>
+    onError: (e) => {
+      if ((e as { response?: { status?: number } })?.response?.status === 409) {
+        void invalidateRealtimeSignal(queryClient, 'supplier_rfqs_changed');
+        setConfirmWithdraw(false);
+      }
       toast.error(
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not withdraw the quotation.',
-      ),
+      );
+    },
   });
 
   if (query.isLoading) return <SkeletonTable columns={4} rows={6} />;
@@ -289,7 +295,7 @@ export default function SupplierRfqDetailPage() {
                 </Button>
               </Link>
               {quote && quote.status === 'submitted' && (
-                <Button variant="secondary" onClick={() => setConfirmWithdraw(true)}>
+                <Button variant="secondary" disabled={query.isFetching || withdraw.isPending} onClick={() => setConfirmWithdraw(true)}>
                   Withdraw quotation
                 </Button>
               )}
@@ -306,7 +312,7 @@ export default function SupplierRfqDetailPage() {
         title="Withdraw your quotation?"
         description="It goes back to draft and will not be evaluated unless you submit it again before the deadline."
         confirmLabel="Withdraw"
-        pending={withdraw.isPending}
+        pending={withdraw.isPending || query.isFetching}
       />
     </div>
   );

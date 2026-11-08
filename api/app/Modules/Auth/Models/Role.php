@@ -19,6 +19,7 @@ class Role extends Model
 
     protected $casts = [
         'is_system' => 'boolean',
+        'permissions_version' => 'integer',
     ];
 
     public function permissions(): BelongsToMany

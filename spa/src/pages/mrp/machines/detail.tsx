@@ -10,10 +10,12 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { machineStatusVariant } from '@/lib/statusVariants';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 export default function MachineDetailPage() {
  const { id } = useParams<{ id: string }>();
  const navigate = useNavigate();
+ useRealtimeRecord('machine', id);
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['mrp', 'machines', 'detail', id],
  queryFn: () => machinesApi.show(id!),

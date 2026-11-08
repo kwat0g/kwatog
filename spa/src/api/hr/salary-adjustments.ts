@@ -2,6 +2,7 @@ import { client } from '../client';
 import type { PaginatedResponse, ApiSuccess } from '@/types';
 
 export type SalaryAdjustmentStatus = 'pending' | 'approved' | 'rejected';
+export type SalaryAdjustmentAction = 'approve' | 'reject';
 
 export interface SalaryAdjustmentItem {
  id: string;
@@ -21,6 +22,10 @@ export interface SalaryAdjustmentItem {
  requested_by: { id: string; name: string } | null;
  applied_at: string | null;
  created_at: string | null;
+ updated_at: string | null;
+ version: string | null;
+ permissions: { view: boolean; act: boolean };
+ available_actions: SalaryAdjustmentAction[];
 }
 
 export interface RequestSalaryAdjustmentData {

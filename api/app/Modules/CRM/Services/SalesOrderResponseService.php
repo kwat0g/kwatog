@@ -8,6 +8,7 @@ use App\Common\Mail\UserNotificationMail;
 use Carbon\Carbon;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\NotificationService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
@@ -81,6 +82,7 @@ class SalesOrderResponseService
                 'proposed_delivery_date' => $date, 'notes' => $notes, 'responded_at' => now(),
             ]);
             $row->update(['status' => SalesOrderStatus::DeliveryNegotiation]);
+            $this->broadcastRefresh($row, $by, 'status_changed');
             $this->notifications->sendPortalInApp(CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->get(), 'sales_order.delivery_proposed', [
                 'title' => "Review delivery date for {$row->so_number}",
                 'message' => "Sales proposes {$date}. {$notes} Accept or decline this date in your order.",
@@ -192,6 +194,7 @@ class SalesOrderResponseService
                 'entity_type' => 'sales_order',
                 'entity_id' => $row->hash_id,
             ], 'so:cancellation-request:'.$response->id);
+            $this->broadcastRefresh($row);
 
             return $response->load('items');
         });
@@ -227,6 +230,7 @@ class SalesOrderResponseService
             }
             $row->update(['status' => $decision === 'accept' ? SalesOrderStatus::AwaitingConfirmation : SalesOrderStatus::DeliveryNegotiation]);
             $locked->update(['status' => $status, 'portal_user_id' => $by->id, 'resolved_at' => now()]);
+            $this->broadcastRefresh($row, action: 'status_changed');
             $this->notifySalesAudience($row, $locked);
             $this->notifications->sendPortalInApp(CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->get(), 'sales_order.delivery_decided', [
                 'title' => "Delivery date ".($decision === 'accept' ? 'accepted' : 'declined')." for {$row->so_number}",
@@ -320,6 +324,7 @@ class SalesOrderResponseService
                 $this->storeProposedItems($response, $row, $data['items'] ?? []);
             }
 
+            $this->broadcastRefresh($row);
             $this->notifySalesAudience($row->fresh(), $response);
 
             return $response->load('items');
@@ -359,6 +364,7 @@ class SalesOrderResponseService
                     $locked->resolution_notes = $notes;
                     $locked->save();
                     $this->emailCustomerDecision($locked->load('items', 'salesOrder'), $decision);
+                    $this->broadcastRefresh($locked->salesOrder, $by);
                 }
 
                 return $locked->fresh()->load('items');
@@ -370,9 +376,11 @@ class SalesOrderResponseService
 
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($locked->sales_order_id);
 
+            $cancellationSignalAlreadyStaged = false;
             if ($decision === 'accept') {
                 if ($locked->response_type === SalesOrderResponseType::CancellationRequest) {
                     $this->salesOrders->cancel($so, $locked->notes ?? $notes, null, $by);
+                    $cancellationSignalAlreadyStaged = true;
                 }
                 if ($locked->response_type === SalesOrderResponseType::Propose) {
                     // Apply the counter-offer under the row locks, then re-run
@@ -397,6 +405,13 @@ class SalesOrderResponseService
 
             if ($so->isDirty()) {
                 $so->save();
+            }
+
+            // cancel() already stages the canonical signal. Every other
+            // response resolution changes the parent detail's response
+            // history (and proposal acceptance can also change its terms).
+            if (! $cancellationSignalAlreadyStaged) {
+                $this->broadcastRefresh($so, $by);
             }
 
             if ($locked->response_type !== SalesOrderResponseType::CancellationRequest || $decision !== 'accept') {
@@ -446,6 +461,16 @@ class SalesOrderResponseService
                 'reason'                  => $item['reason'] ?? null,
             ]);
         }
+    }
+
+    private function broadcastRefresh(SalesOrder $so, ?User $actor = null, string $action = 'updated'): void
+    {
+        $fresh = $so->fresh();
+        if ($fresh === null) {
+            return;
+        }
+
+        app(ChainBroadcaster::class)->broadcastFor($fresh, $fresh->status->value, $actor, action: $action);
     }
 
     /**

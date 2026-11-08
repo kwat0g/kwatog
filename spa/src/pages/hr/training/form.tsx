@@ -1,5 +1,5 @@
 import { Switch } from '@/components/ui/Switch';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -18,12 +18,14 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonForm } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { ApiValidationError } from '@/types';
-import type { CreateTrainingData } from '@/types/hr';
+import type { CreateTrainingData, Training } from '@/types/hr';
 import { onFormInvalid } from '@/lib/formErrors';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 const schema = z.object({
  name: z.string().min(1, 'Name is required').max(200),
  description: z.string().max(1000).optional().or(z.literal('')),
@@ -48,6 +50,15 @@ const toPayload = (d: FormValues): CreateTrainingData => ({
  department_id: d.department_id === '' ? undefined : d.department_id,
 });
 
+const toFormValues = (training: Training): FormValues => ({
+ name: training.name,
+ description: training.description ?? '',
+ duration_hours: training.duration_hours ?? '',
+ validity_months: training.validity_months ?? '',
+ is_certification: training.is_certification,
+ department_id: training.department?.id ?? '',
+});
+
 export default function TrainingFormPage() {
  const { id } = useParams<{ id: string }>();
  const isEdit = !!id;
@@ -67,35 +78,61 @@ export default function TrainingFormPage() {
  const { data: depts = [] } = departmentsQuery;
  const { data: training, isLoading: loadingTraining } = trainingQuery;
  const lookupBlocked = departmentsQuery.isError || departmentsQuery.isFetching || (isEdit && (trainingQuery.isError || trainingQuery.isFetching));
+ const [remoteChanged, setRemoteChanged] = useState(false);
+ const appliedTrainingVersion = useRef<string | null>(null);
 
   const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { is_certification: false },
  });
- const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = form;
+ const { register, handleSubmit, reset, formState: { errors, isSubmitting, isDirty } } = form;
+
+ const onRemoteTrainingChanged = useCallback(() => {
+  if (isDirty) setRemoteChanged(true);
+ }, [isDirty]);
+ useRealtimeRecord('training', isEdit ? id : undefined, [], onRemoteTrainingChanged);
 
  useEffect(() => {
- if (training) {
- reset({
- name: training.name,
- description: training.description ?? '',
- duration_hours: training.duration_hours ?? '',
- validity_months: training.validity_months ?? '',
- is_certification: training.is_certification,
- department_id: training.department?.id ?? '',
- });
+ if (!training || appliedTrainingVersion.current === training.version) return;
+ if (isDirty) {
+  setRemoteChanged(true);
+  return;
  }
- }, [training, reset]);
+ reset(toFormValues(training));
+ appliedTrainingVersion.current = training.version;
+ setRemoteChanged(false);
+ }, [training, reset, isDirty]);
+
+ const loadLatestTraining = async () => {
+  const result = await trainingQuery.refetch();
+  if (!result.data) return;
+  reset(toFormValues(result.data));
+  appliedTrainingVersion.current = result.data.version;
+  setRemoteChanged(false);
+ };
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) =>
- isEdit ? trainingsApi.update(id!, toPayload(d)) : trainingsApi.create(toPayload(d)),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['hr', 'trainings'] });
+ isEdit ? trainingsApi.update(id!, toPayload(d), training?.version) : trainingsApi.create(toPayload(d)),
+ onSuccess: (saved) => {
+ if (isEdit) {
+  qc.setQueryData(['hr', 'training', saved.id], saved);
+  reset(toFormValues(saved));
+  appliedTrainingVersion.current = saved.version;
+  setRemoteChanged(false);
+ }
+ void invalidateRealtimeChange(qc, { entityType: 'training', entityId: saved.id });
  toast.success(isEdit ? 'Training updated.' : 'Training created.');
- navigate('/hr/trainings');
+  safety.allowNavigationAfterSave();
+navigate('/hr/trainings');
  },
  onError: (e: AxiosError<ApiValidationError>) => {
+ if (e.response?.status === 409) {
+  setRemoteChanged(true);
+  void trainingQuery.refetch();
+  toast.error('This training changed while you were editing. Review the latest version before saving.');
+  return;
+ }
  if (e.response?.status === 422 && e.response.data.errors) {
  Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
  toast.error(`${field}: ${msgs[0]}`);
@@ -120,6 +157,14 @@ export default function TrainingFormPage() {
  Training could not be refreshed. <Button type="button" variant="secondary" size="sm" onClick={() => void trainingQuery.refetch()}>Retry training</Button>
  </div>}
  <form onSubmit={handleSubmit((d) => { if (!lookupBlocked) mutation.mutate(d); }, onFormInvalid())} className="min-w-0 w-full px-5 py-4">
+ {remoteChanged && (
+  <div role="status" aria-live="polite" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+   <span>A newer training version was saved elsewhere. Your inputs are preserved. Load the latest version before saving.</span>
+   <Button type="button" variant="secondary" size="sm" disabled={trainingQuery.isFetching || mutation.isPending} onClick={() => void loadLatestTraining()}>
+    Load latest version
+   </Button>
+  </div>
+ )}
  <Panel title="Training details">
  <div className="space-y-3">
  <Input label="Name" required {...register('name')} error={errors.name?.message} />
@@ -137,7 +182,7 @@ export default function TrainingFormPage() {
  </Panel>
  <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/trainings')}>Cancel</Button>
- <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || lookupBlocked} loading={mutation.isPending}>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || lookupBlocked || remoteChanged} loading={mutation.isPending}>
  {isEdit ? 'Save changes' : 'Create training'}
  </Button>
  </FormActions>

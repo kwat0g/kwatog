@@ -8,6 +8,7 @@ use App\Common\Services\SettingsService;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollAnomalyType;
+use App\Modules\Payroll\Events\PayrollAnomalyChanged;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAnomalyFlag;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -42,6 +43,9 @@ class PayrollAnomalyPolicyTest extends TestCase
         app(SettingsService::class)->set('payroll.anomaly.deduction_ratio', 0.50, 'payroll');
         app(PayrollAnomalyService::class)->detect($period);
         $this->assertTrue($this->hasFlag($payroll, PayrollAnomalyType::HighDeduction));
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => PayrollAnomalyChanged::class,
+        ]);
     }
 
     private function hasFlag(Payroll $payroll, PayrollAnomalyType $type): bool

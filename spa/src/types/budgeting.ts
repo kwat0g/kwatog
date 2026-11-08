@@ -23,6 +23,8 @@ export interface Budget {
  status: 'draft' | 'submitted' | 'approved' | 'active' | 'closed';
  status_label?: string;
  can_approve?: boolean;
+ available_actions?: Array<'edit' | 'delete' | 'submit' | 'approve' | 'reject' | 'close'>;
+ permissions?: { view: boolean; manage: boolean; approve: boolean };
  submitted_by?: { id: string; name: string } | null;
  submitted_at?: string | null;
   approved_by?: { id: string; name: string } | null;
@@ -33,6 +35,7 @@ export interface Budget {
  line_items?: BudgetLineItem[];
  created_at: string;
  updated_at: string;
+ version?: string;
 }
 
 export interface BudgetLineItem {
@@ -76,6 +79,7 @@ export interface BudgetTransfer {
   status: 'pending' | 'approved' | 'rejected';
   status_label?: string;
   can_approve?: boolean;
+  available_actions?: { approve?: boolean; reject?: boolean };
   from_line?: BudgetTransferLine | null;
   to_line?: BudgetTransferLine | null;
   requested_by?: { id: string; name: string } | null;

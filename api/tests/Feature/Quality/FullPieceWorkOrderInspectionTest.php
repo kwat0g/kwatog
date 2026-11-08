@@ -35,8 +35,44 @@ class FullPieceWorkOrderInspectionTest extends TestCase
         parent::setUp();
         Queue::fake();
         $this->seed(RolePermissionSeeder::class);
-        config(['inspection.finish_first_wo_enabled' => true]);
+        config(['inspection.finish_first_wo_enabled' => true, 'inspection.outgoing_confirmed_checks_enabled' => false]);
         $this->maker = User::factory()->withRole('qc_inspector')->create(['is_active' => true]);
+    }
+
+
+    public function test_simple_quantity_capture_passes_final_qc_without_measurement_entry(): void
+    {
+        foreach ([false, true] as $confirmed) {
+            config(['inspection.outgoing_confirmed_checks_enabled' => $confirmed]);
+            $wo = $this->workOrder([5]);
+            app(TriggerOutgoingQC::class)->handle(new WorkOrderCompleted($wo));
+            $inspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'outgoing')->firstOrFail();
+            $this->actingAs($this->maker)->postJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/batch-result', [
+                'expected_result_version' => 0, 'quantity_result' => ['defective_quantity' => '0', 'descriptions' => []],
+            ])->assertSuccessful()->assertJsonPath('data.status', 'awaiting_review');
+            $this->assertSame(0, $inspection->pieceReadings()->count());
+            $url = '/api/v1/quality/work-orders/'.$wo->hash_id.'/final-inspection';
+            $group = $this->getJson($url)->assertSuccessful()->json('data');
+            $this->assertSame(0, $group['batches'][0]['missing_readings']);
+            $reviewer = User::factory()->withRole('qc_inspector')->create(['is_active' => true]);
+            $this->actingAs($reviewer)->postJson($url.'/review', ['manifest' => $group['manifest']])
+                ->assertSuccessful()->assertJsonPath('data.state', 'released')->assertJsonPath('data.accepted_quantity', 5);
+            $this->assertNull(app(\App\Modules\Quality\Services\CoCService::class)->unavailableReason($inspection->fresh()));
+        }
+    }
+
+    public function test_simple_final_failure_keeps_per_piece_reasons_and_requires_group_review(): void
+    {
+        $wo = $this->workOrder([5]);
+        app(TriggerOutgoingQC::class)->handle(new WorkOrderCompleted($wo));
+        $inspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'outgoing')->firstOrFail();
+        $this->actingAs($this->maker)->postJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/batch-result', [
+            'expected_result_version' => 0, 'quantity_result' => ['defective_quantity' => '2', 'descriptions' => ['Cracked', 'Short shot']],
+        ])->assertSuccessful()->assertJsonPath('data.proposed_result', 'failed');
+        $this->assertSame(['Cracked', 'Short shot'], $inspection->defectivePieces()->pluck('problem_description')->all());
+        $this->assertSame(0, $inspection->pieceReadings()->count());
+        $this->assertSame(0, $inspection->fresh()->accepted_quantity);
+        $this->assertFalse($inspection->fresh()->canReleaseOutgoing());
     }
 
     public function test_completed_work_order_gets_idempotent_version_two_batch_inspections(): void

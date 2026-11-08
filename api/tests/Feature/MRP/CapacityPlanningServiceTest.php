@@ -14,6 +14,8 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Maintenance\Models\MaintenanceWindow;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MrpPlan;
@@ -25,6 +27,7 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\HasAssignedProductionCrew;
 use Tests\TestCase;
 
@@ -105,11 +108,11 @@ class CapacityPlanningServiceTest extends TestCase
         $mold = $this->mold('CAP-D-MAINT');
         $mold->compatibleMachines()->sync([$machine->id]);
         foreach (['machine' => $machine, 'mold' => $mold] as $type => $equipment) {
-            $order = \App\Modules\Maintenance\Models\MaintenanceWorkOrder::create([
+            $order = MaintenanceWorkOrder::create([
                 'mwo_number' => 'CAP-MAINT-'.$type, 'maintainable_type' => $type, 'maintainable_id' => $equipment->id,
                 'type' => 'preventive', 'priority' => 'medium', 'description' => 'Inspection', 'status' => 'open', 'created_by' => $this->user->id,
             ]);
-            \App\Modules\Maintenance\Models\MaintenanceWindow::create([
+            MaintenanceWindow::create([
                 'maintainable_type' => $type, 'maintainable_id' => $equipment->id, 'work_order_id' => $order->id,
                 'planned_start_at' => $this->tomorrow->copy()->setTime($type === 'machine' ? 8 : 9, 0),
                 'planned_end_at' => $this->tomorrow->copy()->setTime($type === 'machine' ? 9 : 10, 0),
@@ -348,6 +351,52 @@ class CapacityPlanningServiceTest extends TestCase
         $row = $this->schedule($wo, $machine, $fast, 8, 10);
         $updated = $this->planner->reassign($row->id, $machine->id, $slow->id);
         $this->assertSame('10:25', $updated->scheduled_end->format('H:i'));
+    }
+
+    public function test_reorder_reflow_stages_refresh_for_raw_reinserted_schedule(): void
+    {
+        $machine = $this->machine('REALTIME-REFLOW-M', 100);
+        $mold = $this->mold('REALTIME-REFLOW-D');
+        $mold->compatibleMachines()->sync([$machine->id]);
+        $workOrder = $this->workOrder('REALTIME-REFLOW-WO', WorkOrderStatus::Planned, '100', 10);
+        $workOrder->forceFill(['machine_id' => $machine->id, 'mold_id' => $mold->id])->save();
+        $schedule = $this->schedule($workOrder, $machine, $mold, 8, 10);
+
+        $this->planner->reorder($schedule->id, 1);
+
+        $messages = DB::table('event_outbox')
+            ->where('event_type', 'App\\Modules\\Production\\Events\\ProductionScheduleChanged')
+            ->where('dedupe_key', 'like', "production-schedule-refresh:{$schedule->id}:%")
+            ->get();
+
+        $this->assertCount(1, $messages, 'The raw delete/reinsert reflow must stage one final schedule refresh.');
+        $payload = json_decode((string) $messages->first()->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('updated', $payload['action']);
+        $this->assertSame($schedule->hash_id, $payload['scheduleHashId']);
+        $this->assertSame(1, $schedule->fresh()->priority_order);
+    }
+
+    public function test_scheduler_superseding_a_previous_proposal_stages_refresh(): void
+    {
+        $machine = $this->machine('REALTIME-SUPERSEDE-M', 100);
+        $mold = $this->mold('REALTIME-SUPERSEDE-D');
+        $mold->compatibleMachines()->sync([$machine->id]);
+        $workOrder = $this->workOrder('RT-SUPERSEDE-WO', WorkOrderStatus::Planned, '100', 10);
+        $workOrder->forceFill(['machine_id' => $machine->id, 'mold_id' => $mold->id])->save();
+        $oldSchedule = $this->schedule($workOrder, $machine, $mold, 8, 10);
+
+        $result = $this->planner->run([$workOrder->id]);
+
+        $messages = DB::table('event_outbox')
+            ->where('event_type', 'App\\Modules\\Production\\Events\\ProductionScheduleChanged')
+            ->where('dedupe_key', 'like', "production-schedule-refresh:{$oldSchedule->id}:%")
+            ->get();
+
+        $this->assertCount(1, $result['scheduled']);
+        $this->assertCount(1, $messages, 'The previous Eloquent-bulk supersede must stage a schedule refresh.');
+        $payload = json_decode((string) $messages->first()->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('status_changed', $payload['action']);
+        $this->assertSame(ProductionScheduleStatus::Superseded, $oldSchedule->fresh()->status);
     }
 
     public function test_terminal_execution_history_releases_capacity(): void

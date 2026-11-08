@@ -27,6 +27,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonBlock, SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { forecastingApi } from '@/api/forecasting';
+import { useDemandForecastRealtime } from '@/hooks/useDemandForecastRealtime';
 import type { ProductAccuracy } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { chartColor } from '@/lib/chartPalette';
@@ -38,6 +39,8 @@ type SortField = 'part_number' | 'name' | 'mape' | 'bias' | 'periods_evaluated';
 type SortDir = 'asc' | 'desc';
 
 export default function ForecastAccuracyPage() {
+ useDemandForecastRealtime();
+
  const currentYear = new Date().getFullYear();
  const [year, setYear] = useState<number>(currentYear);
  const [sortField, setSortField] = useState<SortField>('mape');

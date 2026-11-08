@@ -7,7 +7,9 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\Alert;
+use App\Common\Services\OutboxService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Events\BadgesChanged;
 use App\Modules\Dashboard\Models\ActionCenterTask;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Production\Models\WorkOrder;
@@ -15,6 +17,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ActionCenterTaskService
 {
@@ -67,10 +70,25 @@ class ActionCenterTaskService
                 $results[] = $task->load('assignee:id,name');
             }
 
+            if ($results !== []) {
+                // Register cache-generation rotation before the outbox's
+                // after-commit queue callback. Laravel executes these
+                // callbacks in registration order; the signal can therefore
+                // never make another client refetch the previous badge or
+                // dashboard snapshot after the task rows commit.
+                BadgeService::touch();
+
+                // Task state is shared across roles. Stage one opaque signal
+                // for the whole bulk action in the same transaction so other
+                // viewers refresh only after the task rows commit.
+                app(OutboxService::class)->record(
+                    new BadgesChanged(),
+                    'action-center:'.Str::uuid(),
+                );
+            }
+
             return $results;
         });
-
-        BadgeService::touch();
 
         return $results;
     }

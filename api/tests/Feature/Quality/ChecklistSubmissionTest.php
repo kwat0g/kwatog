@@ -88,7 +88,9 @@ class ChecklistSubmissionTest extends TestCase
         $this->assertSame(0, $inspection->measurements()->whereNotNull('item_result')->count());
         $payload = $this->payload($inspection);
         $payload['expected_result_version'] = 2;
-        $this->postJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/batch-result', $payload)->assertUnprocessable();
+        $this->postJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/batch-result', $payload)
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'inspection_state_conflict');
         $this->assertSame(0, $inspection->fresh()->result_version);
     }
 
@@ -150,7 +152,8 @@ class ChecklistSubmissionTest extends TestCase
             'items' => [$payload['items'][0]], 'expected_result_version' => 0, 'submit' => false])
             ->assertSuccessful()->assertJsonPath('data.result_version', 1);
         $this->postJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/cancel', [
-            'reason' => 'Stale cancellation', 'expected_result_version' => 0])->assertUnprocessable();
+            'reason' => 'Stale cancellation', 'expected_result_version' => 0])
+            ->assertStatus(409)->assertJsonPath('code', 'inspection_state_conflict');
         $this->postJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/cancel', [
             'reason' => 'Current cancellation', 'expected_result_version' => 1])
             ->assertSuccessful()->assertJsonPath('data.result_version', 2);

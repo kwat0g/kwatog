@@ -80,7 +80,6 @@ export default function DepartmentsPage() {
  const { data: rows = [], isLoading, isError, refetch } = useQuery({
   queryKey: ['hr', 'departments', 'tree', scope],
   queryFn: () => departmentsApi.tree({ trashed: archiveToTrashed(scope) }),
-  placeholderData: (prev) => prev,
  });
 
  const tree = useMemo(() => buildTree(rows), [rows]);

@@ -2,12 +2,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import { DashboardShell } from './DashboardShell';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DashboardAttentionList, DashboardShell } from './DashboardShell';
+
+const { canPermission, actionCenterGet } = vi.hoisted(() => ({
+  canPermission: vi.fn((_permission: string) => false),
+  actionCenterGet: vi.fn(),
+}));
 
 vi.mock('@/components/dashboard/TimeClockQuickAction', () => ({
   TimeClockQuickAction: () => null,
 }));
+vi.mock('@/api/actionCenter', () => ({ actionCenterApi: { get: actionCenterGet } }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: canPermission }) }));
+vi.mock('@/hooks/useRealtimeSignal', () => ({ useRealtimeSignal: vi.fn() }));
 
 function renderShell(ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -33,6 +41,46 @@ function Thrower(): ReactNode {
 }
 
 describe('DashboardShell', () => {
+  beforeEach(() => {
+    canPermission.mockReturnValue(false);
+    actionCenterGet.mockReset();
+  });
+
+  it('revalidates the cached action-center snapshot when the dashboard mounts', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['action-center'], { items: [], summary: { total: 0 } });
+    canPermission.mockReturnValue(true);
+    actionCenterGet.mockResolvedValue({ items: [], summary: { total: 0 } });
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <DashboardAttentionList />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Needs your attention' })).toBeInTheDocument();
+    expect(actionCenterGet).toHaveBeenCalledTimes(1);
+    client.clear();
+  });
+
+  it('shows the server snapshot timestamp when a dashboard does not pass an updatedAt prop', () => {
+    renderShell(
+      <DashboardShell<{ items: unknown[]; generated_at: string }>
+        title="Warehouse Dashboard"
+        query={queryOf({
+          data: { items: [], generated_at: '2026-11-04T08:15:00.000Z' },
+        })}
+      >
+        {() => <div>body</div>}
+      </DashboardShell>,
+    );
+
+    expect(screen.getByText(/As of/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nov 4, 2026/i)).toBeInTheDocument();
+  });
+
   it('shows a stale badge when updatedAt is older than the poll window', () => {
     renderShell(
       <DashboardShell<{ items: unknown[] }>

@@ -13,9 +13,16 @@ import { DashboardGrid, DashboardGridItem } from '@/components/dashboard/Dashboa
 import { FinanceSection } from '@/components/dashboard/FinanceSection';
 import { LiveDashboardWidget } from '@/components/dashboard/registry';
 import { DashboardPicker } from '@/components/dashboard/DashboardPicker';
-import { dashboardLayoutApi } from '@/api/dashboard-layout';
+import {
+  dashboardLayoutApi,
+  dashboardLayoutQueryKeys,
+  mergeDashboardLayoutSnapshot,
+  type DashboardLayoutSnapshot,
+} from '@/api/dashboard-layout';
 import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { useAuthStore } from '@/stores/authStore';
+import { realtimeIdentityKey } from '@/lib/realtime/identity';
+import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
 import { usePermission } from '@/hooks/usePermission';
 
 /**
@@ -37,19 +44,19 @@ import { usePermission } from '@/hooks/usePermission';
 export default function DashboardDefaultPage() {
  const queryClient = useQueryClient();
  const user = useAuthStore((s) => s.user);
+ const dashboardIdentity = realtimeIdentityKey(user);
  const { can } = usePermission();
  const canSeeFinance = can('accounting.dashboard.view');
  const canResetLayout = can('dashboard.layout.reset');
- const roleLabel = user?.role?.name ?? 'Your';
 
  const layout = useQuery({
- queryKey: ['dashboard', 'layout', { rich: true }],
+ queryKey: dashboardLayoutQueryKeys.layout(dashboardIdentity, true),
  queryFn: () => dashboardLayoutApi.layout({ rich: true }),
  });
 
   const widgetKeys = layout.data?.items?.map((widget) => widget.key) ?? [];
   const widgetData = useQuery({
-  queryKey: ['dashboard', 'widget-data', widgetKeys],
+  queryKey: dashboardLayoutQueryKeys.widgetData(dashboardIdentity, widgetKeys),
   queryFn: () => dashboardLayoutApi.data(widgetKeys),
   enabled: widgetKeys.length > 0,
   refetchInterval: DASHBOARD_REFRESH_MS,
@@ -65,21 +72,25 @@ export default function DashboardDefaultPage() {
 
  const reset = useMutation({
  mutationFn: () => dashboardLayoutApi.reset(layout.data?.version ?? ''),
- onSuccess: () => {
+ onSuccess: (snapshot) => {
+  queryClient.setQueryData<DashboardLayoutSnapshot>(
+   dashboardLayoutQueryKeys.layout(dashboardIdentity, true),
+   (current) => mergeDashboardLayoutSnapshot(current, snapshot),
+  );
  toast.success('Dashboard reset to your role default.');
- queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
+  void invalidateRealtimeSignal(
+   queryClient,
+   'dashboard_layout_changed',
+   [],
+   [dashboardLayoutQueryKeys.layout(dashboardIdentity, true)],
+  );
  },
  onError: (error) => reportMutationError(error, 'Failed to reset layout.'),
  });
 
- const subtitle = canSeeFinance
- ? 'Foundation + Hire-to-Retire + Lean Accounting are live.'
- : `${roleLabel} priorities are shown from the data and permissions available to this account.`;
-
   return (
   <DashboardShell<Awaited<ReturnType<typeof dashboardLayoutApi.layout>>>
   title={`Welcome${user ? `, ${user.name}` : ''}`}
-  subtitle={subtitle}
   query={layout}
   refreshingQueryKey={['dashboard', 'layout']}
   kpiCount={3}

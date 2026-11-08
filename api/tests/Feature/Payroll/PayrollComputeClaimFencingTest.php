@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
+use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
+use App\Modules\Payroll\Events\PayrollPeriodChanged;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
-use App\Modules\Payroll\Listeners\RunPayrollComputationOnRequested;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
@@ -43,6 +44,15 @@ class PayrollComputeClaimFencingTest extends TestCase
 
         $this->assertNotEmpty($claimed->processing_token);
         $this->assertSame($claimed->processing_token, $payload['claimToken']);
+
+        $refresh = DB::table('event_outbox')
+            ->where('event_type', PayrollPeriodChanged::class)
+            ->first();
+        $this->assertNotNull($refresh, 'A compute claim must notify other period viewers.');
+        $refreshPayload = json_decode((string) $refresh->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($period->hash_id, $refreshPayload['hashId']);
+        $this->assertSame('status_changed', $refreshPayload['action']);
+        $this->assertSame('pending', $refresh->status, 'The signal is staged with the claim transaction.');
     }
 
     public function test_stale_worker_cannot_write_failure_marker_or_release_new_owner(): void
@@ -52,7 +62,7 @@ class PayrollComputeClaimFencingTest extends TestCase
             'period_end' => '2026-01-15',
             'payroll_date' => '2026-01-20',
         ]);
-        \App\Modules\HR\Models\Employee::factory()->create([
+        Employee::factory()->create([
             'date_hired' => '2025-01-01',
         ]);
         $oldToken = 'old-worker-token';
@@ -101,5 +111,9 @@ class PayrollComputeClaimFencingTest extends TestCase
         $this->assertSame(PayrollPeriodStatus::Draft, $fresh->status);
         $this->assertNull($fresh->processing_token);
         $this->assertNull($fresh->processing_started_at);
+        $this->assertNull(
+            app(PayrollProgressTracker::class)->get($fresh),
+            'Terminal progress must not remain cached after the compute job completes.',
+        );
     }
 }

@@ -6,8 +6,8 @@ export const purchaseRequestsApi = {
  options: () => client.get<{ statuses: Array<{ value: string; label: string }>; priorities: Array<{ value: string; label: string }>; approval_sla_hours?: number; default_priority: string }>('/purchasing/purchase-requests/options').then((r) => r.data),
  list: (params?: ListParams & { status?: string; priority?: string; is_auto_generated?: boolean | string; is_urgent?: boolean | string; from?: string; to?: string }, signal?: AbortSignal) =>
  client.get<PaginatedResponse<PurchaseRequest>>('/purchasing/purchase-requests', { params, signal }).then((r) => r.data),
- show: (id: string) =>
- client.get<PurchaseRequest>(`/purchasing/purchase-requests/${id}`).then((r) => r.data),
+ show: (id: string, signal?: AbortSignal) =>
+ client.get<PurchaseRequest>(`/purchasing/purchase-requests/${id}`, { signal }).then((r) => r.data),
  create: (data: CreatePurchaseRequestData) =>
  client.post<PurchaseRequest>('/purchasing/purchase-requests', data).then((r) => r.data),
   update: (id: string, data: Partial<CreatePurchaseRequestData>) =>

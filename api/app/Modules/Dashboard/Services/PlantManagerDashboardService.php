@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Support\FailOpenCache;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\BillStatus;
@@ -40,14 +41,18 @@ class PlantManagerDashboardService
 
     public function plantManager(User $user, string $range = 'week'): array
     {
+        $cacheScope = $this->gate->cacheScope($user);
+
         $range = in_array($range, ['today', 'week', 'month', 'quarter'], true) ? $range : 'week';
 
         // Cache key already carries the user id, so a per-viewer panel set is
         // cache-safe — two roles never share an entry.
-        return Cache::remember("dashboard:plant_manager:{$user->id}:{$range}", self::CACHE_TTL, function () use ($user, $range) {
+        $generation = DashboardCacheGeneration::current('dashboard:plant_manager');
+        return FailOpenCache::remember(Cache::store(), "dashboard:plant_manager:v4:{$generation}:{$user->id}:{$cacheScope}:{$range}", self::CACHE_TTL, function () use ($user, $range) {
             [$start, $end, $label] = $this->rangeBounds($range);
 
             return [
+                'generated_at' => now()->toIso8601String(),
                 'kpis' => $this->gate->kpis($user, [
                     // Money, even as a single figure, is finance's to disclose.
                     ['accounting.dashboard.view', fn () => $this->kpi("Revenue · {$label}",    $this->revenueInRange($start, $end),    $this->functionalCurrency())],
@@ -79,7 +84,7 @@ class PlantManagerDashboardService
                     'range'              => [null,                         fn () => $range],
                 ]),
             ];
-        });
+        }, 'dashboard.plant_manager');
     }
 
     /**

@@ -6,6 +6,7 @@ namespace App\Modules\HR\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\HR\Support\RecruitmentApplicationActions;
 
 class JobApplicationResource extends JsonResource
 {
@@ -23,6 +24,9 @@ class JobApplicationResource extends JsonResource
             'cover_letter'       => $this->cover_letter,
             'stage'              => $this->stage?->value,
             'stage_label'        => $this->stage?->label(),
+            'version'            => $this->updated_at?->format('Y-m-d\\TH:i:s.uP'),
+            'permissions'        => RecruitmentApplicationActions::permissions($request->user()),
+            'available_actions'  => RecruitmentApplicationActions::for($this->resource, $request->user()),
             'rejected_at_stage'  => $this->rejected_at_stage,
             'rejection_reason'   => $this->rejection_reason,
             'applied_at'         => $this->applied_at?->toIso8601String(),

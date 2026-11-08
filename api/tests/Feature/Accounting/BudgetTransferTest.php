@@ -430,6 +430,32 @@ class BudgetTransferTest extends TestCase
         $this->assertSame(1, $badge);
     }
 
+    public function test_same_role_checker_gets_reject_action_without_approve_action(): void
+    {
+        [$service, $maker, , $from, $to] = $this->livePair('1000.00', '1000.00');
+        $transfer = $service->request([
+            'from_line_item_id' => $from->id,
+            'to_line_item_id' => $to->id,
+            'month' => 'jan',
+            'amount' => '25.00',
+            'reason' => 'Same-role reject action projection.',
+        ], $maker->id);
+        $sameRoleReviewer = User::factory()->withRole('finance_officer')->create();
+
+        $this->actingAs($sameRoleReviewer)
+            ->getJson('/api/v1/budget-transfers/'.$transfer->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.can_approve', false)
+            ->assertJsonPath('data.available_actions.approve', false)
+            ->assertJsonPath('data.available_actions.reject', true);
+
+        $this->actingAs($sameRoleReviewer)
+            ->postJson('/api/v1/budget-transfers/'.$transfer->hash_id.'/reject')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'rejected')
+            ->assertJsonPath('data.available_actions.reject', false);
+    }
+
     /**
      * @return array{0:BudgetTransferService,1:User,2:User,3:BudgetLineItem,4:BudgetLineItem}
      */

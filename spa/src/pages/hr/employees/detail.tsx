@@ -12,7 +12,7 @@ import { employeeStatusVariant } from '@/lib/statusVariants';
 import { AxiosError } from 'axios';
 import { LuPencil, LuUserMinus, LuEye, LuEyeOff, LuPlus, LuCheck, LuCamera } from '@/lib/icons';
 import { employeesApi, type SeparateData } from '@/api/hr/employees';
-import { shiftsApi } from '@/api/attendance/shifts';
+import { shiftsApi, type CurrentShiftAssignment } from '@/api/attendance/shifts';
 import { employeeDocumentApi } from '@/api/hr/employee-documents';
 import { employeeTrainingsApi } from '@/api/hr/employee-trainings';
 import { employeeSkillsApi } from '@/api/hr/employee-skills';
@@ -24,25 +24,34 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { formatTime } from '@/lib/formatDate';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import type { EmployeeDocument } from '@/types/hr';
+import type { EmployeeDocument, EmployeeSkill, EmployeeTraining } from '@/types/hr';
 import { Panel } from '@/components/ui/Panel';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { SkeletonDetail, SkeletonPanel } from '@/components/ui/Skeleton';
+import { SkeletonBlock, SkeletonDetail, SkeletonPanel } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { OnboardingStepper } from '@/components/hr/OnboardingStepper';
 import { SystemAccountSection } from '@/components/hr/SystemAccountSection';
 import { usePermission } from '@/hooks/usePermission';
+import {
+  useEmployeeShiftRealtime,
+  useRealtimeList,
+  useRealtimeRecord,
+  useSkillCatalogRealtime,
+} from '@/hooks/useRealtimeRecord';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatMobile, maskByKind } from '@/lib/phFormat';
-import type { ApiValidationError } from '@/types';
+import type { ApiValidationError, PaginatedResponse } from '@/types';
+import type { Shift } from '@/types/attendance';
+import { DEFAULT_WORKING_DAYS } from '@/lib/workingDays';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
 import { DocumentList } from '@/components/documents/DocumentList';
 import { localIsoDate } from '@/lib/formatDate';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const TABS = [
   'Overview',
@@ -58,10 +67,120 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number];
 
+const WEEKDAYS = [
+  { iso: 1, short: 'Mon', full: 'Monday' },
+  { iso: 2, short: 'Tue', full: 'Tuesday' },
+  { iso: 3, short: 'Wed', full: 'Wednesday' },
+  { iso: 4, short: 'Thu', full: 'Thursday' },
+  { iso: 5, short: 'Fri', full: 'Friday' },
+  { iso: 6, short: 'Sat', full: 'Saturday' },
+  { iso: 7, short: 'Sun', full: 'Sunday' },
+] as const;
+
+function reconcileEmployeeTrainingMutation(
+  queryClient: ReturnType<typeof useQueryClient>,
+  employeeId: string,
+  record: EmployeeTraining,
+  created = false,
+): void {
+  queryClient.setQueryData<PaginatedResponse<EmployeeTraining>>(
+    ['employee-trainings', employeeId],
+    (current) => {
+      if (!current) return current;
+      const exists = current.data.some((item) => item.id === record.id);
+      const data = exists
+        ? current.data.map((item) => item.id === record.id ? record : item)
+        : created ? [record, ...current.data] : current.data;
+
+      return {
+        ...current,
+        data,
+        meta: {
+          ...current.meta,
+          total: current.meta.total + (created && !exists ? 1 : 0),
+        },
+      };
+    },
+  );
+  void invalidateRealtimeChange(queryClient, { entityType: 'employee_training', entityId: record.id });
+}
+
+function reconcileEmployeeDocumentList(
+  queryClient: ReturnType<typeof useQueryClient>,
+  employeeId: string,
+  record: EmployeeDocument | null,
+  deletedId?: string,
+): void {
+  const queryKey = ['employee-documents', employeeId];
+  const current = queryClient.getQueryData<PaginatedResponse<EmployeeDocument>>(queryKey);
+  if (!current && (!record || !deletedId)) return;
+
+  const base = current ?? {
+    data: [],
+    meta: { current_page: 1, last_page: 1, per_page: 25, total: 0, from: null, to: null },
+    links: { first: '', last: '', prev: null, next: null },
+  } satisfies PaginatedResponse<EmployeeDocument>;
+  const exists = record ? base.data.some((item) => item.id === record.id) : false;
+  const data = record
+    ? exists
+      ? base.data.map((item) => item.id === record.id ? record : item)
+      : [record, ...base.data]
+    : base.data.filter((item) => item.id !== deletedId);
+  const deleted = !record && base.data.some((item) => item.id === deletedId);
+  const total = Math.max(0, base.meta.total + (record && !exists ? 1 : 0) - (deleted ? 1 : 0));
+
+  queryClient.setQueryData<PaginatedResponse<EmployeeDocument>>(queryKey, {
+    ...base,
+    data,
+    meta: { ...base.meta, total },
+  });
+}
+
+function reconcileEmployeeSkillList(
+  queryClient: ReturnType<typeof useQueryClient>,
+  employeeId: string,
+  record: EmployeeSkill | null,
+  deletedId?: string,
+): void {
+  const queryKey = ['employee-skills', employeeId];
+  const current = queryClient.getQueryData<PaginatedResponse<EmployeeSkill>>(queryKey);
+  if (!current && !record) {
+    void invalidateRealtimeChange(queryClient, { entityType: 'employee_skill', entityId: employeeId });
+    return;
+  }
+
+  const base = current ?? {
+    data: [],
+    meta: { current_page: 1, last_page: 1, per_page: 25, total: 0, from: null, to: null },
+    links: { first: '', last: '', prev: null, next: null },
+  } satisfies PaginatedResponse<EmployeeSkill>;
+  const exists = record ? base.data.some((item) => item.id === record.id) : false;
+  const data = record
+    ? exists
+      ? base.data.map((item) => item.id === record.id ? record : item)
+      : [record, ...base.data]
+    : base.data.filter((item) => item.id !== deletedId);
+  const deleted = !record && base.data.some((item) => item.id === deletedId);
+  const total = Math.max(0, base.meta.total + (record && !exists ? 1 : 0) - (deleted ? 1 : 0));
+
+  queryClient.setQueryData<PaginatedResponse<EmployeeSkill>>(queryKey, {
+    ...base,
+    data,
+    meta: { ...base.meta, total },
+  });
+  void invalidateRealtimeChange(queryClient, { entityType: 'employee_skill', entityId: employeeId });
+}
+
 export default function EmployeeDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can } = usePermission();
+  useRealtimeRecord('employee', id);
+  useRealtimeRecord('employee_document', can('hr.employees.documents.view') ? id : undefined);
+  useRealtimeRecord('employee_skill', can('hr.employees.trainings.view') ? id : undefined);
+  useSkillCatalogRealtime();
+  useRealtimeList('leave_request', can('leave.view') ? 'visible' : undefined);
+  useRealtimeList('employee_training', can('hr.employees.trainings.view') ? 'visible' : undefined);
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('Overview');
   const [separateOpen, setSeparateOpen] = useState(false);
@@ -75,12 +194,23 @@ export default function EmployeeDetailPage() {
     queryKey: ['hr', 'employee', id],
     queryFn: () => employeesApi.show(id),
   });
+  useEmployeeShiftRealtime(id);
+  // Position title/department are embedded in this API resource. The exact
+  // authorized Position signal refetches this Employee detail when they change.
+  useRealtimeRecord('position', employee?.position?.id, [['hr', 'employee', id]]);
 
-  const { data: currentShift } = useQuery({
+  const {
+    data: currentShiftResponse,
+    isLoading: isShiftLoading,
+    isError: isShiftError,
+    refetch: refetchShift,
+  } = useQuery({
     queryKey: ['attendance', 'current-shift', id],
-    queryFn: () => shiftsApi.currentForEmployee(id),
+    queryFn: () => shiftsApi.currentAssignment(id),
     enabled: !!id,
   });
+  const currentShift = currentShiftResponse?.data ?? null;
+  const currentShiftAssignment = currentShiftResponse?.assignment ?? null;
 
   if (isLoading) return <SkeletonDetail />;
   if (isError || !employee) {
@@ -157,8 +287,15 @@ export default function EmployeeDetailPage() {
         items={TABS.map((t) => ({ key: t, label: t }))}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
-        <div>
+      <div className="grid grid-cols-1 gap-4 px-4 py-4 sm:px-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-4">
+          <WorkSchedulePanel
+            isLoading={isShiftLoading}
+            isError={isShiftError}
+            shift={currentShift}
+            assignment={currentShiftAssignment}
+            onRetry={() => void refetchShift()}
+          />
           {tab === 'Overview' && <OverviewTab employee={employee} />}
           {tab === 'Employment history' && <EmploymentHistoryTab employee={employee} />}
           {tab === 'Attendance' && <AttendanceTab employeeId={id} />}
@@ -171,55 +308,27 @@ export default function EmployeeDetailPage() {
           {tab === 'Activity' && <ActivityTab employee={employee} />}
         </div>
 
-        <div className="space-y-4">
-          <Panel title="At a glance">
-            <dl className="text-sm space-y-2">
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                  Employee no
-                </dt>
-                <dd className="font-mono">{employee.employee_no}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Hired</dt>
-                <dd className="font-mono">{formatDate(employee.date_hired)}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                  Pay type
-                </dt>
-                <dd>{employee.pay_type_label ?? employee.pay_type}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                  {employee.pay_type === 'monthly' ? 'Monthly salary' : 'Semi-monthly rate'}
-                </dt>
-                <dd className="font-mono tabular-nums">
-                  {formatPeso(
-                    employee.pay_type === 'monthly'
-                      ? employee.basic_monthly_salary
-                      : employee.semi_monthly_rate,
-                  )}
-                </dd>
-              </div>
-              {employee.user && (
-                <div>
-                  <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                    Linked user
-                  </dt>
-                  <dd>{employee.user.email}</dd>
-                </div>
-              )}
-              {currentShift && (
-                <div>
-                  <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                    Current shift
-                  </dt>
-                  <dd className="font-mono tabular-nums">
-                    {currentShift.name} ({formatTime(currentShift.start_time)}–{formatTime(currentShift.end_time)})
-                  </dd>
-                </div>
-              )}
+        <aside className="min-w-0 space-y-4" aria-label="Employee summary">
+          <Panel title="Employment">
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-4 text-sm">
+              <Item label="Employee no" value={employee.employee_no} mono />
+              <Item label="Employment type" value={employee.employment_type_label ?? cap(employee.employment_type)} />
+              <Item label="Date hired" value={formatDate(employee.date_hired)} mono />
+              <Item
+                label="Regularized"
+                value={employee.date_regularized ? formatDate(employee.date_regularized) : 'Not recorded'}
+                mono
+              />
+              <Item label="Pay basis" value={employee.pay_type_label ?? employee.pay_type} />
+              <Item
+                label={employee.pay_type === 'monthly' ? 'Monthly salary' : 'Semi-monthly rate'}
+                value={formatPeso(
+                  employee.pay_type === 'monthly'
+                    ? employee.basic_monthly_salary
+                    : employee.semi_monthly_rate,
+                )}
+                mono
+              />
             </dl>
           </Panel>
 
@@ -228,7 +337,7 @@ export default function EmployeeDetailPage() {
           <SystemAccountSection
             employeeId={id}
           />
-        </div>
+        </aside>
       </div>
 
       {separateOpen && (
@@ -244,6 +353,102 @@ export default function EmployeeDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+function WorkSchedulePanel({
+  isLoading,
+  isError,
+  shift,
+  assignment,
+  onRetry,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  shift: Shift | null;
+  assignment: CurrentShiftAssignment | null;
+  onRetry: () => void;
+}) {
+  const workingDays = assignment?.working_days?.length
+    ? assignment.working_days
+    : DEFAULT_WORKING_DAYS;
+  const workingDaySet = new Set(workingDays);
+
+  return (
+    <Panel title="Work schedule">
+      {isLoading ? (
+        <div role="status" aria-label="Loading work schedule" className="space-y-3">
+          <SkeletonBlock className="h-4 w-36" />
+          <SkeletonBlock className="h-3 w-28" />
+          <SkeletonBlock className="h-8 w-full" />
+        </div>
+      ) : isError ? (
+        <div role="alert" className="space-y-2">
+          <p className="text-sm font-medium text-primary">Shift schedule could not be loaded.</p>
+          <Button variant="secondary" size="sm" onClick={onRetry}>Retry</Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {shift && assignment ? (
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h4 className="min-w-0 break-words text-subsection font-semibold text-primary">
+                  {shift.name}
+                </h4>
+                <Chip variant={shift.is_night_shift ? 'info' : 'neutral'}>
+                  {shift.is_night_shift ? 'Night shift' : 'Day shift'}
+                </Chip>
+              </div>
+              <p className="mt-1 font-mono text-sm tabular-nums text-secondary">
+                {formatTime(shift.start_time)}–{formatTime(shift.end_time)}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-primary">No active shift assignment today</p>
+          )}
+
+          <div className="border-t border-default pt-3">
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <h4 className="text-sm font-medium text-primary">
+                {assignment?.working_days?.length ? 'Working days' : 'Default working days'}
+              </h4>
+              <span className="text-caption text-muted">
+                {workingDays.length} {workingDays.length === 1 ? 'day' : 'days'} / week
+              </span>
+            </div>
+            <ul className="flex flex-wrap gap-1.5" aria-label="Employee workweek">
+              {WEEKDAYS.map((day) => {
+                const isWorkingDay = workingDaySet.has(day.iso);
+                return (
+                  <li
+                    key={day.iso}
+                    aria-label={`${day.full}, ${isWorkingDay ? 'working day' : 'rest day'}`}
+                    title={`${day.full}: ${isWorkingDay ? 'working day' : 'rest day'}`}
+                    className={cn(
+                      'flex min-h-9 min-w-10 items-center justify-center rounded border px-2 text-xs font-medium',
+                      isWorkingDay
+                        ? 'border-info-bg bg-info-bg text-info-fg'
+                        : 'border-default bg-subtle text-muted',
+                    )}
+                  >
+                    {day.short}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-default pt-3 text-sm">
+            {shift && assignment && <Item label="Break" value={`${shift.break_minutes} min`} />}
+            <Item
+              label="Effective from"
+              value={assignment ? formatDate(assignment.effective_date) : 'No active assignment'}
+              mono
+            />
+          </dl>
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -267,15 +472,15 @@ function OverviewTab({ employee }: { employee: any }) {
   });
 
   return (
-    <div className="space-y-4">
-      <Panel title="Personal">
-        <div className="flex gap-6">
+    <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+      <Panel title="Personal" className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:gap-6">
           <div className="shrink-0">
             <div className="w-20 h-20 rounded-full bg-elevated flex items-center justify-center overflow-hidden">
               {employee.photo_url ? (
                 <img
                   src={employee.photo_url}
-                  alt={employee.name}
+                  alt={employee.full_name}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -307,7 +512,7 @@ function OverviewTab({ employee }: { employee: any }) {
               </div>
             )}
           </div>
-          <dl className="grid grid-cols-2 gap-4 text-sm flex-1">
+          <dl className="grid min-w-0 flex-1 grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
             <Item label="Full name" value={employee.full_name} />
             <Item label="Birth date" value={formatDate(employee.birth_date)} mono />
             <Item label="Gender" value={employee.gender_label ?? cap(employee.gender)} />
@@ -319,8 +524,8 @@ function OverviewTab({ employee }: { employee: any }) {
           </dl>
         </div>
       </Panel>
-      <Panel title="Contact">
-        <dl className="grid grid-cols-2 gap-4 text-sm">
+      <Panel title="Contact" className="min-w-0">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
           <Item label="Mobile" value={formatMobile(employee.contact.mobile_number)} mono />
           <Item label="Email" value={employee.contact.email} />
           <Item
@@ -346,8 +551,8 @@ function OverviewTab({ employee }: { employee: any }) {
         </dl>
       </Panel>
       <GovIdsPanel employee={employee} />
-      <Panel title="Banking">
-        <dl className="grid grid-cols-2 gap-4 text-sm">
+      <Panel title="Banking" className="min-w-0">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
           <Item label="Bank" value={employee.bank_name} />
           <Item label="Account number" value={employee.bank_account_no} mono />
         </dl>
@@ -405,11 +610,12 @@ function GovIdsPanel({ employee }: { employee: any }) {
   ) : null;
   return (
     <Panel
+      className="min-w-0"
       title="Government IDs"
       meta={canView ? 'Masked. Click reveal to view.' : 'Hidden — insufficient permissions.'}
       actions={action}
     >
-      <dl className="grid grid-cols-2 gap-4 text-sm">
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
         <Item label="SSS" value={maskByKind('sss', employee.sss_no, canView && revealed)} mono />
         <Item
           label="PhilHealth"
@@ -509,8 +715,10 @@ function DocumentsTab({ employee }: { employee: any }) {
 
   const uploadMutation = useMutation({
     mutationFn: (data: FormData) => employeeDocumentApi.upload(employeeId, data),
-    onSuccess: () => {
+    onSuccess: (record) => {
+      reconcileEmployeeDocumentList(qc, employeeId, record);
       qc.invalidateQueries({ queryKey: ['employee-documents', employeeId] });
+      qc.invalidateQueries({ queryKey: ['employee-document-options', employeeId] });
       qc.invalidateQueries({ queryKey: ['hr', 'employee', employeeId] });
       toast.success('Document uploaded.');
       setShowUpload(false);
@@ -520,8 +728,10 @@ function DocumentsTab({ employee }: { employee: any }) {
 
   const deleteMutation = useMutation({
     mutationFn: (docId: string) => employeeDocumentApi.delete(employeeId, docId),
-    onSuccess: () => {
+    onSuccess: (_, docId) => {
+      reconcileEmployeeDocumentList(qc, employeeId, null, docId);
       qc.invalidateQueries({ queryKey: ['employee-documents', employeeId] });
+      qc.invalidateQueries({ queryKey: ['employee-document-options', employeeId] });
       qc.invalidateQueries({ queryKey: ['hr', 'employee', employeeId] });
       toast.success('Document deleted.');
     },
@@ -887,21 +1097,31 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
         completed_at: localIsoDate(),
         certificate: data.certificate,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['employee-trainings', employeeId] });
+    onSuccess: (record) => {
+      reconcileEmployeeTrainingMutation(qc, employeeId, record);
       toast.success('Training completed.');
       setCompleteTarget(null);
     },
-    onError: (error) => reportMutationError(error, 'Failed to complete training.'),
+    onError: (error, variables) => {
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        void invalidateRealtimeChange(qc, { entityType: 'employee_training', entityId: variables.recordId });
+      }
+      reportMutationError(error, 'Failed to complete training.');
+    },
   });
 
   const cancelMutation = useMutation({
     mutationFn: (recordId: string) => employeeTrainingsApi.cancel(recordId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['employee-trainings', employeeId] });
+    onSuccess: (record) => {
+      reconcileEmployeeTrainingMutation(qc, employeeId, record);
       toast.success('Training cancelled.');
     },
-    onError: (error) => reportMutationError(error, 'Failed to cancel training.'),
+    onError: (error, recordId) => {
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        void invalidateRealtimeChange(qc, { entityType: 'employee_training', entityId: recordId });
+      }
+      reportMutationError(error, 'Failed to cancel training.');
+    },
   });
 
   if (isLoading) return <SkeletonPanel />;
@@ -952,7 +1172,7 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
                     <Chip variant={chipVariantForStatus(r.status)}>{r.status_label}</Chip>
                   </Td>
                   <Td>
-                    {r.status === 'scheduled' && can('hr.employees.trainings.manage') && (
+                    {(r.available_actions ?? []).includes('complete') && (
                       <div className="flex gap-1">
                         <Button
                           variant="ghost"
@@ -963,13 +1183,13 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
                           icon={<LuCheck size={12} />}
                           onClick={() => setCompleteTarget(r)}
                         />
-                        <Button
+                        {(r.available_actions ?? []).includes('cancel') && <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => cancelMutation.mutate(r.id)}
                         >
                           Cancel
-                        </Button>
+                        </Button>}
                       </div>
                     )}
                   </Td>
@@ -1055,8 +1275,8 @@ function AssignTrainingModal({ employeeId, onClose }: { employeeId: string; onCl
   const mutation = useMutation({
     mutationFn: (d: { training_id: string; scheduled_for: string }) =>
       employeeTrainingsApi.assign(employeeId, d),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['employee-trainings', employeeId] });
+    onSuccess: (record) => {
+      reconcileEmployeeTrainingMutation(qc, employeeId, record, true);
       toast.success('Training assigned.');
       onClose();
     },
@@ -1118,8 +1338,8 @@ function SkillsTab({ employeeId }: { employeeId: string }) {
 
   const removeMutation = useMutation({
     mutationFn: (recordId: string) => employeeSkillsApi.remove(recordId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['employee-skills', employeeId] });
+    onSuccess: (_, recordId) => {
+      reconcileEmployeeSkillList(qc, employeeId, null, recordId);
       toast.success('Skill removed.');
     },
     onError: (error) => reportMutationError(error, 'Failed to remove skill.'),
@@ -1247,8 +1467,8 @@ function AssignSkillModal({ employeeId, onClose }: { employeeId: string; onClose
       expires_at: d.expires_at || null,
       certificate: d.certificate?.[0] ?? null,
     }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['employee-skills', employeeId] });
+    onSuccess: (record) => {
+      reconcileEmployeeSkillList(qc, employeeId, record);
       toast.success('Skill assigned.');
       onClose();
     },
@@ -1399,9 +1619,9 @@ function PayrollTab({ employeeId }: { employeeId: string }) {
 
 function Item({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
-      <dd className={mono ? 'font-mono tabular-nums' : ''}>
+      <dd className={cn('break-words', mono && 'font-mono tabular-nums')}>
         {value || <span className="text-text-subtle">—</span>}
       </dd>
     </div>

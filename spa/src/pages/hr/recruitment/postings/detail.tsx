@@ -2,6 +2,7 @@ import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import { LuPencil, LuTrash2, LuArchiveRestore } from '@/lib/icons';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
@@ -16,8 +17,9 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
-import type { JobPostingStatus, JobApplication } from '@/types/recruitment';
+import type { JobPostingStatus, JobApplication, JobPosting } from '@/types/recruitment';
 import { applicationStageVariant } from '@/lib/statusVariants';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 
 const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 'info'> = {
  draft: 'neutral',
@@ -32,6 +34,7 @@ export default function PostingDetailPage() {
  const navigate = useNavigate();
  const queryClient = useQueryClient();
  const { can } = usePermission();
+ useRealtimeRecord('job_posting', can('hr.recruitment.view') ? id : undefined);
  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
  const [applicationPage, setApplicationPage] = useState(1);
@@ -59,34 +62,55 @@ export default function PostingDetailPage() {
  });
  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
  const postingStatusLabel = new Map((recruitmentOptions?.posting_statuses ?? []).map((status) => [status.value, status.label]));
- const isArchived = Boolean(posting?.deleted_at);
+
+ const refreshAfterConflict = (error: unknown): boolean => {
+  if (!(error instanceof AxiosError) || error.response?.status !== 409) return false;
+  const body = error.response.data as { code?: string; message?: string };
+  if (body.code !== 'recruitment_state_conflict') return false;
+  queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
+  queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
+  queryClient.invalidateQueries({ queryKey: ['recruitment-applications', { job_posting_id: id }] });
+  toast.error(body.message ?? 'This posting changed. The latest version is loading.');
+  return true;
+ };
 
  const statusMutation = useMutation({
- mutationFn: (status: string) => recruitmentApi.changePostingStatus(id!, status),
- onSuccess: () => {
+ mutationFn: (status: string) => recruitmentApi.changePostingStatus(id!, status, posting?.version),
+ onSuccess: (res) => {
  toast.success('Status updated.');
- queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
+ queryClient.setQueryData<JobPosting>(['recruitment-posting', id], res.data.data);
+ queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
+ queryClient.invalidateQueries({ queryKey: ['recruitment-applications', { job_posting_id: id }] });
  },
- onError: (error) => reportMutationError(error, 'Failed to update status.'),
+ onError: (error) => {
+  if (!refreshAfterConflict(error)) reportMutationError(error, 'Failed to update status.');
+ },
  });
 
  const deleteMutation = useMutation({
-  mutationFn: () => recruitmentApi.deletePosting(id!),
+  mutationFn: () => recruitmentApi.deletePosting(id!, posting?.version),
   onSuccess: () => {
   toast.success('Posting archived.');
+  queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
   navigate('/hr/recruitment/postings');
   },
-  onError: (error) => reportMutationError(error, 'Failed to archive posting.'),
+  onError: (error) => {
+  if (!refreshAfterConflict(error)) reportMutationError(error, 'Failed to archive posting.');
+  },
  });
 
  const restoreMutation = useMutation({
-  mutationFn: (postingId: string) => recruitmentApi.restorePosting(postingId),
+  mutationFn: (postingId: string) => recruitmentApi.restorePosting(postingId, posting?.version),
   onSuccess: () => {
   queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
+  queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
   toast.success('Posting restored.');
   setShowRestoreConfirm(false);
  },
-  onError: (error) => reportMutationError(error, 'Failed to restore posting.'),
+  onError: (error) => {
+  if (refreshAfterConflict(error)) setShowRestoreConfirm(false);
+  else reportMutationError(error, 'Failed to restore posting.');
+  },
  });
 
  const appColumns: Column<JobApplication>[] = [
@@ -106,6 +130,8 @@ export default function PostingDetailPage() {
  );
  }
 
+ const hasAction = (action: JobPosting['available_actions'][number]) => posting.available_actions.includes(action);
+
  return (
  <div>
  <PageHeader
@@ -119,26 +145,26 @@ export default function PostingDetailPage() {
  backTo="/hr/recruitment/postings"
  backLabel="Postings"
  actions={
- can('hr.recruitment.manage') ? (
+ posting.available_actions.length > 0 ? (
  <>
- <Button variant="secondary" size="sm" icon={<LuPencil size={12} />} onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
+ {hasAction('edit') && <Button variant="secondary" size="sm" icon={<LuPencil size={12} />} onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
  Edit
- </Button>
- {posting.status === 'draft' && (
+ </Button>}
+ {hasAction('publish') && (
  <Button variant="primary" size="sm" onClick={() => statusMutation.mutate('open')} disabled={statusMutation.isPending} loading={statusMutation.isPending}>
  Publish
  </Button>
  )}
- {posting.status === 'open' && (
+ {hasAction('close') && (
  <Button variant="secondary" size="sm" onClick={() => statusMutation.mutate('closed')}>
  Close
  </Button>
  )}
- {isArchived ? (
+ {hasAction('restore') ? (
   <Button variant="secondary" size="sm" icon={<LuArchiveRestore size={12} />} onClick={() => setShowRestoreConfirm(true)}>
   Restore
   </Button>
- ) : posting.status === 'draft' ? (
+  ) : hasAction('archive') ? (
   <Button variant="danger" size="sm" icon={<LuTrash2 size={12} />} onClick={() => setShowDeleteConfirm(true)}>
   Delete
   </Button>

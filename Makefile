@@ -1,4 +1,4 @@
-.PHONY: help up down build restart logs ps shell tinker migrate seed fresh test test-db lint analyse spa-shell chain-smoke worker-recovery-smoke deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell backup restore prod-backup prod-restore
+.PHONY: help up down build restart dev-refresh-php dev-watch-php logs ps shell tinker migrate seed fresh test test-db lint analyse spa-shell chain-smoke worker-recovery-smoke deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell backup restore prod-backup prod-restore
 
 help:
 	@echo "Ogami ERP — Make targets"
@@ -6,6 +6,8 @@ help:
 	@echo "  make down        — stop all services"
 	@echo "  make build       — rebuild images"
 	@echo "  make restart     — restart all services"
+	@echo "  make dev-refresh-php — clear framework artifacts and restart local PHP consumers"
+	@echo "  make dev-watch-php — restart mounted PHP consumers as source files change (no image rebuild)"
 	@echo "  make logs        — tail logs (CTRL+C to exit)"
 	@echo "  make ps          — list running services"
 	@echo "  make shell       — bash inside the api container"
@@ -33,6 +35,28 @@ build:
 
 restart:
 	docker compose restart
+
+# Mounted PHP source reaches request workers immediately, but PHP-FPM, Horizon,
+# the mail worker and Reverb keep loaded classes/config in memory. Restart the
+# already-running local containers in place; Compose overrides on this VPS are
+# assembled from multiple files, so a partial Compose invocation is unsafe.
+dev-refresh-php:
+	@test "$$(docker inspect -f '{{.Config.Image}}' ogami-api)" = "ogami-erp-dev:local" || (echo "Refusing refresh: ogami-api is not the local dev image"; exit 1)
+	@docker exec ogami-api sh -ec 'test "$$APP_ENV" = local' || (echo "Refusing refresh: APP_ENV is not local"; exit 1)
+	docker exec ogami-api php artisan config:clear
+	docker exec ogami-api php artisan route:clear
+	docker exec ogami-api php artisan event:clear
+	docker exec ogami-api php artisan view:clear
+	docker restart ogami-api ogami-horizon ogami-queue-mail ogami-reverb
+
+# Source is bind-mounted into the dev stack, so changes do not need an image
+# rebuild. Compose Watch restarts only the long-running PHP consumers whose
+# loaded classes/config would otherwise remain stale; API FPM already validates
+# source timestamps, and the Vite service provides frontend HMR.
+dev-watch-php:
+	@test "$$(docker inspect -f '{{.Config.Image}}' ogami-api)" = "ogami-erp-dev:local" || (echo "Refusing watch: ogami-api is not the local dev image"; exit 1)
+	@docker exec ogami-api sh -ec 'test "$$APP_ENV" = local' || (echo "Refusing watch: APP_ENV is not local"; exit 1)
+	docker compose watch --no-up horizon queue-mail reverb
 
 logs:
 	docker compose logs -f --tail=200
@@ -219,11 +243,16 @@ deploy: build-spa
 		done; \
 		[ "$$status" = healthy ] || { echo 'ERROR: production database did not become healthy'; exit 1; }
 	$(MAKE) prod-backup
+	$(PROD_COMPOSE) stop api nginx reverb horizon queue-mail scheduler
 	$(PROD_COMPOSE) up migrate
-	$(PROD_COMPOSE) up -d api nginx reverb horizon scheduler
+	$(PROD_COMPOSE) up -d --force-recreate api
 	$(PROD_COMPOSE) exec -T api php artisan config:cache
 	$(PROD_COMPOSE) exec -T api php artisan route:cache
+	$(PROD_COMPOSE) exec -T api php artisan event:cache
 	$(PROD_COMPOSE) exec -T api php artisan view:cache
+	$(PROD_COMPOSE) exec -T api php artisan realtime:config-check
+	$(PROD_COMPOSE) restart api
+	$(PROD_COMPOSE) up -d --force-recreate nginx reverb horizon queue-mail scheduler
 	$(PROD_COMPOSE) exec -T nginx nginx -s reload
 	@echo ""
 	@echo "  Deploy complete. Smoke-test https://$$SERVER_NAME/sanctum/csrf-cookie"

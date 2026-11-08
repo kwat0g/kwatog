@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Modules\DSS\Models\DssRunLog;
 use App\Modules\DSS\Services\RecommendationService;
+use App\Modules\DSS\Services\DssRealtimeService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +41,9 @@ class MaintainDss extends Command
                 }
             });
         $pruned = DssRunLog::query()->where('created_at', '<', now()->subDays(90))->delete();
+        if ($pruned > 0) {
+            app(DssRealtimeService::class)->stage('deleted');
+        }
 
         $this->info("Expired {$expired} recommendations; failed {$interrupted} interrupted runs; pruned {$pruned} run logs older than 90 days.");
 

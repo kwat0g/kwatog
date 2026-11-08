@@ -43,6 +43,7 @@ class UserResource extends JsonResource
                 : null,
             'permissions' => $this->permission_slugs,
             'delegated_approvals' => \App\Common\Models\ApprovalDelegation::delegatedApprovalPermissions($this->resource),
+            'access_scope_refresh_at' => \App\Common\Models\ApprovalDelegation::nextAccessScopeRefreshAt($this->resource)?->toIso8601String(),
             'features'    => $features,
         ];
     }

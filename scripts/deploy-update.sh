@@ -198,11 +198,11 @@ else
 fi
 
 # ── 4. Rebuild API images ─────────────────────────────────────────────────────
-# api / horizon / reverb / scheduler each have their OWN build block and bake the
-# source at build time. All four must be rebuilt for code/config changes to land.
+# Every PHP service has its own image and bakes source at build time. Rebuild
+# all long-running consumers so no worker keeps the prior release's code.
 if [ "${DO_BUILD}" -eq 1 ]; then
-    log "Rebuilding API images (api horizon reverb scheduler)"
-    ${COMPOSE} build api horizon reverb scheduler
+    log "Rebuilding PHP images (api horizon queue-mail reverb scheduler)"
+    ${COMPOSE} build api horizon queue-mail reverb scheduler
     ok "Images rebuilt"
 else
     warn "Skipping image rebuild (--no-build)"
@@ -219,7 +219,7 @@ ok "nginx config rendered"
 # partially migrated schema) while migrations are pending. They are started
 # only after the API has migrated and rebuilt its runtime caches below.
 log "Stopping consumers before migration"
-${COMPOSE} stop nginx reverb horizon scheduler
+${COMPOSE} stop api nginx reverb horizon queue-mail scheduler
 log "Starting infrastructure and API only"
 ${COMPOSE} up -d --force-recreate db redis api
 log "Waiting for database to report healthy"
@@ -237,20 +237,26 @@ ${COMPOSE} exec -T api php artisan migrate --force
 ok "Migrations applied"
 
 # ── 8. Rebuild runtime caches with the LIVE env ───────────────────────────────
-log "Rebuilding framework caches (config/route/view) + storage link"
+log "Rebuilding framework caches (config/route/event/view) + realtime config check"
 ${COMPOSE} exec -T api php artisan config:cache
 ${COMPOSE} exec -T api php artisan route:cache
+${COMPOSE} exec -T api php artisan event:cache
 ${COMPOSE} exec -T api php artisan view:cache
+${COMPOSE} exec -T api php artisan realtime:config-check
 ${COMPOSE} exec -T api php artisan storage:link
 # Migrations write settings directly, so invalidate only settings cache keys
 # after schema/data changes. This deliberately does not flush Redis globally.
 ${COMPOSE} exec -T api php artisan tinker --execute='app(\App\Common\Services\SettingsService::class)->flushCache();'
 ok "Caches rebuilt"
 
+# Production OPcache has validate_timestamps=0. Restart FPM after the cache
+# files exist so it cannot keep the pre-cache bootstrap loaded in memory.
+${COMPOSE} restart api
+
 # ── 9. Start consumers only after migration and cache rebuild ────────────────
-log "Starting consumers (nginx reverb horizon scheduler)"
-${COMPOSE} up -d --force-recreate nginx reverb horizon scheduler
-# Recreating Horizon starts a fresh master with this release's code and config.
+log "Starting consumers (nginx reverb horizon queue-mail scheduler)"
+${COMPOSE} up -d --force-recreate nginx reverb horizon queue-mail scheduler
+# Recreating each long-lived consumer loads this release's code and env.
 ok "Consumers started"
 
 # ── 10. Reload nginx ──────────────────────────────────────────────────────────
@@ -287,7 +293,7 @@ done
 [ "${SPA_CODE}" = "200" ] || die "SPA index returned HTTP ${SPA_CODE:-unreachable}; deployment is not complete."
 ok "SPA index: HTTP ${SPA_CODE}"
 
-for service in api nginx db redis reverb horizon scheduler; do
+for service in api nginx db redis reverb horizon queue-mail scheduler; do
     cid="$(${COMPOSE} ps -q "${service}")"
     [ -n "${cid}" ] || die "Expected service ${service} has no container."
     state="$(docker inspect -f '{{.State.Status}}' "${cid}")"

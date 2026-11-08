@@ -7,11 +7,12 @@ namespace App\Modules\HR\Services;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\TemporaryPasswordGenerator;
-use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Notifications\AdminPasswordResetNotification;
 use App\Modules\Auth\Services\PasswordResetService;
+use App\Modules\Auth\Services\SessionRevocationService;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
 use App\Modules\HR\Exceptions\ProvisioningConfigurationException;
@@ -33,6 +34,7 @@ class UserProvisioningService
     public function __construct(
         private readonly SettingsService $settings,
         private readonly TemporaryPasswordGenerator $temporaryPasswords,
+        private readonly SessionRevocationService $sessions,
     ) {}
 
     /**
@@ -59,21 +61,21 @@ class UserProvisioningService
 
             /** @var User $user */
             $user = User::create([
-                'name'                  => $lockedEmployee->full_name,
-                'email'                 => $email,
-                'password'              => Hash::make($tempPassword),
-                'role_id'               => $this->defaultRoleIdForEmployee(),
-                'employee_id'           => $lockedEmployee->id,
-                'is_active'             => true,
-                'must_change_password'  => true,
-                'password_changed_at'   => null,
+                'name' => $lockedEmployee->full_name,
+                'email' => $email,
+                'password' => Hash::make($tempPassword),
+                'role_id' => $this->defaultRoleIdForEmployee(),
+                'employee_id' => $lockedEmployee->id,
+                'is_active' => true,
+                'must_change_password' => true,
+                'password_changed_at' => null,
                 'failed_login_attempts' => 0,
             ]);
 
             PasswordHistory::create([
-                'user_id'       => $user->id,
+                'user_id' => $user->id,
                 'password_hash' => $user->password,
-                'created_at'    => now(),
+                'created_at' => now(),
             ]);
 
             if (($options['send_welcome'] ?? true) === true) {
@@ -154,17 +156,17 @@ class UserProvisioningService
             $temp = $this->generateTempPassword();
 
             PasswordHistory::create([
-                'user_id'       => $user->id,
+                'user_id' => $user->id,
                 'password_hash' => $user->password,
-                'created_at'    => now(),
+                'created_at' => now(),
             ]);
 
             $user->forceFill([
-                'password'              => Hash::make($temp),
-                'must_change_password'  => true,
+                'password' => Hash::make($temp),
+                'must_change_password' => true,
                 'failed_login_attempts' => 0,
-                'locked_until'          => null,
-                'password_changed_at'   => now(),
+                'locked_until' => null,
+                'password_changed_at' => now(),
             ])->save();
 
             // Resetting credentials must terminate every prior session before
@@ -208,27 +210,27 @@ class UserProvisioningService
 
         if (! $user) {
             return [
-                'account_exists'        => false,
-                'is_active'             => false,
-                'is_locked'             => false,
-                'email'                 => null,
-                'role'                  => null,
-                'user_id'               => null,
-                'last_login_at'         => null,
-                'must_change_password'  => false,
+                'account_exists' => false,
+                'is_active' => false,
+                'is_locked' => false,
+                'email' => null,
+                'role' => null,
+                'user_id' => null,
+                'last_login_at' => null,
+                'must_change_password' => false,
             ];
         }
 
         return [
             'account_exists' => true,
-            'is_active'      => (bool) $user->is_active,
-            'is_locked'      => $user->isLocked(),
-            'email'          => $user->email,
-            'role'           => $user->role
+            'is_active' => (bool) $user->is_active,
+            'is_locked' => $user->isLocked(),
+            'email' => $user->email,
+            'role' => $user->role
                 ? ['id' => $user->role->hash_id, 'name' => $user->role->name, 'slug' => $user->role->slug]
                 : null,
-            'user_id'              => $user->hash_id,
-            'last_login_at'        => optional($user->last_activity)->toIso8601String(),
+            'user_id' => $user->hash_id,
+            'last_login_at' => optional($user->last_activity)->toIso8601String(),
             'must_change_password' => (bool) $user->must_change_password,
         ];
     }
@@ -250,22 +252,22 @@ class UserProvisioningService
                 $user = $this->provisionForEmployee($employee, $options);
                 $results[] = [
                     'employee_id' => $employee->hash_id,
-                    'status'      => 'success',
-                    'message'     => 'Account created.',
-                    'user_id'     => $user->hash_id,
+                    'status' => 'success',
+                    'message' => 'Account created.',
+                    'user_id' => $user->hash_id,
                 ];
             } catch (\DomainException $e) {
                 $results[] = [
                     'employee_id' => $employee->hash_id,
-                    'status'      => 'skipped',
-                    'message'     => $e->getMessage(),
+                    'status' => 'skipped',
+                    'message' => $e->getMessage(),
                 ];
             } catch (\Throwable $e) {
                 report($e);
                 $results[] = [
                     'employee_id' => $employee->hash_id,
-                    'status'      => 'failed',
-                    'message'     => 'Provisioning failed: '.$e->getMessage(),
+                    'status' => 'failed',
+                    'message' => 'Provisioning failed: '.$e->getMessage(),
                 ];
             }
         }
@@ -286,6 +288,7 @@ class UserProvisioningService
             $email = "{$base}{$count}@{$domain}";
             $count++;
         }
+
         return $email;
     }
 
@@ -321,6 +324,7 @@ class UserProvisioningService
         if (! $role) {
             throw new ProvisioningConfigurationException("Configured default role [{$slug}] does not exist.");
         }
+
         return (int) $role->id;
     }
 
@@ -330,6 +334,6 @@ class UserProvisioningService
             $user->tokens()->delete();
         }
 
-        DB::table('sessions')->where('user_id', $user->id)->delete();
+        $this->sessions->revokeAllSessions($user);
     }
 }

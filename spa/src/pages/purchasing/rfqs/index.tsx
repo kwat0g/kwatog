@@ -13,13 +13,16 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import type { RequestForQuote } from '@/types/purchasing';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 type Filters = ListParams & { status?: string; search?: string };
 
 export default function RequestForQuotesPage() {
+  useRealtimeList('request_for_quote', 'visible');
   const navigate = useNavigate();
   const [filters, setFilters] = useUrlFilters<Filters>({
     page: 1,
@@ -27,11 +30,13 @@ export default function RequestForQuotesPage() {
     status: '',
     search: '',
   });
+  const listQueryKey = ['purchasing', 'rfqs', filters] as const;
 
   const query = useQuery({
-    queryKey: ['purchasing', 'rfqs', filters],
+    queryKey: listQueryKey,
     queryFn: ({ signal }) => rfqsApi.list(filters, signal),
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 2) ? previous : undefined,
   });
 
   const columns: Column<RequestForQuote>[] = [

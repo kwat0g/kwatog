@@ -25,6 +25,15 @@ export interface Recommendation {
   type: string;
   severity: RecommendationSeverity;
   status: RecommendationStatus;
+  permissions: { view: boolean; act: boolean };
+  available_actions: {
+    accept: boolean;
+    dismiss: boolean;
+    snooze: boolean;
+    execute: boolean;
+    start_follow_up: boolean;
+    record_outcome: boolean;
+  };
   owner_role_slugs?: string[] | null;
   priority_score: string | null;
   impact_estimate: string | null;
@@ -63,6 +72,7 @@ export interface Recommendation {
   decided_at: string | null;
   created_at: string;
   updated_at: string;
+  version: number;
 }
 
 export interface RecommendationListParams {

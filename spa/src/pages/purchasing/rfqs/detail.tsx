@@ -16,8 +16,14 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import {
+  invalidateRealtimeChange,
+  reconcileRealtimeMutationResponse,
+} from '@/lib/realtime/invalidationMap';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import type { RequestForQuote } from '@/types/purchasing';
 
 const errMsg = (e: unknown, fallback: string) =>
   (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
@@ -37,6 +43,7 @@ const toIsoDatetime = (localDatetimeValue: string): string => {
 
 export default function RfqDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  useRealtimeRecord('request_for_quote', id);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
@@ -57,56 +64,67 @@ export default function RfqDetailPage() {
   const purchaseOrders = useQuery({
     queryKey: ['purchasing', 'rfqs', id, 'purchase-orders'],
     queryFn: () => rfqsApi.purchaseOrders(id),
-    enabled: !!rfq && rfq.status === 'awarded' && rfq.actions.can_compare,
+    enabled: !!rfq && rfq.status === 'awarded' && rfq.available_actions.can_compare,
   });
 
-  const refreshAll = async () => {
-    await qc.invalidateQueries({ queryKey: ['purchasing', 'rfqs', id] });
-    await qc.invalidateQueries({ queryKey: ['purchasing', 'rfqs'] });
-    if (rfq?.purchase_request?.id) {
-      await qc.invalidateQueries({
-        queryKey: ['purchasing', 'purchase-requests', rfq.purchase_request.id],
-      });
+  const refreshAll = async (updated?: RequestForQuote) => {
+    if (updated) {
+      await reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'request_for_quote', entityId: id },
+        ['purchasing', 'rfqs', id],
+        updated,
+      );
+      return;
     }
+    await invalidateRealtimeChange(qc, { entityType: 'request_for_quote', entityId: id });
+  };
+  const statusMutationError = (e: unknown, fallback: string) => {
+    const code = e instanceof AxiosError ? e.response?.data?.code : undefined;
+    if (e instanceof AxiosError && e.response?.status === 409 && code === 'request_for_quote_state_conflict') {
+      setCancelOpen(false);
+      void invalidateRealtimeChange(qc, { entityType: 'request_for_quote', entityId: id });
+    }
+    toast.error(errMsg(e, fallback));
   };
 
   const publish = useMutation({
     mutationFn: () => rfqsApi.publish(id),
-    onSuccess: async () => {
-      await refreshAll();
+    onSuccess: async (updated) => {
+      await refreshAll(updated);
       toast.success('RFQ published to invited suppliers.');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to publish RFQ.')),
+    onError: (e) => statusMutationError(e, 'Failed to publish RFQ.'),
   });
 
   const closeNow = useMutation({
     mutationFn: () => rfqsApi.closeNow(id),
-    onSuccess: async () => {
-      await refreshAll();
+    onSuccess: async (updated) => {
+      await refreshAll(updated);
       toast.success('RFQ closed. Ready for comparison.');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to close RFQ.')),
+    onError: (e) => statusMutationError(e, 'Failed to close RFQ.'),
   });
 
   const extend = useMutation({
     mutationFn: () => rfqsApi.extend(id, toIsoDatetime(extensionDeadline), extensionReason),
-    onSuccess: async () => {
-      await refreshAll();
+    onSuccess: async (updated) => {
+      await refreshAll(updated);
       setExtensionDeadline('');
       setExtensionReason('');
       toast.success('RFQ deadline extended.');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to extend deadline.')),
+    onError: (e) => statusMutationError(e, 'Failed to extend deadline.'),
   });
 
   const cancel = useMutation({
     mutationFn: (reason: string) => rfqsApi.cancel(id, reason),
-    onSuccess: async () => {
-      await refreshAll();
+    onSuccess: async (updated) => {
+      await refreshAll(updated);
       setCancelOpen(false);
       toast.success('RFQ cancelled.');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to cancel RFQ.')),
+    onError: (e) => statusMutationError(e, 'Failed to cancel RFQ.'),
   });
 
   const uploadRequirement = useMutation({
@@ -122,7 +140,7 @@ export default function RfqDetailPage() {
       setRequirementFile(null);
       toast.success('Requirement document uploaded.');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to upload document.')),
+    onError: (e) => statusMutationError(e, 'Failed to upload document.'),
   });
 
   if (query.isLoading) return <SkeletonTable columns={5} rows={6} />;
@@ -137,40 +155,42 @@ export default function RfqDetailPage() {
     );
   }
 
-  const canCompare = rfq.actions.can_compare;
-  const canViewSupplierActivity = rfq.actions.can_view_supplier_activity;
+  const canCompare = rfq.available_actions.can_compare;
+  const canViewSupplierActivity = rfq.available_actions.can_view_supplier_activity;
 
   return (
     <div>
       <PageHeader
         title={<span className="font-mono">{rfq.rfq_number}</span>}
         subtitle={rfq.title}
-        backTo={rfq.actions.can_compare ? '/purchasing/rfqs' : undefined}
-        backLabel={rfq.actions.can_compare ? 'Supplier RFQs' : undefined}
+        backTo={rfq.available_actions.can_compare ? '/purchasing/rfqs' : undefined}
+        backLabel={rfq.available_actions.can_compare ? 'Supplier RFQs' : undefined}
         actions={
           <div className="flex flex-wrap gap-2">
             <Chip variant={rfqStatus(rfq.status).variant}>{rfqStatus(rfq.status).label}</Chip>
-            {rfq.actions.can_publish && (
+            {rfq.available_actions.can_publish && (
               <Button
                 size="sm"
                 variant="primary"
                 onClick={() => publish.mutate()}
                 loading={publish.isPending}
+                disabled={query.isFetching}
               >
                 Publish
               </Button>
             )}
-            {rfq.actions.can_close_now && (
+            {rfq.available_actions.can_close_now && (
               <Button
                 size="sm"
                 variant="primary"
                 onClick={() => closeNow.mutate()}
                 loading={closeNow.isPending}
+                disabled={query.isFetching}
               >
                 Close now
               </Button>
             )}
-            {canViewSupplierActivity && rfq.status === 'open' && !rfq.actions.can_close_now && (
+            {canViewSupplierActivity && rfq.status === 'open' && !rfq.available_actions.can_close_now && (
               <div className="text-sm text-muted">
                 Closes {formatDateTime(rfq.closes_at)} ·{' '}
                 <span className="font-mono tabular-nums">
@@ -182,13 +202,13 @@ export default function RfqDetailPage() {
             {canCompare && (
               <Button
                 size="sm"
-                variant={rfq.actions.can_award ? 'primary' : 'secondary'}
+                variant={rfq.available_actions.can_award ? 'primary' : 'secondary'}
                 onClick={() => navigate(`/purchasing/rfqs/${id}/compare`)}
               >
-                {rfq.actions.can_award ? 'Compare & award' : 'View comparison'}
+                {rfq.available_actions.can_award ? 'Compare & award' : 'View comparison'}
               </Button>
             )}
-            {rfq.actions.can_edit && (
+            {rfq.available_actions.can_edit && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -197,12 +217,13 @@ export default function RfqDetailPage() {
                 Edit
               </Button>
             )}
-            {rfq.actions.can_cancel && (
+            {rfq.available_actions.can_cancel && (
               <Button
                 size="sm"
                 variant="secondary"
                 icon={<LuX size={14} />}
                 onClick={() => setCancelOpen(true)}
+                disabled={query.isFetching}
               >
                 Cancel
               </Button>
@@ -478,7 +499,7 @@ export default function RfqDetailPage() {
             </dl>
           </Panel>
 
-          {rfq.actions.can_upload_document && (
+          {rfq.available_actions.can_upload_document && (
             <Panel title="Requirement document">
               <p className="text-sm text-muted mb-2">Shared with all invited suppliers.</p>
               <Input
@@ -490,16 +511,16 @@ export default function RfqDetailPage() {
               <Button
                 className="mt-3 w-full"
                 variant="secondary"
-                disabled={!requirementFile}
                 onClick={() => uploadRequirement.mutate()}
                 loading={uploadRequirement.isPending}
+                disabled={!requirementFile || query.isFetching}
               >
                 Upload
               </Button>
             </Panel>
           )}
 
-          {rfq.status === 'open' && rfq.actions.can_extend && (
+          {rfq.available_actions.can_extend && (
             <Panel title="Extend deadline">
               <Input
                 label="New deadline"
@@ -517,7 +538,7 @@ export default function RfqDetailPage() {
               <Button
                 className="mt-3 w-full"
                 variant="secondary"
-                disabled={!extensionDeadline || extensionReason.trim().length < 5}
+                disabled={!extensionDeadline || extensionReason.trim().length < 5 || query.isFetching}
                 onClick={() => extend.mutate()}
                 loading={extend.isPending}
               >
@@ -526,7 +547,7 @@ export default function RfqDetailPage() {
             </Panel>
           )}
 
-          {rfq.status === 'open' && rfq.actions.can_capture_quote && (
+          {rfq.available_actions.can_capture_quote && (
             <Panel title="Manual quotation">
               <p className="text-sm text-muted mb-3">For suppliers without portal access.</p>
               <Button
@@ -564,7 +585,7 @@ export default function RfqDetailPage() {
         title="Cancel this RFQ?"
         description="Invited suppliers will no longer be able to submit or revise quotations."
         confirmLabel="Cancel RFQ"
-        pending={cancel.isPending}
+        pending={cancel.isPending || query.isFetching}
         onConfirm={(reason) => cancel.mutate(reason)}
       />
     </div>

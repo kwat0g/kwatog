@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Resources;
 
+use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillPaymentStatus;
 use App\Modules\Accounting\Enums\BillStatus;
 use Illuminate\Http\Request;
@@ -19,36 +20,37 @@ class BillResource extends JsonResource
         $pendingVpApproval = $pendingPayment && in_array($this->status, [BillStatus::Unpaid, BillStatus::Partial], true);
 
         return [
-            'id'                      => $this->hash_id,
-            'bill_number'             => $this->bill_number,
+            'id' => $this->hash_id,
+            'bill_number' => $this->bill_number,
             'supplier_invoice_number' => $this->supplierInvoice?->number ?? $this->supplier_invoice_number,
             'supplier_invoice_group_total' => $this->supplierInvoice?->gross_total,
-            'supplier_invoice_date'   => optional($this->supplierInvoice?->date ?? $this->supplier_invoice_date)->toDateString(),
+            'supplier_invoice_date' => optional($this->supplierInvoice?->date ?? $this->supplier_invoice_date)->toDateString(),
             'supplier_invoice_submitted_at' => optional($this->supplierInvoice?->submitted_at ?? $this->supplier_invoice_submitted_at)->toIso8601String(),
-            'date'                    => optional($this->date)->toDateString(),
-            'due_date'                => optional($this->due_date)->toDateString(),
-            'is_vatable'     => (bool) $this->is_vatable,
+            'date' => optional($this->date)->toDateString(),
+            'due_date' => optional($this->due_date)->toDateString(),
+            'is_vatable' => (bool) $this->is_vatable,
             'withholding_tax_type' => $this->withholding_tax_type?->value,
-            'ewt_rate'       => (string) ($this->ewt_rate ?? '0.0000'),
-            'ewt_amount'     => (string) ($this->ewt_amount ?? '0.00'),
-            'subtotal'       => (string) $this->subtotal,
-            'vat_amount'     => (string) $this->vat_amount,
-            'total_amount'   => (string) $this->total_amount,
-            'amount_paid'    => (string) $this->amount_paid,
-            'balance'        => (string) $this->balance,
-            'status'         => $this->status?->value,
-            'status_label'   => $pendingVpApproval ? 'Pending VP approval' : $this->status?->label(),
+            'ewt_rate' => (string) ($this->ewt_rate ?? '0.0000'),
+            'ewt_amount' => (string) ($this->ewt_amount ?? '0.00'),
+            'subtotal' => (string) $this->subtotal,
+            'vat_amount' => (string) $this->vat_amount,
+            'total_amount' => (string) $this->total_amount,
+            'amount_paid' => (string) $this->amount_paid,
+            'balance' => (string) $this->balance,
+            'status' => $this->status?->value,
+            'status_label' => $pendingVpApproval ? 'Pending VP approval' : $this->status?->label(),
             'payment_approval_pending' => $pendingVpApproval,
-            'cancelled_at'   => optional($this->cancelled_at)->toIso8601String(),
+            'available_actions' => $this->availableActions($request),
+            'cancelled_at' => optional($this->cancelled_at)->toIso8601String(),
             // 2026-08-08 — source receipt for auto-created draft bills.
             'goods_receipt_note_id' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? $this->goodsReceiptNote->hash_id : null),
             'landed_cost_shipment' => $this->whenLoaded('landedCostShipment', fn () => $this->landedCostShipment ? [
                 'id' => $this->landedCostShipment->hash_id,
                 'shipment_number' => $this->landedCostShipment->shipment_number,
             ] : null),
-            'is_overdue'     => $this->isOverdue(),
-            'aging_bucket'   => $this->agingBucket(),
-            'remarks'        => $this->remarks,
+            'is_overdue' => $this->isOverdue(),
+            'aging_bucket' => $this->agingBucket(),
+            'remarks' => $this->remarks,
             'provenance_type' => $this->provenance_type,
             'exception_evidence' => $this->exception_evidence,
             'exception_owner' => $this->whenLoaded('exceptionOwner', fn () => $this->exceptionOwner ? [
@@ -60,7 +62,7 @@ class BillResource extends JsonResource
                 'name' => $this->exceptionApprover->name,
             ] : null),
             'exception_approved_at' => optional($this->exception_approved_at)->toIso8601String(),
-            'has_variances'  => (bool) $this->has_variances,
+            'has_variances' => (bool) $this->has_variances,
             'three_way_overridden' => (bool) $this->three_way_overridden,
             'three_way_override_reason' => $this->three_way_override_reason,
             'three_way_overridden_by' => $this->whenLoaded('threeWayOverrider', fn () => $this->threeWayOverrider ? [
@@ -71,13 +73,13 @@ class BillResource extends JsonResource
             'three_way_review_status' => $this->threeWayReviewStatus(),
             'three_way_match_url' => $this->purchase_order_id ? '/api/v1/purchasing/three-way-match/'.$this->hash_id : null,
             'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
-                'id'        => $this->purchaseOrder->hash_id,
+                'id' => $this->purchaseOrder->hash_id,
                 'po_number' => $this->purchaseOrder->po_number,
                 // 2026-08-08 — P2P stepper: the PR behind this PO.
                 'purchase_request' => $this->purchaseOrder->relationLoaded('purchaseRequest')
                     && $this->purchaseOrder->purchaseRequest
                     ? [
-                        'id'        => $this->purchaseOrder->purchaseRequest->hash_id,
+                        'id' => $this->purchaseOrder->purchaseRequest->hash_id,
                         'pr_number' => $this->purchaseOrder->purchaseRequest->pr_number,
                     ]
                     : null,
@@ -85,15 +87,15 @@ class BillResource extends JsonResource
             // 2026-08-08 — P2P stepper: the source receipt(s) this bill came from.
             'goods_receipt_notes' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? [
                 [
-                    'id'         => $this->goodsReceiptNote->hash_id,
+                    'id' => $this->goodsReceiptNote->hash_id,
                     'grn_number' => $this->goodsReceiptNote->grn_number,
-                    'status'     => (string) $this->goodsReceiptNote->status?->value,
+                    'status' => (string) $this->goodsReceiptNote->status?->value,
                 ],
             ] : []),
-            'vendor'         => $this->whenLoaded('vendor', fn () => $this->vendor ? [
+            'vendor' => $this->whenLoaded('vendor', fn () => $this->vendor ? [
                 'id' => $this->vendor->hash_id, 'name' => $this->vendor->name,
             ] : null),
-            'items'          => BillItemResource::collection($this->whenLoaded('items')),
+            'items' => BillItemResource::collection($this->whenLoaded('items')),
             // Supplier-submitted invoice attachment.
             'supplier_invoice_attachment' => $this->whenLoaded('portalShippingDocuments', function (): ?array {
                 $document = $this->supplierInvoice?->documents->firstWhere('document_type', 'supplier_invoice')
@@ -102,17 +104,63 @@ class BillResource extends JsonResource
                 return $document ? ['id' => $document->hash_id, 'original_filename' => $document->original_filename] : null;
             }),
             // Each payment needs its bill to project a pending payment's EWT.
-            'payments'       => BillPaymentResource::collection($this->whenLoaded('payments', fn () => $this->payments->each(
+            'payments' => BillPaymentResource::collection($this->whenLoaded('payments', fn () => $this->payments->each(
                 fn ($payment) => $payment->setRelation('bill', $this->resource),
             ))),
-            'journal_entry'  => $this->whenLoaded('journalEntry', fn () => $this->journalEntry ? [
-                'id'           => $this->journalEntry->hash_id,
+            'journal_entry' => $this->whenLoaded('journalEntry', fn () => $this->journalEntry ? [
+                'id' => $this->journalEntry->hash_id,
                 'entry_number' => $this->journalEntry->entry_number,
-                'status'       => $this->journalEntry->status?->value,
+                'status' => $this->journalEntry->status?->value,
                 'status_label' => $this->journalEntry->status?->label(),
             ] : null),
-            'created_at'     => optional($this->created_at)->toIso8601String(),
-            'updated_at'     => optional($this->updated_at)->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
+        ];
+    }
+
+    /** @return array{post_draft: bool, override_three_way_match: bool, record_payment: bool, cancel: bool} */
+    private function availableActions(Request $request): array
+    {
+        $user = $request->user();
+        $isDraft = $this->status === BillStatus::Draft;
+        $isOpen = in_array($this->status, [BillStatus::Unpaid, BillStatus::Partial], true);
+        $manualReview = $this->threeWayReviewStatus() === 'manual_review';
+        $isMaker = $user !== null
+            && $this->created_by !== null
+            && (int) $this->created_by === (int) $user->getKey();
+
+        $pendingAmount = $this->resource->relationLoaded('payments')
+            ? $this->payments
+                ->where('status', BillPaymentStatus::PendingApproval)
+                ->reduce(
+                    static fn (string $total, $payment): string => Money::add($total, (string) $payment->amount),
+                    Money::zero(),
+                )
+            : Money::round2((string) ($this->pending_payment_amount ?? Money::zero()));
+        $balance = Money::round2((string) $this->balance);
+        $unreservedBalance = Money::sub($balance, $pendingAmount);
+        $balanceCents = (int) bcmul($balance, '100', 0);
+        $unreservedCents = (int) bcmul($unreservedBalance, '100', 0);
+        $totalCents = (int) bcmul(Money::round2((string) $this->total_amount), '100', 0);
+        $minimumPartialCents = intdiv($totalCents + 1, 2);
+
+        return [
+            'post_draft' => $isDraft
+                && $user?->hasPermission('accounting.bills.create') === true
+                && ! $manualReview,
+            'override_three_way_match' => $isDraft
+                && $manualReview
+                && ! $isMaker
+                && $user?->hasPermission('accounting.bills.create') === true
+                && $user?->hasPermission('accounting.bills.three_way_override') === true,
+            'record_payment' => $isOpen
+                && $user?->hasPermission('accounting.bills.pay') === true
+                && $unreservedCents > 0
+                && ($unreservedCents >= $minimumPartialCents || $unreservedCents === $balanceCents),
+            'cancel' => Money::isZero((string) $this->amount_paid)
+                && $this->status !== BillStatus::Cancelled
+                && ! ($this->supplierInvoice?->number ?? $this->supplier_invoice_number)
+                && $user?->hasPermission('accounting.bills.update') === true,
         ];
     }
 }

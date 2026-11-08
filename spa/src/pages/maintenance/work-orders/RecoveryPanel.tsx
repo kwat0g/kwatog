@@ -13,6 +13,7 @@ import { reportMutationError } from '@/lib/formErrors';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { MaintenanceWorkOrder, MaintenanceWorkOrderLog, RepairEvidence } from '@/types/maintenance';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const resultLabels = { in_progress: 'In progress', passed: 'Passed', needs_follow_up: 'Needs follow-up' };
 
@@ -26,7 +27,6 @@ export function WorkLogContent({ log }: { log: MaintenanceWorkOrderLog }) {
 }
 
 export function WorkLogControl({ order }: { order: MaintenanceWorkOrder }) {
-  const { can } = usePermission();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [finding, setFinding] = useState('');
@@ -41,13 +41,12 @@ export function WorkLogControl({ order }: { order: MaintenanceWorkOrder }) {
       setActionTaken('');
       setResult('');
       setOpen(false);
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
+      void invalidateRealtimeChange(qc, { entityType: 'maintenance_work_order', entityId: order.id });
       toast.success('Work recorded.');
     },
     onError: (error) => reportMutationError(error, 'Could not record work.'),
   });
-  const actions = order.available_actions ?? [];
-  const canRecord = order.can_record_work ?? (can('maintenance.wo.complete') && (actions.includes('complete') || actions.includes('submit_repair')));
+  const canRecord = order.can_record_work === true;
   if (!canRecord || order.repair_submitted_at) return null;
   const canCloseWork = order.closure_readiness?.can_close_work ?? false;
   return <>
@@ -83,18 +82,18 @@ export function RecoveryPanel({ order }: { order: MaintenanceWorkOrder }) {
     const timer = window.setInterval(() => setElapsed(Date.now() - receivedAt), 1000);
     return () => window.clearInterval(timer);
   }, [order.open_downtime_started_at, order.server_time]);
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
-    qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+  const applyUpdated = (updated: MaintenanceWorkOrder) => {
+    qc.setQueryData(['maintenance', 'work-order', order.id], updated);
+    void invalidateRealtimeChange(qc, { entityType: 'maintenance_work_order', entityId: order.id });
   };
   const submit = useMutation({
     mutationFn: () => workOrdersApi.submitRepair(order.id, evidence),
-    onSuccess: () => { refresh(); toast.success('Repair submitted for verification.'); },
+    onSuccess: (updated) => { applyUpdated(updated); toast.success('Repair submitted for verification.'); },
     onError: (error) => reportMutationError(error, 'Could not submit repair evidence.'),
   });
   const verify = useMutation({
     mutationFn: (decision: 'accept' | 'reject') => workOrdersApi.verifyRepair(order.id, { decision, reason: decision === 'reject' ? reason.trim() : undefined }),
-    onSuccess: (_, decision) => { refresh(); setReason(''); toast.success(decision === 'accept' ? 'Recovery verified.' : 'Repair rejected. Technician can continue work.'); },
+    onSuccess: (updated, decision) => { applyUpdated(updated); setReason(''); toast.success(decision === 'accept' ? 'Recovery verified.' : 'Repair rejected. Technician can continue work.'); },
     onError: (error) => reportMutationError(error, 'Could not verify this repair.'),
   });
   const liveMinutes = order.open_downtime_started_at && order.server_time

@@ -8,13 +8,9 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Models\Product;
-use App\Modules\Quality\Enums\InspectionStage;
-use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Quality\Enums\NcrStatus;
-use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\NcrService;
@@ -22,12 +18,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/**
- * P01-01 shape on P67 cancel: NcrService::cancel evaluates the terminal guard
- * on the *passed* model and writes outside any transaction. A close that commits
- * first is then flipped back to `cancelled` by the stale cancel — the NCR ends
- * in the wrong terminal state after already being closed.
- */
+/** Covers the row-locked NCR terminal guards and the stale-action API response. */
 class NcrCloseCancelRaceTest extends TestCase
 {
     use RefreshDatabase;
@@ -55,9 +46,9 @@ class NcrCloseCancelRaceTest extends TestCase
 
         foreach ([NcrActionType::Corrective, NcrActionType::Preventive] as $type) {
             NcrAction::create([
-                'ncr_id'       => $ncr->id,
-                'action_type'  => $type->value,
-                'description'  => 'x',
+                'ncr_id' => $ncr->id,
+                'action_type' => $type->value,
+                'description' => 'x',
                 'performed_by' => $ncr->created_by,
                 'performed_at' => now(),
             ]);
@@ -88,5 +79,30 @@ class NcrCloseCancelRaceTest extends TestCase
         }
 
         $this->assertSame(NcrStatus::Closed, $ncr->refresh()->status);
+    }
+
+    public function test_stale_close_and_cancel_requests_return_conflict(): void
+    {
+        $by = $this->user();
+        $ncr = $this->closableNcr();
+
+        app(NcrService::class)->close($ncr->fresh(), $by);
+
+        $this->actingAs($by, 'sanctum')
+            ->postJson('/api/v1/quality/ncrs/'.$ncr->hash_id.'/close')
+            ->assertConflict()
+            ->assertJsonPath('code', 'ncr_state_conflict');
+
+        $this->patchJson('/api/v1/quality/ncrs/'.$ncr->hash_id.'/disposition', [
+            'disposition' => NcrDisposition::UseAsIs->value,
+        ])
+            ->assertConflict()
+            ->assertJsonPath('code', 'ncr_state_conflict');
+
+        $this->postJson('/api/v1/quality/ncrs/'.$ncr->hash_id.'/cancel', [
+            'reason' => 'Stale cancellation request.',
+        ])
+            ->assertConflict()
+            ->assertJsonPath('code', 'ncr_state_conflict');
     }
 }

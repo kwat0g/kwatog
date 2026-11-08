@@ -2,6 +2,7 @@ import { client } from '../client';
 import type { PaginatedResponse } from '@/types';
 
 export type AccountingPeriodStatus = 'open' | 'closed' | 'reopened';
+export type AccountingPeriodAction = 'close' | 'reopen';
 
 export interface AccountingPeriod {
  id: string;
@@ -14,8 +15,12 @@ export interface AccountingPeriod {
  reopened_at: string | null;
  reopened_by: { id: string | null; name: string } | null;
  reopen_reason: string | null;
+ /** Omitted only for the UI's synthetic, not-yet-persisted current-period action target. */
+ available_actions?: AccountingPeriodAction[];
+ permissions?: { view: boolean; manage: boolean };
  created_at: string | null;
  updated_at: string | null;
+ version?: string | null;
 }
 
 export interface PeriodListParams {

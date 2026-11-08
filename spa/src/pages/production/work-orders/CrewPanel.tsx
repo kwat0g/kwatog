@@ -1,6 +1,6 @@
 import { formatDateTime } from '@/lib/formatDate';
 import { LuLoaderCircle } from '@/lib/icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { workOrdersApi } from '@/api/production/workOrders';
@@ -22,7 +22,11 @@ import {
   offsetScheduleDate,
 } from '@/components/production/scheduleDates';
 import { crewValidation } from '@/lib/productionCrewValidation';
-import type { CrewContext, EmployeeOption } from '@/types/production-crew';
+import {
+  invalidateQueryPrefixesExcept,
+  reconcileRealtimeMutationResponse,
+} from '@/lib/realtime/invalidationMap';
+import type { AssignmentSuggestion, CrewContext, EmployeeOption } from '@/types/production-crew';
 
 export function WorkerScheduleStatus({ worker }: { worker: EmployeeOption }) {
   const attendance = worker.schedule_attendance;
@@ -244,6 +248,29 @@ export function AssignmentForm({
     : context.current
       ? 'Crew updated before production'
       : 'Initial crew assignment';
+  const [crewConflictReloaded, setCrewConflictReloaded] = useState(false);
+  const [crewConflictReloadFailed, setCrewConflictReloadFailed] = useState(false);
+  const refreshCrewConflict = async () => {
+    setCrewConflictReloaded(false);
+    setCrewConflictReloadFailed(false);
+    try {
+      await Promise.all([
+        qc.fetchQuery({
+          queryKey: ['production', 'crew', woId, ...(ncrId ? [ncrId] : [])],
+          queryFn: () => workOrdersApi.crew(woId, ncrId),
+          staleTime: 0,
+        }),
+        qc.fetchQuery({
+          queryKey: ['production', 'crew-options', woId, ncrId, debouncedSearch],
+          queryFn: () => workOrdersApi.crewOptions(woId, debouncedSearch, ncrId),
+          staleTime: 0,
+        }),
+      ]);
+      setCrewConflictReloaded(true);
+    } catch {
+      setCrewConflictReloadFailed(true);
+    }
+  };
   const unchanged =
     !!context.current &&
     recorder === context.current.recorder_employee_id &&
@@ -274,9 +301,15 @@ export function AssignmentForm({
               .map((member) => member.id)
           : [],
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['production'] });
+    onSuccess: (freshContext) => {
+      const crewKey = ['production', 'crew', woId, ...(ncrId ? [ncrId] : [])];
+      qc.setQueryData(crewKey, freshContext);
+      void invalidateQueryPrefixesExcept(qc, [['production']], [crewKey]);
       onSaved();
+    },
+    onError: async (error) => {
+      if (!(error instanceof AxiosError) || error.response?.status !== 409) return;
+      await refreshCrewConflict();
     },
   });
   return (
@@ -338,12 +371,31 @@ export function AssignmentForm({
       )}
       {invalid && <p className="text-sm text-danger-fg">{invalid}</p>}
       {assign.isError && (
-        <p role="alert" className="text-sm text-danger-fg">
-          {assign.error instanceof AxiosError
-            ? (assign.error.response?.data?.message ??
-              'Assignment failed. Reload crew and try again.')
-            : 'Assignment failed. Reload crew and try again.'}
-        </p>
+        <div role="alert" className="space-y-1 text-sm text-danger-fg">
+          <p>
+            {assign.error instanceof AxiosError
+              ? (assign.error.response?.data?.message ??
+                'Assignment failed. Reload crew and try again.')
+              : 'Assignment failed. Reload crew and try again.'}
+          </p>
+          {assign.error instanceof AxiosError && assign.error.response?.status === 409 && (
+            <>
+              {crewConflictReloaded && (
+                <p className="text-warning-fg">
+                  Current crew and worker availability were refreshed. Review your selected workers before retrying.
+                </p>
+              )}
+              {crewConflictReloadFailed && (
+                <div className="flex items-center gap-2 text-warning-fg">
+                  <span>Could not refresh current crew and worker availability.</span>
+                  <Button type="button" variant="secondary" onClick={() => void refreshCrewConflict()}>
+                    Refresh current crew
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" disabled={assign.isPending} onClick={onSaved}>
@@ -539,8 +591,13 @@ export function SlotForm({
         },
         ncrId,
       ),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['production'] });
+    onSuccess: (updated) => {
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'work_order', entityId: woId },
+        ['production', 'work-orders', 'detail', woId],
+        updated,
+      );
       onSaved();
     },
   });
@@ -1198,6 +1255,7 @@ export function AssignmentReview({
   onPendingChange?: (pending: boolean) => void;
   title?: string;
 }) {
+  const qc = useQueryClient();
   const [minimum, setMinimum] = useState(
     context.current ? String(context.current.members.length) : initialWorkers ? String(initialWorkers) : '',
   );
@@ -1227,16 +1285,40 @@ export function AssignmentReview({
     maximum_workers: Number(debouncedCount),
   };
   const [reason, setReason] = useState('');
+  const generatedSuggestionKeys = useRef(new Set<string>());
+  const generationRequests = useRef(new Map<string, Promise<AssignmentSuggestion>>());
   const suggestion = useQuery({
     queryKey: ['production', 'assignment-suggestion', woId, debouncedKey, generate],
     enabled: validLimits && validDay && stable,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === woId
+      && previousQuery.queryKey[3] === debouncedKey
+      && previousQuery.queryKey[4] === generate
+        ? previous
+        : undefined,
     queryFn: async () => {
       if (generate) {
-        return workOrdersApi.generateAssignmentSuggestion(woId, {
+        const generationKey = `${woId}|${debouncedKey}`;
+        const inFlightGeneration = generationRequests.current.get(generationKey);
+        if (inFlightGeneration) return inFlightGeneration;
+        if (generatedSuggestionKeys.current.has(generationKey)) {
+          // Realtime invalidation must refresh a generated proposal without
+          // replaying the POST that writes pending ProductionSchedule rows.
+          return workOrdersApi.assignmentSuggestion(woId, undefined, limits);
+        }
+
+        const request = workOrdersApi.generateAssignmentSuggestion(woId, {
           ...limits,
           preferred_production_date: debouncedDay || null,
         });
+        generationRequests.current.set(generationKey, request);
+        try {
+          const result = await request;
+          generatedSuggestionKeys.current.add(generationKey);
+          return result;
+        } finally {
+          generationRequests.current.delete(generationKey);
+        }
       }
       const result = await workOrdersApi.assignmentSuggestion(woId, undefined, limits);
       if (
@@ -1331,7 +1413,7 @@ export function AssignmentReview({
           </Button>
         </p>
       )}
-      {suggestion.data ? (
+      {stable && validLimits && validDay && suggestion.data ? (
         <AssignmentEditor
           woId={woId}
           context={context}
@@ -1346,6 +1428,17 @@ export function AssignmentReview({
           preferredDay={preferredDay}
           invalidDay={!validDay}
           onRefresh={confirm && generate ? () => suggestion.refetch() : undefined}
+          onConflict={async () => {
+            const [refreshedSuggestion] = await Promise.all([
+              suggestion.refetch(),
+              qc.fetchQuery({
+                queryKey: ['production', 'crew', woId],
+                queryFn: () => workOrdersApi.crew(woId),
+                staleTime: 0,
+              }),
+            ]);
+            if (refreshedSuggestion.isError) throw refreshedSuggestion.error;
+          }}
           confirm={confirm}
           commitLabel={commitLabel}
           onPendingChange={onPendingChange}
@@ -1392,6 +1485,7 @@ function AssignmentEditor({
   preferredDay,
   invalidDay,
   onRefresh,
+  onConflict,
   confirm,
   commitLabel,
   onPendingChange,
@@ -1410,6 +1504,7 @@ function AssignmentEditor({
   preferredDay: string;
   invalidDay: boolean;
   onRefresh?: () => void;
+  onConflict: () => Promise<void>;
   confirm: boolean;
   commitLabel?: string;
   onPendingChange?: (pending: boolean) => void;
@@ -1420,6 +1515,10 @@ function AssignmentEditor({
   const [recorder, setRecorder] = useState(
     manual && !minimum ? '' : (proposal.recorder_employee_id ?? ''),
   );
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+  const [conflictRefreshComplete, setConflictRefreshComplete] = useState(false);
+  const [conflictRefreshFailed, setConflictRefreshFailed] = useState(false);
+  const [conflictRefreshing, setConflictRefreshing] = useState(false);
   useEffect(() => {
     if (!manual) {
       setMembers(proposal.members);
@@ -1437,6 +1536,19 @@ function AssignmentEditor({
     : manual
       ? 'Initial manual crew assignment'
       : 'Initial automatic crew assignment';
+  const refreshConflict = async () => {
+    setConflictRefreshing(true);
+    setConflictRefreshFailed(false);
+    setConflictRefreshComplete(false);
+    try {
+      await onConflict();
+      setConflictRefreshComplete(true);
+    } catch {
+      setConflictRefreshFailed(true);
+    } finally {
+      setConflictRefreshing(false);
+    }
+  };
   const options = proposal.worker_options ?? proposal.eligible_workers ?? proposal.members;
   const unavailable =
     manual &&
@@ -1477,12 +1589,27 @@ function AssignmentEditor({
         reason: assignmentReason.trim(),
         ...(confirm ? { preferred_production_date: preferredDay || null } : {}),
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
-      qc.invalidateQueries({ queryKey: ['production', 'crew', woId] });
-      qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
-      qc.invalidateQueries({ queryKey: ['mrp'] });
+    onSuccess: (freshContext) => {
+      const crewKey = ['production', 'crew', woId];
+      qc.setQueryData(crewKey, freshContext);
+      void invalidateQueryPrefixesExcept(
+        qc,
+        [
+          ['production', 'work-orders'],
+          ['production', 'crew', woId],
+          ['production', 'dashboard'],
+          ['mrp'],
+        ],
+        [crewKey],
+      );
       onClose();
+    },
+    onError: (error) => {
+      if (!(error instanceof AxiosError) || error.response?.status !== 409) return;
+      setConflictMessage(
+        error.response.data?.message ?? 'The assignment changed. Reviewing the current crew and proposal…',
+      );
+      void refreshConflict();
     },
   });
   useEffect(() => { onPendingChange?.(apply.isPending); }, [apply.isPending, onPendingChange]);
@@ -1492,6 +1619,8 @@ function AssignmentEditor({
         'Assignment failed. Reopen this review and try again.')
       : 'Assignment failed. Reopen this review and try again.'
     : null;
+  const assignmentConflict =
+    apply.isError && apply.error instanceof AxiosError && apply.error.response?.status === 409;
   const timingRejected = !!applyMessage && /Proposal (passed|no longer fits)/.test(applyMessage);
   const recoveryMessage = timingRejected
     ? applyMessage
@@ -1630,6 +1759,23 @@ function AssignmentEditor({
               {applyMessage}
             </p>
           )}
+          {assignmentConflict && (
+            <div role="status" className="space-y-1 text-warning-fg">
+              {conflictMessage && <p>{conflictMessage}</p>}
+              {conflictRefreshing && <p>Refreshing the crew and current proposal…</p>}
+              {conflictRefreshComplete && (
+                <p>Review the refreshed crew and proposal before applying again.</p>
+              )}
+              {conflictRefreshFailed && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <p>The current proposal could not be refreshed. Retry refresh before applying.</p>
+                  <Button variant="secondary" disabled={busy} onClick={() => void refreshConflict()}>
+                    Refresh current proposal
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
       <div className="flex flex-wrap justify-end gap-2">
@@ -1638,7 +1784,12 @@ function AssignmentEditor({
         </Button>
         <Button
           variant="primary"
-          disabled={invalid || apply.isPending || apply.isError}
+          disabled={
+            invalid ||
+            apply.isPending ||
+            conflictRefreshing ||
+            (apply.isError && (!assignmentConflict || !conflictRefreshComplete))
+          }
           loading={apply.isPending}
           onClick={() => {
             if (!invalid) apply.mutate();

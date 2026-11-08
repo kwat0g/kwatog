@@ -35,7 +35,8 @@ export function DataTableToolbar<T>({
   const rootRef = useRef<HTMLDivElement>(null);
   const columnsButtonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
-  const showVisibilityToggle = enableColumnVisibilityToggle ?? !!tableKey;
+  const customizableColumnCount = columns.filter((column) => column.togglable !== false).length;
+  const showVisibilityToggle = enableColumnVisibilityToggle ?? (!!tableKey || customizableColumnCount >= 5);
   const showDensity = !!onDensityChange || !!tableKey;
 
   useEffect(() => {

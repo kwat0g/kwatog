@@ -115,6 +115,7 @@ class CustomerPortalService
             ->orderByDesc('created_at')->limit(5)->get();
 
         return [
+            'generated_at' => now()->toIso8601String(),
             'open_so_count' => $openSoCount,
             'pending_delivery_count' => $pendingDeliveryCount,
             'open_invoice_count' => $openInvoiceCount,

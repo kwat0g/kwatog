@@ -11,12 +11,12 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\ProcurementChainCache;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -34,12 +34,14 @@ class ProcurementChainController extends Controller
         \assert($user instanceof User);
 
         // ── Material Requirements ──
-        $prCounts = Cache::remember('procurement_chain_pr', 60, fn () => [
+        $cache = app(ProcurementChainCache::class);
+
+        $prCounts = $cache->remember('procurement_chain_pr', 60, fn () => [
             'pending_pr'   => PurchaseRequest::whereIn('status', [PurchaseRequestStatus::Draft->value, PurchaseRequestStatus::Pending->value])->count(),
             'approved_pr'  => PurchaseRequest::whereIn('status', [PurchaseRequestStatus::Approved->value, PurchaseRequestStatus::Converted->value])->count(),
         ]);
 
-        $poCounts = Cache::remember('procurement_chain_po', 60, fn () => [
+        $poCounts = $cache->remember('procurement_chain_po', 60, fn () => [
             'draft_po'              => PurchaseOrder::where('status', PurchaseOrderStatus::Draft->value)->count(),
             'sent_po'               => PurchaseOrder::whereIn('status', [
                 PurchaseOrderStatus::Approved->value,
@@ -53,13 +55,13 @@ class ProcurementChainController extends Controller
         ]);
 
         // ── Receiving ──
-        $grnCounts = Cache::remember('procurement_chain_grn', 60, fn () => [
+        $grnCounts = $cache->remember('procurement_chain_grn', 60, fn () => [
             'grn_received'  => GoodsReceiptNote::whereIn('status', [GrnStatus::Accepted->value, GrnStatus::PartialAccepted->value])->count(),
             'grn_pending_qc' => GoodsReceiptNote::where('status', GrnStatus::PendingQc->value)->count(),
         ]);
 
         // ── Billing ──
-        $billCounts = Cache::remember('procurement_chain_bills', 60, fn () => [
+        $billCounts = $cache->remember('procurement_chain_bills', 60, fn () => [
             'bills_unpaid'  => Bill::whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->count(),
             'bills_overdue' => Bill::whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
                 ->where('due_date', '<', now())
@@ -71,7 +73,7 @@ class ProcurementChainController extends Controller
         ]);
 
         // ── 3-way match stats ──
-        $threeWayStats = Cache::remember('procurement_chain_three_way', 120, fn () => [
+        $threeWayStats = $cache->remember('procurement_chain_three_way', 120, fn () => [
             'matched'          => Bill::where('has_variances', false)->where('status', '!=', 'cancelled')->count(),
             'has_variances'    => Bill::where('has_variances', true)->where('three_way_overridden', false)->count(),
             'overridden'       => Bill::where('three_way_overridden', true)->count(),

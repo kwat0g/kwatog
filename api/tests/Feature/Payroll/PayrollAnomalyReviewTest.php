@@ -10,6 +10,7 @@ use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAnomalyFlag;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Events\PayrollAnomalyChanged;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +38,10 @@ class PayrollAnomalyReviewTest extends TestCase
             ->assertJsonPath('data.is_resolved', true)
             ->assertJsonPath('data.resolution_remarks', $remarks)
             ->assertJsonPath('data.resolved_by.name', $reviewer->name);
+
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => PayrollAnomalyChanged::class,
+        ]);
 
         $audit = DB::table('audit_logs')
             ->where('action', 'payroll.anomaly.resolve')

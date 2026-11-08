@@ -25,6 +25,10 @@ backups/
 # Reproducible dependency/build outputs are produced inside their images.
 api/vendor/
 spa/node_modules/
+spa/.auth/
+spa/e2e-process/
+spa/playwright*.config.ts
+spa/tsconfig.process-e2e.json
 spa/dist/
 spa/playwright-report/
 spa/test-results/

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Jobs;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Models\ProcessedYearEndLeaveType;
 use App\Modules\Leave\Models\YearEndLeaveDisposition;
+use App\Modules\Leave\Services\LeaveBalanceRealtimeService;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollAdjustmentType;
 use App\Modules\Payroll\Models\PayrollAdjustment;
@@ -49,14 +51,15 @@ class ProcessYearEndLeave implements ShouldQueue
     public const TIMEOUT_SECONDS = 600;
 
     public int $tries = 1;
+
     public int $timeout = self::TIMEOUT_SECONDS;
 
     /**
-     * @param User $runBy  Who triggered processing (audit + adjustment.created_by).
-     * @param int|null $year  The year that is ENDING. Defaults to the current
-     *   calendar year — correct for the scheduled Dec-31 23:00 run. Manual
-     *   runs in a later month MUST pass the explicit target year.
-     * @param array<int>|null $leaveTypeIds  Optional subset of leave type IDs.
+     * @param  User  $runBy  Who triggered processing (audit + adjustment.created_by).
+     * @param  int|null  $year  The year that is ENDING. Defaults to the current
+     *                          calendar year — correct for the scheduled Dec-31 23:00 run. Manual
+     *                          runs in a later month MUST pass the explicit target year.
+     * @param  array<int>|null  $leaveTypeIds  Optional subset of leave type IDs.
      */
     public function __construct(
         public User $runBy,
@@ -84,14 +87,16 @@ class ProcessYearEndLeave implements ShouldQueue
 
         $totalEmployees = 0;
         $totalConverted = 0.0;
-        $totalCarried   = 0.0;
+        $totalCarried = 0.0;
         $totalForfeited = 0.0;
-        $skipped        = 0;
+        $skipped = 0;
         $processedTypes = 0;
+        $balancesChanged = false;
 
         DB::transaction(function () use (
             $year, $types, $employees,
-            &$totalEmployees, &$totalConverted, &$totalCarried, &$totalForfeited, &$skipped, &$processedTypes
+            &$totalEmployees, &$totalConverted, &$totalCarried, &$totalForfeited, &$skipped, &$processedTypes,
+            &$balancesChanged,
         ) {
             foreach ($types as $lt) {
                 // Idempotency: skip a type+year already processed.
@@ -102,15 +107,16 @@ class ProcessYearEndLeave implements ShouldQueue
                 if ($already) {
                     $skipped++;
                     Log::info("Year-end leave already processed for type {$lt->id} / {$year} — skipping.");
+
                     continue;
                 }
 
-                $rate      = max(0.0, min(1.0, (float) ($lt->conversion_rate ?? 0.0)));
-                $cap       = $lt->max_carryover_days !== null ? (float) $lt->max_carryover_days : null;
+                $rate = max(0.0, min(1.0, (float) ($lt->conversion_rate ?? 0.0)));
+                $cap = $lt->max_carryover_days !== null ? (float) $lt->max_carryover_days : null;
                 $isConvert = (bool) $lt->is_convertible_year_end;
 
                 $typeConverted = 0.0;
-                $typeCarried   = 0.0;
+                $typeCarried = 0.0;
                 $typeForfeited = 0.0;
                 $typeEmployees = 0;
 
@@ -130,10 +136,10 @@ class ProcessYearEndLeave implements ShouldQueue
 
                     if ($isConvert) {
                         $converted = round($remaining * $rate, 1);
-                        $carried   = 0.0;
+                        $carried = 0.0;
                         $forfeited = round($remaining - $converted, 1);
                     } else {
-                        $carried   = $cap !== null ? round(min($remaining, $cap), 1) : round($remaining, 1);
+                        $carried = $cap !== null ? round(min($remaining, $cap), 1) : round($remaining, 1);
                         $converted = 0.0;
                         $forfeited = round($remaining - $carried, 1);
                     }
@@ -143,10 +149,11 @@ class ProcessYearEndLeave implements ShouldQueue
                     $bal->used = (float) $bal->total_credits;
                     $bal->remaining = 0.0;
                     $bal->save();
+                    $balancesChanged = true;
 
                     // Encashment → approved PayrollAdjustment (next run pays it).
                     $adjustmentId = null;
-                    $cashValue    = 0.0;
+                    $cashValue = 0.0;
                     if ($converted > 0) {
                         $cashValue = round($converted * $this->dailyRate($emp), 2);
                         if ($cashValue > 0) {
@@ -157,48 +164,52 @@ class ProcessYearEndLeave implements ShouldQueue
                     YearEndLeaveDisposition::query()->updateOrCreate(
                         ['employee_id' => $emp->id, 'leave_type_id' => $lt->id, 'year' => $year],
                         [
-                            'days_converted'        => $converted,
-                            'days_carried'          => $carried,
-                            'days_forfeited'        => $forfeited,
-                            'cash_value'            => $cashValue,
+                            'days_converted' => $converted,
+                            'days_carried' => $carried,
+                            'days_forfeited' => $forfeited,
+                            'cash_value' => $cashValue,
                             'payroll_adjustment_id' => $adjustmentId,
-                            'processed_at'          => Carbon::now(),
+                            'processed_at' => Carbon::now(),
                         ],
                     );
 
                     $typeConverted += $converted;
-                    $typeCarried   += $carried;
+                    $typeCarried += $carried;
                     $typeForfeited += $forfeited;
                     $typeEmployees++;
                 }
 
                 ProcessedYearEndLeaveType::query()->create([
-                    'leave_type_id'   => $lt->id,
-                    'year'            => $year,
-                    'processed_at'    => Carbon::now(),
-                    'processed_by'    => $this->runBy->id,
+                    'leave_type_id' => $lt->id,
+                    'year' => $year,
+                    'processed_at' => Carbon::now(),
+                    'processed_by' => $this->runBy->id,
                     'employees_count' => $typeEmployees,
-                    'days_converted'  => round($typeConverted, 1),
-                    'days_carried'    => round($typeCarried, 1),
-                    'days_forfeited'  => round($typeForfeited, 1),
+                    'days_converted' => round($typeConverted, 1),
+                    'days_carried' => round($typeCarried, 1),
+                    'days_forfeited' => round($typeForfeited, 1),
                 ]);
 
                 $processedTypes++;
                 $totalEmployees += $typeEmployees;
                 $totalConverted += $typeConverted;
-                $totalCarried   += $typeCarried;
+                $totalCarried += $typeCarried;
                 $totalForfeited += $typeForfeited;
+            }
+
+            if ($balancesChanged) {
+                app(LeaveBalanceRealtimeService::class)->stageForAllEmployees();
             }
         });
 
         Log::info("Year-end leave processing complete for {$year}.", [
-            'year'            => $year,
+            'year' => $year,
             'total_employees' => $totalEmployees,
             'total_converted' => round($totalConverted, 1),
-            'total_carried'   => round($totalCarried, 1),
+            'total_carried' => round($totalCarried, 1),
             'total_forfeited' => round($totalForfeited, 1),
-            'skipped_types'   => $skipped,
-            'run_by'          => $this->runBy->id,
+            'skipped_types' => $skipped,
+            'run_by' => $this->runBy->id,
         ]);
 
         return [
@@ -214,7 +225,8 @@ class ProcessYearEndLeave implements ShouldQueue
     /** Daily rate, mirroring FinalPayService and the configured payroll divisor. */
     private function dailyRate(Employee $emp): float
     {
-        $days = app(\App\Common\Services\SettingsService::class)->requiredInt('payroll.work_days_per_month', 1);
+        $days = app(SettingsService::class)->requiredInt('payroll.work_days_per_month', 1);
+
         return (float) ($emp->monthlyEquivalentSalary() ?? 0) / $days;
     }
 
@@ -232,17 +244,17 @@ class ProcessYearEndLeave implements ShouldQueue
         float $days,
         float $cashValue,
     ): int {
-        $adj = new PayrollAdjustment();
+        $adj = new PayrollAdjustment;
         $adj->fill([
-            'payroll_period_id'   => null,
-            'employee_id'         => $emp->id,
+            'payroll_period_id' => null,
+            'employee_id' => $emp->id,
             'original_payroll_id' => null,
-            'type'                => PayrollAdjustmentType::Underpayment->value,
-            'amount'              => number_format($cashValue, 2, '.', ''),
-            'reason'              => "Year-end leave encashment {$year}: {$days} day(s) of {$lt->name}",
-            'created_by'          => $this->runBy->id,
+            'type' => PayrollAdjustmentType::Underpayment->value,
+            'amount' => number_format($cashValue, 2, '.', ''),
+            'reason' => "Year-end leave encashment {$year}: {$days} day(s) of {$lt->name}",
+            'created_by' => $this->runBy->id,
         ]);
-        $adj->status      = PayrollAdjustmentStatus::Approved;
+        $adj->status = PayrollAdjustmentStatus::Approved;
         $adj->approved_by = $this->runBy->id;
         $adj->save();
 

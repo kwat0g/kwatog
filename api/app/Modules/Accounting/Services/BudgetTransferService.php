@@ -158,6 +158,12 @@ class BudgetTransferService
         );
     }
 
+    public function canReject(BudgetTransfer $transfer, User $reviewer): bool
+    {
+        return (string) $transfer->status === BudgetTransferStatus::Pending->value
+            && (int) $transfer->requested_by !== (int) $reviewer->id;
+    }
+
     /** Reject a pending transfer; nothing moves. */
     public function reject(BudgetTransfer $transfer, int $userId): BudgetTransfer
     {

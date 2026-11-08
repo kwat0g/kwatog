@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Events\InventoryStockChanged;
+use App\Modules\Inventory\Exceptions\StockMovementStateConflictException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Production\Models\WorkOrder;
@@ -23,6 +26,7 @@ use App\Modules\SupplyChain\Models\DeliveryItem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * F-05 — posts a GL journal entry for every value-changing stock movement that
@@ -85,18 +89,71 @@ class MovementGlPostingService
                 if (! $locked) {
                     throw new BusinessRuleException('The stock movement no longer exists.');
                 }
+                if ($locked->journal_entry_id !== null
+                    || $locked->gl_handoff_status !== MovementGlHandoffStatus::ManualRequired) {
+                    throw new StockMovementStateConflictException(
+                        'This stock movement no longer needs a GL retry. Refresh the movement and review its current status.',
+                    );
+                }
 
+                $previousHandoff = $this->glHandoffState($locked);
                 $this->postForLocked($locked);
                 if ($workOrder) {
                     app(WorkOrderService::class)->autoFinishIfTargetReached($workOrder);
                 }
 
-                return $locked->fresh();
+                $fresh = $locked->fresh();
+                if ($fresh && $this->glHandoffState($fresh) !== $previousHandoff) {
+                    $this->stageHandoffRefresh($fresh);
+                }
+
+                return $fresh;
             });
+        } catch (StockMovementStateConflictException $e) {
+            throw $e;
         } catch (BusinessRuleException $e) {
-            $this->markManual($movement->id);
+            DB::transaction(function () use ($movement): void {
+                $locked = StockMovement::query()->whereKey($movement->id)->lockForUpdate()->first();
+                if (! $locked) {
+                    return;
+                }
+
+                $previousHandoff = $this->glHandoffState($locked);
+                $this->markManual($locked->id);
+                $fresh = $locked->fresh();
+                if ($fresh && $this->glHandoffState($fresh) !== $previousHandoff) {
+                    $this->stageHandoffRefresh($fresh);
+                }
+            });
             throw $e;
         }
+    }
+
+    /** @return array{0: int|null, 1: string, 2: string|null} */
+    private function glHandoffState(StockMovement $movement): array
+    {
+        $status = $movement->gl_handoff_status;
+        $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
+
+        return [
+            $movement->journal_entry_id === null ? null : (int) $movement->journal_entry_id,
+            $status,
+            $movement->gl_handoff_message,
+        ];
+    }
+
+    private function stageHandoffRefresh(StockMovement $movement): void
+    {
+        $eventId = (string) Str::uuid();
+        $version = $movement->gl_handoff_at?->toISOString() ?? now()->toISOString();
+        $transactionId = DB::transactionLevel() > 0 && DB::connection()->getDriverName() === 'pgsql'
+            ? (string) DB::scalar('select txid_current()')
+            : $eventId;
+
+        app(OutboxService::class)->recordCoalesced(
+            new InventoryStockChanged($eventId, $version, now()),
+            "stock-movement-gl-refresh:{$movement->getKey()}:{$transactionId}",
+        );
     }
 
     /** Persist the safe operator-facing state for a failed GL handoff. */
@@ -108,11 +165,11 @@ class MovementGlPostingService
                 return;
             }
 
-            $movement->forceFill([
+            $this->saveHandoff($movement, [
                 'gl_handoff_status' => MovementGlHandoffStatus::ManualRequired->value,
                 'gl_handoff_message' => $message ?? self::MANUAL_MESSAGE,
                 'gl_handoff_at' => now(),
-            ])->save();
+            ]);
         });
     }
 
@@ -226,12 +283,12 @@ class MovementGlPostingService
 
     private function markGenerated(StockMovement $movement, int $journalEntryId): void
     {
-        $movement->forceFill([
+        $this->saveHandoff($movement, [
             'journal_entry_id' => $journalEntryId,
             'gl_handoff_status' => MovementGlHandoffStatus::Generated->value,
             'gl_handoff_message' => null,
             'gl_handoff_at' => now(),
-        ])->save();
+        ]);
     }
 
     private function markNotRequired(StockMovement $movement, string $reason): void
@@ -240,11 +297,11 @@ class MovementGlPostingService
             return;
         }
 
-        $movement->forceFill([
+        $this->saveHandoff($movement, [
             'gl_handoff_status' => MovementGlHandoffStatus::NotRequired->value,
             'gl_handoff_message' => null,
             'gl_handoff_at' => now(),
-        ])->save();
+        ]);
 
         Log::info('MovementGlPostingService: GL handoff not required', [
             'movement_id' => $movement->id,
@@ -269,6 +326,19 @@ class MovementGlPostingService
         return in_array($type, self::NON_GL_TYPES, true)
             || Money::isZero(Money::round2((string) $movement->total_cost))
             || $this->settings->get('modules.accounting', false) !== true;
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function saveHandoff(StockMovement $movement, array $attributes): void
+    {
+        $movement->forceFill($attributes);
+        if (! $movement->isDirty(['journal_entry_id', 'gl_handoff_status', 'gl_handoff_message', 'gl_handoff_at'])) {
+            return;
+        }
+
+        $movement->forceFill([
+            'version' => max(1, (int) ($movement->getOriginal('version') ?? $movement->version)) + 1,
+        ])->save();
     }
 
     /** @return array{0: string, 1: string, 2: bool, 3: string} inventoryCode, offsetCode, inventoryIsDebit, offsetSetting */
@@ -323,6 +393,7 @@ class MovementGlPostingService
 
         if ($type === StockMovementType::MaterialIssue && $movement->reference_type === 'maintenance_work_order') {
             $setting = 'accounting.accounts.maintenance_consumption_code';
+
             return [$inventoryCode, $this->settings->requiredString($setting), false, $setting];
         }
         if ($type === StockMovementType::MaterialReturn && $movement->reference_type === 'stock_movement') {
@@ -330,6 +401,7 @@ class MovementGlPostingService
             if ($source?->movement_type === StockMovementType::MaterialIssue
                 && $source->reference_type === 'maintenance_work_order') {
                 $setting = 'accounting.accounts.maintenance_consumption_code';
+
                 return [$inventoryCode, $this->settings->requiredString($setting), true, $setting];
             }
         }

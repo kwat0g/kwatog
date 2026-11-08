@@ -14,6 +14,7 @@ use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Exceptions\NcrStateConflictException;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Requests\AddNcrActionRequest;
 use App\Modules\Quality\Requests\CreateNcrRequest;
@@ -95,7 +96,7 @@ class NcrController
         return new NcrActionResource($action);
     }
 
-    public function setDisposition(Request $request, NonConformanceReport $ncr): NcrResource
+    public function setDisposition(Request $request, NonConformanceReport $ncr): NcrResource|JsonResponse
     {
         $data = $request->validate([
             'disposition' => ['required', Rule::in(NcrDisposition::values())],
@@ -131,15 +132,19 @@ class NcrController
                 'defect_type_id' => DefectType::tryDecodeHash($defect['defect_type_id']), 'count' => (int) $defect['count'],
             ], $data['sorting_evidence']['trial_defects']);
         }
-        $ncr = $this->service->setDisposition(
-            $ncr,
-            (string) $data['disposition'],
-            $data['root_cause'] ?? null,
-            $data['corrective_action'] ?? null,
-            $request->user(),
-            isset($data['mrb_accepted_quantity']) ? (string) $data['mrb_accepted_quantity'] : null,
-            isset($data['sorting_evidence']) ? array_replace($data['sorting_evidence'], ['performed_by' => User::tryDecodeHash($data['sorting_evidence']['performed_by']), 'inspected_quantity' => (string) $data['sorting_evidence']['inspected_quantity'], 'recovery_passed' => $request->boolean('sorting_evidence.recovery_passed')]) : [],
-        );
+        try {
+            $ncr = $this->service->setDisposition(
+                $ncr,
+                (string) $data['disposition'],
+                $data['root_cause'] ?? null,
+                $data['corrective_action'] ?? null,
+                $request->user(),
+                isset($data['mrb_accepted_quantity']) ? (string) $data['mrb_accepted_quantity'] : null,
+                isset($data['sorting_evidence']) ? array_replace($data['sorting_evidence'], ['performed_by' => User::tryDecodeHash($data['sorting_evidence']['performed_by']), 'inspected_quantity' => (string) $data['sorting_evidence']['inspected_quantity'], 'recovery_passed' => $request->boolean('sorting_evidence.recovery_passed')]) : [],
+            );
+        } catch (NcrStateConflictException $exception) {
+            return $this->ncrStateConflictResponse($exception);
+        }
 
         return new NcrResource($ncr);
     }
@@ -149,16 +154,33 @@ class NcrController
         return new NcrResource($this->service->retryQuarantine($ncr, $request->user()));
     }
 
-    public function close(Request $request, NonConformanceReport $ncr): NcrResource
+    public function close(Request $request, NonConformanceReport $ncr): NcrResource|JsonResponse
     {
-        return new NcrResource($this->service->close($ncr, $request->user()));
+        try {
+            return new NcrResource($this->service->close($ncr, $request->user()));
+        } catch (NcrStateConflictException $exception) {
+            return $this->ncrStateConflictResponse($exception);
+        }
     }
 
-    public function cancel(Request $request, NonConformanceReport $ncr): NcrResource
+    public function cancel(Request $request, NonConformanceReport $ncr): NcrResource|JsonResponse
     {
         $reason = $request->input('reason');
 
-        return new NcrResource($this->service->cancel($ncr, is_string($reason) ? $reason : null, $request->user()));
+        try {
+            return new NcrResource($this->service->cancel($ncr, is_string($reason) ? $reason : null, $request->user()));
+        } catch (NcrStateConflictException $exception) {
+            return $this->ncrStateConflictResponse($exception);
+        }
+    }
+
+    private function ncrStateConflictResponse(NcrStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
     }
 
     /**

@@ -12,15 +12,19 @@ use App\Modules\Attendance\Models\Attendance;
 use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\EmployeeSalaryHistory;
+use App\Modules\HR\Models\SalaryAdjustment;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
+use App\Modules\Loans\Services\LoanService;
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Enums\DeductionType;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollAdjustmentType;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Exceptions\PayrollPeriodStateConflictException;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
 use App\Modules\Payroll\Models\PayrollCycleClaim;
@@ -32,8 +36,12 @@ use App\Modules\Payroll\Services\Government\PhilhealthComputationService;
 use App\Modules\Payroll\Services\Government\SssComputationService;
 use App\Modules\Payroll\Support\EmployedDayFraction;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * The heart of Sprint 3 — orchestrates per-employee payroll computation.
@@ -80,27 +88,21 @@ class PayrollCalculatorService
      *
      * Wrapped in DB::transaction so failed math leaves no partial rows.
      *
-     * @param bool $internal True only when called by ProcessPayrollJob, which
-     *        owns the period's Processing claim. External callers (the
-     *        per-employee Recompute button) are additionally refused Approved
-     *        and Processing periods — see the guard below.
+     * @param  bool  $internal  True only when called by ProcessPayrollJob, which
+     *                          owns the period's Processing claim. External callers (the
+     *                          per-employee Recompute button) are refused unless the parent
+     *                          period is Draft or Computed. Its state is rechecked under lock.
      */
     public function computeForEmployee(
         PayrollPeriod $period,
         Employee $employee,
         bool $internal = false,
         ?string $claimToken = null,
-    ): Payroll
-    {
+    ): Payroll {
         // Locked = Finalized, Disbursed or Voided. Only Finalized was checked
         // before, so a disbursed run (money already paid) or a voided one could
         // be silently recomputed row by row via /payrolls/{id}/recompute.
-        if ($period->status?->isLocked()) {
-            throw new BusinessRuleException(sprintf(
-                'Cannot recompute: payroll period is %s.',
-                strtolower($period->status->label()),
-            ));
-        }
+        $this->assertEmployeeComputeAllowed($period, $internal);
 
         // isLocked() alone left two holes for externally-triggered recomputes:
         //
@@ -113,17 +115,6 @@ class PayrollCalculatorService
         //
         // The batch job passes internal: true because its own claim is exactly
         // what puts the period into Processing.
-        if (! $internal && in_array($period->status, [
-            PayrollPeriodStatus::Approved,
-            PayrollPeriodStatus::Processing,
-        ], true)) {
-            throw new BusinessRuleException(
-                $period->status === PayrollPeriodStatus::Approved
-                    ? 'Cannot recompute: this period is already approved. Void it or force-unlock to make changes.'
-                    : 'Cannot recompute: a compute run is currently in progress for this period.',
-            );
-        }
-
         $this->assertGovernmentTablesEffective($period);
 
         return DB::transaction(function () use ($period, $employee, $internal, $claimToken) {
@@ -132,6 +123,13 @@ class PayrollCalculatorService
             // stop before deleting/replacing or writing any row for this one.
             if ($internal) {
                 $period = $this->periods->assertComputeClaim($period, $claimToken);
+            } else {
+                // Serialize an individual recompute with period lifecycle
+                // transitions. The initial check improves the error message;
+                // this locked check closes the race before any payroll row,
+                // loan, adjustment, or accrual data is changed.
+                $period = PayrollPeriod::query()->lockForUpdate()->findOrFail($period->id);
+                $this->assertEmployeeComputeAllowed($period, false);
             }
 
             // Wipe any prior rows for this employee+period (clean recompute).
@@ -184,14 +182,14 @@ class PayrollCalculatorService
             // Daily + hourly are DERIVED divisors used for OT, night
             // differential, holiday premium and tardiness/undertime only. They
             // are never a basic-pay basis.
-            $dailyRate  = Money::div($monthlySalary, $this->positivePolicy('payroll.work_days_per_month'), 4);
+            $dailyRate = Money::div($monthlySalary, $this->positivePolicy('payroll.work_days_per_month'), 4);
             if (Money::lte($dailyRate, '0')) {
                 throw new BusinessRuleException("Employee {$employee->employee_no} has no authoritative pay rate for payroll calculation.");
             }
             $hourlyRate = Money::div($dailyRate, $this->positivePolicy('payroll.hours_per_day'), 4);
 
             // ─── Load attendance rows for this period ────────────
-            /** @var \Illuminate\Support\Collection<int, Attendance> $attendances */
+            /** @var Collection<int, Attendance> $attendances */
             $attendances = Attendance::query()
                 ->where('employee_id', $employee->id)
                 ->whereBetween('date', [$period->period_start, $period->period_end])
@@ -213,15 +211,17 @@ class PayrollCalculatorService
             $leavePay = Money::zero();
 
             // ─── Earnings stack ──────────────────────────────────
-            $overtimePay  = $aggregates['ot_pay'];
+            $overtimePay = $aggregates['ot_pay'];
             $nightDiffPay = $aggregates['nd_pay'];
-            $holidayPay   = $aggregates['holiday_pay'];
-            $tardiness    = $aggregates['tardiness_deduction'];
-            $undertime    = $aggregates['undertime_deduction'];
+            $holidayPay = $aggregates['holiday_pay'];
+            $tardiness = $aggregates['tardiness_deduction'];
+            $undertime = $aggregates['undertime_deduction'];
 
             $earnings = Money::add($basicPay, $leavePay, $overtimePay, $nightDiffPay, $holidayPay);
             $grossPay = Money::sub(Money::sub($earnings, $tardiness), $undertime);
-            if (Money::lt($grossPay, '0')) $grossPay = Money::zero();
+            if (Money::lt($grossPay, '0')) {
+                $grossPay = Money::zero();
+            }
 
             // ─── Government deductions (first half only) ─────────
             // Government contributions are assessed on the employee's ACTUAL
@@ -248,22 +248,29 @@ class PayrollCalculatorService
             if ($period->is_first_half && ! $period->is_thirteenth_month) {
                 $effectiveOn = $period->payroll_date;
                 $sssR = $this->sss->compute($govBasis, $effectiveOn);
-                $phR  = $this->philhealth->compute($govBasis, $effectiveOn);
-                $pgR  = $this->pagibig->compute($govBasis, $effectiveOn);
-                $sssEe = $sssR['ee']; $sssEr = $sssR['er'];
-                $phEe  = $phR['ee'];  $phEr  = $phR['er'];
-                $pgEe  = $pgR['ee'];  $pgEr  = $pgR['er'];
+                $phR = $this->philhealth->compute($govBasis, $effectiveOn);
+                $pgR = $this->pagibig->compute($govBasis, $effectiveOn);
+                $sssEe = $sssR['ee'];
+                $sssEr = $sssR['er'];
+                $phEe = $phR['ee'];
+                $phEr = $phR['er'];
+                $pgEe = $pgR['ee'];
+                $pgEr = $pgR['er'];
 
                 // BIR taxable = gross - employee gov contributions
                 $taxable = Money::sub(Money::sub(Money::sub($grossPay, $sssEe), $phEe), $pgEe);
-                if (Money::lt($taxable, '0')) $taxable = Money::zero();
+                if (Money::lt($taxable, '0')) {
+                    $taxable = Money::zero();
+                }
 
                 // De minimis benefits: the portion ABOVE the statutory limit is
                 // taxable compensation and must be added to the WHT base. The
                 // non-taxable portion is exempt and never touches tax. Guarded so
                 // the calculator works unchanged if the module isn't installed.
                 $taxable = Money::add($taxable, $this->deMinimisTaxableExcess($employee, $period));
-                if (Money::lt($taxable, '0')) $taxable = Money::zero();
+                if (Money::lt($taxable, '0')) {
+                    $taxable = Money::zero();
+                }
 
                 $wht = $this->bir->compute($taxable, 'semi_monthly', $period->payroll_date);
             }
@@ -271,20 +278,20 @@ class PayrollCalculatorService
             // ─── Persist payroll row (without deductions yet) ────
             $payroll = Payroll::create([
                 'payroll_period_id' => $period->id,
-                'employee_id'       => $employee->id,
-                'pay_type'          => $payType,
-                'days_worked'       => $aggregates['days_worked'],
-                'basic_pay'         => $basicPay,
-                'leave_pay'         => $leavePay,
-                'overtime_pay'      => $overtimePay,
-                'night_diff_pay'    => $nightDiffPay,
-                'holiday_pay'       => $holidayPay,
+                'employee_id' => $employee->id,
+                'pay_type' => $payType,
+                'days_worked' => $aggregates['days_worked'],
+                'basic_pay' => $basicPay,
+                'leave_pay' => $leavePay,
+                'overtime_pay' => $overtimePay,
+                'night_diff_pay' => $nightDiffPay,
+                'holiday_pay' => $holidayPay,
                 // Persisted so the GL posting can balance (earnings are debited
                 // gross, so the lateness withheld must be credited back) and so
                 // the payslip can itemise what was actually deducted.
                 'tardiness_deduction' => $tardiness,
                 'undertime_deduction' => $undertime,
-                'gross_pay'         => $grossPay,
+                'gross_pay' => $grossPay,
                 'sss_ee' => $sssEe, 'sss_er' => $sssEr,
                 'philhealth_ee' => $phEe, 'philhealth_er' => $phEr,
                 'pagibig_ee' => $pgEe, 'pagibig_er' => $pgEr,
@@ -345,17 +352,68 @@ class PayrollCalculatorService
             }
 
             $payroll->update([
-                'loan_deductions'   => $loanTotal,
+                'loan_deductions' => $loanTotal,
                 'adjustment_amount' => $adjAmount,
-                'total_deductions'  => $totalDeductions,
-                'net_pay'           => $netPay,
+                'total_deductions' => $totalDeductions,
+                'net_pay' => $netPay,
             ]);
 
             // ─── 13th month accrual hook ─────────────────────────
             $this->thirteenthMonth->accrue($payroll->fresh(['period']));
 
-            return $payroll->fresh(['deductionDetails', 'employee.department', 'employee.position', 'period']);
+            $freshPayroll = $payroll->fresh(['deductionDetails', 'employee.department', 'employee.position', 'period']);
+
+            if (! $internal) {
+                // The parent period embeds payroll rows and their totals. Stage
+                // its refresh in the same transaction as this replacement so
+                // a failure cannot commit data without its durable peer signal.
+                app(PayrollPeriodRealtimeService::class)->stage(
+                    $period->fresh() ?? $period,
+                    'related_updated',
+                    $freshPayroll->updated_at?->format('Y-m-d\TH:i:s.uP'),
+                );
+            }
+
+            return $freshPayroll;
         });
+    }
+
+    private function assertEmployeeComputeAllowed(PayrollPeriod $period, bool $internal): void
+    {
+        if ($period->status?->isLocked()) {
+            $message = sprintf(
+                'Cannot recompute: payroll period is %s.',
+                strtolower($period->status->label()),
+            );
+
+            throw $internal
+                ? new BusinessRuleException($message)
+                : new PayrollPeriodStateConflictException($message);
+        }
+
+        if ($internal) {
+            return;
+        }
+
+        if ($period->status === PayrollPeriodStatus::Approved) {
+            throw new PayrollPeriodStateConflictException(
+                'Cannot recompute: this period is already approved. Void it or force-unlock to make changes.',
+            );
+        }
+
+        if ($period->status === PayrollPeriodStatus::Processing) {
+            throw new PayrollPeriodStateConflictException(
+                'Cannot recompute: a compute run is currently in progress for this period.',
+            );
+        }
+
+        if (! $period->status?->isComputable()) {
+            throw new PayrollPeriodStateConflictException(
+                'Cannot recompute: payroll period state no longer permits recomputation. Refresh the record and review available actions.',
+            );
+        }
+
+        $this->periods->assertPeriodEnded($period);
     }
 
     /**
@@ -397,10 +455,10 @@ class PayrollCalculatorService
 
         try {
             PayrollCycleClaim::create([
-                'employee_id'       => $employee->id,
-                'payroll_id'        => $payroll->id,
+                'employee_id' => $employee->id,
+                'payroll_id' => $payroll->id,
                 'payroll_period_id' => $period->id,
-                'cycle_key'         => $cycleKey,
+                'cycle_key' => $cycleKey,
             ]);
         } catch (QueryException $e) {
             // The race the read above cannot cover: another worker claimed this
@@ -429,7 +487,7 @@ class PayrollCalculatorService
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, Attendance>  $attendances
+     * @param  Collection<int, Attendance>  $attendances
      * @return array{
      *   days_worked: string,
      *   ot_pay: string,
@@ -452,9 +510,9 @@ class PayrollCalculatorService
             }
 
             $regHrs = (string) $att->regular_hours;
-            $otHrs  = (string) $att->overtime_hours;
-            $ndHrs  = (string) $att->night_diff_hours;
-            $rate   = (string) $att->day_type_rate; // 1.0 default, 1.3 special, 2.0 regular holiday, etc.
+            $otHrs = (string) $att->overtime_hours;
+            $ndHrs = (string) $att->night_diff_hours;
+            $rate = (string) $att->day_type_rate; // 1.0 default, 1.3 special, 2.0 regular holiday, etc.
 
             // Holiday premium = (rate - 1.0) × regular hours × hourly rate.
             // Captures the EXTRA earned for working a holiday/restday.
@@ -496,10 +554,10 @@ class PayrollCalculatorService
         }
 
         return [
-            'days_worked'         => $daysWorked,
-            'ot_pay'              => $otPay,
-            'nd_pay'              => $ndPay,
-            'holiday_pay'         => $holiday,
+            'days_worked' => $daysWorked,
+            'ot_pay' => $otPay,
+            'nd_pay' => $ndPay,
+            'holiday_pay' => $holiday,
             'tardiness_deduction' => $tardiness,
             'undertime_deduction' => $undertime,
         ];
@@ -577,9 +635,9 @@ class PayrollCalculatorService
      * working if the clearance table is absent, and takes the EARLIEST active
      * separation date so a re-initiated separation cannot extend paid days.
      */
-    private function separationDate(Employee $employee): ?\Illuminate\Support\Carbon
+    private function separationDate(Employee $employee): ?Carbon
     {
-        if (! \Illuminate\Support\Facades\Schema::hasTable('clearances')) {
+        if (! Schema::hasTable('clearances')) {
             return null;
         }
 
@@ -594,7 +652,7 @@ class PayrollCalculatorService
             ->whereNotNull('separation_date')
             ->min('separation_date');
 
-        return $date === null ? null : \Illuminate\Support\Carbon::parse($date)->startOfDay();
+        return $date === null ? null : Carbon::parse($date)->startOfDay();
     }
 
     /**
@@ -620,7 +678,7 @@ class PayrollCalculatorService
     ): ?array {
         // Full timeline, future rows included — they are exactly what tells us
         // the live salary is not yet the salary in force for this period.
-        $history = \App\Modules\HR\Models\EmployeeSalaryHistory::query()
+        $history = EmployeeSalaryHistory::query()
             ->where('employee_id', $employee->id)
             ->orderBy('effective_date')
             ->orderBy('id')
@@ -633,14 +691,15 @@ class PayrollCalculatorService
         // Does any change take effect strictly AFTER period_start and on/before
         // period_end?
         $changesInside = $history->first(function ($h) use ($period) {
-            $eff = \Illuminate\Support\Carbon::parse($h->effective_date);
+            $eff = Carbon::parse($h->effective_date);
+
             return $eff->gt($period->period_start) && $eff->lte($period->period_end);
         });
 
         // Any row effective strictly AFTER period_end? The live salary carries
         // a raise that must not be paid for this period yet.
         $futureRow = $history->first(function ($h) use ($period) {
-            return \Illuminate\Support\Carbon::parse($h->effective_date)->gt($period->period_end);
+            return Carbon::parse($h->effective_date)->gt($period->period_end);
         });
 
         if ($changesInside === null && $futureRow === null) {
@@ -654,7 +713,7 @@ class PayrollCalculatorService
         // from_* snapshot), else the employee's current values (the row set may
         // only describe the raise, not the starting salary).
         $startRow = $history->last(function ($h) use ($period) {
-            return \Illuminate\Support\Carbon::parse($h->effective_date)->lte($period->period_start);
+            return Carbon::parse($h->effective_date)->lte($period->period_start);
         });
         $curMonthly = $this->historyMonthly($startRow, $payType);
         if ($curMonthly === null) {
@@ -665,18 +724,20 @@ class PayrollCalculatorService
 
         // Pure future-dated raise: one span at the pre-effective rate.
         if ($changesInside === null) {
-            $start = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
-            $end   = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
+            $start = Carbon::parse($period->period_start)->startOfDay();
+            $end = Carbon::parse($period->period_end)->startOfDay();
             $totalDays = max(1, $start->diffInDays($end, true) + 1);
+
             return [['days' => $totalDays, 'monthly' => $curMonthly]];
         }
 
         // Build day-by-day cursor, switching rates as effective dates pass.
-        $periodStart = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
-        $periodEnd = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
+        $periodStart = Carbon::parse($period->period_start)->startOfDay();
+        $periodEnd = Carbon::parse($period->period_end)->startOfDay();
         $insideChanges = $history
             ->filter(function ($h) use ($periodStart, $periodEnd) {
-                $eff = \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay();
+                $eff = Carbon::parse($h->effective_date)->startOfDay();
+
                 return $eff->gt($periodStart) && $eff->lte($periodEnd);
             })
             ->values();
@@ -688,7 +749,7 @@ class PayrollCalculatorService
         // from-values — the live row may already carry the new salary, which
         // would silently pay the raise early (HR-05).
         $startRow = $history->last(function ($h) use ($periodStart) {
-            return \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay()->lte($periodStart);
+            return Carbon::parse($h->effective_date)->startOfDay()->lte($periodStart);
         });
         $curMonthly = $this->historyMonthly($startRow, $payType)
             ?? ($startRow === null ? $this->preFirstHistoryMonthly($employee, $history->first(), $payType) : null)
@@ -697,12 +758,12 @@ class PayrollCalculatorService
         // Build day-by-day cursor, switching rates as effective dates pass.
         $segments = [];
         $changeIdx = 0;
-        $spanDays  = 0;
+        $spanDays = 0;
 
         for ($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay()) {
             // Apply any change effective on this day before counting it.
             while ($changeIdx < $insideChanges->count()
-                && \Illuminate\Support\Carbon::parse($insideChanges[$changeIdx]->effective_date)->startOfDay()->eq($day)) {
+                && Carbon::parse($insideChanges[$changeIdx]->effective_date)->startOfDay()->eq($day)) {
                 if ($spanDays > 0) {
                     $segments[] = ['days' => $spanDays, 'monthly' => $curMonthly];
                     $spanDays = 0;
@@ -732,7 +793,7 @@ class PayrollCalculatorService
      */
     private function preFirstHistoryMonthly(Employee $employee, object $firstRow, string $payType): ?string
     {
-        $adjustment = \App\Modules\HR\Models\SalaryAdjustment::query()
+        $adjustment = SalaryAdjustment::query()
             ->where('employee_id', $employee->id)
             ->whereDate('effective_date', $firstRow->effective_date)
             ->whereNotNull('applied_at')
@@ -841,6 +902,7 @@ class PayrollCalculatorService
             $factor = bcdiv((string) $s['days'], (string) $totalDays, 6);
             $total = Money::add($total, Money::mul($halfBasic, $factor));
         }
+
         return Money::round2($total);
     }
 
@@ -879,9 +941,9 @@ class PayrollCalculatorService
         }
 
         Log::error('Government contribution table(s) missing; payroll computation blocked', [
-            'period_id'    => $period->id,
+            'period_id' => $period->id,
             'payroll_date' => $period->payroll_date->toDateString(),
-            'missing'      => $missing,
+            'missing' => $missing,
         ]);
 
         throw new BusinessRuleException(sprintf(
@@ -901,15 +963,16 @@ class PayrollCalculatorService
     private function deMinimisTaxableExcess(Employee $employee, PayrollPeriod $period): string
     {
         try {
-            $year  = (int) $period->payroll_date->format('Y');
+            $year = (int) $period->payroll_date->format('Y');
             $month = (int) $period->payroll_date->format('n');
+
             return $this->deMinimis
                 ->getTaxableExcessForEmployee($employee, $year, $month);
         } catch (\Throwable $e) {
             Log::error('De minimis taxable-excess lookup failed; payroll computation blocked', [
                 'employee_id' => $employee->id,
-                'period_id'   => $period->id,
-                'error'       => $e->getMessage(),
+                'period_id' => $period->id,
+                'error' => $e->getMessage(),
             ]);
 
             throw new BusinessRuleException(
@@ -925,6 +988,7 @@ class PayrollCalculatorService
         if (! is_numeric($value) || (float) $value <= 0) {
             throw new BusinessRuleException("Required payroll setting {$key} is missing or invalid.");
         }
+
         return (string) $value;
     }
 
@@ -934,17 +998,20 @@ class PayrollCalculatorService
         if (! is_numeric($value) || (float) $value < 0) {
             throw new BusinessRuleException("Required payroll setting {$key} is missing or invalid.");
         }
+
         return (string) $value;
     }
 
     private function addDeductionDetail(Payroll $payroll, DeductionType $type, string $description, string $amount): void
     {
-        if (Money::isZero($amount)) return;
+        if (Money::isZero($amount)) {
+            return;
+        }
         PayrollDeductionDetail::create([
-            'payroll_id'     => $payroll->id,
+            'payroll_id' => $payroll->id,
             'deduction_type' => $type->value,
-            'description'    => $description,
-            'amount'         => $amount,
+            'description' => $description,
+            'amount' => $amount,
         ]);
     }
 
@@ -994,26 +1061,26 @@ class PayrollCalculatorService
 
             $total = Money::add($total, $deduction);
             PayrollDeductionDetail::create([
-                'payroll_id'     => $payroll->id,
+                'payroll_id' => $payroll->id,
                 'deduction_type' => $loan->loan_type === LoanType::CashAdvance ? DeductionType::CashAdvance->value : DeductionType::Loan->value,
-                'description'    => sprintf('%s · %s', $loan->loan_no, $loan->loan_type->value),
-                'amount'         => $deduction,
-                'reference_id'   => $loan->id,
+                'description' => sprintf('%s · %s', $loan->loan_no, $loan->loan_type->value),
+                'amount' => $deduction,
+                'reference_id' => $loan->id,
             ]);
 
             // Loan accounting trace.
             LoanPayment::create([
-                'loan_id'      => $loan->id,
-                'payroll_id'   => $payroll->id,
-                'amount'       => $deduction,
+                'loan_id' => $loan->id,
+                'payroll_id' => $payroll->id,
+                'amount' => $deduction,
                 'payment_date' => $period->payroll_date,
-                'remarks'      => 'Auto-deduction from payroll',
+                'remarks' => 'Auto-deduction from payroll',
             ]);
 
             // Reconcile from the immutable payment ledger. The loan row is
             // already locked above, so manual payments and this deduction
             // cannot race or leave the denormalized summary drifting.
-            app(\App\Modules\Loans\Services\LoanService::class)
+            app(LoanService::class)
                 ->reconcileAggregates($loan);
         }
 
@@ -1037,8 +1104,8 @@ class PayrollCalculatorService
             ->get()
             ->each(function (PayrollAdjustment $adj) {
                 $adj->forceFill([
-                    'status'                => PayrollAdjustmentStatus::Approved->value,
-                    'applied_at'            => null,
+                    'status' => PayrollAdjustmentStatus::Approved->value,
+                    'applied_at' => null,
                     'applied_to_payroll_id' => null,
                 ])->save();
             });
@@ -1074,7 +1141,7 @@ class PayrollCalculatorService
                 continue;
             }
             $loan->total_paid = Money::sub((string) $loan->total_paid, (string) $p->amount);
-            $loan->balance    = Money::add((string) $loan->balance, (string) $p->amount);
+            $loan->balance = Money::add((string) $loan->balance, (string) $p->amount);
             $loan->pay_periods_remaining = $loan->pay_periods_remaining + 1;
             if ($loan->status === LoanStatus::Paid) {
                 $loan->status = LoanStatus::Active;
@@ -1115,12 +1182,12 @@ class PayrollCalculatorService
             $signedTotal = Money::add($signedTotal, $signed);
 
             PayrollDeductionDetail::create([
-                'payroll_id'     => $payroll->id,
+                'payroll_id' => $payroll->id,
                 'deduction_type' => DeductionType::Adjustment->value,
-                'description'    => $adj->type->label().' · '.\Illuminate\Support\Str::limit($adj->reason, 100),
+                'description' => $adj->type->label().' · '.Str::limit($adj->reason, 100),
                 // store as positive in the detail — sign only matters for the payroll.adjustment_amount.
-                'amount'         => Money::round2(ltrim($signed, '-')),
-                'reference_id'   => $adj->id,
+                'amount' => Money::round2(ltrim($signed, '-')),
+                'reference_id' => $adj->id,
             ]);
 
             $adj->status = PayrollAdjustmentStatus::Applied;

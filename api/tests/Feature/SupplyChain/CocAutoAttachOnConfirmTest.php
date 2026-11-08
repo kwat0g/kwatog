@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -24,6 +25,7 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -163,11 +165,17 @@ class CocAutoAttachOnConfirmTest extends TestCase
         $confirmed = $this->svc->confirm($delivery, $user);
         $this->assertSame('manual_required', $confirmed->coc_handoff_status->value);
         $this->assertSame(1, $delivery->fresh()->shipmentLot()->count());
+        $initialSignals = DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count();
 
         $this->seedResolvedMeasurements($inspection->fresh(), 8, InspectionStatus::Passed);
         $retried = $this->svc->retryCocHandoff($delivery->fresh(), $user);
 
         $this->assertSame('generated', $retried->coc_handoff_status->value);
+        $this->assertSame(
+            $initialSignals + 1,
+            DB::table('event_outbox')->where('event_type', ChainStepAdvanced::class)->count(),
+            'A successful CoC retry changes delivery detail and must stage one refresh.',
+        );
         $this->assertSame(1, DeliveryProof::query()
             ->where('delivery_id', $delivery->id)
             ->where('proof_type', 'coc')

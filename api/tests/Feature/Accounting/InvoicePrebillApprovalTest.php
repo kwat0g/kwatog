@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Events\ChainStepAdvanced;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -103,6 +107,11 @@ class InvoicePrebillApprovalTest extends TestCase
         $withoutInvoiceRead->flushPermissionsCache();
         $invoice = $this->createPrebill($maker);
 
+        $this->actingAs($approver)
+            ->getJson('/api/v1/invoices/'.$invoice->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.approve_prebill', true);
+
         $this->assertSame($maker->id, $invoice->created_by);
         $this->assertNull($invoice->prebill_approved_by);
         $this->assertNull($invoice->prebill_approved_at);
@@ -117,6 +126,69 @@ class InvoicePrebillApprovalTest extends TestCase
         ]);
     }
 
+    public function test_prebill_creation_and_approval_stage_invoice_refresh_signals(): void
+    {
+        $maker = $this->user('finance_officer');
+        $approver = $this->user('finance_officer');
+        $invoice = $this->createPrebill($maker);
+
+        $this->assertSame(1, DB::table('chain_step_runs')
+            ->where('entity_type', 'invoice')
+            ->where('entity_id', $invoice->id)
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count(), 'Creating the invoice should signal authorized detail and list viewers.');
+        $actions = DB::table('chain_step_runs')
+            ->join('event_outbox', 'event_outbox.id', '=', 'chain_step_runs.outbox_id')
+            ->where('chain_step_runs.entity_type', 'invoice')
+            ->where('chain_step_runs.entity_id', $invoice->id)
+            ->where('chain_step_runs.event_type', ChainStepAdvanced::class)
+            ->pluck('event_outbox.payload')
+            ->map(fn (string $payload): string => json_decode($payload, true, flags: JSON_THROW_ON_ERROR)['action'])
+            ->all();
+        $this->assertSame(['created'], $actions);
+
+        $customer = $invoice->customer()->firstOrFail();
+        $revenue = Account::query()->where('code', '4010')->firstOrFail();
+        $this->actingAs($maker)->putJson(
+            '/api/v1/invoices/'.$invoice->hash_id,
+            $this->updatePayload($invoice, $customer, $revenue, '2.00'),
+        )->assertOk();
+        $this->assertSame(2, DB::table('chain_step_runs')
+            ->where('entity_type', 'invoice')
+            ->where('entity_id', $invoice->id)
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count(), 'Editing a prebill changes the review content and invalidates its detail.');
+        $actions = DB::table('chain_step_runs')
+            ->join('event_outbox', 'event_outbox.id', '=', 'chain_step_runs.outbox_id')
+            ->where('chain_step_runs.entity_type', 'invoice')
+            ->where('chain_step_runs.entity_id', $invoice->id)
+            ->where('chain_step_runs.event_type', ChainStepAdvanced::class)
+            ->pluck('event_outbox.payload')
+            ->map(fn (string $payload): string => json_decode($payload, true, flags: JSON_THROW_ON_ERROR)['action'])
+            ->all();
+        sort($actions);
+        $this->assertSame(['created', 'updated'], $actions);
+
+        $this->actingAs($approver)
+            ->postJson('/api/v1/invoices/'.$invoice->hash_id.'/approve-prebill')
+            ->assertOk()
+            ->assertJsonPath('data.prebill_approved_by.id', $approver->hash_id)
+            ->assertJsonPath('data.available_actions.approve_prebill', false);
+
+        $this->assertSame(3, DB::table('chain_step_runs')
+            ->where('entity_type', 'invoice')
+            ->where('entity_id', $invoice->id)
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count(), 'Approval should refresh viewers so the server-computed finalize action can appear.');
+
+        $this->actingAs($maker)->patchJson('/api/v1/invoices/'.$invoice->hash_id.'/cancel')->assertOk();
+        $this->assertSame(4, DB::table('chain_step_runs')
+            ->where('entity_type', 'invoice')
+            ->where('entity_id', $invoice->id)
+            ->where('event_type', ChainStepAdvanced::class)
+            ->count(), 'Cancellation should remove stale invoice actions and list rows.');
+    }
+
     public function test_display_history_is_not_persisted_as_an_invoice_attribute(): void
     {
         $maker = $this->user('finance_officer');
@@ -127,7 +199,7 @@ class InvoicePrebillApprovalTest extends TestCase
         ]);
         $revenue = Account::query()->where('code', '4010')->firstOrFail();
 
-        $invoice = app(\App\Modules\Accounting\Services\InvoiceService::class)
+        $invoice = app(InvoiceService::class)
             ->create($this->payload($customer, $revenue), $maker);
 
         $this->assertArrayNotHasKey('status_history', $invoice->getAttributes());
@@ -190,7 +262,7 @@ class InvoicePrebillApprovalTest extends TestCase
         ])->assertCreated();
 
         $invoice = Invoice::query()->findOrFail(
-            \App\Common\Support\HashIdFilter::decode($response->json('data.id'), Invoice::class),
+            HashIdFilter::decode($response->json('data.id'), Invoice::class),
         );
         $this->assertSame($maker->id, $invoice->created_by);
         $this->assertSame('draft', $invoice->status->value);
@@ -218,6 +290,48 @@ class InvoicePrebillApprovalTest extends TestCase
         $this->assertNull($invoice->fresh()->prebill_approved_at);
         $this->assertSame('draft', $invoice->fresh()->status->value);
         $this->assertSame(0, JournalEntry::query()->count());
+    }
+
+    public function test_prebill_resource_hides_delegated_approval_when_the_invoice_maker_is_the_delegator(): void
+    {
+        $maker = $this->user('finance_officer');
+        $delegate = $this->user('purchasing_officer');
+        $invoice = $this->createPrebill($maker);
+
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $delegate->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'accounting.invoices.view')->value('id'),
+            'type' => 'grant',
+            'granted_by' => $maker->id,
+            'reason' => 'Prebill available-action projection test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $delegate->flushPermissionsCache();
+
+        ApprovalDelegation::query()->create([
+            'delegator_user_id' => $maker->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'finance_officer',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'reason' => 'Prebill available-action projection test.',
+            'is_active' => true,
+        ]);
+
+        $this->assertContains(
+            'accounting.invoices.prebill_approve',
+            ApprovalDelegation::delegatedApprovalPermissions($delegate),
+        );
+
+        $this->actingAs($delegate)
+            ->getJson('/api/v1/invoices/'.$invoice->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.available_actions.approve_prebill', false);
+
+        $this->actingAs($delegate)
+            ->postJson('/api/v1/invoices/'.$invoice->hash_id.'/approve-prebill')
+            ->assertForbidden();
     }
 
     public function test_prebill_cannot_be_finalized_before_a_separate_approval(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
@@ -20,6 +21,7 @@ use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteResponseStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteStatus;
 use App\Modules\Purchasing\Events\RfqLifecycleEvent;
+use App\Modules\Purchasing\Exceptions\RequestForQuoteStateConflictException;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RfqDocument;
@@ -50,6 +52,7 @@ class RequestForQuoteService
         private readonly RequestForQuoteAccessPolicy $access,
         private readonly PurchaseOrderService $purchaseOrders,
         private readonly OutboxService $outbox,
+        private readonly RequestForQuoteRealtimeService $realtime,
         private readonly SupplierPerformanceService $performance,
         private readonly RfqCommercialCalculator $calculator,
         private readonly TaxPolicyService $taxPolicy,
@@ -239,9 +242,17 @@ class RequestForQuoteService
                 'po_conversion_note' => "RFQ {$rfq->rfq_number} sourcing in progress.",
                 'po_conversion_at' => now(),
             ])->save();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $locked->fresh(),
+                $locked->status?->value ?? PurchaseRequestStatus::Approved->value,
+                $by,
+                action: 'updated',
+            );
 
             if (! empty($data['publish'])) {
-                $this->openLocked($rfq);
+                $this->openLocked($rfq, created: true, actor: $by);
+            } else {
+                $this->realtime->changed($rfq, 'created', $by);
             }
 
             return $rfq;
@@ -256,7 +267,7 @@ class RequestForQuoteService
             $locked = RequestForQuote::query()->lockForUpdate()->with(['items', 'purchaseRequest.items'])->findOrFail($rfq->id);
             $this->assertManage($by);
             if ($locked->status !== RfqStatus::Draft) {
-                throw new BusinessRuleException('Only draft RFQs can be edited.');
+                throw new RequestForQuoteStateConflictException('This RFQ is no longer a draft. Refresh and review its current status.');
             }
             $locked->fill([
                 'title' => $data['title'] ?? $locked->title,
@@ -284,6 +295,7 @@ class RequestForQuoteService
             if (array_key_exists('invitations', $data)) {
                 $this->syncInvitations($locked, $locked->purchaseRequest, (array) $data['invitations'], $by);
             }
+            $this->realtime->changed($locked, 'updated', $by);
         });
 
         return $this->show($rfq->fresh(), $by);
@@ -295,9 +307,9 @@ class RequestForQuoteService
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
             $this->assertManage($by);
             if ($locked->status !== RfqStatus::Draft) {
-                throw new BusinessRuleException('Only draft RFQs can be published.');
+                throw new RequestForQuoteStateConflictException('This RFQ is no longer a draft. Refresh and review its current status.');
             }
-            $this->openLocked($locked);
+            $this->openLocked($locked, actor: $by);
         });
 
         return $this->show($rfq->fresh(), $by);
@@ -312,17 +324,17 @@ class RequestForQuoteService
                 throw new BusinessRuleException('An extension reason is required.');
             }
             if ($locked->status !== RfqStatus::Open) {
-                throw new BusinessRuleException('Only open RFQs can be extended.');
+                throw new RequestForQuoteStateConflictException('This RFQ is no longer open. Refresh and review its current status.');
             }
             if (! $locked->closes_at->isFuture()) {
-                throw new BusinessRuleException('The deadline has already passed, so the RFQ is closing. Compare the quotations received, or cancel and start a new RFQ.');
+                throw new RequestForQuoteStateConflictException('The RFQ deadline has passed. Refresh and review its current status before continuing.');
             }
             $deadline = $this->localDateTime((string) $data['closes_at']);
             if ($deadline->lte($locked->closes_at) || $deadline->isPast()) {
                 throw new BusinessRuleException('The new deadline must be in the future and later than the current deadline.');
             }
             $locked->forceFill(['closes_at' => $deadline, 'last_extension_reason' => $data['reason']])->save();
-            $this->recordLifecycle($locked, 'extended', 'extended:'.$deadline->timestamp);
+            $this->recordLifecycle($locked, 'extended', 'extended:'.$deadline->timestamp, $by);
         });
 
         return $this->show($rfq->fresh(), $by);
@@ -335,12 +347,12 @@ class RequestForQuoteService
             $locked = RequestForQuote::query()->lockForUpdate()->with('invitations')->findOrFail($rfq->id);
             $this->assertManage($by);
             if ($locked->status !== RfqStatus::Open) {
-                throw new BusinessRuleException('Only open RFQs can be closed.');
+                throw new RequestForQuoteStateConflictException('This RFQ is no longer open. Refresh and review its current status.');
             }
             if (! $this->access->allInvitedResponded($locked)) {
-                throw new BusinessRuleException('Close now is available once every invited supplier has submitted a quotation. Otherwise the RFQ closes at its deadline.');
+                throw new RequestForQuoteStateConflictException('Supplier responses changed. Refresh and review the RFQ before closing it.');
             }
-            $this->closeLocked($locked);
+            $this->closeLocked($locked, $by);
         });
 
         return $this->show($rfq->fresh(), $by);
@@ -399,13 +411,15 @@ class RequestForQuoteService
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
             $this->assertManage($by);
             if (! in_array($locked->status, [RfqStatus::Draft, RfqStatus::Open, RfqStatus::Closed], true)) {
-                throw new BusinessRuleException('Only a draft, open or closed RFQ can be cancelled.');
+                throw new RequestForQuoteStateConflictException('This RFQ can no longer be cancelled. Refresh and review its current status.');
             }
             $wasPublished = $locked->status !== RfqStatus::Draft;
             $locked->forceFill(['status' => RfqStatus::Cancelled, 'cancellation_reason' => $reason, 'resolved_at' => now()])->save();
             $this->handBack($locked, "RFQ {$locked->rfq_number} was cancelled. Convert by Direct PO or start a new RFQ.");
             if ($wasPublished) {
-                $this->recordLifecycle($locked, 'cancelled', 'cancelled');
+                $this->recordLifecycle($locked, 'cancelled', 'cancelled', $by);
+            } else {
+                $this->realtime->changed($locked, 'status_changed', $by);
             }
         });
 
@@ -476,7 +490,7 @@ class RequestForQuoteService
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
             $this->assertManage($by);
             if (! in_array($locked->status, [RfqStatus::Draft, RfqStatus::Open], true)) {
-                throw new BusinessRuleException('Documents can only be added while the RFQ is a draft or open.');
+                throw new RequestForQuoteStateConflictException('This RFQ no longer accepts documents. Refresh and review its current status.');
             }
             if ($documentType === 'requirement_document') {
                 $vendorId = null;
@@ -485,7 +499,7 @@ class RequestForQuoteService
             }
             $path = $file->store('rfqs/'.$locked->hash_id.'/internal', 'local');
             try {
-                return $locked->documents()->create([
+                $document = $locked->documents()->create([
                     'vendor_id' => $vendorId,
                     'supplier_quote_id' => $vendorId === null ? null : SupplierQuote::query()->where('request_for_quote_id', $locked->id)->where('vendor_id', $vendorId)->value('id'),
                     'uploaded_by_user' => $by->id,
@@ -495,6 +509,9 @@ class RequestForQuoteService
                     'size_bytes' => (int) $file->getSize(),
                     'file_path' => $path,
                 ]);
+                $this->realtime->changed($locked, 'updated', $by);
+
+                return $document;
             } catch (\Throwable $e) {
                 Storage::disk('local')->delete($path);
                 throw $e;
@@ -532,7 +549,7 @@ class RequestForQuoteService
         return is_string($vendor->email) && filter_var($vendor->email, FILTER_VALIDATE_EMAIL) ? 'email' : 'none';
     }
 
-    private function openLocked(RequestForQuote $rfq): void
+    private function openLocked(RequestForQuote $rfq, bool $created = false, ?User $actor = null): void
     {
         if (! $rfq->invitations()->exists()) {
             throw new BusinessRuleException('Invite at least one supplier before publishing.');
@@ -541,14 +558,14 @@ class RequestForQuoteService
             throw new BusinessRuleException('The RFQ deadline must be in the future. Edit the draft to set a new deadline.');
         }
         $rfq->forceFill(['status' => RfqStatus::Open, 'issued_at' => now()])->save();
-        $this->recordLifecycle($rfq, 'published', 'published');
+        $this->recordLifecycle($rfq, 'published', 'published', $actor, $created ? 'created' : 'status_changed');
     }
 
     /**
      * Closed with at least one submitted quote → ready to compare. With none,
      * there is nothing to evaluate: cancel and hand the PR back.
      */
-    private function closeLocked(RequestForQuote $rfq): void
+    private function closeLocked(RequestForQuote $rfq, ?User $actor = null): void
     {
         $submitted = SupplierQuote::query()
             ->where('request_for_quote_id', $rfq->id)
@@ -556,7 +573,7 @@ class RequestForQuoteService
             ->exists();
         if ($submitted) {
             $rfq->forceFill(['status' => RfqStatus::Closed, 'closed_at' => now()])->save();
-            $this->recordLifecycle($rfq, 'closed', 'closed');
+            $this->recordLifecycle($rfq, 'closed', 'closed', $actor);
 
             return;
         }
@@ -567,17 +584,32 @@ class RequestForQuoteService
             'cancellation_reason' => 'No quotations were received before the deadline.',
         ])->save();
         $this->handBack($rfq, "RFQ {$rfq->rfq_number} closed without quotations. Convert by Direct PO or start a new RFQ.");
-        $this->recordLifecycle($rfq, 'cancelled', 'cancelled');
+        $this->recordLifecycle($rfq, 'cancelled', 'cancelled', $actor);
     }
 
     /** Recompute the PR's coverage and, if anything is left, say where it went. */
     public function handBack(RequestForQuote $rfq, string $note): void
     {
         $pr = PurchaseRequest::query()->lockForUpdate()->findOrFail($rfq->purchase_request_id);
+        $beforeStatus = $pr->status?->value;
+        $beforeConversionStatus = $pr->po_conversion_status?->value;
+        $beforeNote = (string) $pr->po_conversion_note;
         $this->purchaseOrders->syncConversionStatus($pr);
         $pr->refresh();
+        $statusChanged = $beforeStatus !== $pr->status?->value
+            || $beforeConversionStatus !== $pr->po_conversion_status?->value
+            || $beforeNote !== (string) $pr->po_conversion_note;
         if ($pr->status === PurchaseRequestStatus::Approved) {
-            $pr->forceFill(['po_conversion_note' => $note])->save();
+            $pr->forceFill(['po_conversion_note' => $note]);
+            $noteChanged = $pr->isDirty('po_conversion_note');
+            $pr->save();
+            if ($noteChanged && ! $statusChanged) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $pr->fresh(),
+                    PurchaseRequestStatus::Approved->value,
+                    action: 'updated',
+                );
+            }
         }
     }
 
@@ -651,11 +683,12 @@ class RequestForQuoteService
         return CarbonImmutable::parse($value)->setTimezone((string) config('app.timezone'));
     }
 
-    private function recordLifecycle(RequestForQuote $rfq, string $kind, string $suffix): void
+    private function recordLifecycle(RequestForQuote $rfq, string $kind, string $suffix, ?User $actor = null, string $action = 'status_changed'): void
     {
         $this->outbox->record(
             RfqLifecycleEvent::capture($rfq, $kind),
             'rfq:'.$rfq->id.':'.$suffix,
         );
+        $this->realtime->changed($rfq, $action, $actor);
     }
 }

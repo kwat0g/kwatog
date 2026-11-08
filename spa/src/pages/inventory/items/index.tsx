@@ -23,6 +23,7 @@ import { ItemCategoriesManager } from '@/pages/inventory/categories';
 import { usePermission } from '@/hooks/usePermission';
 import { formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { reportMutationError } from '@/lib/formErrors';
 import { showUndoToast } from '@/lib/undoToast';
 import type { Item } from '@/types/inventory';
@@ -32,7 +33,7 @@ const stockChip = (status: 'ok' | 'low' | 'critical') => ({
   ok: 'success' as const, low: 'warning' as const, critical: 'danger' as const }[status]);
 
 const DEFAULT_FILTERS: ItemListParams = {
-  page: 1, per_page: 25, is_active: 'true',
+  page: 1, per_page: 25, is_active: '',
 };
 
 // ─── Bulk archive / restore plumbing ──────────────────────────────
@@ -116,10 +117,12 @@ export default function ItemsListPage() {
  const [bulkConfirm, setBulkConfirm] = useState<{ mode: 'archive' | 'restore'; rows: Item[] } | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['inventory', 'items', filters, { trashed: archiveToTrashed(scope) }],
+  const queryKey = ['inventory', 'items', filters, { trashed: archiveToTrashed(scope) }] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => itemsApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev });
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: itemOptions } = useQuery({
  queryKey: ['inventory', 'items', 'options'],
  queryFn: itemsApi.options,

@@ -1,5 +1,5 @@
 import { useDeferredValue, useState } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuPlus, LuSearch } from '@/lib/icons';
 import { returnCasesApi } from '@/api/returnCases';
@@ -12,6 +12,10 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatDateTime } from '@/lib/formatDate';
 import { usePermission } from '@/hooks/usePermission';
 import type { ReturnCaseStatus } from '@/types/returnCases';
+import type { CustomerPortalUser, SupplierPortalUser } from '@/types/b2b';
+import { useRealtimeList, useReturnCasePortalRealtime } from '@/hooks/useRealtimeRecord';
+import { useAuthStore } from '@/stores/authStore';
+import { returnCaseQueryKeys } from '@/lib/queryKeys/returnCases';
 import { casePath, caseStatusVariant, newCasePath, realmFromPath } from './shared';
 
 const STATUS_OPTIONS: Array<{ value: ReturnCaseStatus | ''; label: string }> = [
@@ -30,7 +34,22 @@ export default function ReturnCaseListPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const realm = realmFromPath(location.pathname);
+  const portalUser = useOutletContext<CustomerPortalUser | SupplierPortalUser | null>();
   const { can } = usePermission();
+  const authUser = useAuthStore((state) => state.user);
+  const customerOnly = authUser?.role?.slug === 'customer_service_officer'
+    && !authUser.permissions.includes('purchasing.po.create');
+  const portalScope = realm === 'customer'
+    ? (portalUser as CustomerPortalUser | null)?.customer?.id
+    : realm === 'supplier'
+      ? (portalUser as SupplierPortalUser | null)?.vendor?.id
+      : undefined;
+  const cacheScope = realm === 'internal' ? `user:${authUser?.id ?? 'unknown'}` : `${realm}:${portalScope ?? 'unknown'}`;
+  useRealtimeList('return_case', realm === 'internal' ? (customerOnly ? 'customer' : 'all') : undefined);
+  useReturnCasePortalRealtime(
+    realm === 'internal' ? undefined : realm,
+    portalScope,
+  );
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [status, setStatus] = useState<ReturnCaseStatus | ''>('');
@@ -39,14 +58,13 @@ export default function ReturnCaseListPage() {
   const canCreate = realm === 'customer' || (realm === 'internal' && can('return_management.manage'));
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['return-cases', realm, page, deferredSearch, status],
+    queryKey: returnCaseQueryKeys.list(realm, cacheScope, page, deferredSearch, status),
     queryFn: () => returnCasesApi.list(realm, {
       page,
       per_page: 20,
       search: deferredSearch.trim() || undefined,
       status: status || undefined,
     }),
-    placeholderData: (previous) => previous,
   });
 
   const title = realm === 'internal' ? 'Problem reports' : 'Problem reports';

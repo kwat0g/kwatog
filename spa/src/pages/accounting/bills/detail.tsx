@@ -38,8 +38,10 @@ import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
-import type { BillPayment, PaymentMethod } from '@/types/accounting';
+import type { Bill, BillPayment, PaymentMethod } from '@/types/accounting';
 import { agingBucketLabel } from '@/lib/labels';
+import { invalidateRealtimeChange, reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 
 const paymentSchema = z.object({
   cash_account_id: z.string().min(1, 'Required'),
@@ -73,27 +75,56 @@ export default function BillDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const billDetailKey = ['accounting', 'bills', id] as const;
   const [showPay, setShowPay] = useState(false);
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showPostConfirm, setShowPostConfirm] = useState(false);
   const [showPostOverride, setShowPostOverride] = useState(false);
-  const [paymentToVoid, setPaymentToVoid] = useState<BillPayment | null>(null);
-  const [paymentToReject, setPaymentToReject] = useState<BillPayment | null>(null);
   const paymentIdempotencyKey = useRef<string | null>(null);
   const {
     data: bill,
     isLoading,
+    isFetching,
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['accounting', 'bills', id],
+    queryKey: billDetailKey,
     queryFn: () => billsApi.show(id),
     enabled: !!id,
   });
+  const rejectPaymentActionTarget = useQueryRecordTarget(bill?.payments, { isFetching, isError });
+  const voidPaymentActionTarget = useQueryRecordTarget(bill?.payments, { isFetching, isError });
+  const paymentToReject = rejectPaymentActionTarget.target;
+  const paymentToVoid = voidPaymentActionTarget.target;
+  const canRejectPayment = rejectPaymentActionTarget.isFresh
+    && paymentToReject?.status === 'pending_approval'
+    && paymentToReject.can_decide === true;
+  const canVoidPayment = voidPaymentActionTarget.isFresh
+    && bill?.status !== 'cancelled'
+    && paymentToVoid?.status === 'posted'
+    && paymentToVoid.can_void === true;
+  const reconcilePaymentResponse = (payment: BillPayment, appendIfMissing = false) => {
+    qc.setQueryData<Bill>(billDetailKey, (current) => {
+      if (!current) return current;
+      const previousPayments = current.payments ?? [];
+      const hasPayment = previousPayments.some((existing) => existing.id === payment.id);
+      const payments = hasPayment
+        ? previousPayments.map((existing) => existing.id === payment.id ? payment : existing)
+        : appendIfMissing
+          ? [...previousPayments, payment]
+          : previousPayments;
+      return {
+        ...current,
+        payments,
+        payment_approval_pending: payments.some((existing) => existing.status === 'pending_approval'),
+      };
+    });
+    void invalidateRealtimeChange(qc, { entityType: 'bill', entityId: id });
+  };
   // 2026-08-08 — final P2P link: live chain progress (payments / credit-note
   // applications settle the bill in real time).
-  useChainProgress('bill', id, ['accounting', 'bills', id]);
+  useChainProgress('bill', id, billDetailKey);
   const { data: accountingOptions, isError: paymentOptionsFailed, isFetching: paymentOptionsPending, refetch: refetchPaymentOptions } = useQuery({
     queryKey: ['accounting', 'options'],
     queryFn: () => accountingOptionsApi.list(),
@@ -149,9 +180,14 @@ export default function BillDetailPage() {
 
   const cancelMut = useMutation({
     mutationFn: () => billsApi.cancel(id),
-    onSuccess: () => {
+    onSuccess: (updatedBill) => {
       toast.success('Bill cancelled.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'bill', entityId: updatedBill.id },
+        billDetailKey,
+        updatedBill,
+      );
     },
     onError: (e: Error & { response?: { data?: { message?: string } } }) =>
       toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
@@ -159,14 +195,25 @@ export default function BillDetailPage() {
   const postMut = useMutation({
     mutationFn: (data?: { allow_override?: boolean; override_reason?: string }) =>
       billsApi.postDraft(id, data),
-    onSuccess: () => {
+    onSuccess: (updatedBill) => {
       toast.success('Draft bill posted to AP + GL.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+      reconcileRealtimeMutationResponse(
+        qc,
+        { entityType: 'bill', entityId: updatedBill.id },
+        billDetailKey,
+        updatedBill,
+      );
       setShowPostConfirm(false);
       setShowPostOverride(false);
     },
-    onError: (e: Error & { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? 'Failed to post bill.'),
+    onError: (e: Error & { response?: { status?: number; data?: { code?: string; message?: string } } }) => {
+      if (e.response?.status === 409 && e.response.data?.code === 'bill_state_conflict') {
+        setShowPostConfirm(false);
+        setShowPostOverride(false);
+        void invalidateRealtimeChange(qc, { entityType: 'bill', entityId: id });
+      }
+      toast.error(e.response?.data?.message ?? 'Failed to post bill.');
+    },
   });
   const payMut = useMutation({
     mutationFn: (d: PaymentFormValues) =>
@@ -184,8 +231,7 @@ export default function BillDetailPage() {
       ),
     onSuccess: (payment) => {
       toast.success(payment.status === 'posted' ? 'Payment recorded.' : 'Payment submitted for VP approval.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
-      void qc.refetchQueries({ queryKey: ['accounting', 'bills', id] });
+      reconcilePaymentResponse(payment, true);
       setShowPay(false);
       setPaymentProof(null);
       paymentIdempotencyKey.current = null;
@@ -201,35 +247,55 @@ export default function BillDetailPage() {
       toast.error(e.response?.data?.message ?? 'Failed to record payment.'),
   });
   const approvePaymentMut = useMutation({
-    mutationFn: (paymentId: string) => billsApi.approvePayment(id, paymentId),
-    onSuccess: () => {
-      toast.success('Payment approval recorded.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
-      void qc.refetchQueries({ queryKey: ['accounting', 'bills', id] });
+    mutationFn: (paymentId: string) => {
+      const current = bill?.payments?.find((payment) => payment.id === paymentId);
+      if (isFetching || isError || bill?.status === 'cancelled' || current?.status !== 'pending_approval' || current.can_decide !== true) {
+        throw new Error('This payment can no longer be approved. Refresh the bill and try again.');
+      }
+      return billsApi.approvePayment(id, paymentId);
     },
-    onError: (e: Error & { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? 'Failed to approve payment.'),
+    onSuccess: (payment) => {
+      toast.success('Payment approval recorded.');
+      reconcilePaymentResponse(payment);
+    },
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? e.message ?? 'Failed to approve payment.');
+      void qc.invalidateQueries({ queryKey: billDetailKey });
+    },
   });
   const rejectPaymentMut = useMutation({
-    mutationFn: (remarks: string) => billsApi.rejectPayment(id, paymentToReject!.id, remarks),
-    onSuccess: () => {
-      toast.success('Payment request rejected.');
-      setPaymentToReject(null);
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
-      void qc.refetchQueries({ queryKey: ['accounting', 'bills', id] });
+    mutationFn: ({ paymentId, remarks }: { paymentId: string; remarks: string }) => {
+      if (!canRejectPayment || !paymentToReject || paymentToReject.id !== paymentId) {
+        throw new Error('This payment can no longer be rejected. Refresh the bill and try again.');
+      }
+      return billsApi.rejectPayment(id, paymentId, remarks);
     },
-    onError: (e: Error & { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? 'Failed to reject payment.'),
+    onSuccess: (payment) => {
+      toast.success('Payment request rejected.');
+      rejectPaymentActionTarget.close();
+      reconcilePaymentResponse(payment);
+    },
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? e.message ?? 'Failed to reject payment.');
+      void qc.invalidateQueries({ queryKey: billDetailKey });
+    },
   });
   const voidPaymentMut = useMutation({
-    mutationFn: (reason: string) => billsApi.voidPayment(id, paymentToVoid!.id, { reason }),
-    onSuccess: () => {
-      toast.success('Payment voided and the bill balance was recalculated.');
-      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
-      setPaymentToVoid(null);
+    mutationFn: ({ paymentId, reason }: { paymentId: string; reason: string }) => {
+      if (!canVoidPayment || !paymentToVoid || paymentToVoid.id !== paymentId) {
+        throw new Error('This payment can no longer be voided. Refresh the bill and try again.');
+      }
+      return billsApi.voidPayment(id, paymentId, { reason });
     },
-    onError: (e: Error & { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? 'Failed to void payment.'),
+    onSuccess: (payment) => {
+      toast.success('Payment voided and the bill balance was recalculated.');
+      reconcilePaymentResponse(payment);
+      voidPaymentActionTarget.close();
+    },
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? e.message ?? 'Failed to void payment.');
+      void qc.invalidateQueries({ queryKey: billDetailKey });
+    },
   });
 
   if (isLoading || (!bill && !isError)) return <SkeletonDetail />;
@@ -247,15 +313,15 @@ export default function BillDetailPage() {
     );
   if (!bill) return null;
 
-  const isOpen = bill.status === 'unpaid' || bill.status === 'partial';
-  // Pending requests reserve balance, so only offer what remains available.
-  const canRecordPayment = isOpen && unreservedCentavos > 0
-    && (unreservedCentavos >= minimumPartialCentavos || unreservedCentavos === toCentavos(bill.balance));
   // Header accounts (e.g. 1000 Assets) share the 10xx prefix but cannot take a posting.
   const cashParentIds = new Set((cashAccounts?.data ?? []).map((a) => a.parent_id).filter(Boolean));
   const cashAccts = (cashAccounts?.data ?? []).filter(
     (a) => a.code.startsWith('10') && a.is_active && !cashParentIds.has(a.id),
   );
+  const matchBlocked = bill.three_way_review_status === 'manual_review' || match?.overall_status === 'blocked';
+  const canPostBill = matchBlocked
+    ? bill.available_actions?.override_three_way_match === true
+    : bill.available_actions?.post_draft === true;
 
   return (
     <div>
@@ -293,21 +359,14 @@ export default function BillDetailPage() {
             >
               Print
             </Button>
-            {bill.status === 'draft' && can('accounting.bills.create') && (
+            {canPostBill && (
               <Button
                 variant="primary"
                 size="sm"
                 icon={<LuSend size={14} />}
                 onClick={() => {
-                  if (
-                    bill.three_way_review_status === 'manual_review' ||
-                    match?.overall_status === 'blocked'
-                  ) {
-                    if (can('accounting.bills.three_way_override')) setShowPostOverride(true);
-                    else
-                      toast.error(
-                        'A finance checker with 3-way-match override permission must approve this variance.',
-                      );
+                  if (matchBlocked) {
+                    setShowPostOverride(true);
                   } else {
                     setShowPostConfirm(true);
                   }
@@ -316,7 +375,7 @@ export default function BillDetailPage() {
                 Post bill
               </Button>
             )}
-            {canRecordPayment && can('accounting.bills.pay') && (
+            {bill.available_actions?.record_payment === true && (
               <Button
                 variant="primary"
                 size="sm"
@@ -331,19 +390,16 @@ export default function BillDetailPage() {
                 Record payment
               </Button>
             )}
-            {bill.amount_paid === '0.00' &&
-              bill.status !== 'cancelled' &&
-              !bill.supplier_invoice_number &&
-              can('accounting.bills.update') && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon={<LuBan size={14} />}
-                  onClick={() => setShowCancelConfirm(true)}
-                >
-                  Cancel
-                </Button>
-              )}
+            {bill.available_actions?.cancel === true && (
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<LuBan size={14} />}
+                onClick={() => setShowCancelConfirm(true)}
+              >
+                Cancel
+              </Button>
+            )}
           </div>
         }
       />
@@ -608,15 +664,20 @@ export default function BillDetailPage() {
                       </span>
                     )}
                     {/* Server decides: current step role and not the requester, not just the permission. */}
-                    {p.status === 'pending_approval' &&
-                      (p.can_decide ?? can('accounting.bills.payment_approve')) && (
+                    {p.status === 'pending_approval' && p.can_decide === true && (
                         <span className="flex gap-1">
                           {bill.status !== 'cancelled' && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => approvePaymentMut.mutate(p.id)}
+                              disabled={isFetching || isError || approvePaymentMut.isPending}
+                              onClick={() => {
+                                const current = bill.payments?.find((payment) => payment.id === p.id);
+                                if (!isFetching && !isError && bill.status !== 'cancelled' && current?.status === 'pending_approval' && current.can_decide === true) {
+                                  approvePaymentMut.mutate(p.id);
+                                }
+                              }}
                               loading={approvePaymentMut.isPending}
                             >
                               Approve
@@ -626,7 +687,8 @@ export default function BillDetailPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => setPaymentToReject(p)}
+                            disabled={isFetching || isError || rejectPaymentMut.isPending}
+                            onClick={() => rejectPaymentActionTarget.open(p)}
                             loading={rejectPaymentMut.isPending}
                           >
                             Reject
@@ -639,7 +701,8 @@ export default function BillDetailPage() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => setPaymentToVoid(p)}
+                          onClick={() => voidPaymentActionTarget.open(p)}
+                          disabled={isFetching || isError || voidPaymentMut.isPending}
                         >
                           Void
                         </Button>
@@ -886,13 +949,23 @@ export default function BillDetailPage() {
       />
 
       <ReasonDialog
-        isOpen={paymentToReject !== null}
+        isOpen={rejectPaymentActionTarget.targetId !== null}
         onClose={() => {
-          if (!rejectPaymentMut.isPending) setPaymentToReject(null);
+          if (!rejectPaymentMut.isPending) rejectPaymentActionTarget.close();
         }}
-        onConfirm={(reason) => rejectPaymentMut.mutate(reason)}
+        onConfirm={(remarks) => {
+          if (canRejectPayment && paymentToReject) {
+            rejectPaymentMut.mutate({ paymentId: paymentToReject.id, remarks });
+          }
+        }}
         title="Reject payment request?"
-        description={bill.status === 'cancelled'
+        description={!canRejectPayment
+          ? rejectPaymentActionTarget.isChecking
+            ? 'Checking the current payment decision…'
+            : rejectPaymentActionTarget.isUnverified
+              ? 'The current payment state could not be verified. Retry the bill before continuing.'
+              : 'This payment is no longer eligible for rejection.'
+          : bill.status === 'cancelled'
           ? 'Rejecting this request will close the pending payment while keeping the bill cancelled.'
           : 'The payment will not post and the bill will remain open.'}
         reasonLabel="Rejection reason"
@@ -901,24 +974,36 @@ export default function BillDetailPage() {
         confirmLabel="Reject payment"
         variant="danger"
         pending={rejectPaymentMut.isPending}
+        disabled={!canRejectPayment}
       />
 
       <ReasonDialog
-        isOpen={paymentToVoid !== null}
+        isOpen={voidPaymentActionTarget.targetId !== null}
         onClose={() => {
-          if (!voidPaymentMut.isPending) setPaymentToVoid(null);
+          if (!voidPaymentMut.isPending) voidPaymentActionTarget.close();
         }}
-        onConfirm={(reason) => voidPaymentMut.mutate(reason)}
+        onConfirm={(reason) => {
+          if (canVoidPayment && paymentToVoid) {
+            voidPaymentMut.mutate({ paymentId: paymentToVoid.id, reason });
+          }
+        }}
         title={
           paymentToVoid ? `Void payment of ${formatPeso(paymentToVoid.amount)}?` : 'Void payment?'
         }
-        description="This reverses the payment journal, preserves the original payment in the audit trail, and recalculates the bill balance."
+        description={canVoidPayment
+          ? 'This reverses the payment journal, preserves the original payment in the audit trail, and recalculates the bill balance.'
+          : voidPaymentActionTarget.isChecking
+            ? 'Checking the current payment and void eligibility…'
+            : voidPaymentActionTarget.isUnverified
+              ? 'The current payment state could not be verified. Retry the bill before continuing.'
+              : 'This payment is no longer eligible for voiding.'}
         reasonLabel="Void reason"
         reasonPlaceholder="e.g. Bank transfer was rejected and will be reissued."
         minLength={3}
         confirmLabel="Void payment"
         variant="danger"
         pending={voidPaymentMut.isPending}
+        disabled={!canVoidPayment}
       />
 
       <ReasonDialog

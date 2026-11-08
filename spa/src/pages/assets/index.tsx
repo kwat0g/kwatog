@@ -17,22 +17,27 @@ import { formatPeso } from '@/lib/formatNumber';
 import { DepreciationRunner } from './DepreciationRunner';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const STATUS_CHIP: Record<AssetStatus, 'success' | 'warning' | 'neutral'> = {
  active: 'success',
  under_maintenance: 'warning',
  disposed: 'neutral' };
 
 export default function AssetsListPage() {
+ useRealtimeList('asset', 'visible');
  const navigate = useNavigate();
  const { can } = usePermission();
  const [filters, setFilters] = useUrlFilters<AssetListParams>({ page: 1, per_page: 25 });
  // Depreciation folded here 2026-08-08 (was /admin/depreciation). Same gate.
  const [showDepreciation, setShowDepreciation] = useState(false);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['assets', filters],
+  const queryKey = ['assets', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => assetsApi.list(filters),
- placeholderData: (prev) => prev });
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 1) ? previous : undefined });
  const { data: assetOptions } = useQuery({
  queryKey: ['assets', 'options'],
  queryFn: assetsApi.options,

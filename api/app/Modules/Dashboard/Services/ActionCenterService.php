@@ -49,11 +49,16 @@ class ActionCenterService
         );
     }
 
-    /** @return array{items: array<int, array<string, mixed>>, summary: array<string, mixed>, generated_at: string} */
+    /** @return array{items: array<int, array<string, mixed>>, summary: array<string, mixed>, generated_at: string, next_transition_at: string|null} */
     public function for(User $user): array
     {
         $items = [];
         $failedSources = [];
+        $nextTransitionAt = null;
+
+        if ($user->hasPermission('production.work_orders.view')) {
+            $this->considerTransition($nextTransitionAt, $this->nextProductionDeadline());
+        }
 
         $this->append($items, $failedSources, 'alerts', fn () => $this->alertItems(), $user, ['alerts.view']);
         // Source gates mirror the owning module's READ routes exactly, so the
@@ -74,7 +79,7 @@ class ActionCenterService
         $this->append($items, $failedSources, 'production', fn () => $this->productionItems(), $user, ['production.work_orders.view']);
         $this->append($items, $failedSources, 'deliveries', fn () => $this->deliveryItems(), $user, ['supply_chain.view', 'supply_chain.deliveries.view']);
 
-        $items = $this->overlayTaskState($items);
+        $items = $this->overlayTaskState($items, $nextTransitionAt);
 
         usort($items, function (array $a, array $b): int {
             $rank = ['critical' => 0, 'high' => 1, 'medium' => 2, 'low' => 3];
@@ -84,6 +89,13 @@ class ActionCenterService
         });
 
         $items = array_slice($items, 0, $this->settings->requiredInt('dashboard.action_center.max_items', 1, 1000));
+        foreach ($items as &$item) {
+            $this->considerTransition($nextTransitionAt, $item['due_at'] ?? null);
+            $this->considerTransition($nextTransitionAt, $item['priority_change_at'] ?? null);
+            unset($item['priority_change_at']);
+        }
+        unset($item);
+
         $byCategory = [];
         foreach ($items as $item) {
             $byCategory[$item['category']] = ($byCategory[$item['category']] ?? 0) + 1;
@@ -101,13 +113,14 @@ class ActionCenterService
                 'by_category' => $byCategory,
             ],
             'generated_at' => now()->toIso8601String(),
+            'next_transition_at' => $nextTransitionAt?->toIso8601String(),
             'category_options' => $this->categoryOptions(),
             'meta' => ['failed_sources' => array_values($failedSources)],
         ];
     }
 
     /** @param array<int, array<string, mixed>> $items @return array<int, array<string, mixed>> */
-    private function overlayTaskState(array $items): array
+    private function overlayTaskState(array $items, ?Carbon &$nextTransitionAt): array
     {
         if ($items === []) {
             return [];
@@ -132,6 +145,9 @@ class ActionCenterService
              * somebody acts on it again.
              */
             $hideStale = $hidden && $this->recordChangedAfterHide($task, $item);
+            if ($task?->state === 'snoozed' && ! $hideStale) {
+                $this->considerTransition($nextTransitionAt, $task->snoozed_until?->toIso8601String());
+            }
             if ($hidden && ! $hideStale) {
                 continue;
             }
@@ -174,6 +190,18 @@ class ActionCenterService
         }
 
         return $visible;
+    }
+
+    private function considerTransition(?Carbon &$current, mixed $timestamp): void
+    {
+        if (! is_string($timestamp) || $timestamp === '') {
+            return;
+        }
+
+        $candidate = Carbon::parse($timestamp);
+        if ($candidate->isFuture() && ($current === null || $candidate->lt($current))) {
+            $current = $candidate;
+        }
     }
 
     /** @param array<string, mixed> $item */
@@ -255,7 +283,11 @@ class ActionCenterService
                     updatedAt: $inspection->updated_at?->toIso8601String(), dueAt: null,
                     overdue: $age >= $slaHours,
                     owner: $inspection->inspector?->name,
-                );
+                ) + [
+                    'priority_change_at' => $age < $slaHours
+                        ? $inspection->created_at?->copy()->addHours($slaHours)->toIso8601String()
+                        : null,
+                ];
             })->all();
     }
 
@@ -353,6 +385,18 @@ class ActionCenterService
         };
     }
 
+    private function nextProductionDeadline(): ?string
+    {
+        $deadline = WorkOrder::query()
+            ->whereIn('status', ['confirmed', 'in_progress'])
+            ->whereNotNull('planned_end')
+            ->where('planned_end', '>', now())
+            ->orderBy('planned_end')
+            ->value('planned_end');
+
+        return $deadline === null ? null : Carbon::parse((string) $deadline)->toIso8601String();
+    }
+
     /** @return array<int, array<string, mixed>> */
     private function productionItems(): array
     {
@@ -375,7 +419,11 @@ class ActionCenterService
                     createdAt: $workOrder->created_at?->toIso8601String(),
                     updatedAt: $workOrder->updated_at?->toIso8601String(),
                     dueAt: $workOrder->planned_end?->toIso8601String(), overdue: true, owner: null,
-                );
+                ) + [
+                    'priority_change_at' => $hours < $criticalHours
+                        ? $workOrder->planned_end?->copy()->addHours($criticalHours)->toIso8601String()
+                        : null,
+                ];
             })->all();
     }
 

@@ -11,6 +11,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Modules\Inventory\Enums\StockCountSessionStatus;
+use App\Modules\Inventory\Exceptions\StockCountStateConflictException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockCountItem;
@@ -45,6 +46,7 @@ class StockCountService
         $session = StockCountSession::with([
             'items.location.zone.warehouse',
             'items.item',
+            'items.session',
             'items.counter',
             'items.verifier',
             'warehouse',
@@ -125,7 +127,7 @@ class StockCountService
         return DB::transaction(function () use ($id) {
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
             if ($session->status !== StockCountSessionStatus::Draft) {
-                throw new BusinessRuleException('Session must be in draft status to start.');
+                throw new StockCountStateConflictException('This stock-count session is no longer a draft. Refresh and review its current status.');
             }
 
             $locations = $this->locationsFor($session)
@@ -191,7 +193,7 @@ class StockCountService
                 'frozen_at' => now(),
             ]);
 
-            return $session->fresh()->load(['warehouse', 'zone', 'items.location', 'items.item']);
+            return $session->fresh()->load(['warehouse', 'zone', 'items.location', 'items.item', 'items.session']);
         });
     }
 
@@ -205,7 +207,7 @@ class StockCountService
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($sessionId);
             $item = StockCountItem::query()->lockForUpdate()->findOrFail($itemId);
             if ($session->status !== StockCountSessionStatus::InProgress) {
-                throw new BusinessRuleException('Session is not in progress.');
+                throw new StockCountStateConflictException('This stock-count session is no longer in progress. Refresh and review its current status.');
             }
 
             $baseItem = Item::withTrashed()->findOrFail($item->item_id);
@@ -236,7 +238,7 @@ class StockCountService
                 ->count();
             $session->update(['counted_locations' => $counted]);
 
-            return $item->fresh()->load(['location', 'item', 'counter']);
+            return $item->fresh()->load(['location', 'item', 'counter', 'session']);
         });
     }
 
@@ -282,10 +284,10 @@ class StockCountService
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($sessionId);
             $item = StockCountItem::query()->lockForUpdate()->findOrFail($itemId);
             if ($session->status !== StockCountSessionStatus::InProgress) {
-                throw new BusinessRuleException('Session is not in progress.');
+                throw new StockCountStateConflictException('This stock-count session is no longer in progress. Refresh and review its current status.');
             }
             if ($item->status !== StockCountItemStatus::Counted) {
-                throw new BusinessRuleException('Item must be counted first.');
+                throw new StockCountStateConflictException('This count line is no longer awaiting variance approval. Refresh and review its current status.');
             }
             if (! ApprovalDelegation::canActForPermission($user, 'inventory.stock_count.manage', array_values(array_filter([
                 (int) $item->counted_by,
@@ -305,7 +307,7 @@ class StockCountService
             $item->verified_by = $user->id;
             $item->save();
 
-            return $item->fresh()->load(['location', 'item', 'verifier']);
+            return $item->fresh()->load(['location', 'item', 'verifier', 'session']);
         });
     }
 
@@ -314,7 +316,7 @@ class StockCountService
         return DB::transaction(function () use ($id, $user) {
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
             if ($session->status !== StockCountSessionStatus::InProgress) {
-                throw new BusinessRuleException('Session must be in progress to complete.');
+                throw new StockCountStateConflictException('This stock-count session is no longer in progress. Refresh and review its current status.');
             }
             if ((int) $session->created_by === (int) $user->id) {
                 throw new BusinessRuleException('A different user must complete and approve this stock-count session.');
@@ -402,7 +404,7 @@ class StockCountService
             // adjustments already posted.
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
             if (in_array($session->status, [StockCountSessionStatus::Completed, StockCountSessionStatus::Cancelled], true)) {
-                throw new BusinessRuleException('Session already completed or cancelled.');
+                throw new StockCountStateConflictException('This stock-count session is already completed or cancelled. Refresh and review its current status.');
             }
             $session->update(['status' => StockCountSessionStatus::Cancelled->value]);
 

@@ -20,7 +20,7 @@ use App\Modules\MRP\Events\MoldShotLimitReached;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MoldHistory;
-use App\Modules\Production\Services\ProductionDashboardService;
+use App\Modules\Production\Services\AssignedWorkOrderRefreshService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -64,7 +64,7 @@ class MoldService
 
     public function show(Mold $m): Mold
     {
-        return $m->load([
+        return $m->loadCount('compatibleMachines')->load([
             'product:id,part_number,name,unit_of_measure',
             'compatibleMachines:id,machine_code,name,tonnage',
             'asset:id,asset_code,name',
@@ -82,13 +82,11 @@ class MoldService
                 'event_date' => now()->toDateString(),
                 'shot_count_at_event' => 0,
             ]);
-            $mold = $mold->fresh()->load('product:id,part_number,name,unit_of_measure');
+            $mold = $this->show($mold->fresh());
             $this->ensureShotMaintenanceSchedule($mold);
 
             return $mold;
         });
-
-        ProductionDashboardService::forgetCache();
 
         return $mold;
     }
@@ -102,9 +100,8 @@ class MoldService
             }
             $m->update($data);
 
-            return $m->fresh()->load('product:id,part_number,name,unit_of_measure');
+            return $this->show($m->fresh());
         });
-        ProductionDashboardService::forgetCache();
 
         return $mold;
     }
@@ -125,7 +122,18 @@ class MoldService
 
             $mold->delete();
         });
-        ProductionDashboardService::forgetCache();
+    }
+
+    public function restore(Mold $m): Mold
+    {
+        return DB::transaction(function () use ($m): Mold {
+            $mold = Mold::query()->withTrashed()->lockForUpdate()->findOrFail($m->id);
+            if ($mold->trashed()) {
+                $mold->restore();
+            }
+
+            return $this->show($mold->fresh());
+        });
     }
 
     /**
@@ -139,11 +147,19 @@ class MoldService
             if ($m->current_work_order_id) {
                 throw new BusinessRuleException('Release the installed mold before changing compatibility.');
             }
+            $previousMachineIds = $m->compatibleMachines()->pluck('machines.id')->map(static fn ($id): int => (int) $id)->all();
             $m->compatibleMachines()->sync($machineIds);
+            app(AssignedWorkOrderRefreshService::class)->stageForMold((int) $m->getKey());
+            // The pivot update has no Eloquent model events. Touch the mold
+            // aggregate and explicitly ping old/new machine detail viewers.
+            $m->touch();
+            $changedMachineIds = array_unique(array_merge($previousMachineIds, array_map('intval', $machineIds)));
+            foreach (Machine::query()->whereIn('id', $changedMachineIds)->get() as $machine) {
+                app(MachineRealtimeService::class)->stage($machine, 'updated');
+            }
 
             return $this->show($m->fresh());
         });
-        ProductionDashboardService::forgetCache();
 
         return $mold;
     }
@@ -192,8 +208,6 @@ class MoldService
 
         [$row, $beforePct] = $fresh;
 
-        ProductionDashboardService::forgetCache();
-
         return $row;
     }
 
@@ -224,7 +238,6 @@ class MoldService
 
             return $m->fresh();
         });
-        ProductionDashboardService::forgetCache();
 
         return $mold;
     }
@@ -260,7 +273,6 @@ class MoldService
 
             return $m->fresh();
         });
-        ProductionDashboardService::forgetCache();
 
         return $mold;
     }
@@ -305,7 +317,6 @@ class MoldService
 
             return $m->fresh();
         });
-        ProductionDashboardService::forgetCache();
 
         return $mold;
     }
@@ -338,7 +349,6 @@ class MoldService
 
             return $m->fresh();
         });
-        ProductionDashboardService::forgetCache();
 
         return $mold;
     }

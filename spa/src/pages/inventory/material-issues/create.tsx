@@ -23,6 +23,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { localIsoDate } from '@/lib/formatDate';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 const itemSchema = z.object({
   item_id: z.string().min(1, 'Item required'),
   location_id: z.string().min(1, 'Location required'),
@@ -279,9 +280,16 @@ export default function CreateMaterialIssuePage() {
         idempotencyKey.current,
       ),
     onSuccess: (slip) => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'material-issues'] });
+      qc.setQueryData(['inventory', 'material-issues', slip.id], slip);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'material_issue_slip', entityId: slip.id },
+        [],
+        [['inventory', 'material-issues', slip.id]],
+      );
       toast.success(`Material issue ${slip.slip_number} created.`);
-      nav(`/inventory/material-issues/${slip.id}`);
+            safety.allowNavigationAfterSave();
+nav(`/inventory/material-issues/${slip.id}`);
     },
     onError: (e) => {
       applyServerValidationErrors(e, setError, 'Failed to record the material issue.');

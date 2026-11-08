@@ -18,15 +18,19 @@ use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
+use App\Modules\Purchasing\Exceptions\PurchaseRequestStateConflictException;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -45,12 +49,59 @@ class PurchaseRequestService
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
+        $approvalRoleSlugs = $user !== null ? $this->access->approvalRoleSlugs($user) : [];
+        $approvalDepartmentId = in_array('department_head', $approvalRoleSlugs, true)
+            ? $user?->employee?->department_id
+            : null;
+
         $q = PurchaseRequest::query()->with([
             'requester:id,name,role_id',
             'department:id,name,code',
             'items.item:id,code,name,unit_of_measure',
             'items.suggestedVendor:id,name',
             'approvalRecords',
+        ])->withExists([
+            // Keep the list action projection set-based: don't load every PO/RFQ
+            // or issue one existence query per Purchase Request row.
+            'purchaseOrders as has_live_purchase_order' => fn (Builder $orders) => $orders
+                ->where('status', '<>', PurchaseOrderStatus::Cancelled->value),
+            'rfqs as has_active_rfq' => fn (Builder $rfqs) => $rfqs
+                ->whereIn('status', RfqStatus::active()),
+            'rfqs as has_handed_back_rfq' => fn (Builder $rfqs) => $rfqs
+                ->whereIn('status', [RfqStatus::Awarded->value, RfqStatus::Cancelled->value]),
+            'approvalRecords as has_actionable_approval' => function (Builder $records) use ($approvalRoleSlugs, $approvalDepartmentId): void {
+                if ($approvalRoleSlugs === []) {
+                    $records->whereRaw('1 = 0');
+
+                    return;
+                }
+
+                $otherRoles = array_values(array_diff($approvalRoleSlugs, ['department_head']));
+                $records->where('action', 'pending')
+                    ->where(function (Builder $roles) use ($otherRoles, $approvalRoleSlugs, $approvalDepartmentId): void {
+                        if ($otherRoles !== []) {
+                            $roles->whereIn('role_slug', $otherRoles);
+                        }
+
+                        if (in_array('department_head', $approvalRoleSlugs, true)) {
+                            $departmentStep = static function (Builder $department) use ($approvalDepartmentId): void {
+                                $department->where('role_slug', 'department_head')
+                                    ->where(function (Builder $scope) use ($approvalDepartmentId): void {
+                                        $scope->whereNull('purchase_requests.department_id');
+                                        if ($approvalDepartmentId !== null) {
+                                            $scope->orWhere('purchase_requests.department_id', $approvalDepartmentId);
+                                        }
+                                    });
+                            };
+
+                            if ($otherRoles !== []) {
+                                $roles->orWhere($departmentStep);
+                            } else {
+                                $roles->where($departmentStep);
+                            }
+                        }
+                    });
+            },
         ]);
 
         TrashedFilter::apply($q, $filters);
@@ -78,12 +129,12 @@ class PurchaseRequestService
         }
 
         if (($filters['signal'] ?? null) === 'awaiting_my_approval' && $user !== null) {
-            $this->access->awaitingMyApproval($q, $user);
+            $this->access->awaitingMyApproval($q, $user, $approvalRoleSlugs);
         } else {
-            $this->access->visibleTo($q, $user);
+            $this->access->visibleTo($q, $user, $approvalRoleSlugs);
         }
 
-        return $q->orderByDesc('date')->orderByDesc('id')
+        return $q->orderByDesc('created_at')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
@@ -225,6 +276,13 @@ class PurchaseRequestService
                 ]);
             }
 
+            app(ChainBroadcaster::class)->broadcastFor(
+                $pr->fresh(),
+                PurchaseRequestStatus::Draft->value,
+                $by,
+                action: 'created',
+            );
+
             return $this->show($pr);
         });
     }
@@ -344,6 +402,15 @@ class PurchaseRequestService
                 }
             }
 
+            if ($locked->wasChanged() || array_key_exists('items', $data)) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $locked->fresh(),
+                    PurchaseRequestStatus::Draft->value,
+                    $by,
+                    action: 'updated',
+                );
+            }
+
             return $this->show($locked->fresh());
         });
     }
@@ -364,7 +431,7 @@ class PurchaseRequestService
      */
     public function submit(PurchaseRequest $pr, ?User $by = null): PurchaseRequest
     {
-        if ($by !== null && ! $this->access->canManageDraft($by, $pr)) {
+        if ($by !== null && ! $this->access->canManageRequest($by, $pr)) {
             throw new ForbiddenActionException('You do not have permission to submit this purchase request.');
         }
 
@@ -373,7 +440,7 @@ class PurchaseRequestService
             // can both pass a stale draft check and recreate approval records.
             $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
             if ($locked->status !== PurchaseRequestStatus::Draft) {
-                throw new BusinessRuleException('Only draft PRs can be submitted.');
+                throw new PurchaseRequestStateConflictException('This purchase request is no longer a draft. Refresh and review its current status.');
             }
             if ($locked->sourcing_method === null) {
                 throw new BusinessRuleException('Select a sourcing method before submitting this purchase request.');
@@ -493,7 +560,23 @@ class PurchaseRequestService
             throw new ForbiddenActionException('You do not have permission to acknowledge this purchase request budget warning.');
         }
 
-        return $this->budget->acknowledge($pr, $by);
+        return DB::transaction(function () use ($pr, $by): PurchaseRequest {
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
+            if (! $this->access->canAcknowledgeBudget($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to acknowledge this purchase request budget warning.');
+            }
+
+            /** @var PurchaseRequest $fresh */
+            $fresh = $this->budget->acknowledge($locked, $by);
+            app(ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                $fresh->status?->value ?? PurchaseRequestStatus::Draft->value,
+                $by,
+                action: 'updated',
+            );
+
+            return $fresh;
+        });
     }
 
     public function approve(PurchaseRequest $pr, User $by, ?string $remarks = null): PurchaseRequest
@@ -505,7 +588,7 @@ class PurchaseRequestService
             // duplicate the approval outbox event.
             $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
             if ($locked->status !== PurchaseRequestStatus::Pending) {
-                throw new BusinessRuleException('Only pending PRs can be approved.');
+                throw new PurchaseRequestStateConflictException('This purchase request is no longer pending approval. Refresh and review its current status.');
             }
             $this->assertMayDecide($by, $locked, 'approve');
             $this->budget->assertAcknowledged($locked);
@@ -516,7 +599,15 @@ class PurchaseRequestService
                 return $this->markApproved($locked, $by);
             }
 
-            return $locked->fresh();
+            $fresh = $locked->fresh();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                PurchaseRequestStatus::Pending->value,
+                $by,
+                action: 'updated',
+            );
+
+            return $fresh;
         });
     }
 
@@ -570,6 +661,14 @@ class PurchaseRequestService
                 'po_conversion_at' => $locked->status === PurchaseRequestStatus::Approved ? now() : $locked->po_conversion_at,
             ])->save();
             $fresh = $locked->fresh();
+            if ($locked->wasChanged()) {
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $fresh,
+                    $fresh->status?->value ?? PurchaseRequestStatus::Draft->value,
+                    $by,
+                    action: 'updated',
+                );
+            }
             if ($fresh->status === PurchaseRequestStatus::Approved && $method === PurchaseRequestSourcingMethod::DirectPo) {
                 $this->outbox->record(new PurchaseRequestApproved($fresh), 'purchase-request:'.$fresh->id.':direct-po-selected');
             }
@@ -651,7 +750,7 @@ class PurchaseRequestService
             // an approval that concurrently committed.
             $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
             if ($locked->status !== PurchaseRequestStatus::Pending) {
-                throw new BusinessRuleException('Only pending PRs can be rejected.');
+                throw new PurchaseRequestStateConflictException('This purchase request is no longer pending approval. Refresh and review its current status.');
             }
             $this->assertMayDecide($by, $locked, 'reject');
             $this->approvals->reject($locked, $by, $reason);
@@ -670,7 +769,7 @@ class PurchaseRequestService
 
     public function cancel(PurchaseRequest $pr, ?User $by = null): PurchaseRequest
     {
-        if ($by !== null && ! $this->access->canCancel($by, $pr)) {
+        if ($by !== null && ! $this->access->canManageRequest($by, $pr)) {
             throw new ForbiddenActionException('You do not have permission to cancel this purchase request.');
         }
 
@@ -679,7 +778,7 @@ class PurchaseRequestService
             // approval and cancel an already-approved PR.
             $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
             if (! in_array($locked->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::Pending], true)) {
-                throw new BusinessRuleException('Cannot cancel a PR in this status.');
+                throw new PurchaseRequestStateConflictException('This purchase request can no longer be cancelled. Refresh and review its current status.');
             }
             if ($by !== null && ! $this->access->canCancel($by, $locked)) {
                 throw new ForbiddenActionException('You do not have permission to cancel this purchase request.');
@@ -721,6 +820,41 @@ class PurchaseRequestService
                 throw new ForbiddenActionException('You do not have permission to delete this purchase request.');
             }
             $locked->delete();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $locked,
+                PurchaseRequestStatus::Draft->value,
+                $by,
+                action: 'deleted',
+            );
+        });
+    }
+
+    public function restore(PurchaseRequest $pr, ?User $by = null): PurchaseRequest
+    {
+        return DB::transaction(function () use ($pr, $by): PurchaseRequest {
+            $locked = PurchaseRequest::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($pr->getKey());
+            if (! $locked->trashed()) {
+                throw new BusinessRuleException('Only deleted purchase requests can be restored.');
+            }
+            if ($locked->status !== PurchaseRequestStatus::Draft) {
+                throw new BusinessRuleException('Only deleted draft purchase requests can be restored.');
+            }
+            if ($by !== null && ! $this->access->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to restore this purchase request.');
+            }
+
+            $locked->restore();
+            $fresh = $locked->fresh();
+            app(ChainBroadcaster::class)->broadcastFor(
+                $fresh,
+                PurchaseRequestStatus::Draft->value,
+                $by,
+                action: 'restored',
+            );
+
+            return $fresh;
         });
     }
 

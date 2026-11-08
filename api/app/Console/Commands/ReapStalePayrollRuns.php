@@ -7,7 +7,6 @@ namespace App\Console\Commands;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollPeriodService;
-use App\Modules\Payroll\Services\PayrollProgressTracker;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -39,7 +38,7 @@ class ReapStalePayrollRuns extends Command
 
     protected $description = 'Release payroll periods wedged at Processing by a crashed compute worker';
 
-    public function handle(PayrollPeriodService $periods, PayrollProgressTracker $progress): int
+    public function handle(PayrollPeriodService $periods): int
     {
         // The service floors this above ProcessPayrollJob's timeout so a
         // healthy long run is never reclaimed out from under its own worker.
@@ -55,7 +54,7 @@ class ReapStalePayrollRuns extends Command
                 // A null stamp means the claim predates processing_started_at
                 // tracking — treat it as stale rather than wedging it forever.
                 $q->where('processing_started_at', '<', $threshold)
-                  ->orWhereNull('processing_started_at');
+                    ->orWhereNull('processing_started_at');
             })
             ->get();
 
@@ -75,8 +74,6 @@ class ReapStalePayrollRuns extends Command
                     continue;
                 }
 
-                $progress->forget($released);
-
                 $this->line(sprintf(
                     '  Released period #%d (%s) → %s',
                     $released->id,
@@ -89,7 +86,7 @@ class ReapStalePayrollRuns extends Command
                 // One bad row must not abort the sweep.
                 Log::warning('payroll:reap-stale-runs — failed to release claim', [
                     'period_id' => $period->id,
-                    'error'     => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
             }
         }

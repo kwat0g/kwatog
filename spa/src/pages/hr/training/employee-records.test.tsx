@@ -8,6 +8,7 @@ import EmployeeTrainingRecordsPage from './employee-records';
 vi.mock('@/api/hr/employee-trainings', () => ({
   employeeTrainingsApi: { listAll: vi.fn() },
 }));
+vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeList: vi.fn() }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -26,6 +27,9 @@ beforeEach(() => {
       last_alert_level: null,
       last_alert_at: null,
       created_at: '2026-10-01T00:00:00.000Z',
+      version: '2026-10-01T00:00:00.000000+00:00',
+      permissions: { view: true, manage: false },
+      available_actions: [],
     }],
     meta: { current_page: 1, last_page: 1, per_page: 25, total: 1, from: 1, to: 1 },
     links: { first: '', last: '', prev: null, next: null },
@@ -45,8 +49,9 @@ it('loads the filtered list and opens the selected training record', async () =>
     </QueryClientProvider>,
   );
 
-  expect(await screen.findByText('Mika Tanaka')).toBeVisible();
+  const employeeCell = await screen.findByRole('cell', { name: 'Mika Tanaka' });
+  expect(employeeCell).toBeVisible();
   expect(employeeTrainingsApi.listAll).toHaveBeenCalledWith(expect.objectContaining({ signal: 'expired' }));
-  fireEvent.click(screen.getByText('Mika Tanaka'));
+  fireEvent.click(employeeCell);
   expect(await screen.findByTestId('record-detail')).toBeVisible();
 });

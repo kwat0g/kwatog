@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Chip } from '@/components/ui/Chip';
 import { forecastingApi } from '@/api/forecasting';
+import { useDemandForecastRealtime } from '@/hooks/useDemandForecastRealtime';
 import type { StockOutRisk } from '@/types/forecasting';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -37,6 +38,8 @@ const RISK_COLOR: Record<StockOutRisk, string> = {
 };
 
 export default function StockOutProjectionPage() {
+ useDemandForecastRealtime();
+
  const [horizon, setHorizon] = useState<number | undefined>(undefined);
 
  const q = useQuery({

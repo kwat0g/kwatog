@@ -185,7 +185,7 @@ class InvoiceCollectionTest extends TestCase
         $user     = $this->newUser();
         $customer = Customer::create(['name' => 'Nissan PH', 'payment_terms_days' => 30]);
         $svc      = app(InvoiceService::class);
-        $cashId   = $this->accountHashId('1010');
+        $cashId   = $this->accountHashId('1020');
 
         $invoice = $this->makeFinalizedInvoice($svc, $user, $customer, '1000.00', false);
         // total = 10000.00
@@ -203,6 +203,40 @@ class InvoiceCollectionTest extends TestCase
         $this->assertSame(InvoiceStatus::Partial, $invoice->status, 'Invoice should be Partial after partial collection.');
         $this->assertSame('4000.00', (string) $invoice->amount_paid);
         $this->assertSame('6000.00', (string) $invoice->balance, 'Balance should be total minus paid.');
+    }
+
+    public function test_finance_collection_permission_records_agreed_cash_payment_without_exception_reason(): void
+    {
+        $creator = $this->newUser();
+        $finance = User::factory()->create(['role_id' => Role::query()->where('slug', 'finance_officer')->value('id')]);
+        $customer = Customer::create(['name' => 'Honda PH', 'payment_terms_days' => 30]);
+        $order = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'created_by' => $creator->id,
+            'status' => SalesOrderStatus::Invoiced->value,
+            'payment_method' => PaymentMethod::Cash->value,
+        ]);
+        $invoice = $this->makeFinalizedInvoice(app(InvoiceService::class), $creator, $customer, salesOrder: $order);
+        $idempotencyKey = 'agreed-cash-no-reason-'.uniqid();
+
+        $collection = app(InvoiceService::class)->recordCollection($invoice, [
+            'cash_account_id' => $this->accountHashId('1010'),
+            'collection_date' => '2026-04-15',
+            'amount' => (string) $invoice->balance,
+            'payment_method' => PaymentMethod::Cash->value,
+            'idempotency_key' => $idempotencyKey,
+        ], $finance);
+        $replayed = app(InvoiceService::class)->recordCollection($invoice->fresh(), [
+            'cash_account_id' => $this->accountHashId('1010'),
+            'collection_date' => '2026-04-15',
+            'amount' => (string) $invoice->balance,
+            'payment_method' => PaymentMethod::Cash->value,
+            'idempotency_key' => $idempotencyKey,
+        ], $finance);
+
+        $this->assertSame((int) $invoice->id, (int) $collection->invoice_id);
+        $this->assertSame((int) $collection->id, (int) $replayed->id);
+        $this->assertSame(InvoiceStatus::Paid, $invoice->fresh()->status);
     }
 
     public function test_collection_replay_returns_original_collection_and_receipt(): void

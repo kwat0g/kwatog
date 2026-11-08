@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Events\DatabaseRestoreCompleted;
 use App\Common\Jobs\CreateBackupJob;
 use App\Common\Jobs\RestoreBackupJob;
 use App\Common\Models\AuditLog;
 use App\Common\Models\BackupOperation;
+use App\Common\Support\FailOpenCache;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -382,13 +384,25 @@ class BackupService
     /** @return array<string, mixed> */
     public function adoptLegacy(string $databaseFilename): array
     {
+        $store = app(BackupManifestStore::class);
         try {
-            return app(BackupManifestStore::class)->adoptLegacy($databaseFilename);
+            $alreadyAdopted = $store->find($databaseFilename) !== null;
+            $manifest = $store->adoptLegacy($databaseFilename);
         } catch (Throwable $exception) {
             throw ValidationException::withMessages([
                 'database_filename' => [$this->safeError($exception)],
             ]);
         }
+
+        if (! $alreadyAdopted) {
+            app(AdminBackupsRealtimeService::class)->signalManifest(
+                (string) ($manifest['id'] ?? $databaseFilename),
+                'created',
+                (string) ($manifest['created_at'] ?? now()->toISOString()),
+            );
+        }
+
+        return $manifest;
     }
 
     public function runBackup(string $operationId): void
@@ -510,6 +524,9 @@ class BackupService
 
         $temporaryFiles = [];
         $maintenance = false;
+        $cacheBoundaryReady = false;
+        $maintenanceCleared = false;
+        $databaseRestoreStarted = false;
         $pausedQueues = [];
         $destructiveStarted = false;
         $rollbackRequired = false;
@@ -624,6 +641,18 @@ class BackupService
                 $this->runFilesRestore($filesPath);
             }
 
+            $cacheInvalidation = app(DatabaseRestoreCacheInvalidator::class)->invalidate();
+            $failedCacheOwners = array_keys(array_filter($cacheInvalidation, static fn (bool $rotated): bool => ! $rotated));
+            $metadata['cache_invalidation'] = [
+                'owners' => $cacheInvalidation,
+                'failed' => $failedCacheOwners,
+                'at' => now()->toIso8601String(),
+            ];
+            if ($failedCacheOwners !== []) {
+                throw new \RuntimeException('Database restore cache retirement failed for: '.implode(', ', $failedCacheOwners));
+            }
+            $cacheBoundaryReady = true;
+
             $metadata['restore_phase'] = 'completed';
             $metadata['rollback_required'] = false;
             $this->persistOperation($original, self::STATUS_COMPLETED, null, $metadata);
@@ -675,6 +704,7 @@ class BackupService
             if ($maintenance && ! $rollbackRequired) {
                 try {
                     Artisan::call('up');
+                    $maintenanceCleared = ! app()->maintenanceMode()->active();
                 } catch (Throwable $exception) {
                     Log::critical('Could not leave maintenance mode after restore.', [
                         'operation_id' => $operationId,
@@ -684,6 +714,9 @@ class BackupService
             }
             if ($pausedQueues !== [] && ! $rollbackRequired) {
                 $this->resumeQueues($pausedQueues);
+            }
+            if ($cacheBoundaryReady && $maintenanceCleared && ! $rollbackRequired) {
+                $this->dispatchDatabaseRestoreCompleted($operationId);
             }
             if ($rollbackRequired) {
                 Log::critical('Restore requires operator rollback before the application can resume.', [
@@ -962,6 +995,8 @@ class BackupService
 
         $temporaryFiles = [];
         $maintenance = false;
+        $cacheBoundaryReady = false;
+        $maintenanceCleared = false;
         $pausedQueues = [];
         try {
             $databaseName = $this->validateArtifactName((string) ($databaseArtifact['name'] ?? ''), 'database');
@@ -993,6 +1028,7 @@ class BackupService
             }
             $maintenance = true;
 
+            $databaseRestoreStarted = true;
             $this->runDatabaseRestore($databasePath);
             $this->runMigrations();
             $retired = $this->retireImportedActiveOperations($operationId);
@@ -1002,6 +1038,18 @@ class BackupService
             if ($filesPath !== null) {
                 $this->runFilesRestore($filesPath);
             }
+
+            $cacheInvalidation = app(DatabaseRestoreCacheInvalidator::class)->invalidate();
+            $failedCacheOwners = array_keys(array_filter($cacheInvalidation, static fn (bool $rotated): bool => ! $rotated));
+            $metadata['cache_invalidation'] = [
+                'owners' => $cacheInvalidation,
+                'failed' => $failedCacheOwners,
+                'at' => now()->toIso8601String(),
+            ];
+            if ($failedCacheOwners !== []) {
+                throw new \RuntimeException('Database rollback cache retirement failed for: '.implode(', ', $failedCacheOwners));
+            }
+            $cacheBoundaryReady = true;
 
             $metadata['restore_phase'] = 'rolled_back';
             $metadata['rollback_required'] = false;
@@ -1041,21 +1089,48 @@ class BackupService
             throw $exception;
         } finally {
             if ($maintenance) {
-                try {
-                    Artisan::call('up');
-                } catch (Throwable $exception) {
-                    Log::critical('Could not leave maintenance mode after rollback.', [
+                if (! $databaseRestoreStarted || $cacheBoundaryReady) {
+                    try {
+                        Artisan::call('up');
+                        $maintenanceCleared = ! app()->maintenanceMode()->active();
+                    } catch (Throwable $exception) {
+                        Log::critical('Could not leave maintenance mode after rollback.', [
+                            'operation_id' => $operationId,
+                            'error' => $this->safeError($exception),
+                        ]);
+                    }
+                } else {
+                    Log::critical('Rollback left the application in maintenance mode because cache retirement did not complete.', [
                         'operation_id' => $operationId,
-                        'error' => $this->safeError($exception),
                     ]);
                 }
             }
-            if ($pausedQueues !== []) {
+            $cacheBoundaryFailedAfterRestore = $databaseRestoreStarted && ! $cacheBoundaryReady;
+            if ($pausedQueues !== [] && ! $cacheBoundaryFailedAfterRestore) {
                 $this->resumeQueues($pausedQueues);
+            }
+            if ($cacheBoundaryReady && $maintenanceCleared) {
+                $this->dispatchDatabaseRestoreCompleted($operationId);
             }
             foreach ($temporaryFiles as $temporaryFile) {
                 @unlink($temporaryFile);
             }
+        }
+    }
+
+    private function dispatchDatabaseRestoreCompleted(string $operationId): void
+    {
+        try {
+            app(OutboxService::class)->record(
+                new DatabaseRestoreCompleted,
+                dedupeKey: 'database-restore-completed:'.$operationId,
+                publishInlineAfterCommit: true,
+            );
+        } catch (Throwable $exception) {
+            Log::critical('Database restore completion signal could not be staged for connected clients.', [
+                'operation_id' => $operationId,
+                'exception' => $exception::class,
+            ]);
         }
     }
 
@@ -1964,10 +2039,12 @@ class BackupService
 
         // Cache::remember treats a null hit as a miss, so a missing object would
         // re-shell on every poll. Wrap the verdict instead of the payload.
-        $probe = Cache::remember(
+        $probe = FailOpenCache::remember(
+            Cache::store(),
             'backup:remote-artifact:'.sha1($location['bucket'].'/'.$location['key']),
             now()->addSeconds((int) config('backup.remote_probe_cache_seconds', 120)),
             fn (): array => ['metadata' => $this->headRemoteArtifact($location)],
+            'backup.remote_artifact_metadata',
         );
 
         return is_array($probe['metadata'] ?? null) ? $probe['metadata'] : null;

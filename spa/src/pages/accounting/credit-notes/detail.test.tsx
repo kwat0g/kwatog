@@ -2,10 +2,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AxiosError } from 'axios';
 import { billsApi } from '@/api/accounting/bills';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
 import { invoicesApi } from '@/api/accounting/invoices';
-import type { PaginatedResponse } from '@/types';
+import type { ApiValidationError, PaginatedResponse } from '@/types';
 import type { CreditNote, Invoice } from '@/types/accounting';
 import CreditNoteDetailPage from './detail';
 
@@ -14,7 +15,6 @@ vi.mock('@/api/accounting/credit-notes', () => ({
 }));
 vi.mock('@/api/accounting/invoices', () => ({ invoicesApi: { list: vi.fn() } }));
 vi.mock('@/api/accounting/bills', () => ({ billsApi: { list: vi.fn() } }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
 
 const creditNote = {
   id: 'credit-1',
@@ -35,6 +35,7 @@ const creditNote = {
   invoice: { id: 'paid-invoice', invoice_number: 'INV-1' },
   lines: [],
   applications: [],
+  available_actions: { can_finalize: false, can_apply: true },
 } satisfies CreditNote;
 
 const supplierCreditNote = {
@@ -45,6 +46,14 @@ const supplierCreditNote = {
   invoice: null,
   vendor: { id: 'vendor-1', name: 'Test vendor' },
   bill: { id: 'paid-bill', bill_number: 'BILL-1' },
+} satisfies CreditNote;
+
+const draftCreditNote = {
+  ...creditNote,
+  credit_note_number: null,
+  status: 'draft',
+  status_label: 'Draft',
+  available_actions: { can_finalize: true, can_apply: false },
 } satisfies CreditNote;
 
 const page = <T,>(data: T[]): PaginatedResponse<T> => ({
@@ -75,6 +84,40 @@ describe('customer credit without open invoices', () => {
     vi.clearAllMocks();
     vi.mocked(invoicesApi.list).mockResolvedValue(page<Invoice>([]));
     vi.mocked(billsApi.list).mockResolvedValue(page([]));
+  });
+
+  it('does not show stale actions that the API has disabled', async () => {
+    renderPage({
+      ...creditNote,
+      available_actions: { can_finalize: false, can_apply: false },
+    });
+
+    await screen.findByText('CN-1');
+
+    expect(screen.queryByRole('button', { name: 'Apply to invoice' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finalize + post' })).not.toBeInTheDocument();
+  });
+
+  it('keeps finalize pending until a state-conflict refetch removes the stale action', async () => {
+    const finalized = {
+      ...draftCreditNote,
+      credit_note_number: 'CN-1',
+      status: 'finalized',
+      status_label: 'Finalized',
+      available_actions: { can_finalize: false, can_apply: true },
+    } satisfies CreditNote;
+    vi.mocked(creditNotesApi.finalize).mockRejectedValue(Object.assign(new Error('Conflict'), {
+      response: { status: 409, data: { message: 'Already finalized' } },
+    }) as AxiosError<ApiValidationError>);
+
+    renderPage(draftCreditNote);
+    await screen.findByRole('button', { name: 'Finalize + post' });
+    vi.mocked(creditNotesApi.show).mockResolvedValueOnce(finalized);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Finalize + post' }));
+
+    expect(await screen.findByText('Finalized')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Finalize + post' })).not.toBeInTheDocument());
   });
 
   it.each([

@@ -48,6 +48,24 @@ class EffectiveDatedBracketsTest extends TestCase
         $this->assertSame('150.0000', (string) $in2025->first()->ee_amount);
     }
 
+    public function test_active_bracket_late_fill_stays_in_the_retired_generation(): void
+    {
+        $this->sssRow('2025-01-01', 100.00, 200.00);
+        $service = app(GovernmentContributionTableService::class);
+        $staleRows = $service->activeBrackets(ContributionAgency::Sss);
+        $oldVersion = (string) Cache::get('gov_table:sss:ver', 'legacy-v1');
+
+        // Model a reader that began before the table update but stores its old
+        // result after the invalidation generation has changed.
+        GovernmentContributionTable::query()->update(['ee_amount' => 250.00]);
+        Cache::put('gov_table:sss:ver', 'after-write', 604800);
+        Cache::put("gov_table:sss:rows-v2:v{$oldVersion}:active", $staleRows, 300);
+
+        $freshRows = $service->activeBrackets(ContributionAgency::Sss);
+
+        $this->assertSame('250.0000', (string) $freshRows->first()->ee_amount);
+    }
+
     public function test_inactive_effective_rows_are_not_used_for_payroll(): void
     {
         $this->sssRow('2024-01-01', 100.00, 200.00);

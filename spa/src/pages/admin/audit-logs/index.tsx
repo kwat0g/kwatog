@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { useNavigate } from 'react-router-dom';
 import { LuDownload } from '@/lib/icons';
 import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
@@ -16,6 +17,7 @@ import { formatInt } from '@/lib/formatNumber';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 const actionVariant: Record<string, 'success' | 'info' | 'danger' | 'neutral'> = {
  created: 'success',
  updated: 'info',
@@ -66,12 +68,15 @@ const columns: Column<AuditLogEntry>[] = [
 
 export default function AuditLogsPage() {
  const navigate = useNavigate();
+ useRealtimeSignal('admin_audit_logs_changed', 'admin.audit-logs', '.admin.audit-logs.changed');
  const [filters, setFilters] = useUrlFilters<AuditLogParams>({ page: 1, per_page: 25 });
 
+ const queryKey = ['admin', 'audit-logs', filters] as const;
  const { data, isLoading, isError } = useQuery({
- queryKey: ['admin', 'audit-logs', filters],
+ queryKey,
  queryFn: () => auditLogsApi.list(filters),
- placeholderData: (prev) => prev,
+ placeholderData: (previous, previousQuery) =>
+   sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
  });
  const { data: auditOptions } = useQuery({
  queryKey: ['admin', 'audit-logs', 'options'],

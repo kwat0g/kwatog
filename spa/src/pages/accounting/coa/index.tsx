@@ -30,7 +30,6 @@ export default function ChartOfAccountsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'accounts', 'tree'],
     queryFn: () => accountsApi.tree(),
-    placeholderData: (prev) => prev,
   });
 
   const filteredData = useMemo(() => {
@@ -115,6 +114,7 @@ export default function ChartOfAccountsPage() {
 
       <div className="px-5 pt-4">
         <FilterBar
+          values={filters}
           onSearch={(search) => setFilters((f) => ({ ...f, search }))}
           searchPlaceholder="Search account code or name..."
         />

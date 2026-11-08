@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Inventory;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Auth\Models\Role;
@@ -13,6 +14,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Events\MaterialReviewRecordChanged;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
@@ -34,6 +36,7 @@ use App\Modules\Quality\Models\NonConformanceReport;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use RuntimeException;
 use Tests\TestCase;
@@ -143,6 +146,34 @@ class QuarantineMrbTest extends TestCase
         $quar = StockLevel::where('item_id', $this->item->id)->where('location_id', $this->quarantineLoc->id)->first();
         $this->assertSame('70.000', (string) $src->quantity);
         $this->assertSame('30.000', (string) $quar->quantity);
+    }
+
+    public function test_hold_stages_a_private_mrb_refresh_signal(): void
+    {
+        $this->stock($this->sourceLoc->id, '100');
+        $by = $this->userWith('warehouse_staff');
+        $mrb = $this->svc->hold([
+            'item_id' => $this->item->id,
+            'quantity' => '30',
+            'source_location_id' => $this->sourceLoc->id,
+            'quarantine_location_id' => $this->quarantineLoc->id,
+        ], $by);
+
+        $refresh = DB::table('event_outbox')
+            ->where('event_type', 'App\\Modules\\Inventory\\Events\\MaterialReviewRecordChanged')
+            ->first();
+
+        $this->assertNotNull($refresh, 'Creating an MRB must stage its viewer refresh signal.');
+        $payload = json_decode((string) $refresh->payload, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($mrb->hash_id, $payload['entityHashId']);
+        $this->assertSame('created', $payload['action']);
+        $event = app(OutboxEventCodec::class)->decode($refresh->event_type, $payload);
+        $this->assertInstanceOf(MaterialReviewRecordChanged::class, $event);
+        $broadcast = $event->broadcastWith();
+        $this->assertSame('material_review_record', $broadcast['entity_type']);
+        $this->assertSame($mrb->hash_id, $broadcast['entity_id']);
+        $this->assertArrayNotHasKey('mrb_number', $broadcast);
+        $this->assertArrayNotHasKey('quantity', $broadcast);
     }
 
     public function test_hold_auto_resolves_quarantine_location_in_same_warehouse(): void
@@ -351,6 +382,10 @@ class QuarantineMrbTest extends TestCase
 
         $this->assertSame(MrbStatus::Scrapped, $mrb->status);
         $this->assertSame('scrap', $mrb->disposition);
+        $refresh = DB::table('event_outbox')
+            ->where('event_type', MaterialReviewRecordChanged::class)
+            ->firstOrFail();
+        $this->assertSame('status_changed', json_decode((string) $refresh->payload, true, flags: JSON_THROW_ON_ERROR)['action']);
         // Scrap is written off from quarantine; the resolved scrap location is
         // retained as the physical disposition trace, not as on-hand stock.
         $this->assertSame($this->scrapLoc->id, $mrb->release_location_id);

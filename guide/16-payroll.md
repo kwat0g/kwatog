@@ -60,15 +60,18 @@ their own work. Two sets of eyes on every peso before it leaves.
 ## 5. Compute the payroll (HR does this)
 
 1. Open your `Draft` period at `/payroll/periods/<id>`.
-2. Click **"Compute"**.
-3. Wait. The page shows **Computing…** with a progress bar.
-4. When it finishes, status becomes `Computed`.
-5. Click the **Employees** tab. Check gross, deductions, and net pay.
-6. Click any employee row to open their computation
+2. Compute is available the day after the cutoff ends. Before then, the button
+   stays disabled and shows the available date. Automatic periods follow the
+   same rule.
+3. Click **"Compute"**.
+4. Wait. The page shows **Computing…** with a progress bar.
+5. When it finishes, status becomes `Computed`.
+6. Click the **Employees** tab. Check gross, deductions, and net pay.
+7. Click any employee row to open their computation
    (`/payroll/periods/<id>/employee/<eid>`).
-7. Open the **Failures** tab. Empty = every employee computed cleanly.
-8. Open the **Anomaly review** tab. Resolve any red flags.
-9. If numbers look wrong, click **"Recompute"** and confirm.
+8. Open the **Failures** tab. Empty = every employee computed cleanly.
+9. Open the **Anomaly review** tab. Resolve any red flags.
+10. If numbers look wrong, click **"Recompute"** and confirm.
    This replaces all rows, so it asks first.
 
 ## 6. Approve the payroll (Finance does this — different person)

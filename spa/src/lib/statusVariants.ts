@@ -17,6 +17,8 @@ import type { ReturnCaseStatus } from '@/types/returnCases';
 import type { WorkOrderStatus } from '@/types/production';
 import type { DeliveryStatus, ShipmentStatus } from '@/types/supplyChain';
 import type { MaintenancePriority, MaintenanceWorkOrderStatus } from '@/types/maintenance';
+import type { MrbStatus } from '@/types/inventory';
+import type { PayrollPeriodStatus } from '@/types/payroll';
 
 type StatusVariants<Status extends string> = Partial<Record<string, ChipVariant>> & Record<Status, ChipVariant>;
 
@@ -173,6 +175,23 @@ export const moldStatusVariant: Record<MoldStatus, ChipVariant> = {
  in_use: 'category-1',
  maintenance: 'category-2',
  retired: 'neutral',
+};
+
+export const mrbStatusVariant: Record<MrbStatus, ChipVariant> = {
+ held: 'warning',
+ released: 'success',
+ scrapped: 'danger',
+ returned: 'info',
+};
+
+export const payrollPeriodStatusVariant: Record<PayrollPeriodStatus, ChipVariant> = {
+ draft: 'warning',
+ processing: 'info',
+ computed: 'info',
+ approved: 'info',
+ finalized: 'success',
+ disbursed: 'success',
+ voided: 'danger',
 };
 
 export const leaveStatusVariant: Record<LeaveStatus, ChipVariant> = {

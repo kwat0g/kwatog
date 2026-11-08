@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { FileInput } from '@/components/ui/FileInput';
 import { Textarea } from '@/components/ui/Textarea';
-import type { ReturnRequestItem } from '@/types/returnManagement';
+import type { ReturnRequest, ReturnRequestItem } from '@/types/returnManagement';
 import { returnManagementApi } from '@/api/returnManagement';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
 import { ApprovalTimeline } from '@/components/chain';
@@ -24,12 +24,13 @@ import { fromApprovalRecords } from '@/lib/approvals';
 import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw, LuCheck } from '@/lib/icons';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
-import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime, manilaIsoDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { returnRequestStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 
 const DisposeDialog = lazy(() => import('./dispose'));
 
@@ -62,7 +63,7 @@ export default function ReturnRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { can } = usePermission();
-  const roleSlug = useAuthStore((state) => state.user?.role?.slug);
+  useRealtimeRecord('return_request', id);
 
   const [confirm, setConfirm] = useState<
     'submit' | 'approve' | 'receive' | 'inspect' | 'complete' | 'cancel' | null
@@ -74,7 +75,7 @@ export default function ReturnRequestDetailPage() {
   const [receiptFinal, setReceiptFinal] = useState(true);
   const [receiptRequestKey, setReceiptRequestKey] = useState<string | null>(null);
   const [showDispose, setShowDispose] = useState(false);
-  const [splitItem, setSplitItem] = useState<ReturnRequestItem | null>(null);
+  const [splitItemId, setSplitItemId] = useState<string | null>(null);
   const [splitQuantity, setSplitQuantity] = useState('');
   const [defectProblem, setDefectProblem] = useState('');
   const [defectPhoto, setDefectPhoto] = useState<File | null>(null);
@@ -84,6 +85,7 @@ export default function ReturnRequestDetailPage() {
     data: rma,
     isLoading,
     isError,
+    isFetching,
     refetch,
   } = useQuery({
     queryKey: ['return-request', id],
@@ -151,34 +153,68 @@ export default function ReturnRequestDetailPage() {
       })
     : [];
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['return-request', id] });
+  const reconcile = (updated: ReturnRequest) => {
+    if (!id) return;
+    queryClient.setQueryData<ReturnRequest>(['return-request', id], (current) => current
+      ? { ...current, ...updated }
+      : updated);
+    void invalidateRealtimeChange(queryClient, { entityType: 'return_request', entityId: id });
+  };
 
+  const handleWorkflowError = (error: unknown, fallback: string) => {
+    if (error instanceof AxiosError && error.response?.status === 409) {
+      if (id) void invalidateRealtimeChange(queryClient, { entityType: 'return_request', entityId: id });
+      setConfirm(null);
+    }
+    toast.error(errMsg(error, fallback));
+  };
+
+  const splitItem = (rma?.items ?? []).find((item) => item.id === splitItemId) ?? null;
   const splitCountable = Boolean(splitItem?.product_id || splitItem?.item?.unit_of_measure?.trim().toUpperCase() === 'PCS');
   const splitTotal = Number(splitItem?.received_total ?? splitItem?.returned_quantity ?? 0);
-  const splitValid = /^\d+(?:\.\d{1,3})?$/.test(splitQuantity) && Number(splitQuantity) > 0 && Number(splitQuantity) < splitTotal && (!splitCountable || Number.isInteger(Number(splitQuantity)));
+  const splitCanProceed = Boolean(
+    splitItem
+    && !isFetching
+    && !isError
+    && splitItem.available_actions?.can_split === true
+    && splitTotal > 0,
+  );
+  const splitValid = splitCanProceed
+    && /^\d+(?:\.\d{1,3})?$/.test(splitQuantity)
+    && Number(splitQuantity) > 0
+    && Number(splitQuantity) < splitTotal
+    && (!splitCountable || Number.isInteger(Number(splitQuantity)));
   const splitMut = useMutation({
-    mutationFn: () => returnManagementApi.splitItem(id!, splitItem!.id, splitQuantity),
-    onSuccess: () => { invalidate(); queryClient.invalidateQueries({ queryKey: ['quality', 'inspections'] }); setSplitItem(null); setSplitQuantity(''); toast.success('Return line split. Review Quality coverage before disposition.'); },
-    onError: error => toast.error(errMsg(error, 'Could not split return line.')),
+    mutationFn: () => {
+      if (!splitItem || !splitValid || !id) {
+        throw new Error('The current return line no longer supports this split. Review the latest received quantity.');
+      }
+      return returnManagementApi.splitItem(id, splitItem.id, splitQuantity);
+    },
+    onSuccess: (updated) => { reconcile(updated); setSplitItemId(null); setSplitQuantity(''); toast.success('Return line split. Review Quality coverage before disposition.'); },
+    onError: error => {
+      if (id) void invalidateRealtimeChange(queryClient, { entityType: 'return_request', entityId: id });
+      toast.error(error instanceof Error && !(error instanceof AxiosError) ? error.message : errMsg(error, 'Could not split return line.'));
+    },
   });
 
   const submitMut = useMutation({
     mutationFn: (evidence?: FormData) => returnManagementApi.submit(id!, evidence),
     onSuccess: (updated) => {
-      invalidate();
+      reconcile(updated);
       toast.success(updated.status === 'completed' ? 'Supplier return sent. Replacement will ship against the original PO.' : 'RMA submitted for approval.');
       setConfirm(null);
       setDefectProblem('');
       setDefectPhoto(null);
       setRequiredDeliveryDate('');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to submit RMA.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to submit RMA.'),
   });
 
   const approveMut = useMutation({
     mutationFn: () => returnManagementApi.approve(id!),
     onSuccess: (updated) => {
-      invalidate();
+      reconcile(updated);
       toast.success(
         updated.status === 'pending_approval'
           ? 'Approval recorded; another approval step remains.'
@@ -186,7 +222,7 @@ export default function ReturnRequestDetailPage() {
       );
       setConfirm(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to approve RMA.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to approve RMA.'),
   });
 
   const receiveMut = useMutation({
@@ -201,20 +237,20 @@ export default function ReturnRequestDetailPage() {
       );
     },
     onSuccess: (updated) => {
-      invalidate();
+      reconcile(updated);
       toast.success(updated.status === 'received' ? 'Final receipt recorded.' : 'Partial receipt recorded.');
       setConfirm(null);
       setReceivedQty({});
       setReceiptFinal(true);
       setReceiptRequestKey(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to record receipt.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to record receipt.'),
   });
 
   const inspectMut = useMutation({
     mutationFn: () => returnManagementApi.inspect(id!),
     onSuccess: (updated) => {
-      invalidate();
+      reconcile(updated);
       toast.success(
         updated.inspection_handoff?.status === 'not_required'
           ? 'No new Quality inspection is required. Ready to record disposition.'
@@ -224,115 +260,83 @@ export default function ReturnRequestDetailPage() {
       );
       setConfirm(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to complete inspection.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to complete inspection.'),
   });
 
   const retryInspectionMut = useMutation({
     mutationFn: () => returnManagementApi.retryInspection(id!),
     onSuccess: (updated) => {
-      invalidate();
+      reconcile(updated);
       toast.success(
         updated.inspection_handoff?.status === 'manual_required'
           ? 'Quality handoff still needs attention.'
           : 'Quality inspection staged.',
       );
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to retry Quality inspection.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to retry Quality inspection.'),
   });
 
   const completeMut = useMutation({
     mutationFn: (locId: string) => returnManagementApi.complete(id!, locId),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      reconcile(updated);
       toast.success('RMA completed.');
       setConfirm(null);
       setLocationId('');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to complete RMA.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to complete RMA.'),
   });
 
   const rejectMut = useMutation({
     mutationFn: (reason: string) => returnManagementApi.reject(id!, reason),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      reconcile(updated);
       toast.success('RMA rejected.');
       setRejectOpen(false);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to reject RMA.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to reject RMA.'),
   });
 
   const cancelMut = useMutation({
     mutationFn: () => returnManagementApi.cancel(id!),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: (updated) => {
+      reconcile(updated);
       toast.success('RMA cancelled.');
       setConfirm(null);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to cancel RMA.')),
+    onError: (e) => handleWorkflowError(e, 'Failed to cancel RMA.'),
   });
 
   // 2026-08-08 — finalize the draft credit note staged from the returned lines.
   const finalizeCn = useMutation({
     mutationFn: (cnId: string) => creditNotesApi.finalize(cnId),
-    onSuccess: () => {
+    onSuccess: (creditNote) => {
+      const detailKey = ['return-request', id] as const;
+      const hasLinkedCreditNote = queryClient.getQueryData<ReturnRequest>(detailKey)?.credit_note?.id === creditNote.id;
+      if (hasLinkedCreditNote) {
+        queryClient.setQueryData<ReturnRequest>(detailKey, (current) => current?.credit_note?.id === creditNote.id
+          ? {
+              ...current,
+              credit_note: {
+                ...current.credit_note,
+                credit_note_number: creditNote.credit_note_number,
+                status: creditNote.status,
+                total_amount: creditNote.total_amount,
+              },
+            }
+          : current);
+      }
       toast.success('Credit note finalized and posted to the GL.');
       setFinalizeCnId(null);
-      invalidate();
-      queryClient.invalidateQueries({ queryKey: ['accounting', 'credit-notes'] });
+      void invalidateRealtimeChange(
+        queryClient,
+        { entityType: 'credit_note', entityId: creditNote.id },
+        [],
+        hasLinkedCreditNote ? [detailKey] : [],
+      );
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to finalize credit note.')),
   });
-
-  const availableActions = (
-    status?: string,
-  ): Array<{ key: string; label: string; variant?: 'primary' | 'danger' | 'default' }> => {
-    if (!status) return [];
-    switch (status) {
-      case 'draft':
-        return [
-          { key: 'submit', label: rma?.requires_defect_evidence ? 'Send to supplier' : 'Submit for Approval', variant: 'primary' },
-          { key: 'cancel', label: 'Cancel', variant: 'danger' },
-        ];
-      case 'pending_approval':
-        return [
-          { key: 'approve', label: 'Approve', variant: 'primary' },
-          { key: 'reject', label: 'Reject', variant: 'danger' },
-          { key: 'cancel', label: 'Cancel', variant: 'danger' },
-        ];
-      case 'approved':
-        if (rma?.requires_defect_evidence) {
-          return (rma.items ?? []).every((item) => Boolean(item.reused_incoming_inspection_id))
-            ? [{ key: 'dispose', label: 'Finish earlier supplier return', variant: 'primary' }]
-            : [];
-        }
-        return [
-          { key: 'receive', label: 'Record Receipt', variant: 'primary' },
-          { key: 'cancel', label: 'Cancel', variant: 'danger' },
-        ];
-      case 'received':
-        return [{
-          key: 'inspect',
-          label: requiresPhysicalInspection ? 'Stage Quality Handoff' : 'Continue to Disposition',
-          variant: 'primary',
-        }];
-      case 'inspected': {
-        const disposed = rma?.disposition_status === 'disposed';
-        return [
-          // Disposition decides scrap vs restock and issues the credit note;
-          // completing before it would close the RMA with neither.
-          ...(disposed || pendingReturnInspectionItems.length > 0
-            ? []
-            : [{ key: 'dispose', label: rma?.requires_defect_evidence ? 'Finish earlier supplier return' : 'Dispose Items', variant: 'primary' as const }]),
-          ...(disposed
-            && customerMrbPendingItems.length === 0
-            ? [{ key: 'complete', label: 'Complete RMA', variant: 'primary' as const }]
-            : []),
-        ];
-      }
-      default:
-        return [];
-    }
-  };
 
   const handleAction = (key: string) => {
     if (key === 'reject') {
@@ -443,28 +447,17 @@ export default function ReturnRequestDetailPage() {
   // routes them to department heads and managers, who deliberately do not
   // hold `manage`. Gating every action on `manage` hid the approve button from
   // the only people allowed to press it.
-  const canManage = can('return_management.manage');
-  const canReceive = can('return_management.receive');
-  const canInspect = can('return_management.inspect');
-  const canDispose = can('return_management.dispose');
-  const canComplete = can('return_management.complete');
-  const canApprove = can('return_management.approve');
-  const canDecide = canApprove && rma.actions?.can_approve === true;
-  const actions = availableActions(rma.status).filter((action) =>
-    action.key === 'approve' || action.key === 'reject'
-      ? canDecide
-      : action.key === 'submit' && rma.requires_defect_evidence
-        ? canManage && (roleSlug === 'purchasing_officer' || roleSlug === 'system_admin')
-      : action.key === 'receive'
-        ? canReceive
-        : action.key === 'inspect'
-          ? canInspect
-          : action.key === 'dispose'
-            ? canDispose && (!rma.requires_defect_evidence || roleSlug === 'purchasing_officer' || roleSlug === 'system_admin')
-            : action.key === 'complete'
-              ? canComplete
-              : canManage,
-  );
+  const actions = [
+    { key: 'submit', label: rma.requires_defect_evidence ? 'Send to supplier' : 'Submit for Approval', available: rma.available_actions?.can_submit, variant: 'primary' as const },
+    { key: 'approve', label: 'Approve', available: rma.available_actions?.can_approve, variant: 'primary' as const },
+    { key: 'reject', label: 'Reject', available: rma.available_actions?.can_reject, variant: 'danger' as const },
+    { key: 'receive', label: 'Record Receipt', available: rma.available_actions?.can_receive, variant: 'primary' as const },
+    { key: 'inspect', label: requiresPhysicalInspection ? 'Stage Quality Handoff' : 'Continue to Disposition', available: rma.available_actions?.can_inspect, variant: 'primary' as const },
+    { key: 'dispose', label: rma.requires_defect_evidence ? 'Finish earlier supplier return' : 'Dispose Items', available: rma.available_actions?.can_dispose, variant: 'primary' as const },
+    { key: 'complete', label: 'Complete RMA', available: rma.available_actions?.can_complete, variant: 'primary' as const },
+    { key: 'cancel', label: 'Cancel', available: rma.available_actions?.can_cancel, variant: 'danger' as const },
+  ].filter((action) => action.available === true);
+  const canRetryInspectionHandoff = rma.available_actions?.can_retry_inspection_handoff === true;
 
   // 2026-08-08 — a supplier line still needs a location at completion only when
   // it wasn't shipped at dispose (legacy RMA disposed before the change, or an
@@ -511,14 +504,14 @@ export default function ReturnRequestDetailPage() {
         backLabel="Return Management"
         actions={
           <div className="flex gap-1.5">
-            {rma.is_editable && canManage && (
+            {rma.available_actions?.can_edit === true && (
               <Link to={`/return-management/${rma.id}/edit`}>
                 <Button size="sm" variant="secondary">
                   Edit Draft
                 </Button>
               </Link>
             )}
-            {rma.inspection_handoff?.status === 'manual_required' && canInspect && (
+            {canRetryInspectionHandoff && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -688,7 +681,7 @@ export default function ReturnRequestDetailPage() {
                 {/* Same policy as the page-header retry: the action is
                     return_management.inspect, so a QC inspector is not shown a
                     retry in one placement and denied it in the other. */}
-                {canInspect && (
+                {canRetryInspectionHandoff && (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -837,7 +830,7 @@ export default function ReturnRequestDetailPage() {
                           <div className="space-y-2">
                             {inspectionsForItem(item).map(inspection => <div key={inspection.id}><Link className="font-mono text-accent hover:underline" to={`/quality/inspections/${inspection.id}`}>{inspection.inspection_number}</Link> · {inspection.status.replaceAll('_', ' ')}</div>)}
                             {item.reused_incoming_inspection_id ? <Link className="text-accent hover:underline" to={`/quality/inspections/${item.reused_incoming_inspection_id}`}>Checked incoming evidence reused</Link> : rma.inspection_handoff?.status === 'not_required' && <span className="text-muted">No new check required</span>}
-                            {['received', 'inspected'].includes(rma.status) && rma.disposition_status !== 'disposed' && !item.disposition && Number(item.received_total ?? item.returned_quantity) > 0 && can('return_management.dispose') && <Button size="sm" variant="secondary" onClick={() => { setSplitItem(item); setSplitQuantity(''); }}>Split quantity</Button>}
+                            {item.available_actions?.can_split === true && <Button size="sm" variant="secondary" onClick={() => { setSplitItemId(item.id); setSplitQuantity(''); }}>Split quantity</Button>}
                           </div>
                         </Td>
                       </tr>
@@ -1177,8 +1170,18 @@ export default function ReturnRequestDetailPage() {
         isOpen={rejectOpen}
         onClose={() => setRejectOpen(false)}
         onConfirm={(reason) => rejectMut.mutate(reason)}
+        disabled={rma.available_actions?.can_reject !== true}
         title="Reject this return request?"
-        description="The RMA is returned to the requester with your reason. Please be specific."
+        description={
+          <>
+            The RMA is returned to the requester with your reason. Please be specific.
+            {rma.available_actions?.can_reject !== true && (
+              <span role="status" className="block mt-2 text-warning-fg">
+                This RMA changed while you were deciding. Your reason is preserved; close this dialog after reviewing the refreshed status.
+              </span>
+            )}
+          </>
+        }
         reasonLabel="Rejection reason"
         reasonPlaceholder="e.g. Items were not received within the return window"
         minLength={10}
@@ -1237,12 +1240,17 @@ export default function ReturnRequestDetailPage() {
         </div>
       </Modal>
 
-      <Modal isOpen={Boolean(splitItem)} onClose={() => { if (!splitMut.isPending) setSplitItem(null); }} title="Split return line before disposition">
+      <Modal isOpen={Boolean(splitItemId)} onClose={() => { if (!splitMut.isPending) setSplitItemId(null); }} title="Split return line before disposition">
         <div className="space-y-3">
           <p className="text-sm text-muted">Separate mixed-quality goods into two lines with the same source. Received quantity stays conserved; each line receives its own disposition and Quality coverage.</p>
           <Input label="Quantity for the new line" type="number" min={splitCountable ? 1 : 0.001} max={splitTotal} step={splitCountable ? 1 : 0.001} inputMode={splitCountable ? 'numeric' : 'decimal'} value={splitQuantity} onChange={event => setSplitQuantity(event.target.value)} disabled={splitMut.isPending} helper={`Received: ${formatQuantity(splitTotal)}. Enter ${splitCountable ? 'whole pieces' : 'a quantity'} greater than zero and smaller than the received total.`} error={splitQuantity && !splitValid ? 'Enter a valid quantity smaller than the received total.' : undefined} />
+          {isFetching && <p role="status" className="text-sm text-muted">Checking the latest received quantity…</p>}
+          {!isFetching && splitItemId && !splitItem && <p role="status" className="text-sm text-warning-fg">This return line is no longer available. Review the latest return details.</p>}
+          {!isFetching && splitItem && !isError && !splitCanProceed && <p role="status" className="text-sm text-warning-fg">The current return status or disposition no longer allows splitting this line.</p>}
+          {!isFetching && isError && <p role="status" className="text-sm text-warning-fg">Could not verify the latest return data. Retry before splitting this line.</p>}
+          {!isFetching && splitItem && splitCanProceed && splitQuantity && Number(splitQuantity) >= splitTotal && <p role="status" className="text-sm text-warning-fg">The current received quantity no longer supports this split.</p>}
           {splitValid && <p className="font-mono text-sm tabular-nums">Original line: {formatQuantity(splitTotal - Number(splitQuantity))} · New line: {formatQuantity(splitQuantity)}</p>}
-          <div className="flex justify-end gap-2"><Button variant="secondary" disabled={splitMut.isPending} onClick={() => setSplitItem(null)}>Cancel</Button><Button disabled={!splitValid || splitMut.isPending} loading={splitMut.isPending} onClick={() => splitMut.mutate()}>Split line</Button></div>
+          <div className="flex justify-end gap-2"><Button variant="secondary" disabled={splitMut.isPending} onClick={() => setSplitItemId(null)}>Cancel</Button><Button disabled={!splitValid || splitMut.isPending} loading={splitMut.isPending} onClick={() => splitMut.mutate()}>Split line</Button></div>
         </div>
       </Modal>
       {/* Receive with per-line quantities */}

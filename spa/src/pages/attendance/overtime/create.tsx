@@ -111,7 +111,8 @@ export default function OvertimeCreatePage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] });
       toast.success('Overtime request submitted.');
-      navigate('/hr/attendance/overtime');
+            safety.allowNavigationAfterSave();
+navigate('/hr/attendance/overtime');
     },
     onError: (e) => {
       applyServerValidationErrors(e, setError, 'Failed to submit OT request.');

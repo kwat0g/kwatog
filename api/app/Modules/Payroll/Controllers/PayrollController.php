@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Controllers;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Resources\PayrollResource;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
 use App\Modules\Payroll\Services\PayrollPublicationPolicy;
+use App\Modules\Payroll\Services\PayslipPdfService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -39,12 +41,12 @@ class PayrollController
         $this->publication->scopePublishable($query);
 
         $hasViewAll = $user?->hasPermission('payroll.payslip.view_all') ?? false;
-        $isAdmin    = $user?->role?->slug === 'system_admin';
+        $isAdmin = $user?->role?->slug === 'system_admin';
 
         if (! $hasViewAll && ! $isAdmin) {
             $employeeId = $user?->employee_id;
             if ($user?->role?->slug === 'department_head' && $employeeId) {
-                $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
+                $deptId = Employee::query()->whereKey($employeeId)->value('department_id');
                 if ($deptId) {
                     $query->whereHas('employee', fn ($q) => $q->where('department_id', $deptId));
                 } else {
@@ -61,7 +63,9 @@ class PayrollController
 
         if ($period = $request->query('period_id')) {
             $pid = PayrollPeriod::tryDecodeHash((string) $period);
-            if ($pid) $query->where('payroll_period_id', $pid);
+            if ($pid) {
+                $query->where('payroll_period_id', $pid);
+            }
         }
 
         $this->applyListFilters($query, $request);
@@ -95,8 +99,10 @@ class PayrollController
     private function applyListFilters(Builder $query, Request $request): void
     {
         if ($empHash = $request->query('employee_id')) {
-            $eid = \App\Modules\HR\Models\Employee::tryDecodeHash((string) $empHash);
-            if ($eid) $query->where('employee_id', $eid);
+            $eid = Employee::tryDecodeHash((string) $empHash);
+            if ($eid) {
+                $query->where('employee_id', $eid);
+            }
         }
         if ($search = trim((string) $request->query('search', ''))) {
             $query->whereHas('employee', function ($employeeQuery) use ($search): void {
@@ -130,6 +136,7 @@ class PayrollController
         if (! $this->mayReadRunRows($request->user())) {
             $this->publication->assertPayrollPublishable($payroll);
         }
+
         return new PayrollResource($payroll->load(['employee.department', 'employee.position', 'period', 'deductionDetails']));
     }
 
@@ -143,22 +150,23 @@ class PayrollController
         return $user?->hasPermission('payroll.periods.view') ?? false;
     }
 
-
     public function recompute(Payroll $payroll, Request $request): PayrollResource
     {
         $this->authorizePayroll($payroll, $request);
-        $period   = $payroll->period;
+        $period = $payroll->period;
         $employee = $payroll->employee;
-        $fresh    = $this->calculator->computeForEmployee($period, $employee);
-        return new PayrollResource($fresh);
+        $fresh = $this->calculator->computeForEmployee($period, $employee);
+
+        return new PayrollResource($fresh->load(['employee.department', 'employee.position', 'period', 'deductionDetails']));
     }
 
     public function payslip(Payroll $payroll, Request $request)
     {
         $this->authorizePayroll($payroll, $request);
         $this->publication->assertPayrollPublishable($payroll);
-        /** @var \App\Modules\Payroll\Services\PayslipPdfService $svc */
-        $svc = app(\App\Modules\Payroll\Services\PayslipPdfService::class);
+        /** @var PayslipPdfService $svc */
+        $svc = app(PayslipPdfService::class);
+
         return $svc->stream($payroll, $request->user());
     }
 
@@ -166,21 +174,29 @@ class PayrollController
     {
         $user = $request->user();
         $isAdmin = $user?->role?->slug === 'system_admin';
-        $hasAll  = $user?->hasPermission('payroll.payslip.view_all') ?? false;
-        if ($isAdmin || $hasAll) return;
+        $hasAll = $user?->hasPermission('payroll.payslip.view_all') ?? false;
+        if ($isAdmin || $hasAll) {
+            return;
+        }
 
         // Payroll staff review the whole run (the period-detail drill-down).
         // They may already open the period; reading one of its rows adds no
         // exposure. The publication gate still applies to anyone without it.
-        if ($this->mayReadRunRows($user)) return;
+        if ($this->mayReadRunRows($user)) {
+            return;
+        }
 
-        if ($user?->employee_id && (int) $user->employee_id === (int) $payroll->employee_id) return;
+        if ($user?->employee_id && (int) $user->employee_id === (int) $payroll->employee_id) {
+            return;
+        }
 
         // Department head can view their own department's payrolls.
         if ($user?->role?->slug === 'department_head') {
-            $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($user->employee_id)->value('department_id');
-            $payrollDept = \App\Modules\HR\Models\Employee::query()->whereKey($payroll->employee_id)->value('department_id');
-            if ($deptId && $deptId === $payrollDept) return;
+            $deptId = Employee::query()->whereKey($user->employee_id)->value('department_id');
+            $payrollDept = Employee::query()->whereKey($payroll->employee_id)->value('department_id');
+            if ($deptId && $deptId === $payrollDept) {
+                return;
+            }
         }
 
         abort(403, 'You do not have permission to view this payroll.');

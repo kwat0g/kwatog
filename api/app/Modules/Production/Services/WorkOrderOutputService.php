@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
@@ -156,7 +157,11 @@ class WorkOrderOutputService
             } elseif (! $trial) {
                 app(InspectionService::class)->createForHeldOutput($output, $wo, $approver);
             }
-            app(OutboxService::class)->record(new WorkOrderOutputRecorded($wo->fresh(), $output->fresh()));
+            app(OutboxService::class)->record(new WorkOrderOutputRecorded(
+                $wo->fresh(),
+                $output->fresh(),
+                app(AssignedWorkOrderAudience::class)->userHashIdsFor($wo),
+            ));
 
             return $output->fresh();
         });
@@ -313,12 +318,14 @@ class WorkOrderOutputService
             ]);
             $fresh->update(['quantity_produced' => (int) $fresh->quantity_produced + $quantity]);
             $this->molds->incrementShots($mold, $quantity);
-            app(OutboxService::class)->record(new WorkOrderOutputRecorded($fresh->fresh(), $output));
+            app(OutboxService::class)->record(new WorkOrderOutputRecorded(
+                $fresh->fresh(),
+                $output,
+                app(AssignedWorkOrderAudience::class)->userHashIdsFor($fresh),
+            ));
 
             return $output;
         });
-        ProductionDashboardService::forgetCache();
-
         return $output;
     }
 
@@ -424,9 +431,12 @@ class WorkOrderOutputService
                         $workOrder, 'production', 'work_order', 'production_receipt', 'production-receipt-request:'.$output->id);
                 }
             }
-            app(OutboxService::class)->record(new WorkOrderOutputRecorded($workOrder->fresh(), $output->fresh()->load('defects.defectType')));
+            app(OutboxService::class)->record(new WorkOrderOutputRecorded(
+                $workOrder->fresh(),
+                $output->fresh()->load('defects.defectType'),
+                app(AssignedWorkOrderAudience::class)->userHashIdsFor($workOrder),
+            ));
         });
-        ProductionDashboardService::forgetCache();
     }
 
     public function trialState(WorkOrder $wo): ?array
@@ -572,7 +582,19 @@ class WorkOrderOutputService
         // durable output row and its persisted fingerprint.
         if ($idempotencyKey !== null) {
             $cacheKey = "production:idem:{$wo->id}:{$idempotencyKey}";
-            if (($outputId = Cache::get($cacheKey)) !== null) {
+            try {
+                $outputId = Cache::get($cacheKey);
+            } catch (\Throwable $exception) {
+                // The database's unique idempotency key and fingerprint remain
+                // authoritative when this performance-only lookup is offline.
+                Log::warning('Production output idempotency cache read failed; using the durable record check.', [
+                    'work_order_id' => $wo->id,
+                    'exception' => $exception::class,
+                ]);
+                $outputId = null;
+            }
+
+            if ($outputId !== null) {
                 $cached = WorkOrderOutput::query()
                     ->with('defects.defectType')
                     ->where('work_order_id', $wo->id)
@@ -846,9 +868,11 @@ class WorkOrderOutputService
             if ($repairNcr && $good > 0 && ! $fresh->usesFinishFirstQc()) {
                 app(InspectionService::class)->createForOutput($output, $fresh, User::query()->findOrFail($recordedBy));
             }
-            app(OutboxService::class)->record(
-                new WorkOrderOutputRecorded($fresh->fresh(), $eventOutput),
-            );
+            app(OutboxService::class)->record(new WorkOrderOutputRecorded(
+                $fresh->fresh(),
+                $eventOutput,
+                app(AssignedWorkOrderAudience::class)->userHashIdsFor($fresh),
+            ));
 
             if ($receiptNeedsRecovery) {
                 app(OutboxService::class)->recordForChain(
@@ -871,10 +895,17 @@ class WorkOrderOutputService
         // Cache the durable result for fast replay. The database row remains
         // authoritative after cache expiry/flush and after WO status changes.
         if ($idempotencyKey !== null) {
-            Cache::put("production:idem:{$output->work_order_id}:{$idempotencyKey}", $output->id, self::IDEMPOTENCY_TTL_SECONDS);
+            try {
+                Cache::put("production:idem:{$output->work_order_id}:{$idempotencyKey}", $output->id, self::IDEMPOTENCY_TTL_SECONDS);
+            } catch (\Throwable $exception) {
+                // A committed output must still return successfully to the
+                // acting operator; future retries check the durable row.
+                Log::warning('Production output idempotency cache write failed after commit.', [
+                    'work_order_id' => $output->work_order_id,
+                    'exception' => $exception::class,
+                ]);
+            }
         }
-
-        ProductionDashboardService::forgetCache();
 
         return $output;
     }
@@ -924,11 +955,20 @@ class WorkOrderOutputService
                     throw new BusinessRuleException('Startup trial pieces await QC disposition before finished-goods receipt.');
                 }
                 if ((int) $lockedOutput->good_count <= 0) {
+                    $handoffChanged = $lockedOutput->production_receipt_handoff_status !== ProductionReceiptHandoffStatus::NotRequired
+                        && $lockedOutput->production_receipt_handoff_status !== ProductionReceiptHandoffStatus::NotRequired->value;
+                    $handoffChanged = $handoffChanged
+                        || $lockedOutput->production_receipt_handoff_message !== null
+                        || $lockedOutput->production_receipt_handoff_at === null;
                     $lockedOutput->forceFill([
                         'production_receipt_handoff_status' => ProductionReceiptHandoffStatus::NotRequired->value,
                         'production_receipt_handoff_message' => null,
                         'production_receipt_handoff_at' => $lockedOutput->production_receipt_handoff_at ?? now(),
                     ])->save();
+
+                    if ($handoffChanged && $workOrder) {
+                        app(ChainBroadcaster::class)->refreshWorkOrder($workOrder->fresh());
+                    }
 
                     return $lockedOutput->fresh();
                 }
@@ -944,24 +984,48 @@ class WorkOrderOutputService
                     );
                 }
 
+                $statusBeforeReceipt = $workOrder->status?->value ?? (string) $workOrder->status;
                 $receipt = $this->createProductionReceipt($lockedOutput, $workOrder, (int) $by->id);
                 app(WorkOrderService::class)->requestQualityClose($workOrder->fresh(), $by);
+                $freshWorkOrder = $workOrder->fresh();
+                $statusAfterReceipt = $freshWorkOrder->status?->value ?? (string) $freshWorkOrder->status;
+                if ($statusAfterReceipt === $statusBeforeReceipt) {
+                    app(ChainBroadcaster::class)->refreshWorkOrder($freshWorkOrder);
+                }
 
                 return $receipt;
             });
         } catch (ProductionReceiptHandoffException|BusinessRuleException|InvalidMovementException $e) {
-            $this->markProductionReceiptManual($output->id);
+            DB::transaction(function () use ($output): void {
+                if (! $this->markProductionReceiptManual($output->id)) {
+                    return;
+                }
+
+                $workOrder = WorkOrder::query()->find($output->work_order_id);
+                if ($workOrder) {
+                    app(ChainBroadcaster::class)->refreshWorkOrder($workOrder);
+                }
+            });
             throw $e;
         }
     }
 
     /** Persist the safe operator-facing state for a failed receipt handoff. */
-    public function markProductionReceiptManual(int $outputId): void
+    public function markProductionReceiptManual(int $outputId): bool
     {
-        DB::transaction(function () use ($outputId): void {
+        return DB::transaction(function () use ($outputId): bool {
             $output = WorkOrderOutput::query()->whereKey($outputId)->lockForUpdate()->first();
             if (! $output || (int) $output->good_count <= 0 || $output->production_receipt_movement_id !== null) {
-                return;
+                return false;
+            }
+            $handoffStatus = $output->production_receipt_handoff_status;
+            $handoffStatus = $handoffStatus instanceof ProductionReceiptHandoffStatus
+                ? $handoffStatus->value
+                : (string) $handoffStatus;
+            if ($handoffStatus === ProductionReceiptHandoffStatus::ManualRequired->value
+                && $output->production_receipt_handoff_message === self::RECEIPT_MANUAL_MESSAGE
+                && $output->production_receipt_handoff_at !== null) {
+                return false;
             }
 
             $output->forceFill([
@@ -969,6 +1033,8 @@ class WorkOrderOutputService
                 'production_receipt_handoff_message' => self::RECEIPT_MANUAL_MESSAGE,
                 'production_receipt_handoff_at' => now(),
             ])->save();
+
+            return true;
         });
     }
 

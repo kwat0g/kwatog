@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Services;
 
+use App\Common\Services\OutboxService;
+use App\Common\Services\UserAccessRefreshService;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Admin\Events\RolePermissionsChanged;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -15,7 +18,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class RoleService
 {
@@ -352,6 +357,11 @@ class RoleService
             $ids = Permission::whereIn('slug', $requested)->pluck('id')->all();
             abort_if(count($ids) !== count($requested), 422, 'One or more permissions do not exist.');
             $locked->permissions()->sync($ids);
+            DB::table('roles')->where('id', $locked->id)->update([
+                'permissions_version' => DB::raw('permissions_version + 1'),
+                'updated_at' => now(),
+            ]);
+            $locked->refresh();
 
             $added = array_values(array_diff($requested, $existing));
             $removed = array_values(array_diff($existing, $requested));
@@ -363,10 +373,28 @@ class RoleService
                 'removed' => $removed,
             ]);
 
-            // A concurrent request can refill the old committed permissions
-            // after an in-transaction forget. Invalidate only once this write
-            // is durable so the stale cache cannot survive the commit.
-            DB::afterCommit(fn () => Cache::forget("auth:role_perms:{$locked->id}"));
+            // Versioned permission keys make any concurrent pre-commit read
+            // unreachable after commit. Remove the legacy unversioned key as
+            // well so old application instances cannot keep serving it.
+            $roleId = (int) $locked->id;
+            DB::afterCommit(static function () use ($roleId): void {
+                try {
+                    Cache::forget("auth:role_perms:{$roleId}");
+                } catch (Throwable $exception) {
+                    Log::warning('Legacy role permission cache cleanup failed after commit.', [
+                        'exception' => $exception::class,
+                    ]);
+                }
+            });
+            app(OutboxService::class)->record(new RolePermissionsChanged((string) $locked->hash_id));
+            app(AdminRoleRealtimeService::class)->stage($locked, 'updated');
+            $accessRefresh = app(UserAccessRefreshService::class);
+            $roleMemberIds = User::query()->where('role_id', $locked->id)->pluck('id');
+            $delegateIds = array_values(array_diff(
+                $accessRefresh->activeDelegateIdsForRole((int) $locked->id, (string) $locked->slug),
+                $roleMemberIds->map(static fn (int|string $id): int => (int) $id)->all(),
+            ));
+            $accessRefresh->stageForUsers($delegateIds);
             BadgeService::touch();
 
             return $locked->load('permissions');

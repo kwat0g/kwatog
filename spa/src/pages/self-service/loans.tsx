@@ -22,6 +22,22 @@ import { formatDate } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
 import { chipVariantForStatus } from '@/components/ui/Chip';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { isAxiosError } from 'axios';
+
+function updateLoanCache(
+ current: SelfServiceLoansResponse | undefined,
+ loan: SelfServiceLoan,
+): SelfServiceLoansResponse | undefined {
+ if (!current) return current;
+ const activeStatuses = new Set(['pending', 'active', 'write_off_pending']);
+ const active = current.active.filter((row) => row.id !== loan.id);
+ const history = current.history.filter((row) => row.id !== loan.id);
+
+ return activeStatuses.has(loan.status)
+  ? { ...current, active: [loan, ...active], history }
+  : { ...current, active, history: [loan, ...history] };
+}
 
 const schema = z.object({
  loan_type: z.string().min(1, 'Required'),
@@ -89,7 +105,7 @@ function loanColumns(
   ...(onCancel ? [{
   key: 'actions',
   header: 'Actions',
-  cell: (l: SelfServiceLoan) => l.status === 'pending' ? (
+  cell: (l: SelfServiceLoan) => l.available_actions?.can_withdraw === true ? (
   <Button
   variant="ghost"
   size="sm"
@@ -125,20 +141,39 @@ export default function SelfServiceLoansPage() {
  }),
  onSuccess: (r) => {
  toast.success(r.message ?? 'Loan request submitted.');
- queryClient.invalidateQueries({ queryKey: ['self-service', 'loans'] });
+ queryClient.setQueriesData<SelfServiceLoansResponse>(
+  { queryKey: ['self-service', 'loans'] },
+  (current) => updateLoanCache(current, r.data.loan),
+ );
+ void invalidateRealtimeChange(queryClient, { entityType: 'employee_loan', entityId: r.data.id });
  setShowApply(false);
  },
  onError: (error) => reportMutationError(error, 'Failed to submit loan request.'),
  });
 
  const cancel = useMutation({
-  mutationFn: (id: string) => selfServiceApi.cancelLoan(id),
-  onSuccess: () => {
+  mutationFn: (id: string) => {
+   const currentLoan = [...(data?.active ?? []), ...(data?.history ?? [])].find((loan) => loan.id === id);
+   return selfServiceApi.cancelLoan(id, currentLoan?.version);
+  },
+  onSuccess: (r) => {
   toast.success('Loan request withdrawn.');
   setConfirmCancel(null);
-  queryClient.invalidateQueries({ queryKey: ['self-service', 'loans'] });
+  queryClient.setQueriesData<SelfServiceLoansResponse>(
+   { queryKey: ['self-service', 'loans'] },
+   (current) => updateLoanCache(current, r.data.loan),
+  );
+  void invalidateRealtimeChange(queryClient, { entityType: 'employee_loan', entityId: r.data.id });
   },
-  onError: (error) => reportMutationError(error, 'Failed to withdraw loan request.'),
+  onError: (error) => {
+   if (isAxiosError(error) && error.response?.status === 409) {
+    void refetch();
+    const data = error.response.data as { message?: unknown } | undefined;
+    toast.error(typeof data?.message === 'string' ? data.message : 'This loan changed. Review its current status.');
+    return;
+   }
+   reportMutationError(error, 'Failed to withdraw loan request.');
+  },
   });
 
  const totalCount = (data?.active.length ?? 0) + (data?.history.length ?? 0);
@@ -282,7 +317,7 @@ function ApplyLoanModal({
  Number(debouncedPeriods),
  ),
  enabled: !!watchedLoanType && Number(debouncedAmount) > 0 && Number(debouncedPeriods) >= 1,
- staleTime: 30_000,
+ staleTime: 0,
  });
 
  return (

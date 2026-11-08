@@ -10,12 +10,14 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { usePermission } from '@/hooks/usePermission';
 import { formatInt } from '@/lib/formatNumber';
 import { moldStatusVariant } from '@/lib/statusVariants';
 import type { Mold } from '@/types/mrp';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 const DEFAULT_FILTERS: MoldListParams = {
  page: 1, per_page: 25,
 };
@@ -27,11 +29,14 @@ export default function MoldsListPage() {
  // Bound to the URL so dashboard drill-downs (?nearing_limit=1) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<MoldListParams>(DEFAULT_FILTERS);
+ useRealtimeList('mold', 'visible');
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['mrp', 'molds', filters],
+  const queryKey = ['mrp', 'molds', 'list', filters] as const;
+  const { data, isLoading, isError, refetch } = useQuery({
+  queryKey,
  queryFn: () => moldsApi.list(filters),
- placeholderData: (prev) => prev });
+  placeholderData: (previous, previousQuery) =>
+    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 3) ? previous : undefined });
  const { data: moldOptions } = useQuery({
  queryKey: ['mrp', 'molds', 'options'],
  queryFn: moldsApi.options,

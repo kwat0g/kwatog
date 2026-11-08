@@ -1,6 +1,6 @@
 import { reportMutationError } from '@/lib/formErrors';
 import { IconType } from '@/lib/icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -34,7 +34,11 @@ import { filterActionItems } from '@/lib/actionCenter';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatRelative } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
-import type { ActionCategory, ActionPriority } from '@/types/actionCenter';
+import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
+import { useAuthStore } from '@/stores/authStore';
+import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
+import { scheduleBoundaryInvalidation } from '@/lib/realtime/scheduleBoundaryInvalidation';
+import type { ActionCenterData, ActionCenterTaskUpdate, ActionCategory, ActionPriority } from '@/types/actionCenter';
 
 const CATEGORY_ICONS: Record<ActionCategory, IconType> = {
   alert: LuBellRing,
@@ -48,17 +52,35 @@ const PRIORITY_VARIANT: Record<ActionPriority, ChipVariant> = {
   critical: 'danger', high: 'warning', medium: 'info', low: 'neutral',
 };
 
+const TASK_STATE_LABEL: Record<ActionCenterTaskUpdate['state'], string> = {
+  open: 'Open',
+  acknowledged: 'Acknowledged',
+  snoozed: 'Snoozed',
+  resolved: 'Resolved',
+};
+
 export default function ActionCenterPage() {
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const [category, setCategory] = useState<ActionCategory | 'all'>('all');
   const [search, setSearch] = useState('');
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  useRealtimeSignal('badges_changed', user?.id ? `badge-user.${user.id}` : '', '.BadgesChanged');
   const query = useQuery({
     queryKey: ['action-center'],
     queryFn: actionCenterApi.get,
-    refetchInterval: 60_000,
   });
+
+  // Time-derived SLA and snooze transitions refresh once at the server-provided
+  // boundary; the active page does not poll on a fixed interval.
+  useEffect(() => {
+    const boundary = query.data?.next_transition_at;
+    if (!boundary) return;
+    return scheduleBoundaryInvalidation(boundary, () => {
+      void qc.invalidateQueries({ queryKey: ['action-center'] });
+    });
+  }, [query.data?.next_transition_at, qc]);
 
   // Triage actions from the former Exception Workbench. Task state is SHARED:
   // a snooze or resolve hides the item for every role, so Reopen and Unclaim
@@ -67,11 +89,52 @@ export default function ActionCenterPage() {
   const triage = useMutation({
     mutationFn: ({ action, snoozed_until }: { action: 'claim' | 'unclaim' | 'acknowledge' | 'snooze' | 'resolve' | 'reopen'; snoozed_until?: string }) =>
       actionCenterApi.updateTasks({ item_ids: [...selected], action, snoozed_until }),
-    onSuccess: () => {
+    onSuccess: (updates) => {
+      const updatesByItem = new Map(updates.map((update) => [update.item_id, update]));
+      qc.setQueryData<ActionCenterData>(['action-center'], (current) => {
+        if (!current) return current;
+        const items = current.items.flatMap((item) => {
+          const update = updatesByItem.get(item.id);
+          if (!update) return [item];
+          const isFutureSnooze = update.state === 'snoozed'
+            && update.snoozed_until !== null
+            && Date.parse(update.snoozed_until) > Date.now();
+          if (update.state === 'resolved' || isFutureSnooze) return [];
+
+          return [{
+            ...item,
+            task_state: update.state,
+            task_state_label: TASK_STATE_LABEL[update.state],
+            assigned_to: update.assigned_to,
+            updated_by: user ? { id: user.id, name: user.name } : item.updated_by,
+            snoozed_until: update.snoozed_until,
+          }];
+        });
+        const byCategory = items.reduce<NonNullable<ActionCenterData['summary']['by_category']>>((counts, item) => {
+          counts[item.category] = (counts[item.category] ?? 0) + 1;
+          return counts;
+        }, {});
+
+        return {
+          ...current,
+          items,
+          summary: {
+            ...current.summary,
+            total: items.length,
+            critical: items.filter((item) => item.priority === 'critical').length,
+            high: items.filter((item) => item.priority === 'high').length,
+            overdue: items.filter((item) => item.is_overdue).length,
+            owned_by_me: user
+              ? items.filter((item) => item.assigned_to?.id === user.id).length
+              : current.summary.owned_by_me,
+            unassigned: items.filter((item) => item.assigned_to === null).length,
+            by_category: byCategory,
+          },
+        };
+      });
       toast.success('Action queue updated.');
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ['action-center'] });
-      qc.invalidateQueries({ queryKey: ['badges'] });
+      void invalidateRealtimeSignal(qc, 'badges_changed');
     },
     onError: (error) => reportMutationError(error, 'Could not update the selected items.'),
   });

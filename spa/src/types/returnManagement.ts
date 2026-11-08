@@ -10,6 +10,7 @@ export interface DispositionPayload {
 
 export interface ReturnRequestItem {
   id: string;
+  available_actions?: { can_split?: boolean };
   product_id?: string;
   item_id?: string;
   quantity: string;
@@ -63,7 +64,21 @@ export interface ReturnRequest {
   pending_approval_step?: number | null;
   has_overdue_approval?: boolean;
   approval_records?: ApprovalRecordPayload[];
-  actions?: { can_approve: boolean; can_reject: boolean };
+  available_actions?: {
+    can_approve: boolean;
+    can_reject: boolean;
+    can_cancel: boolean;
+    can_submit?: boolean;
+    can_edit?: boolean;
+    can_receive?: boolean;
+    can_inspect?: boolean;
+    can_retry_inspection_handoff?: boolean;
+    can_dispose?: boolean;
+    can_complete?: boolean;
+    can_split?: boolean;
+  };
+  /** @deprecated Use available_actions. */
+  actions?: { can_approve: boolean; can_reject: boolean; can_cancel?: boolean };
   disposition_status?: string;
   inspection_handoff?: {
     status: 'not_started' | 'generated' | 'manual_required' | 'not_required' | string;

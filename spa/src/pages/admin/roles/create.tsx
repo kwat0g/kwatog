@@ -17,6 +17,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { applyServerValidationErrors } from '@/lib/formErrors';
 import { FormActions } from '@/components/ui/FormActions';
+import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
 /**
  * Series R — Task R1.
  *
@@ -111,9 +112,15 @@ export default function CreateRolePage() {
  return rolesApi.create(payload);
  },
  onSuccess: (role) => {
- queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] });
+ reconcileRealtimeMutationResponse(
+  queryClient,
+  { entityType: 'role', entityId: role.id },
+  ['admin', 'role', role.id],
+  role,
+ );
  toast.success(`Role “${role.name}” created. Configure its permissions next.`);
- navigate(`/admin/roles/${role.id}/permissions`);
+  safety.allowNavigationAfterSave();
+navigate(`/admin/roles/${role.id}/permissions`);
  },
  onError: (error) => {
    applyServerValidationErrors(error, setError, 'Failed to create the role.');

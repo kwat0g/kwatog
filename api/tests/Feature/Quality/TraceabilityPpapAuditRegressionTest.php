@@ -15,13 +15,18 @@ use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Controllers\PpapController;
 use App\Modules\Quality\Enums\PpapStatus;
+use App\Modules\Quality\Exceptions\PpapStateConflictException;
+use App\Modules\Quality\Models\PpapElement;
 use App\Modules\Quality\Models\PpapSubmission;
 use App\Modules\Quality\Services\PpapService;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -36,6 +41,7 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
     use RefreshDatabase;
 
     private User $qc;
+
     private User $approver;
 
     protected function setUp(): void
@@ -253,6 +259,57 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
         }
         $this->actingAs($this->approver)->patchJson("/api/v1/quality/ppap/{$p->hash_id}/approve")->assertOk();
         $this->assertSame(PpapStatus::Approved, $p->fresh()->status);
+    }
+
+    public function test_stale_ppap_review_returns_conflict_without_overwriting_approval(): void
+    {
+        $ppap = $this->submission();
+        $this->actingAs($this->qc)
+            ->patchJson("/api/v1/quality/ppap/{$ppap->hash_id}/submit")
+            ->assertOk();
+
+        $staleRouteModel = PpapSubmission::query()->findOrFail($ppap->id);
+        PpapSubmission::query()->whereKey($ppap->id)->update([
+            'status' => PpapStatus::Approved->value,
+            'approved_by' => $this->approver->id,
+            'approved_at' => now(),
+        ]);
+
+        $request = Request::create('/api/v1/quality/ppap/'.$ppap->hash_id.'/review', 'PATCH');
+        $request->setUserResolver(fn () => $this->approver);
+        $response = app(PpapController::class)->review($request, $staleRouteModel);
+
+        $this->assertInstanceOf(JsonResponse::class, $response);
+        $this->assertSame(409, $response->getStatusCode());
+        $this->assertSame('ppap_state_conflict', $response->getData(true)['code']);
+        $this->assertSame(PpapStatus::Approved, $ppap->fresh()->status);
+    }
+
+    public function test_stale_element_edit_cannot_change_evidence_after_parent_approval(): void
+    {
+        $ppap = $this->submission();
+        $this->actingAs($this->qc)
+            ->patchJson("/api/v1/quality/ppap/{$ppap->hash_id}/submit")
+            ->assertOk();
+        $element = $ppap->elements()->firstOrFail();
+        $staleElement = PpapElement::query()->with('submission')->findOrFail($element->id);
+
+        PpapSubmission::query()->whereKey($ppap->id)->update([
+            'status' => PpapStatus::Approved->value,
+            'approved_by' => $this->approver->id,
+            'approved_at' => now(),
+        ]);
+
+        try {
+            app(PpapService::class)->updateElement($staleElement, [
+                'document_path' => 'ppap/stale-replacement.pdf',
+                'status' => 'accepted',
+            ]);
+            $this->fail('A stale evidence edit must conflict with the parent approval.');
+        } catch (PpapStateConflictException) {
+            $this->assertNull($element->fresh()->document_path);
+            $this->assertSame('pending', $element->fresh()->status->value);
+        }
     }
 
     /**

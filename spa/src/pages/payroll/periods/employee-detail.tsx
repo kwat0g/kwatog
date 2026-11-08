@@ -12,13 +12,18 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { formatPeso } from '@/lib/formatNumber';
-import { Td, tableCls, trCls } from '@/components/ui/table-cells';
+import { formatDate } from '@/lib/formatDate';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 export default function PayrollEmployeeDetailPage() {
  const { id, eid } = useParams<{ id: string; eid: string }>();
  const qc = useQueryClient();
  const { can } = usePermission();
+
+ useRealtimeRecord('payroll_period', id, eid ? [['payroll', eid]] : []);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['payroll', eid],
@@ -28,12 +33,17 @@ export default function PayrollEmployeeDetailPage() {
 
  const recomputeMutation = useMutation({
  mutationFn: () => payrollsApi.recompute(eid!),
- onSuccess: () => {
+ onSuccess: (updated) => {
  toast.success('Recomputed.');
- qc.invalidateQueries({ queryKey: ['payroll', eid] });
+ qc.setQueryData(['payroll', eid], updated);
+ qc.invalidateQueries({ queryKey: ['payroll-period', id] });
  },
- onError: (e: { response?: { data?: { message?: string } } }) =>
- toast.error(e.response?.data?.message ?? 'Failed to recompute.'),
+ onError: (e: { response?: { status?: number; data?: { message?: string } } }) => {
+ if (e.response?.status === 409 && id) {
+ void invalidateRealtimeChange(qc, { entityType: 'payroll_period', entityId: id }, [['payroll', eid]]);
+ }
+ toast.error(e.response?.data?.message ?? 'Failed to recompute.');
+ },
  });
 
  if (isLoading) return <SkeletonDetail />;
@@ -49,12 +59,35 @@ export default function PayrollEmployeeDetailPage() {
 
  const emp = data.employee;
  const payslipPublished = data.period_status === 'finalized' || data.period_status === 'disbursed';
+ const canRecompute = data.available_actions?.recompute === true;
+ const recomputeDateBlocked = Boolean(data.compute_available_on);
+ const showRecompute = canRecompute || (
+ recomputeDateBlocked
+ && data.permissions?.recompute === true
+ && (data.period_status === 'draft' || data.period_status === 'computed')
+ );
+ const attendance = data.attendance_summary;
+ const attendanceMetrics = attendance ? [
+ { label: 'Days counted in payroll', value: data.days_worked ?? '—' },
+ { label: 'Present', value: attendance.present_days },
+ { label: 'Late', value: attendance.late_days },
+ { label: 'Absent', value: attendance.absent_days },
+ { label: 'Half-day', value: attendance.half_days },
+ { label: 'On leave', value: attendance.leave_days },
+ { label: 'Holidays', value: attendance.holiday_days },
+ { label: 'Rest days', value: attendance.rest_days },
+ { label: 'DTR records', value: attendance.dtr_record_count },
+ ] : [];
  const earningRows = [
  { label: 'Basic Pay', value: data.basic_pay },
  { label: 'Leave Pay', value: data.leave_pay },
  { label: 'Overtime Pay', value: data.overtime_pay },
  { label: 'Night Differential', value: data.night_diff_pay },
  { label: 'Holiday Premium', value: data.holiday_pay },
+ ].filter((r) => Number(r.value) > 0);
+ const grossReductionRows = [
+  { label: 'Tardiness deduction', value: data.tardiness_deduction },
+  { label: 'Undertime deduction', value: data.undertime_deduction },
  ].filter((r) => Number(r.value) > 0);
 
  return (
@@ -65,6 +98,8 @@ export default function PayrollEmployeeDetailPage() {
  <span className="font-mono">{emp.employee_no}</span>
  {emp.department && <> · {emp.department}</>}
  {emp.position && <> · {emp.position}</>}
+ {data.period_start && data.period_end && <> · {formatDate(data.period_start)} – {formatDate(data.period_end)}</>}
+ {data.pay_type && <> · {data.pay_type.replace('_', ' ')}</>}
  </> : null}
  backTo={`/payroll/periods/${id}`} backLabel="Period"
  actions={
@@ -86,12 +121,20 @@ export default function PayrollEmployeeDetailPage() {
  >
  Payslip
  </Button>
- {can('payroll.periods.compute') && (
+ {showRecompute && (
+ <div className="flex flex-col items-end gap-1">
  <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />}
  onClick={() => recomputeMutation.mutate()}
- disabled={recomputeMutation.isPending} loading={recomputeMutation.isPending}>
+ disabled={!canRecompute || recomputeMutation.isPending} loading={recomputeMutation.isPending}
+ aria-describedby={recomputeDateBlocked ? 'payroll-row-compute-availability' : undefined}>
  Recompute
  </Button>
+ {recomputeDateBlocked && (
+ <span id="payroll-row-compute-availability" className="text-xs text-muted">
+ Available on {formatDate(data.compute_available_on)}
+ </span>
+ )}
+ </div>
  )}
  {can('payroll.adjustments.create') && (
  <Link to="/payroll/adjustments/create"
@@ -118,8 +161,62 @@ export default function PayrollEmployeeDetailPage() {
  <StatCard label="Net Pay" value={formatPeso(data.net_pay)} />
  </div>
 
+ <Panel title="Attendance for this period" noPadding>
+ {attendance ? (
+ <>
+ <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-5 gap-y-4 px-4 py-4">
+ {attendanceMetrics.map((metric) => (
+ <div key={metric.label}>
+ <dt className="text-xs text-muted">{metric.label}</dt>
+ <dd className="mt-1 text-lg font-medium tabular-nums text-primary">{metric.value}</dd>
+ </div>
+ ))}
+ </dl>
+ <p className="px-4 pb-3 text-xs text-muted">
+ Days counted in payroll are the snapshot saved at computation. The other totals use current DTR records. Present includes late and half-day records. Only explicit Absent DTR entries count as absences; dates without a DTR entry are not counted as absent.
+ </p>
+ {attendance.records.length > 0 ? (
+ <div className="w-full overflow-x-auto border-t border-default">
+ <table className={tableCls}>
+ <thead>
+ <tr>
+ <Th>Date</Th>
+ <Th>Status</Th>
+ <Th align="right">Regular hrs</Th>
+ <Th align="right">OT hrs</Th>
+ <Th align="right">Night hrs</Th>
+ <Th align="right">Late min</Th>
+ <Th align="right">Undertime min</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {attendance.records.map((record) => (
+ <tr key={record.date} className={trCls}>
+ <Td>{formatDate(record.date)}</Td>
+ <Td>{record.status_label}</Td>
+ <Td align="right" mono>{Number(record.regular_hours).toFixed(2)}</Td>
+ <Td align="right" mono>{Number(record.overtime_hours).toFixed(2)}</Td>
+ <Td align="right" mono>{Number(record.night_diff_hours).toFixed(2)}</Td>
+ <Td align="right" mono>{record.tardiness_minutes}</Td>
+ <Td align="right" mono>{record.undertime_minutes}</Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ ) : (
+ <p className="border-t border-default px-4 py-3 text-sm text-muted">
+ No DTR entries are recorded for this cutoff.
+ </p>
+ )}
+ </>
+ ) : (
+ <p className="px-4 py-3 text-sm text-muted">Attendance details are unavailable for this payroll row.</p>
+ )}
+ </Panel>
+
  <div className="grid grid-cols-2 gap-4">
- <Panel title="Earnings" noPadding>
+ <Panel title="Gross pay calculation" noPadding>
  <table className={tableCls}>
  <tbody>
  {earningRows.length === 0 && (
@@ -129,6 +226,12 @@ export default function PayrollEmployeeDetailPage() {
  <tr key={r.label} className={trCls}>
  <Td>{r.label}</Td>
  <Td align="right" mono>{formatPeso(r.value)}</Td>
+ </tr>
+ ))}
+ {grossReductionRows.map((r) => (
+ <tr key={r.label} className={trCls}>
+ <Td>{r.label}</Td>
+ <Td align="right" mono>−{formatPeso(r.value)}</Td>
  </tr>
  ))}
  <tr className={trCls}>

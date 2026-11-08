@@ -9,6 +9,13 @@ export type ActionCategory =
   | 'production'
   | 'supply_chain';
 
+export interface ActionCenterTaskUpdate {
+  item_id: string;
+  state: 'open' | 'acknowledged' | 'snoozed' | 'resolved';
+  assigned_to: { id: string; name: string } | null;
+  snoozed_until: string | null;
+}
+
 export interface ActionCenterItem {
  id: string;
  category: ActionCategory;
@@ -46,4 +53,5 @@ export interface ActionCenterData {
  by_category: Partial<Record<ActionCategory, number>>;
  };
  generated_at: string;
+ next_transition_at?: string | null;
 }

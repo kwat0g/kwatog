@@ -11,6 +11,7 @@ import { AxiosError } from 'axios';
 import { leaveRequestsApi } from '@/api/leave';
 import { selfServiceApi } from '@/api/self-service';
 import { useAuthStore } from '@/stores/authStore';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -155,6 +156,8 @@ const columns: Column<LeaveRequest>[] = [
 ];
 
 export default function SelfServiceLeavePage() {
+  useRealtimeList('leave_request', 'visible');
+  useRealtimeList('leave_type', 'visible');
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const hasEmployeeLink = Boolean(user?.employee?.id);
@@ -163,7 +166,6 @@ export default function SelfServiceLeavePage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['self-service', 'leave'],
     queryFn: () => selfServiceApi.leaveRequests({ per_page: 50 }),
-    placeholderData: (prev) => prev,
   });
 
   const typesQuery = useQuery({

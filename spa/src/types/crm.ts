@@ -209,6 +209,11 @@ export interface SalesOrder {
   requested_delivery_dates?: string[];
   delivery_dates?: string[];
   capabilities?: { can_propose_delivery?: boolean; awaiting_delivery_response?: boolean };
+  available_actions?: {
+    can_edit: boolean;
+    can_cancel: boolean;
+    can_confirm: boolean;
+  };
   delivery_negotiations?: DeliveryNegotiation[];
   latest_response?: {
     id: string;
@@ -269,6 +274,7 @@ export type ComplaintSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export interface EightDReport {
   id: string;
+  version?: string;
   d1_team: string | null;
   d2_problem: string | null;
   d3_containment: string | null;
@@ -287,6 +293,14 @@ export interface CustomerComplaint {
   severity_label?: string;
   status: ComplaintStatus;
   status_label?: string;
+  permissions?: { manage: boolean };
+  available_actions?: {
+    retry_ncr_handoff: boolean;
+    edit_8d: boolean;
+    finalize_8d: boolean;
+    resolve: boolean;
+    close: boolean;
+  };
   description: string;
   affected_quantity: number;
   ncr_handoff?: {
@@ -373,6 +387,12 @@ export interface ContactInquiry {
   message: string;
   status: ContactInquiryStatus;
   status_label: string;
+  version: string;
+  permissions: { manage: boolean };
+  available_actions: {
+    mark_in_progress: boolean;
+    close: boolean;
+  };
   ip_address: string | null;
   user_agent: string | null;
   created_at: string;

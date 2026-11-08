@@ -52,6 +52,19 @@ class RecordInspectionBatchResultRequest extends FormRequest
 
     public function rules(): array
     {
+        if ($this->has('quantity_result')) {
+            return [
+                'expected_result_version' => ['required', 'integer', 'min:0'],
+                'quantity_result' => ['required', 'array:defective_quantity,descriptions'],
+                'quantity_result.defective_quantity' => ['required', 'regex:/^\d{1,12}(?:\.\d{1,3})?$/'],
+                'quantity_result.descriptions' => ['present', 'array', 'max:10000'],
+                'quantity_result.descriptions.*' => ['required', 'string', 'max:500'],
+                'result' => ['prohibited'], 'measurements' => ['prohibited'], 'items' => ['prohibited'],
+                'sample_defect_count' => ['prohibited'], 'physical_defects_confirmed' => ['prohibited'],
+                'critical_defect' => ['prohibited'],
+            ];
+        }
+
         if ($this->route('inspection')?->counted_capture) {
             $lot = $this->route('inspection')->sampling_basis === 'lot';
 
@@ -94,6 +107,7 @@ class RecordInspectionBatchResultRequest extends FormRequest
         }
 
         return [
+            'expected_result_version' => ['sometimes', 'integer', 'min:0'],
             'result' => ['required', Rule::in(['passed', 'failed'])],
             'coverage_confirmed' => ['required', 'accepted'],
             'inspected_quantity' => ['required', 'integer', 'min:1'],

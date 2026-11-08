@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\NotificationService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
@@ -146,7 +147,10 @@ class DeliveryAttemptOutcomeService
 
             $this->notifyWarehouseOfAttempt($locked, $outcome);
 
-            return $this->deliveries->show($locked);
+            $delivery = $this->deliveries->show($locked);
+            app(ChainBroadcaster::class)->broadcastFor($delivery, DeliveryStatus::ReturnPending->value, $by);
+
+            return $delivery;
         }, 3);
     }
 
@@ -304,7 +308,10 @@ class DeliveryAttemptOutcomeService
                 }
             }
 
-            return $this->deliveries->show($locked);
+            $delivery = $this->deliveries->show($locked);
+            app(ChainBroadcaster::class)->broadcastFor($delivery, $next->value, $by);
+
+            return $delivery;
         }, 3);
     }
 
@@ -362,7 +369,10 @@ class DeliveryAttemptOutcomeService
             $outcome->forceFill(['reason_code' => $normalized['reason_code'], 'notes' => $normalized['notes'], 'version' => $version + 1])->save();
             app(ReturnCaseService::class)->createDeliveryAttemptDamageCase($locked, $outcome, $by, true);
             $this->recordRevision($outcome, $by, $key, $fingerprint, 'report_correction', $reason, $before);
-            return $this->deliveries->show($locked);
+            $delivery = $this->deliveries->show($locked);
+            app(ChainBroadcaster::class)->broadcastFor($delivery, DeliveryStatus::ReturnPending->value, $by);
+
+            return $delivery;
         }, 3);
     }
 
@@ -420,7 +430,11 @@ class DeliveryAttemptOutcomeService
             $outcome->forceFill(['version' => $outcome->version + 1, 'return_request_id' => $outcome->return_request_id ?? $rma->id])->save();
             $this->recordRevision($outcome, $by, $key, $fingerprint, 'late_recovery', $normalized['variance_reason'], $before, (int) $rma->id);
             app(DeliveryCostRecognitionService::class)->reconcileUnaccounted($outcome->fresh(), $key, $by);
-            return $this->deliveries->show($locked);
+            $delivery = $this->deliveries->show($locked);
+            $status = $delivery->status instanceof DeliveryStatus ? $delivery->status->value : (string) $delivery->status;
+            app(ChainBroadcaster::class)->broadcastFor($delivery, $status, $by);
+
+            return $delivery;
         }, 3);
     }
 

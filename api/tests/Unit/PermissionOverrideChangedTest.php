@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use App\Common\Enums\PermissionOverrideType;
 use App\Common\Events\PermissionOverrideChanged;
+use Illuminate\Broadcasting\PrivateChannel;
 use Tests\TestCase;
 
 class PermissionOverrideChangedTest extends TestCase
@@ -21,12 +22,18 @@ class PermissionOverrideChangedTest extends TestCase
         );
 
         $this->assertSame('permission.override.changed', $event->broadcastAs());
+        $hashId = app('hashids')->encode(42);
         $this->assertSame([
-            'permission_slug' => 'hr.employees.view',
-            'old_type' => 'revoke',
-            'new_type' => 'grant',
-            'reason' => 'Temporary coverage.',
-        ], $event->broadcastWith());
+            "private-user.{$hashId}",
+            "private-user.access.{$hashId}",
+            "private-admin.user.{$hashId}",
+        ], array_map(
+            static fn (PrivateChannel $channel): string => $channel->name,
+            $event->broadcastOn(),
+        ));
+        $this->assertSame(['refresh' => true, 'event_id' => $event->eventId], $event->broadcastWith());
         $this->assertArrayNotHasKey('user_id', $event->broadcastWith());
+        $this->assertArrayNotHasKey('permission_slug', $event->broadcastWith());
+        $this->assertArrayNotHasKey('reason', $event->broadcastWith());
     }
 }

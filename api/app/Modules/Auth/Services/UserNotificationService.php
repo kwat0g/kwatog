@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Services;
 
+use App\Common\Events\UserNotificationChanged;
+use App\Common\Services\OutboxService;
 use App\Modules\Auth\Models\NotificationPreference;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -11,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class UserNotificationService
 {
+    public function __construct(private readonly NotificationPreferencesRealtimeService $preferenceRealtime) {}
+
     public function list(User $user, array $filters): LengthAwarePaginator
     {
         $query = DB::table('notifications')
@@ -64,19 +68,33 @@ class UserNotificationService
                 ->where('notifiable_id', $user->id)
                 ->update(['read_at' => $readAt]);
 
-            if (! $updated) abort(404);
+            if (! $updated) {
+                abort(404);
+            }
 
-            return $readAt->toISOString();
+            $readAtIso = $readAt->toISOString();
+            $this->stageChange($user, 'read', $id, $readAtIso);
+
+            return $readAtIso;
         });
     }
 
     public function markAllRead(User $user): int
     {
-        return DB::transaction(fn (): int => (int) DB::table('notifications')
-            ->where('notifiable_type', User::class)
-            ->where('notifiable_id', $user->id)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]));
+        return DB::transaction(function () use ($user): int {
+            $readAt = now();
+            $count = (int) DB::table('notifications')
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', $user->id)
+                ->whereNull('read_at')
+                ->update(['read_at' => $readAt]);
+
+            if ($count > 0) {
+                $this->stageChange($user, 'read_all', occurredAt: $readAt->toISOString());
+            }
+
+            return $count;
+        });
     }
 
     public function preferences(User $user)
@@ -89,7 +107,7 @@ class UserNotificationService
     }
 
     /**
-     * @param array<int, array{notification_type:string, channel:string, enabled:bool}> $preferences
+     * @param  array<int, array{notification_type:string, channel:string, enabled:bool}>  $preferences
      *
      * Duplicate keys in one request are collapsed with last-row-wins
      * semantics before the single upsert. The database unique key keeps
@@ -103,10 +121,10 @@ class UserNotificationService
             foreach ($preferences as $row) {
                 $key = serialize([$row['notification_type'], $row['channel']]);
                 $rows[$key] = [
-                    'user_id'           => $user->id,
+                    'user_id' => $user->id,
                     'notification_type' => $row['notification_type'],
-                    'channel'           => $row['channel'],
-                    'enabled'           => (bool) $row['enabled'],
+                    'channel' => $row['channel'],
+                    'enabled' => (bool) $row['enabled'],
                 ];
             }
 
@@ -116,29 +134,54 @@ class UserNotificationService
                     ['user_id', 'notification_type', 'channel'],
                     ['enabled'],
                 );
+                $this->preferenceRealtime->stage($user);
             }
         });
     }
 
     public function delete(User $user, string $id): void
     {
-        $deleted = DB::table('notifications')
-            ->where('id', $id)
-            ->where('notifiable_type', User::class)
-            ->where('notifiable_id', $user->id)
-            ->delete();
+        DB::transaction(function () use ($user, $id): void {
+            $deleted = DB::table('notifications')
+                ->where('id', $id)
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', $user->id)
+                ->delete();
 
-        if (! $deleted) {
-            abort(404);
-        }
+            if (! $deleted) {
+                abort(404);
+            }
+
+            $this->stageChange($user, 'deleted', $id, now()->toISOString());
+        });
     }
 
     public function deleteAllRead(User $user): int
     {
-        return (int) DB::table('notifications')
-            ->where('notifiable_type', User::class)
-            ->where('notifiable_id', $user->id)
-            ->whereNotNull('read_at')
-            ->delete();
+        return DB::transaction(function () use ($user): int {
+            $count = (int) DB::table('notifications')
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', $user->id)
+                ->whereNotNull('read_at')
+                ->delete();
+
+            if ($count > 0) {
+                $this->stageChange($user, 'cleared', occurredAt: now()->toISOString());
+            }
+
+            return $count;
+        });
+    }
+
+    private function stageChange(
+        User $user,
+        string $action,
+        ?string $notificationId = null,
+        ?string $occurredAt = null,
+    ): void {
+        app(OutboxService::class)->record(
+            new UserNotificationChanged((int) $user->id, $action, $notificationId, $occurredAt),
+            publishInlineAfterCommit: true,
+        );
     }
 }

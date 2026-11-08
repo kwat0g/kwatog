@@ -1,8 +1,9 @@
 import { reportMutationError } from '@/lib/formErrors';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import type { PaginatedResponse } from '@/types';
 import {
  Button,
  Chip,
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { useQueryRecordTarget } from '@/hooks/useQueryRecordTarget';
 import {
  salaryAdjustmentsApi,
  type SalaryAdjustmentItem,
@@ -36,31 +38,61 @@ const STATUS_CHIP: Record<SalaryAdjustmentStatus, 'warning' | 'success' | 'dange
  */
 export function SalaryAdjustmentsTab() {
  const queryClient = useQueryClient();
- const [status, setStatus] = useState<SalaryAdjustmentStatus>('pending');
- const [confirm, setConfirm] = useState<
- null | { kind: 'approve' | 'reject'; row: SalaryAdjustmentItem }
- >(null);
+ const [status, setStatus] = useState<SalaryAdjustmentStatus | ''>('');
+ const [confirmKind, setConfirmKind] = useState<'approve' | 'reject' | null>(null);
 
- const { data, isLoading, isError, refetch } = useQuery({
+ const { data, isLoading, isFetching, isError, refetch } = useQuery({
  queryKey: ['hr', 'salary-adjustments', status],
- queryFn: () => salaryAdjustmentsApi.list({ status }),
- placeholderData: (prev) => prev,
+ queryFn: () => salaryAdjustmentsApi.list({ ...(status ? { status } : {}) }),
  });
+ const confirmActionTarget = useQueryRecordTarget(data?.data, { isFetching, isError });
+ const confirmTarget = confirmActionTarget.target;
+ const canConfirm = Boolean(confirmKind && confirmActionTarget.isFresh && confirmTarget?.available_actions.includes(confirmKind));
  const { data: adjustmentOptions } = useQuery({
  queryKey: ['hr', 'salary-adjustments', 'options'],
  queryFn: salaryAdjustmentsApi.options,
  staleTime: 5 * 60 * 1000,
  });
 
+ useEffect(() => {
+ if (!confirmKind || isFetching || isError) return;
+ if (!confirmTarget?.available_actions.includes(confirmKind)) {
+  confirmActionTarget.close();
+  setConfirmKind(null);
+ }
+ }, [confirmKind, confirmTarget, confirmActionTarget, isFetching, isError]);
+
  const act = useMutation({
  mutationFn: (args: { id: string; action: 'approve' | 'reject' }) =>
  salaryAdjustmentsApi.act(args.id, args.action, args.action === 'reject' ? 'Rejected via queue' : undefined),
- onSuccess: (_d, vars) => {
+ onSuccess: (updated, vars) => {
+ queryClient.setQueryData<PaginatedResponse<SalaryAdjustmentItem>>(
+ ['hr', 'salary-adjustments', status],
+ (current) => {
+ if (!current) return current;
+ const existed = current.data.some((row) => row.id === updated.id);
+    const nextRows = !status || updated.status === status
+ ? current.data.map((row) => row.id === updated.id ? updated : row)
+ : current.data.filter((row) => row.id !== updated.id);
+ return {
+ ...current,
+ data: nextRows,
+ meta: {
+ ...current.meta,
+ total: Math.max(0, current.meta.total - (existed && updated.status !== status ? 1 : 0)),
+ },
+ };
+ },
+ );
  toast.success(vars.action === 'approve' ? 'Adjustment approved.' : 'Adjustment rejected.');
- setConfirm(null);
+ confirmActionTarget.close();
+ setConfirmKind(null);
  queryClient.invalidateQueries({ queryKey: ['hr', 'salary-adjustments'] });
  },
- onError: (error) => reportMutationError(error, 'Failed to update adjustment.'),
+ onError: (error) => {
+  void queryClient.invalidateQueries({ queryKey: ['hr', 'salary-adjustments'] });
+  reportMutationError(error, 'Failed to update adjustment.');
+ },
  });
 
  const filterConfig: FilterConfig[] = [
@@ -69,6 +101,7 @@ export function SalaryAdjustmentsTab() {
  label: 'Status',
  type: 'select',
  options: [
+    { value: '', label: 'All statuses' },
  ...(adjustmentOptions?.statuses ?? []),
  ],
  },
@@ -79,7 +112,8 @@ export function SalaryAdjustmentsTab() {
  <FilterBar
  filters={filterConfig}
  values={{ status }}
- onFilter={(_k, v) => setStatus((v as SalaryAdjustmentStatus) || 'pending')}
+ onFilter={(_k, v) => setStatus((v as SalaryAdjustmentStatus) || '')}
+ onApplySavedView={(saved) => setStatus((saved.status as SalaryAdjustmentStatus | undefined) ?? '')}
  />
 
  {isLoading && !data && <SkeletonTable columns={5} rows={6} />}
@@ -157,25 +191,28 @@ export function SalaryAdjustmentsTab() {
  )}
  </div>
 
- {row.status === 'pending' && (
+ {row.status === 'pending' && (row.available_actions.length > 0 || row.permissions.act) && (
  <footer className="px-4 py-2 border-t border-default flex justify-end gap-2">
- <Button
+ {row.available_actions.includes('reject') && <Button
  variant="danger"
  size="sm"
- onClick={() => setConfirm({ kind: 'reject', row })}
+ onClick={() => { setConfirmKind('reject'); confirmActionTarget.open(row); }}
  disabled={act.isPending}
  >
  Reject
- </Button>
- <Button
+ </Button>}
+ {row.available_actions.includes('approve') && <Button
  variant="primary"
  size="sm"
- onClick={() => setConfirm({ kind: 'approve', row })}
+ onClick={() => { setConfirmKind('approve'); confirmActionTarget.open(row); }}
  disabled={act.isPending}
- loading={act.isPending && confirm?.row.id === row.id}
+ loading={act.isPending && confirmActionTarget.targetId === row.id}
  >
  Approve
- </Button>
+ </Button>}
+ {row.available_actions.length === 0 && row.permissions.act && (
+ <span role="status" className="text-xs text-muted">This approval step is assigned to another reviewer.</span>
+ )}
  </footer>
  )}
  </article>
@@ -184,20 +221,29 @@ export function SalaryAdjustmentsTab() {
  )}
 
  <ConfirmDialog
- isOpen={confirm !== null}
- title={confirm?.kind === 'approve' ? 'Approve adjustment?' : 'Reject adjustment?'}
+ isOpen={confirmKind !== null && confirmActionTarget.targetId !== null}
+ title={confirmKind === 'approve' ? 'Approve adjustment?' : 'Reject adjustment?'}
  description={
- confirm?.kind === 'reject'
+ isFetching
+ ? 'Checking the latest adjustment status and available actions…'
+ : isError
+ ? 'The latest adjustment status could not be checked. Refresh the list before continuing.'
+ : !canConfirm
+ ? 'This action is no longer available for this adjustment.'
+ : confirmKind === 'reject'
  ? 'The requested salary will not be applied.'
  : 'Approving the final step applies the new salary and records an effective-dated history entry. You cannot approve a request you submitted.'
  }
- confirmLabel={act.isPending ? '...' : confirm?.kind === 'approve' ? 'Approve' : 'Reject'}
- variant={confirm?.kind === 'approve' ? 'primary' : 'danger'}
+ confirmLabel={act.isPending ? '...' : confirmKind === 'approve' ? 'Approve' : 'Reject'}
+ variant={confirmKind === 'approve' ? 'primary' : 'danger'}
  onConfirm={() => {
- if (confirm) act.mutate({ id: confirm.row.id, action: confirm.kind });
+ if (
+ confirmKind && confirmTarget && canConfirm && !isFetching && !isError
+ ) act.mutate({ id: confirmTarget.id, action: confirmKind });
  }}
- onClose={() => setConfirm(null)}
+ onClose={() => { confirmActionTarget.close(); setConfirmKind(null); }}
  pending={act.isPending}
+ disabled={isFetching || isError || !canConfirm}
  />
  </div>
  );

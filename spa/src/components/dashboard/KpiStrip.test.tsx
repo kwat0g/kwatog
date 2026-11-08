@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { kpiApi } from '@/api/kpi';
+import { queryClient } from '@/lib/queryClient';
 import type { KpiScorecardItem, KpiTrendPoint } from '@/types/dashboard/kpi';
 import { KpiStrip } from './KpiStrip';
+
+vi.mock('@/hooks/useRealtimeSignal', () => ({ useRealtimeSignal: vi.fn() }));
 
 function renderStrip(codes: string[]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -80,6 +83,31 @@ describe('KpiStrip', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', '/dashboard/ppc#kpi-on_time_delivery');
   });
 
+  it('revalidates a cached scorecard on mount instead of trusting an old dashboard snapshot', async () => {
+    const scorecard = vi.spyOn(kpiApi, 'scorecard').mockResolvedValue([oeeItem]);
+    vi.spyOn(kpiApi, 'trends').mockResolvedValue({});
+    const now = new Date();
+    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    queryClient.clear();
+    queryClient.setQueryData(
+      ['kpi', 'scorecard', previousMonth.getFullYear(), previousMonth.getMonth() + 1],
+      [{ ...oeeItem, snapshot: { ...oeeItem.snapshot!, actual_value: '70.0000' } }],
+    );
+
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <KpiStrip codes={['oee']} compact />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(scorecard).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('83.5%')).toBeInTheDocument();
+    view.unmount();
+    queryClient.clear();
+  });
+
   it('renders status dot + 6-pt sparkline + MoM delta for a compact KPI', async () => {
     vi.spyOn(kpiApi, 'scorecard').mockResolvedValue([oeeItem]);
     vi.spyOn(kpiApi, 'trends').mockResolvedValue({ oee: oeeTrend });
@@ -90,7 +118,7 @@ describe('KpiStrip', () => {
     // Status dot carries the snapshot status for assistive tech.
     expect(screen.getByLabelText('Status: Warning')).toBeInTheDocument();
     // 6-month sparkline from GET /dashboard/kpi/trends?months=6.
-    expect(screen.getByRole('img', { name: /6-month trend/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /monthly trend: 6 points/i })).toBeInTheDocument();
     // MoM delta: 83.50 − 81.00 = +2.50 percentage points.
     expect(screen.getByText('+2.50%')).toBeInTheDocument();
   });

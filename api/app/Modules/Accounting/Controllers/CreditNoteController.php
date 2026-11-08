@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Accounting\Exceptions\CreditNoteStateConflictException;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Requests\ApplyCreditNoteRequest;
 use App\Modules\Accounting\Requests\StoreCreditNoteRequest;
@@ -37,6 +38,7 @@ class CreditNoteController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new CreditNoteResource($cn);
     }
 
@@ -44,9 +46,12 @@ class CreditNoteController
     {
         try {
             $cn = $this->service->finalize($creditNote, $request->user());
+        } catch (CreditNoteStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new CreditNoteResource($cn);
     }
 
@@ -54,9 +59,12 @@ class CreditNoteController
     {
         try {
             $this->service->apply($creditNote, $request->validated(), $request->user());
+        } catch (CreditNoteStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new CreditNoteResource($this->service->show($creditNote->fresh()));
     }
 
@@ -64,10 +72,21 @@ class CreditNoteController
     {
         try {
             $cn = $this->service->void($creditNote, $request->user(), (string) $request->validated('reason'));
+        } catch (CreditNoteStateConflictException $e) {
+            return $this->stateConflictResponse($e);
         } catch (BusinessRuleException|ClosedPeriodException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return new CreditNoteResource($cn);
+    }
+
+    private function stateConflictResponse(CreditNoteStateConflictException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'errors' => [$exception->errorKey() => [$exception->getMessage()]],
+            'code' => $exception->errorCode(),
+        ], 409);
     }
 }

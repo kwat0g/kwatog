@@ -56,7 +56,7 @@ class DepartmentController
 
     public function restore(Department $department): JsonResponse
     {
-        $department->restore();
+        $this->service->restore($department);
         return response()->json(['message' => 'Department restored.']);
     }
 }

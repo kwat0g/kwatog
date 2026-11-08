@@ -22,13 +22,16 @@ import { StatCard } from '@/components/ui/StatCard';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 
 export default function ProcurementChainPage() {
+  useRealtimeList('purchase_request', 'visible');
+  useRealtimeList('purchase_order', 'visible');
+  useRealtimeList('grn', 'visible');
+  useRealtimeList('bill', 'visible');
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'chain'],
     queryFn: () => procurementChainApi.overview(),
-    placeholderData: (prev) => prev,
-    refetchInterval: 60_000,
   });
 
   if (isLoading && !data)

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { LuPlus, LuPrinter } from '@/lib/icons';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
+import { purchaseOrderQueryKeys } from '@/lib/queryKeys/purchasing';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { bulkPrint } from '@/api/print';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +14,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { focusRing } from '@/lib/focus';
@@ -22,6 +24,7 @@ import type { PurchaseOrder } from '@/types/purchasing';
 import { purchaseOrderStatusVariant } from '@/lib/statusVariants';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 
 interface PurchaseOrderListParams extends ListParams {
   status?: string;
@@ -34,6 +37,32 @@ interface PurchaseOrderListParams extends ListParams {
   to?: string;
 }
 
+function purchaseOrderFocusValue(filters: PurchaseOrderListParams): string {
+  if (filters.signal === 'action') {
+    return filters.action_type ? `action:${filters.action_type}` : 'action';
+  }
+  if (filters.signal === 'receipt_overdue') return 'receipt_overdue';
+  if (filters.requires_vp_approval !== undefined && filters.requires_vp_approval !== '') {
+    return `vp:${String(filters.requires_vp_approval)}`;
+  }
+  if (filters.overdue === true || filters.overdue === 'true') return 'delivery:overdue';
+  return '';
+}
+
+function purchaseOrderFocusFilters(focus: string): Partial<PurchaseOrderListParams> {
+  const reset = { signal: '', action_type: '', requires_vp_approval: '', overdue: '' };
+  if (focus === 'action') return { ...reset, signal: 'action' };
+  if (focus.startsWith('action:')) {
+    return { ...reset, signal: 'action', action_type: focus.slice('action:'.length) };
+  }
+  if (focus === 'receipt_overdue') return { ...reset, signal: focus };
+  if (focus === 'vp:true' || focus === 'vp:false') {
+    return { ...reset, requires_vp_approval: focus.slice('vp:'.length) };
+  }
+  if (focus === 'delivery:overdue') return { ...reset, overdue: 'true' };
+  return reset;
+}
+
 const DEFAULT_FILTERS: PurchaseOrderListParams = {
   page: 1,
   per_page: 25,
@@ -43,17 +72,20 @@ const DEFAULT_FILTERS: PurchaseOrderListParams = {
 };
 
 export default function PurchaseOrdersListPage() {
+  useRealtimeList('purchase_order', 'visible');
   const navigate = useNavigate();
   const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<PurchaseOrderListParams>(DEFAULT_FILTERS);
+  const listQueryKey = purchaseOrderQueryKeys.list(filters);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['purchasing', 'purchase-orders', filters],
+    queryKey: listQueryKey,
     queryFn: ({ signal }) => purchaseOrdersApi.list(filters, signal),
-    placeholderData: (prev) => prev,
+    placeholderData: (prev, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, listQueryKey, 3) ? prev : undefined,
   });
   const { data: orderOptions } = useQuery({
-    queryKey: ['purchasing', 'purchase-orders', 'options'],
+    queryKey: purchaseOrderQueryKeys.options,
     queryFn: purchaseOrdersApi.options,
     staleTime: 5 * 60 * 1000,
   });
@@ -71,6 +103,7 @@ export default function PurchaseOrdersListPage() {
   const statusLabels = new Map(
     (orderOptions?.statuses ?? []).map((option) => [option.value, option.label]),
   );
+  const focusFilterValue = purchaseOrderFocusValue(filters);
 
   const columns: Column<PurchaseOrder>[] = [
     {
@@ -164,47 +197,19 @@ export default function PurchaseOrdersListPage() {
         ]
       : []),
     {
-      key: 'requires_vp_approval',
-      label: 'VP threshold',
-      type: 'select',
-      options: [
-        { value: '', label: 'All' },
-        { value: 'true', label: 'Yes' },
-        { value: 'false', label: 'No' },
-      ],
-    },
-    {
-      key: 'signal',
-      label: 'Signal',
+      key: 'focus',
+      label: 'Focus',
       type: 'select',
       options: [
         { value: '', label: 'All' },
         { value: 'action', label: 'Needs my action' },
+        { value: 'action:approval', label: 'Awaiting approval' },
+        { value: 'action:send', label: 'Approved, ready to send' },
+        { value: 'action:supplier_response', label: 'Supplier response to resolve' },
         { value: 'receipt_overdue', label: 'Receipt overdue' },
-      ],
-    },
-    ...(filters.signal === 'action'
-      ? [
-          {
-            key: 'action_type',
-            label: 'Action type',
-            type: 'select' as const,
-            options: [
-              { value: '', label: 'All actions' },
-              { value: 'approval', label: 'Awaiting approval' },
-              { value: 'send', label: 'Approved, ready to send' },
-              { value: 'supplier_response', label: 'Supplier response to resolve' },
-            ],
-          },
-        ]
-      : []),
-    {
-      key: 'overdue',
-      label: 'Delivery',
-      type: 'select',
-      options: [
-        { value: '', label: 'All' },
-        { value: 'true', label: 'Overdue only' },
+        { value: 'vp:true', label: 'VP approval required' },
+        { value: 'vp:false', label: 'Below VP threshold' },
+        { value: 'delivery:overdue', label: 'Delivery overdue' },
       ],
     },
   ];
@@ -229,16 +234,34 @@ export default function PurchaseOrdersListPage() {
       />
       <FilterBar
         filters={filterConfig}
-        values={filters}
+        values={{
+          ...filters,
+          signal: undefined,
+          action_type: undefined,
+          requires_vp_approval: undefined,
+          overdue: undefined,
+          focus: focusFilterValue,
+        }}
         onSearch={(s) => setFilters((f) => ({ ...f, search: s, page: 1 }))}
         onFilter={(k, v) =>
-          setFilters((f) => ({
-            ...f,
-            [k]: v,
-            ...(k === 'signal' && v !== 'action' ? { action_type: '' } : {}),
-            page: 1,
-          }))
+          setFilters((f) => {
+            if (k === 'focus') return { ...f, ...purchaseOrderFocusFilters(String(v ?? '')), page: 1 };
+            return { ...f, [k]: v, page: 1 };
+          })
         }
+        onApplySavedView={(saved, clearKeys) => setFilters((current) => {
+          const next: Record<string, unknown> = { ...current, page: 1 };
+          clearKeys.forEach((key) => { delete next[key]; });
+          const focus = saved.focus ?? purchaseOrderFocusValue(saved as PurchaseOrderListParams);
+          const savedFilters = { ...saved };
+          delete savedFilters.focus;
+          return {
+            ...next,
+            ...savedFilters,
+            ...purchaseOrderFocusFilters(focus),
+            page: 1,
+          } as PurchaseOrderListParams;
+        })}
         searchPlaceholder="Search PO number…"
         dateRange={{ fromKey: 'from', toKey: 'to', label: 'PO date' }}
       />

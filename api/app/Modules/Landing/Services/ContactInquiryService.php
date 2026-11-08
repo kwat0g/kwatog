@@ -8,8 +8,8 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\SettingsService;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
-use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Landing\Mail\ContactInquiryReceivedMail;
+use App\Modules\Landing\Models\ContactInquiry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,6 +20,7 @@ class ContactInquiryService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
+        private readonly ContactInquiryRealtimeService $realtime,
     ) {}
 
     /**
@@ -44,6 +45,7 @@ class ContactInquiryService
             // Acceptance of the privacy notice — server clock, never the client's.
             $inquiry->consent_at = now();
             $inquiry->save();
+            $this->realtime->stage('created', entityHashId: (string) $inquiry->hash_id);
 
             return $inquiry;
         });

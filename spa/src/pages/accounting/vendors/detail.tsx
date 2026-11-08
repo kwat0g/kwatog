@@ -16,6 +16,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
@@ -25,6 +26,7 @@ export default function VendorDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can } = usePermission();
+  useRealtimeRecord('vendor', id);
   const [bir2307Year, setBir2307Year] = useState(new Date().getFullYear());
   const [bir2307Quarter, setBir2307Quarter] = useState(Math.floor(new Date().getMonth() / 3) + 1);
 

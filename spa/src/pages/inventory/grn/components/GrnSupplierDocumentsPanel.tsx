@@ -12,7 +12,7 @@ import { SupplierDocumentsTable } from '@/pages/purchasing/purchase-orders/compo
  */
 export function GrnSupplierDocumentsPanel({ grnId }: { grnId: string }) {
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'grn', grnId, 'supplier-documents'],
+    queryKey: ['inventory', 'grn', 'detail', grnId, 'supplier-documents'],
     queryFn: () => supplierActivityApi.forGoodsReceipt(grnId),
   });
 

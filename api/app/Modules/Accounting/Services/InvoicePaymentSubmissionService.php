@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\NotificationService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\AccountType;
@@ -71,8 +72,8 @@ class InvoicePaymentSubmissionService
                 if ($reason = $this->blockedReason($locked)) {
                     throw ValidationException::withMessages(['amount' => $reason]);
                 }
-                if (Money::cmp($data['amount'], (string) $locked->balance) !== 0) {
-                    throw ValidationException::withMessages(['amount' => 'Invoice balance changed. Review the refreshed invoice before submitting payment.']);
+                if (Money::gt($data['amount'], (string) $locked->balance)) {
+                    throw ValidationException::withMessages(['amount' => 'Payment amount exceeds the current invoice balance. Review the refreshed invoice before submitting payment.']);
                 }
                 if ($data['payment_date'] < $locked->date->toDateString()) {
                     throw ValidationException::withMessages(['payment_date' => 'Payment date cannot be earlier than the invoice date.']);
@@ -89,7 +90,7 @@ class InvoicePaymentSubmissionService
                 if (! $path) throw new BusinessRuleException('Payment proof could not be stored. Please retry.');
                 $row = InvoicePaymentSubmission::create([
                     'invoice_id' => $locked->id, 'customer_id' => $by->customer_id, 'submitted_by' => $by->id,
-                    'amount' => (string) $locked->balance, 'balance_at_submission' => (string) $locked->balance,
+                    'amount' => Money::round2((string) $data['amount']), 'balance_at_submission' => (string) $locked->balance,
                     'sending_bank' => $data['sending_bank'], 'sending_bank_normalized' => $bank,
                     'reference_number' => $data['reference_number'], 'reference_normalized' => $reference,
                     'payment_date' => $data['payment_date'], 'status' => Status::Pending,
@@ -106,6 +107,9 @@ class InvoicePaymentSubmissionService
                     'title' => 'Customer payment awaits verification', 'message' => 'Review payment for '.$locked->invoice_number.'.',
                     'link_to' => '/accounting/invoices/'.$locked->hash_id,
                 ], 'invoice-payment:'.$row->hash_id.':pending', emailEnabled: false);
+
+                app(ChainBroadcaster::class)->broadcastFor($locked->fresh(), $locked->status->value, null, action: 'updated');
+
                 return $row;
             }, 3);
         } catch (\Throwable $error) {
@@ -193,6 +197,7 @@ class InvoicePaymentSubmissionService
             if ($row->status === Status::Rejected && $row->rejection_reason === $reason) return $row;
             if ($row->status !== Status::Pending) throw new BusinessRuleException('Only a pending payment can be rejected.');
             $row->update(['status' => Status::Rejected, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'rejection_reason' => $reason]);
+            app(ChainBroadcaster::class)->broadcastFor($locked->fresh(), $locked->status->value, $by, action: 'updated');
             $this->notifyCustomer($row, $locked, 'Payment requires correction', $reason);
             return $row;
         }, 3);
@@ -204,7 +209,7 @@ class InvoicePaymentSubmissionService
             $this->authorize($by);
             $row = InvoicePaymentSubmission::query()->whereHash($data['payment_submission_id'])->lockForUpdate()->firstOrFail();
             $this->assertParent($invoice, $row);
-            if ($row->status !== Status::Pending || Money::cmp((string) $row->amount, (string) $invoice->balance) !== 0) {
+            if ($row->status !== Status::Pending || Money::gt((string) $row->amount, (string) $invoice->balance)) {
                 throw new BusinessRuleException('Payment state or invoice balance changed. Review the submission before recording funds.');
             }
             if (Money::cmp((string) $data['amount'], (string) $row->amount) !== 0
@@ -217,8 +222,18 @@ class InvoicePaymentSubmissionService
             $this->assertProof($row);
             $this->bankAccountId($data['cash_account_id']);
         } else {
-            if (! $by->hasPermission('accounting.invoices.collect_manual')) throw new ForbiddenActionException('Customer payment submission is required before recording collection.');
-            Validator::make(['manual_reason' => trim((string) ($data['manual_reason'] ?? ''))], ['manual_reason' => ['required', 'string', 'min:10', 'max:500']])->validate();
+            $order = $invoice->salesOrder()->first();
+            $methodMatchesOrder = $order
+                && in_array($order->payment_method, ['cash', 'check'], true)
+                && $order->payment_method === ($data['payment_method'] ?? null);
+            $ordinaryCollector = $by->hasPermission('accounting.invoices.collect') && $methodMatchesOrder;
+            $exceptionalCollector = $by->hasPermission('accounting.invoices.collect_manual') || $by->role?->slug === 'system_admin';
+            if (! $ordinaryCollector && ! $exceptionalCollector) {
+                throw new ForbiddenActionException('Record the agreed payment method or request exceptional collection access.');
+            }
+            if (! $ordinaryCollector) {
+                Validator::make(['manual_reason' => trim((string) ($data['manual_reason'] ?? ''))], ['manual_reason' => ['required', 'string', 'min:10', 'max:500']])->validate();
+            }
             if ($invoice->paymentSubmissions()->where('status', Status::Pending)->exists()) {
                 throw new BusinessRuleException('Review or reject the pending customer payment before an exceptional collection.');
             }

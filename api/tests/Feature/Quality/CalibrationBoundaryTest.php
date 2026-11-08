@@ -61,6 +61,36 @@ class CalibrationBoundaryTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_calibration_list_returns_server_permissions_and_row_actions(): void
+    {
+        $record = CalibrationRecord::create([
+            'equipment_code' => 'CAL-ACTIONS-001',
+            'name' => 'Digital caliper',
+            'frequency_days' => 365,
+        ]);
+        $manager = $this->userWithPermissions('calibration-action-manager', [
+            'quality.calibration.view',
+            'quality.calibration.manage',
+        ]);
+        $viewer = $this->userWithPermissions('calibration-action-viewer', ['quality.calibration.view']);
+
+        $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/v1/quality/calibration')
+            ->assertOk()
+            ->assertJsonPath('permissions.create', true)
+            ->assertJsonPath('data.0.permissions.manage', true)
+            ->assertJsonPath('data.0.available_actions.update', true)
+            ->assertJsonPath('data.0.available_actions.record_calibration', true);
+
+        $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/v1/quality/calibration')
+            ->assertOk()
+            ->assertJsonPath('permissions.create', false)
+            ->assertJsonPath('data.0.permissions.manage', false)
+            ->assertJsonPath('data.0.available_actions.update', false)
+            ->assertJsonPath('data.0.available_actions.record_calibration', false);
+    }
+
     /**
      * The whole PATCH path had no test anywhere, and it was throwing
      * MassAssignmentException in every non-production environment because the

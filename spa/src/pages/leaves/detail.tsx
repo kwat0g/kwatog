@@ -19,6 +19,7 @@ import { formatDate } from '@/lib/formatDate';
 import { leaveStatusVariant } from '@/lib/statusVariants';
 
 import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
+import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 export default function LeaveDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const user = useAuthStore((s) => s.user);
@@ -27,6 +28,7 @@ export default function LeaveDetailPage() {
  const [confirmApproveDept, setConfirmApproveDept] = useState(false);
  const [confirmApproveHR, setConfirmApproveHR] = useState(false);
  const [confirmCancel, setConfirmCancel] = useState(false);
+ useRealtimeRecord('leave_request', id);
 
  const { data: req, isLoading, isError, refetch } = useQuery({
  queryKey: ['leaves', 'request', id],
@@ -51,28 +53,28 @@ export default function LeaveDetailPage() {
 
  const approveDept = useOptimisticStatusAction({
       detailKey,
-      invalidateKey: ['leaves'],
+      realtimeChange: { entityType: 'leave_request', entityId: id },
       mutationFn: () => leaveRequestsApi.approveDept(id),
       nextStatus: 'pending_hr',
       successMsg: 'Approved.', errorMsg: 'Failed to approve.',
     });
  const approveHR = useOptimisticStatusAction({
       detailKey,
-      invalidateKey: ['leaves'],
+      realtimeChange: { entityType: 'leave_request', entityId: id },
       mutationFn: () => leaveRequestsApi.approveHR(id),
       nextStatus: 'approved',
       successMsg: 'Approved.', errorMsg: 'Failed to approve.',
     });
  const rejectMut = useOptimisticStatusAction({
       detailKey,
-      invalidateKey: ['leaves'],
+      realtimeChange: { entityType: 'leave_request', entityId: id },
       mutationFn: () => leaveRequestsApi.reject(id, reason),
       nextStatus: 'rejected',
       successMsg: 'Rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => { setReject(false); setReason(''); },
     });
  const cancelMut = useOptimisticStatusAction({
       detailKey,
-      invalidateKey: ['leaves'],
+      realtimeChange: { entityType: 'leave_request', entityId: id },
       mutationFn: () => leaveRequestsApi.cancel(id),
       nextStatus: 'cancelled',
       successMsg: 'Cancelled.', errorMsg: 'Failed to cancel.',
@@ -83,7 +85,8 @@ export default function LeaveDetailPage() {
  return <EmptyState icon="alert-circle" title="Leave request not found" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
  }
 
- const canCancel = isOwner && ['pending_dept', 'pending_hr', 'approved'].includes(req.status);
+ const hasAction = (action: 'approve_dept' | 'approve_hr' | 'reject' | 'cancel') =>
+  req.available_actions?.includes(action) ?? false;
  const statusLabel = new Map((leaveOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const halfDayLabels = new Map((leaveOptions?.half_day_periods ?? []).map((option) => [option.value, option.label]));
 
@@ -101,19 +104,19 @@ export default function LeaveDetailPage() {
  backLabel={isOwner ? 'My leaves' : 'Leaves'}
  actions={
  <>
- {req.status === 'pending_dept' && req.can_approve && (
+ {req.status === 'pending_dept' && hasAction('approve_dept') && (
  <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => setConfirmApproveDept(true)}>Approve</Button>
- <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ {hasAction('reject') && <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>}
  </>
  )}
- {req.status === 'pending_hr' && req.can_approve && (
+ {req.status === 'pending_hr' && hasAction('approve_hr') && (
  <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => setConfirmApproveHR(true)}>Approve</Button>
- <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ {hasAction('reject') && <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>}
  </>
  )}
- {canCancel && (
+ {hasAction('cancel') && (
  <Button variant="secondary" size="sm" icon={<LuRotateCcw size={12} />} onClick={() => setConfirmCancel(true)} disabled={cancelMut.isPending}>Cancel</Button>
  )}
  </>

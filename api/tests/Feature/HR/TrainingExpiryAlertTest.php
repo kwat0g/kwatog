@@ -9,6 +9,8 @@ use App\Modules\Auth\Models\User;
 use App\Common\Services\SettingsService;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\TrainingAlertLevel;
+use App\Common\Models\OutboxMessage;
+use App\Modules\HR\Events\EmployeeTrainingChanged;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
@@ -154,6 +156,10 @@ class TrainingExpiryAlertTest extends TestCase
         $rec->refresh();
         $this->assertSame(TrainingAlertLevel::Expired, $rec->last_alert_level);
         $this->assertSame(EmployeeTrainingStatus::Expired, $rec->status);
+        $this->assertSame(
+            1,
+            OutboxMessage::query()->where('event_type', EmployeeTrainingChanged::class)->count(),
+        );
     }
 
     public function test_smoke_command_runs(): void

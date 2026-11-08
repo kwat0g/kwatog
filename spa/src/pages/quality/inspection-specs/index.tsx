@@ -24,8 +24,10 @@ import type { InspectionSpec } from '@/types/quality';
 import { formatDateIso } from '@/lib/formatDate';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
+import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { reportMutationError } from '@/lib/formErrors';
+import { useRealtimeList } from '@/hooks/useRealtimeRecord';
 export default function InspectionSpecsListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -36,11 +38,14 @@ export default function InspectionSpecsListPage() {
     trashed: 'with',
   });
   const [archiveTarget, setArchiveTarget] = useState<InspectionSpec | null>(null);
+  useRealtimeList('inspection_spec', 'visible');
 
+  const queryKey = ['quality', 'inspection-specs', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['quality', 'inspection-specs', filters],
+    queryKey,
     queryFn: () => inspectionSpecsApi.list(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous, previousQuery) =>
+      sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined,
   });
 
   const archiveMutation = useMutation({

@@ -45,6 +45,77 @@ class OutboxDispatcher
         return $leaseToken;
     }
 
+    /**
+     * Publish a batch of freshly staged notification signals with one lease
+     * claim and one success update. The batch path keeps recipient fan-out
+     * from multiplying database round trips in the request.
+     *
+     * @param  array<string, array{event_type: class-string, event: object}>  $eventsByOutboxId
+     */
+    public function dispatchBatchInline(array $eventsByOutboxId): void
+    {
+        if ($eventsByOutboxId === []) {
+            return;
+        }
+
+        $outboxIds = array_keys($eventsByOutboxId);
+        $leaseToken = (string) Str::uuid();
+        $claimedAt = now();
+
+        DB::transaction(function () use ($outboxIds, $leaseToken, $claimedAt): void {
+            $claimed = OutboxMessage::query()
+                ->whereIn('id', $outboxIds)
+                ->where('status', OutboxMessage::STATUS_PENDING)
+                ->where('available_at', '<=', $claimedAt)
+                ->update([
+                    'status' => OutboxMessage::STATUS_PROCESSING,
+                    'attempts' => DB::raw('attempts + 1'),
+                    'locked_at' => $claimedAt,
+                    'lease_token' => $leaseToken,
+                    'updated_at' => $claimedAt,
+                ]);
+
+            if ($claimed !== count($outboxIds)) {
+                throw new \RuntimeException('Could not claim every staged notification event in one batch.');
+            }
+        });
+
+        $publishedIds = [];
+        $failed = [];
+
+        foreach ($eventsByOutboxId as $outboxId => $entry) {
+            try {
+                OutboxDispatchContext::run(
+                    $outboxId,
+                    $entry['event_type'],
+                    static fn () => event($entry['event']),
+                );
+                $publishedIds[] = $outboxId;
+            } catch (Throwable $exception) {
+                $failed[$outboxId] = $exception;
+            }
+        }
+
+        if ($publishedIds !== []) {
+            $publishedAt = now();
+            DB::table('event_outbox')
+                ->whereIn('id', $publishedIds)
+                ->where('status', OutboxMessage::STATUS_PROCESSING)
+                ->where('lease_token', $leaseToken)
+                ->update([
+                    'status' => OutboxMessage::STATUS_PUBLISHED,
+                    'locked_at' => null,
+                    'lease_token' => null,
+                    'published_at' => $publishedAt,
+                    'updated_at' => $publishedAt,
+                ]);
+        }
+
+        foreach ($failed as $outboxId => $exception) {
+            $this->markPending($outboxId, $exception, $leaseToken);
+        }
+    }
+
     public function markFailed(string $outboxId, Throwable $exception, ?string $leaseToken = null): void
     {
         DB::transaction(function () use ($outboxId, $exception, $leaseToken): void {

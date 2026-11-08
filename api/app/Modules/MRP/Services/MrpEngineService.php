@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Services\SalesOrderSupplyService;
 use App\Modules\HR\Models\Department;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -39,11 +42,13 @@ use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\QualityStockHoldService;
+use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Sprint 6 — Task 52. MRP engine.
@@ -133,8 +138,8 @@ class MrpEngineService
                 ];
                 DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
                 $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
-                $supplyRecovery = app(\App\Modules\SupplyChain\Services\DeliveryService::class)->reconcileAutomaticSupply($so, \App\Modules\Auth\Models\User::findOrFail($recordedBy));
-                app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->allocate($so, \App\Modules\Auth\Models\User::findOrFail($recordedBy), \Illuminate\Support\Str::uuid()->toString());
+                $supplyRecovery = app(DeliveryService::class)->reconcileAutomaticSupply($so, User::findOrFail($recordedBy));
+                app(SalesOrderSupplyService::class)->allocate($so, User::findOrFail($recordedBy), Str::uuid()->toString());
                 // Lock the current plan. Supersede it only after confirming a new plan is needed.
                 $previous = MrpPlan::where('sales_order_id', $so->id)
                     ->where('status', MrpPlanStatus::Active->value)
@@ -442,9 +447,9 @@ class MrpEngineService
                         $this->generatedRecordsFingerprint((int) $so->id),
                     )) {
                     if ($lines->contains(fn ($line) => $line->fulfillment_policy === 'stock_first')) {
-                        app(\App\Modules\SupplyChain\Services\DeliveryService::class)->draftOrderSupply(
+                        app(DeliveryService::class)->draftOrderSupply(
                             $so,
-                            \App\Modules\Auth\Models\User::findOrFail($recordedBy),
+                            User::findOrFail($recordedBy),
                         );
                     }
                     if ($run !== null) {
@@ -511,6 +516,7 @@ class MrpEngineService
                     // in-process submit) is skipped rather than clobbered, and a
                     // fresh consolidated PR is created when no candidate survives.
                     $pr = null;
+                    $prWasCreated = false;
                     foreach ($priorDraftAutoPrs as $candidate) {
                         $candidate->refresh();
                         if ($candidate->status !== PurchaseRequestStatus::Draft) {
@@ -524,6 +530,10 @@ class MrpEngineService
                         }
 
                         $candidate->forceFill(['status' => PurchaseRequestStatus::Cancelled->value])->save();
+                        app(ChainBroadcaster::class)->broadcastFor(
+                            $candidate,
+                            PurchaseRequestStatus::Cancelled->value,
+                        );
                     }
 
                     $earliestNeedBy = collect($shortages)
@@ -542,6 +552,7 @@ class MrpEngineService
                             'priority' => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
                             'is_auto_generated' => true,
                         ]);
+                        $prWasCreated = true;
                     } else {
                         // status non-fillable; service-only. Repoint the reused PR
                         // to the current plan and refresh its lines.
@@ -568,6 +579,11 @@ class MrpEngineService
                             'purpose' => "MRP demand for SO {$so->so_number}",
                         ]);
                     }
+                    app(ChainBroadcaster::class)->broadcastFor(
+                        $pr->fresh(),
+                        PurchaseRequestStatus::Draft->value,
+                        action: $prWasCreated ? 'created' : 'updated',
+                    );
                     $autoPrCount = 1; // one consolidated PR per run
                 } else {
                     // No shortages on this run — retire leftover draft auto-PRs so
@@ -585,6 +601,10 @@ class MrpEngineService
                         $retiredPr->forceFill([
                             'status' => PurchaseRequestStatus::Cancelled->value,
                         ])->save();
+                        app(ChainBroadcaster::class)->broadcastFor(
+                            $retiredPr,
+                            PurchaseRequestStatus::Cancelled->value,
+                        );
                     }
                 }
 
@@ -717,8 +737,13 @@ class MrpEngineService
                 // Link the SO to this plan.
                 $so->update(['mrp_plan_id' => $plan->id]);
                 if ($lines->contains(fn ($line) => $line->fulfillment_policy === 'stock_first')) {
-                    app(\App\Modules\SupplyChain\Services\DeliveryService::class)->draftOrderSupply($so, \App\Modules\Auth\Models\User::findOrFail($recordedBy));
+                    app(DeliveryService::class)->draftOrderSupply($so, User::findOrFail($recordedBy));
                 }
+
+                // CRM SalesOrder resources embed the active MRP plan. Send a
+                // separate content-free signal on the SalesOrder's own
+                // authorized channels; the MRP plan event stays MRP-scoped.
+                app(ChainBroadcaster::class)->refreshSalesOrder($so->refresh());
 
                 $finalPlan = $plan->fresh();
                 app(OutboxService::class)->recordForChain(
@@ -954,16 +979,22 @@ class MrpEngineService
             ]);
         } catch (\Throwable $e) {
             $failure = MrpErrorPolicy::describe($e);
-            $updated = MrpRun::query()
-                ->whereKey($run->id)
-                ->where('status', MrpRunStatus::Running->value)
-                ->update([
+            $updated = DB::transaction(function () use ($run, $start, $failure): int {
+                $lockedRun = MrpRun::query()->whereKey($run->id)->lockForUpdate()->first();
+                if ($lockedRun === null || $lockedRun->status !== MrpRunStatus::Running) {
+                    return 0;
+                }
+
+                $lockedRun->forceFill([
                     'duration_ms' => (int) round((microtime(true) - $start) * 1000),
                     'status' => MrpRunStatus::Failed->value,
                     'error_message' => $failure['message'],
                     'error_code' => $failure['code'],
                     'recovery_action' => $failure['recovery_action'],
-                ]);
+                ])->save();
+
+                return 1;
+            });
 
             if ($updated === 0) {
                 $run->refresh();
@@ -1215,9 +1246,11 @@ class MrpEngineService
         $delivered = (float) $line->quantity_delivered;
 
         if ($line->fulfillment_policy === 'stock_first') {
-            $coverage = app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->lineCoverage($line);
+            $coverage = app(SalesOrderSupplyService::class)->lineCoverage($line);
+
             return max(0.0, (float) $coverage['demand'] - (float) $coverage['ready_quantity'] - (float) $coverage['awaiting_qc'] - $inlineRepairCommitment);
         }
+
         return max(0.0, (float) $line->quantity - max($delivered, min((float) $line->quantity, (float) $good)));
     }
 
@@ -1233,8 +1266,7 @@ class MrpEngineService
                 WorkOrderStatus::Paused->value,
             ])->orWhere(fn ($planned) => $planned->where('status', WorkOrderStatus::Planned->value)->whereHas('currentProductionSchedule')))
             ->get(['quantity_target', 'quantity_good']);
-        $openProduction = $progressedWos->sum(fn (WorkOrder $workOrder): float =>
-            max(0.0, (float) $workOrder->quantity_target - (float) $workOrder->quantity_good));
+        $openProduction = $progressedWos->sum(fn (WorkOrder $workOrder): float => max(0.0, (float) $workOrder->quantity_target - (float) $workOrder->quantity_good));
 
         // NCR owns replacement production but has no MRP plan to repoint.
         $openProduction += WorkOrder::query()
@@ -1243,8 +1275,7 @@ class MrpEngineService
             ->whereNotNull('parent_ncr_id')
             ->where('status', WorkOrderStatus::Planned->value)
             ->get(['quantity_target', 'quantity_produced'])
-            ->sum(fn (WorkOrder $workOrder): float =>
-                max(0.0, (float) $workOrder->quantity_target - (float) $workOrder->quantity_produced));
+            ->sum(fn (WorkOrder $workOrder): float => max(0.0, (float) $workOrder->quantity_target - (float) $workOrder->quantity_produced));
 
         return $openProduction;
     }
@@ -1538,7 +1569,10 @@ class MrpEngineService
             $inTransit = in_array($line->status, $openStatuses, true)
                 || ($line->status === PurchaseOrderStatus::PendingApproval->value && $line->pending_change_response_id !== null);
             if ($line->stock_production_work_order_id) {
-                if ($inTransit) $linkedTransit += $remaining;
+                if ($inTransit) {
+                    $linkedTransit += $remaining;
+                }
+
                 continue;
             }
             if ($line->sales_order_id !== null) {
@@ -1572,7 +1606,9 @@ class MrpEngineService
         $unplannedHeld = 0.0;
         $linkedQcBySo = [];
         foreach ($held as $row) {
-            if ($row->stock_production_work_order_id) continue;
+            if ($row->stock_production_work_order_id) {
+                continue;
+            }
             $remainder = max(0.0, (float) $row->quantity_received - (float) $row->quantity_accepted);
             if ($row->sales_order_id !== null) {
                 $sid = (int) $row->sales_order_id;

@@ -37,6 +37,9 @@
         </include>
     </source>
     <php>
+        <env name="PRODUCTION_ROUTING_EXECUTION_ENABLED" value="true" force="true"/>
+        <!-- Keep the test runner from inheriting the container's 128 MiB CLI cap. -->
+        <ini name="memory_limit" value="-1"/>
         <!--
             Pin both PHP's process environment and $_SERVER. Compose injects
             APP_ENV=${APP_ENV:-local}; PHPUnit's forced <env> changes getenv()
@@ -252,6 +255,8 @@
         <env name="BROADCAST_CONNECTION" value="log" force="true"/>
         <server name="BROADCAST_CONNECTION" value="log" force="true"/>
         <server name="CACHE_STORE" value="array" force="true"/>
+        <env name="CACHE_GENERATION_DRIVER" value="array" force="true"/>
+        <server name="CACHE_GENERATION_DRIVER" value="array" force="true"/>
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_HOST" value="db"/>
         <env name="DB_PORT" value="5432"/>

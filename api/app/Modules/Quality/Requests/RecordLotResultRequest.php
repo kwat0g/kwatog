@@ -84,6 +84,7 @@ class RecordLotResultRequest extends FormRequest
         $sampleSize = $inspection instanceof Inspection ? (int) $inspection->sample_size : 0;
 
         return [
+            'expected_result_version' => ['sometimes', 'integer', 'min:0'],
             'checklist' => ['present', 'array'],
             'checklist.*._id' => ['required', 'integer', 'min:1', 'distinct:strict'],
             'checklist.*.is_pass' => ['required', 'boolean'],
@@ -121,8 +122,7 @@ class RecordLotResultRequest extends FormRequest
     public function decoded(): array
     {
         $validated = $this->validated();
-
-        return [
+        $decoded = [
             'checklist' => $validated['checklist'] ?? [],
             'measurements' => $validated['measurements'] ?? [],
             // Null keeps a draft uncounted; 0 would read back as "none found".
@@ -133,5 +133,10 @@ class RecordLotResultRequest extends FormRequest
             'defects_removed_confirmed' => $this->boolean('defects_removed_confirmed'),
             'complete' => (bool) ($validated['complete'] ?? false),
         ];
+        if (array_key_exists('expected_result_version', $validated)) {
+            $decoded['expected_result_version'] = (int) $validated['expected_result_version'];
+        }
+
+        return $decoded;
     }
 }

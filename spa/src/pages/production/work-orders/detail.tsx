@@ -34,14 +34,16 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { PageShell } from '@/components/layout/PageShell';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
-import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
+import { reconcileWorkOrderOperation, workOrderOperationsQueryKey } from '@/lib/realtime/productionOperations';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { formatInt, formatPeso, formatPreciseQuantity } from '@/lib/formatNumber';
 import { formatDate, formatDateIso } from '@/lib/formatDate';
+import { invalidateQueryPrefixesExcept } from '@/lib/realtime/invalidationMap';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
-import type { MachineDowntimeCategory } from '@/types/production';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import type { MachineDowntimeCategory, WorkOrder, WorkOrderOutput } from '@/types/production';
 import type { WoOperation, WoOperationStatus } from '@/types/production/routing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
@@ -83,8 +85,6 @@ export default function WorkOrderDetailPage() {
   });
   const employeeId = operationCrew.data?.current?.recorder_employee_id;
   const canLifecycle = can('production.work_orders.lifecycle');
-  const canCancelStock = can('production.wo.cancel_stock');
-  const canConfirm = can('production.wo.confirm');
   const canRecord = can('production.wo.record');
   const canInventoryView = can('inventory.view');
 
@@ -129,9 +129,10 @@ export default function WorkOrderDetailPage() {
     queryKey: ['production', 'work-orders', 'detail', id],
     queryFn: () => workOrdersApi.show(id!),
     enabled: !!id,
-    refetchInterval: 60_000,
   });
+  const stockProduction = data?.production_purpose === 'stock';
   const finishFirst = data?.qc_workflow === 'finish_first_v1';
+  const routingExecutionEnabled = data?.routing_execution_enabled !== false;
   const physicalQuantity = finishFirst ? data?.produced_quantity ?? data?.quantity_produced ?? 0 : data?.quantity_good ?? 0;
   const handoverPending = data?.warehouse_handover?.pending ?? data?.warehouse_handover_pending ?? 0;
   const operationHandoverBlocked = handoverPending > 0 && !(canRecord && canLifecycle && operationHandoverAcknowledged && operationHandoverReason.trim() && operationHandoverReason.trim().length <= 500);
@@ -142,15 +143,10 @@ export default function WorkOrderDetailPage() {
   });
 
   const operations = useQuery({
-    queryKey: ['production', 'work-orders', 'operations', id],
+    queryKey: workOrderOperationsQueryKey(id!),
     queryFn: () => woOperationsApi.list(id!),
-    enabled: !!id && tab === 'operations',
+    enabled: !!id && routingExecutionEnabled && tab === 'operations',
   });
-  // Live updates from output recordings.
-  useEcho(`production.wo.${id}`, '.output.recorded', () => {
-    qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
-  });
-
   // Series C — Task C4. Real-time chain progress (status transitions).
   useChainProgress(
     'work_order',
@@ -183,15 +179,18 @@ export default function WorkOrderDetailPage() {
       }
     },
     onSuccess: (wo, action) => {
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'chain', id] });
-      if (action === 'cancel') {
-        qc.invalidateQueries({ queryKey: ['production'] });
-        qc.invalidateQueries({ queryKey: ['mrp', 'scheduler'] });
-        qc.invalidateQueries({ queryKey: ['inventory'] });
-        qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
-      }
+      if (wo) qc.setQueryData(['production', 'work-orders', 'detail', id], wo);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'work_order', entityId: id! },
+        [
+          ['production', 'work-orders', 'chain', id],
+          ...(action === 'cancel'
+            ? [['production'], ['mrp', 'scheduler'], ['purchasing', 'purchase-requests']]
+            : []),
+        ],
+        wo ? [['production', 'work-orders', 'detail', id]] : [],
+      );
       toast.success(`Work order ${wo?.wo_number} updated.`);
       setConfirmAction(null);
       setShowConfirmDialog(false);
@@ -209,8 +208,14 @@ export default function WorkOrderDetailPage() {
 
   const release = useMutation({
     mutationFn: () => workOrdersApi.releaseResources(id!, releaseReason.trim()),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['production'] });
+    onSuccess: (workOrder) => {
+      qc.setQueryData(['production', 'work-orders', 'detail', id], workOrder);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'work_order', entityId: id! },
+        [['production'], ['mrp', 'scheduler']],
+        [['production', 'work-orders', 'detail', id]],
+      );
       setReleaseOpen(false);
       setReleaseReason('');
       toast.success('Paused resources released. Review schedule before resuming.');
@@ -220,8 +225,12 @@ export default function WorkOrderDetailPage() {
   const retryReceipt = useMutation({
     mutationFn: (outputId: string) => workOrdersApi.retryProductionReceipt(id!, outputId),
     onSuccess: (output) => {
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'outputs', id] });
+      qc.setQueryData<WorkOrder>(['production', 'work-orders', 'detail', id], (current) => current
+        ? { ...current, outputs: current.outputs?.map((row) => row.id === output.id ? output : row) }
+        : current);
+      qc.setQueryData<WorkOrderOutput[]>(['production', 'work-orders', 'outputs', id], (current) =>
+        current?.map((row) => row.id === output.id ? output : row));
+      void invalidateRealtimeChange(qc, { entityType: 'work_order', entityId: id! });
       toast.success(
         output.production_receipt_handoff?.status === 'generated'
           ? 'Finished-goods receipt posted.'
@@ -229,6 +238,13 @@ export default function WorkOrderDetailPage() {
       );
     },
     onError: (error: AxiosError<{ message?: string }>) => {
+      void invalidateQueryPrefixesExcept(
+        qc,
+        [
+          ['production', 'work-orders', 'detail', id],
+          ['production', 'work-orders', 'outputs', id],
+        ],
+      );
       toast.error(error.response?.data?.message ?? 'Finished-goods receipt could not be posted.');
     },
   });
@@ -262,9 +278,13 @@ export default function WorkOrderDetailPage() {
           return woOperationsApi.complete(operationId);
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+    onSuccess: (updatedOperation) => {
+      if (id) reconcileWorkOrderOperation(qc, id, updatedOperation);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'work_order', entityId: id! },
+        [workOrderOperationsQueryKey(id!)],
+      );
       toast.success('Operation updated.');
     },
     onError: (error: AxiosError<{ message?: string }> | Error) => {
@@ -295,9 +315,13 @@ export default function WorkOrderDetailPage() {
         recording_reason: operationRecordingReason.trim() || undefined,
       });
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+    onSuccess: (updatedOperation) => {
+      if (id) reconcileWorkOrderOperation(qc, id, updatedOperation);
+      void invalidateRealtimeChange(
+        qc,
+        { entityType: 'work_order', entityId: id! },
+        [workOrderOperationsQueryKey(id!)],
+      );
       toast.success(
         operationDialog?.kind === 'skip' ? 'Operation skipped.' : 'Operation output recorded.',
       );
@@ -518,19 +542,15 @@ export default function WorkOrderDetailPage() {
   const processQcBlocked = Boolean(data.process_quality_blocker) || (!finishFirst && !!data.startup_trial && data.startup_trial.state !== 'released');
   const setupBlocked = handoverPending > 0 || (processQcBlocked && !['awaiting_samples', 'awaiting_qc'].includes(data.startup_trial?.state ?? ''));
 
-  const showConfirm = data.status === 'planned' && canConfirm;
-  const showStart = data.status === 'confirmed' && canLifecycle;
-  const showPause = data.status === 'in_progress' && canLifecycle;
-  const showResume = data.status === 'paused' && canLifecycle;
+  const showConfirm = data.available_actions?.confirm === true;
+  const showStart = data.available_actions?.start === true;
+  const showPause = data.available_actions?.pause === true;
+  const showResume = data.available_actions?.resume === true;
   const targetProduced = finishFirst && Number(physicalQuantity) >= Number(data.quantity_target);
-  const showComplete = data.status === 'in_progress' && !targetProduced && !processQcBlocked && handoverPending === 0 && Number(data.quantity_produced) > 0 && canLifecycle;
-  const showClose = data.status === 'completed' && !data.quality_close_blocker && canLifecycle;
-  const stockProduction = data.production_purpose === 'stock';
-  const showCancel = stockProduction &&
-    ['planned', 'confirmed'].includes(data.status) && !data.actual_start && !data.parent && (canLifecycle || canCancelStock) &&
-    Number(data.quantity_produced) === 0 &&
-    !data.outputs?.length;
-  const showRecord = data.status === 'in_progress' && !targetProduced && !processQcBlocked && handoverPending === 0 && canRecord;
+  const showComplete = data.available_actions?.complete === true && !targetProduced && !processQcBlocked && handoverPending === 0 && Number(data.quantity_produced) > 0;
+  const showClose = data.available_actions?.close === true && !data.quality_close_blocker;
+  const showCancel = data.available_actions?.cancel === true;
+  const showRecord = data.available_actions?.record_output === true && !targetProduced && !processQcBlocked && handoverPending === 0;
 
   const scheduleStatus = data.schedule_status ?? data.schedule_warning;
   const informationalSchedule =
@@ -738,7 +758,7 @@ export default function WorkOrderDetailPage() {
       )}
 
       {/* Tabs */}
-      <Tabs
+      {routingExecutionEnabled && <Tabs
         label="Work order sections"
         value={tab}
         onChange={setTab}
@@ -746,7 +766,7 @@ export default function WorkOrderDetailPage() {
           { key: 'details', label: 'Details' },
           { key: 'operations', label: 'Operations' },
         ]}
-      />
+      />}
 
       {finishFirst && ['completed', 'closed'].includes(data.status) && <div><Panel title="Final quality inspection">
         <p className="text-sm">{data.produced_quantity ?? data.quantity_produced} produced · {data.qc_accepted_quantity ?? 0} QC accepted · {data.awaiting_qc_quantity ?? 0} awaiting QC.</p>
@@ -1521,7 +1541,7 @@ export default function WorkOrderDetailPage() {
         </div>
       )}
 
-      {tab === 'operations' && (
+      {routingExecutionEnabled && tab === 'operations' && (
         <div>
           <p className="mb-3 text-sm text-muted">
             Operation operator:{' '}

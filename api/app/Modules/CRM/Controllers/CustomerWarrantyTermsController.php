@@ -9,6 +9,7 @@ use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -38,20 +39,23 @@ class CustomerWarrantyTermsController
             'warranty_remedies.*' => ['string', 'distinct', Rule::in(['repair', 'replace', 'credit', 'refund'])],
         ])->validate();
 
-        $term = CustomerProductWarrantyOverride::query()->updateOrCreate(
+        $term = DB::transaction(fn (): CustomerProductWarrantyOverride => CustomerProductWarrantyOverride::query()->updateOrCreate(
             ['customer_id' => $customer->id, 'product_id' => $product->id],
             $validated,
-        )->load(['product' => fn ($query) => $query->withTrashed()->select('id', 'part_number', 'name', 'unit_of_measure')]);
+        ))->load(['product' => fn ($query) => $query->withTrashed()->select('id', 'part_number', 'name', 'unit_of_measure')]);
 
         return response()->json(['data' => $this->serialize($term)]);
     }
 
     public function destroy(Customer $customer, Product $product): JsonResponse
     {
-        CustomerProductWarrantyOverride::query()
-            ->where('customer_id', $customer->id)
-            ->where('product_id', $product->id)
-            ->delete();
+        DB::transaction(function () use ($customer, $product): void {
+            CustomerProductWarrantyOverride::query()
+                ->where('customer_id', $customer->id)
+                ->where('product_id', $product->id)
+                ->get()
+                ->each(fn (CustomerProductWarrantyOverride $term) => $term->delete());
+        });
 
         return response()->json(null, 204);
     }

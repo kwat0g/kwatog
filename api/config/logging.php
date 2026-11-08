@@ -56,6 +56,16 @@ return [
             'days' => 30,
             'replace_placeholders' => true,
         ],
+        // Queue lifecycle timing is written separately because the default
+        // app channel is warning-only in production. Keep the bounded signal
+        // useful for latency diagnosis without raising global log verbosity.
+        'realtime' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/realtime.log'),
+            'level' => 'info',
+            'days' => 3,
+            'replace_placeholders' => true,
+        ],
         'financial' => [
             'driver' => 'daily',
             'path' => storage_path('logs/financial.log'),

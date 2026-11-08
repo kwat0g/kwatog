@@ -2,11 +2,15 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import { queryClient } from '@/lib/queryClient';
 import type { SupplierPortalUser } from '@/types/b2b';
 import PortalLayout from './PortalLayout';
 import { FullPageLoader } from '@/components/ui/Spinner';
 import { PortalBootstrapError } from '@/components/ui/PortalBootstrapError';
+import { usePortalSessionSync } from '@/hooks/usePortalSessionSync';
+import { publishAuthSessionSignal, serializeAuthSessionMutation } from '@/lib/authSessionSync';
+import { clearPwaCaches } from '@/sw-register';
+import { clearLocalAuthSession, useAuthStore } from '@/stores/authStore';
+import { useSupplierPortalDataRealtime } from '@/hooks/useRealtimeSignal';
 
 export default function SupplierPortalLayout() {
  const location = useLocation();
@@ -17,6 +21,16 @@ export default function SupplierPortalLayout() {
  const [isLoading, setIsLoading] = useState(true);
  const [bootstrapError, setBootstrapError] = useState(false);
  const [retryCount, setRetryCount] = useState(0);
+
+ useSupplierPortalDataRealtime(user?.vendor?.id);
+
+ const sessionChanging = useCallback(() => {
+  setUser(null);
+  setIsLoading(true);
+  setBootstrapError(false);
+ }, []);
+ const sessionChanged = useCallback(() => setRetryCount((count) => count + 1), []);
+ usePortalSessionSync('supplier', sessionChanging, sessionChanged);
 
  useEffect(() => {
  let cancelled = false;
@@ -44,7 +58,21 @@ export default function SupplierPortalLayout() {
  }, [navigate, retryCount]);
 
  const handleLogout = useCallback(async () => {
-  try { await supplierPortalApi.logout(); } finally { queryClient.clear(); navigate('/sign-in', { state: { realm: 'supplier' }, replace: true }); }
+  // The API invalidates the shared session container, including sibling guards.
+  publishAuthSessionSignal('all', 'changing');
+  clearLocalAuthSession();
+  setUser(null);
+  setIsLoading(true);
+  setBootstrapError(false);
+  const pwaCacheCleanup = clearPwaCaches();
+  try {
+   await serializeAuthSessionMutation(() => supplierPortalApi.logout());
+  } finally {
+   publishAuthSessionSignal('all', 'changed');
+   void useAuthStore.getState().bootstrap();
+   if (!(await pwaCacheCleanup)) console.warn('Could not clear all Ogami service-worker caches during logout.');
+   navigate('/sign-in', { state: { realm: 'supplier' }, replace: true });
+  }
  }, [navigate]);
 
  if (isLoading) return <FullPageLoader />;
@@ -67,7 +95,7 @@ export default function SupplierPortalLayout() {
  title="Supplier Portal"
  subtitle="Purchase Orders, Invoices & Deliveries"
  >
- <Outlet />
+ <Outlet context={user} />
  </PortalLayout>
  );
 }

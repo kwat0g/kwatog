@@ -20,6 +20,7 @@ import type { Machine, CreateMachineData, UpdateMachineData } from '@/types/mrp'
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 const schema = z.object({
   machine_code: z
     .string()
@@ -109,9 +110,11 @@ export function MachineForm({ initial, mode }: Props) {
         : machinesApi.update(initial!.id, payload);
     },
     onSuccess: (machine) => {
-      qc.invalidateQueries({ queryKey: ['mrp', 'machines'] });
+      qc.setQueryData(['mrp', 'machines', 'detail', machine.id], machine);
+      void invalidateRealtimeChange(qc, { entityType: 'machine', entityId: machine.id });
       toast.success(mode === 'create' ? 'Machine created.' : 'Machine updated.');
-      navigate(`/mrp/machines/${machine.id}`);
+            safety.allowNavigationAfterSave();
+navigate(`/mrp/machines/${machine.id}`);
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.status === 422 && e.response.data.errors) {

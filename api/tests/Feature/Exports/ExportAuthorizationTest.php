@@ -61,6 +61,38 @@ class ExportAuthorizationTest extends TestCase
             ->assertJsonValidationErrors(['module']);
     }
 
+    public function test_schedule_list_exposes_actions_for_the_current_soft_delete_state(): void
+    {
+        $owner = $this->userWith('hr.employees.export');
+        $makeSchedule = fn (string $name) => ScheduledExport::create([
+            'owner_id' => $owner->id,
+            'name' => $name,
+            'module' => 'hr.employees',
+            'columns' => ['employee_no'],
+            'filters' => [],
+            'format' => 'csv',
+            'frequency' => 'daily',
+            'recipients' => [$owner->email],
+            'next_run_at' => now()->addDay(),
+            'is_active' => true,
+        ]);
+        $active = $makeSchedule('Active schedule');
+        $archived = $makeSchedule('Archived schedule');
+        $archived->delete();
+
+        $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/v1/scheduled-exports?trashed=with')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $active->hash_id,
+                'available_actions' => ['update' => true, 'archive' => true, 'restore' => false],
+            ])
+            ->assertJsonFragment([
+                'id' => $archived->hash_id,
+                'available_actions' => ['update' => false, 'archive' => false, 'restore' => true],
+            ]);
+    }
+
     public function test_schedule_cannot_send_an_owner_scoped_export_to_another_address(): void
     {
         $owner = $this->userWith('hr.employees.export');

@@ -20,7 +20,6 @@ export default function ArAgingPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'statements', 'ar-aging', asOf],
     queryFn: () => statementsApi.arAging({ as_of: asOf }),
-    placeholderData: (prev) => prev,
   });
 
   return (
