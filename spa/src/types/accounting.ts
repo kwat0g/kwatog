@@ -279,6 +279,7 @@ export interface Customer {
   name: string;
   code: string | null;
   contact_person: string | null;
+  contact_person_role?: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -286,6 +287,8 @@ export interface Customer {
   delivery_address: string | null;
   delivery_contact_person: string | null;
   delivery_contact_phone: string | null;
+  delivery_latitude?: number | string | null;
+  delivery_longitude?: number | string | null;
   tin: string | null;
   credit_limit: string | null;
   credit_used: string | null;
@@ -310,12 +313,15 @@ export interface Customer {
 export interface CreateCustomerData {
   name: string;
   contact_person?: string;
+  contact_person_role?: string;
   email?: string;
   phone?: string;
   address?: string;
   delivery_address?: string;
   delivery_contact_person?: string;
   delivery_contact_phone?: string;
+  delivery_latitude?: number | string | null;
+  delivery_longitude?: number | string | null;
   tin?: string;
   credit_limit?: string | null;
   payment_terms_days?: number;

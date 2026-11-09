@@ -22,10 +22,10 @@ class Customer extends Model
     }
 
     protected $fillable = [
-        'name', 'code', 'contact_person', 'email', 'phone', 'address',
+        'name', 'code', 'contact_person', 'contact_person_role', 'email', 'phone', 'address',
         // Chain 1 — where the truck actually goes, which is not the billing
         // address above, and who signs for the goods at that gate.
-        'delivery_address', 'delivery_contact_person', 'delivery_contact_phone',
+        'delivery_address', 'delivery_latitude', 'delivery_longitude', 'delivery_contact_person', 'delivery_contact_phone',
         'allowed_payment_methods', 'shipping_payer', 'agreement_starts_on', 'agreement_ends_on',
         'warranty_duration_days', 'warranty_report_window_days', 'warranty_start_basis',
         'warranty_covered_issues', 'warranty_remedies',

@@ -23,6 +23,7 @@ class CustomerPortalUser extends Authenticatable
         'email',
         'password',
         'is_active',
+        'is_authorized_signatory',
         'must_change_password',
         'last_login_at',
         'failed_login_attempts',
@@ -41,6 +42,7 @@ class CustomerPortalUser extends Authenticatable
     {
         return [
             'is_active'           => 'boolean',
+            'is_authorized_signatory' => 'boolean',
             'must_change_password' => 'boolean',
             'last_login_at'       => 'datetime',
             'locked_until'        => 'datetime',

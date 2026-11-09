@@ -22,10 +22,13 @@ class UpdateCustomerRequest extends FormRequest
             // The code is issued once by CustomerService and is immutable.
             'code'              => ['prohibited'],
             'contact_person'    => ['sometimes', 'nullable', 'string', 'max:100'],
+            'contact_person_role' => ['sometimes', 'nullable', 'string', 'max:100'],
             'email'             => ['sometimes', 'nullable', 'email', 'max:200'],
             'phone'             => ['sometimes', 'nullable', 'string', 'max:20'],
             'address'           => ['sometimes', 'nullable', 'string', 'max:500'],
             'delivery_address'         => ['sometimes', 'nullable', 'string', 'max:500'],
+            'delivery_latitude'        => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
+            'delivery_longitude'       => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'delivery_contact_person'  => ['sometimes', 'nullable', 'string', 'max:100'],
             'delivery_contact_phone'   => ['sometimes', 'nullable', 'string', 'max:20'],
             'allowed_payment_methods' => ['sometimes', 'nullable', 'array', 'list'],
@@ -52,6 +55,24 @@ class UpdateCustomerRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $customer = $this->route('customer');
             $customer = $customer instanceof Customer ? $customer : null;
+            $latitudeSupplied = $this->exists('delivery_latitude');
+            $longitudeSupplied = $this->exists('delivery_longitude');
+            if ($latitudeSupplied !== $longitudeSupplied) {
+                $missingField = $latitudeSupplied ? 'delivery_longitude' : 'delivery_latitude';
+                $validator->errors()->add($missingField, 'Set both delivery coordinates by placing a pin on the map.');
+            }
+
+            $deliveryAddress = $this->input('delivery_address', $customer?->delivery_address);
+            $addressChanged = $this->exists('delivery_address')
+                && trim((string) $deliveryAddress) !== trim((string) $customer?->delivery_address);
+            if ($addressChanged && trim((string) $deliveryAddress) !== '') {
+                foreach (['delivery_latitude', 'delivery_longitude'] as $coordinateField) {
+                    if (! $this->filled($coordinateField)) {
+                        $validator->errors()->add($coordinateField, 'Place a new pin for the changed delivery address.');
+                    }
+                }
+            }
+
             $startsOn = $this->input('agreement_starts_on', $customer?->agreement_starts_on?->toDateString());
             $endsOn = $this->input('agreement_ends_on', $customer?->agreement_ends_on?->toDateString());
             if ($startsOn && $endsOn && $endsOn < $startsOn) {

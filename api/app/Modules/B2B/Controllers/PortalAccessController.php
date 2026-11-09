@@ -26,10 +26,18 @@ class PortalAccessController
         $data = $request->validate([
             'name' => ['required', 'string', 'max:200'],
             'email' => ['required', 'email', 'max:255'],
+            'is_authorized_signatory' => ['sometimes', 'boolean'],
         ]);
         /** @var \App\Modules\Auth\Models\User $actor */
         $actor = $request->user('sanctum');
-        $user = $this->access->inviteCustomer($customer, $data['name'], $data['email'], $actor, $request);
+        $user = $this->access->inviteCustomer(
+            $customer,
+            $data['name'],
+            $data['email'],
+            $actor,
+            $request,
+            $data['is_authorized_signatory'] ?? null,
+        );
 
         return response()->json([
             'message' => 'Customer portal invitation queued.',
@@ -37,6 +45,7 @@ class PortalAccessController
                 'id' => $user->hash_id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_authorized_signatory' => (bool) $user->is_authorized_signatory,
             ],
         ], 201);
     }
@@ -46,10 +55,18 @@ class PortalAccessController
         $data = $request->validate([
             'name' => ['required', 'string', 'max:200'],
             'email' => ['required', 'email', 'max:255'],
+            'is_authorized_signatory' => ['sometimes', 'boolean'],
         ]);
         /** @var \App\Modules\Auth\Models\User $actor */
         $actor = $request->user('sanctum');
-        $user = $this->access->inviteSupplier($vendor, $data['name'], $data['email'], $actor, $request);
+        $user = $this->access->inviteSupplier(
+            $vendor,
+            $data['name'],
+            $data['email'],
+            $actor,
+            $request,
+            $data['is_authorized_signatory'] ?? null,
+        );
 
         return response()->json([
             'message' => 'Supplier portal invitation queued.',

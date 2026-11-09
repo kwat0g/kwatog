@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { FormProvider, useForm } from 'react-hook-form';
 import type { Resolver } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,12 +21,19 @@ import { numberInputProps } from '@/lib/numberInput';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { CustomerDeliveryLocationPicker } from '@/components/accounting/CustomerDeliveryLocationPicker';
 const createSchema = (requireWarranty: boolean) => z.object({
  name: z.string().min(1).max(200),
  contact_person: z.string().max(100).optional().or(z.literal('')),
+ contact_person_role: z.string().max(100).optional().or(z.literal('')),
  email: z.string().email().optional().or(z.literal('')),
  phone: z.string().max(20).optional().or(z.literal('')),
  address: z.string().max(500).optional().or(z.literal('')),
+ delivery_address: z.string().max(500).optional().or(z.literal('')),
+ delivery_contact_person: z.string().max(100).optional().or(z.literal('')),
+ delivery_contact_phone: z.string().max(20).optional().or(z.literal('')),
+ delivery_latitude: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number().min(-90).max(90).optional()),
+ delivery_longitude: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number().min(-180).max(180).optional()),
  tin: z.string().max(20).optional().or(z.literal('')),
  credit_limit: z.coerce.number().min(0).max(99999999.99).optional().or(z.literal('').transform(() => undefined)),
  payment_terms_days: z.coerce.number().int().min(0).max(365),
@@ -39,6 +46,12 @@ const createSchema = (requireWarranty: boolean) => z.object({
  if (requireWarranty) {
   if (values.warranty_duration_days == null) context.addIssue({ code: 'custom', path: ['warranty_duration_days'], message: 'Required' });
   if (values.warranty_report_window_days == null) context.addIssue({ code: 'custom', path: ['warranty_report_window_days'], message: 'Required' });
+ }
+ if ((values.delivery_latitude == null) !== (values.delivery_longitude == null)) {
+  context.addIssue({ code: 'custom', path: ['delivery_latitude'], message: 'Choose a complete delivery location pin.' });
+ }
+ if (requireWarranty && values.delivery_address?.trim() && (values.delivery_latitude == null || values.delivery_longitude == null)) {
+  context.addIssue({ code: 'custom', path: ['delivery_latitude'], message: 'Pin the delivery address on the map.' });
  }
  if (values.restrict_payment_methods && values.allowed_payment_methods.length === 0) {
   context.addIssue({ code: 'custom', path: ['allowed_payment_methods'], message: 'Choose at least one allowed method.' });
@@ -58,14 +71,18 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
  const formSchema = createSchema(mode === 'create');
- const resolver = zodResolver(formSchema) as unknown as Resolver<FormValues>;
+ const resolver = zodResolver(formSchema) as unknown as Resolver<z.input<ReturnType<typeof createSchema>>, unknown, FormValues>;
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<ReturnType<typeof createSchema>>, unknown, FormValues>({
  resolver,
  defaultValues: { is_active: true, restrict_payment_methods: false, allowed_payment_methods: [] },
  values: existing ? {
- name: existing.name, contact_person: existing.contact_person ?? '', email: existing.email ?? '',
+ name: existing.name, contact_person: existing.contact_person ?? '', contact_person_role: existing.contact_person_role ?? '', email: existing.email ?? '',
  phone: existing.phone ?? '', address: existing.address ?? '', tin: existing.tin ?? '',
+ delivery_address: existing.delivery_address ?? '', delivery_contact_person: existing.delivery_contact_person ?? '',
+ delivery_contact_phone: existing.delivery_contact_phone ?? '',
+ delivery_latitude: existing.delivery_latitude == null ? '' : String(existing.delivery_latitude),
+ delivery_longitude: existing.delivery_longitude == null ? '' : String(existing.delivery_longitude),
  credit_limit: existing.credit_limit ? Number(existing.credit_limit) : undefined,
  payment_terms_days: existing.payment_terms_days,
  restrict_payment_methods: existing.allowed_payment_methods !== null,
@@ -73,7 +90,7 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
  warranty_duration_days: existing.warranty_duration_days ?? undefined,
  warranty_report_window_days: existing.warranty_report_window_days ?? undefined,
  is_active: existing.is_active,
- } as FormValues : undefined,
+ } as z.input<ReturnType<typeof createSchema>> : undefined,
  });
  const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting } } = form;
 
@@ -110,11 +127,13 @@ navigate(`/accounting/customers/${c.id}`);
  <PageHeader title={mode === 'create' ? 'New customer' : `Edit ${existing?.name ?? 'customer'}`} backTo="/accounting/customers" backLabel="Customers"
  />
       <FormDraftBanner safety={safety} />
+ <FormProvider {...form}>
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4 space-y-4">
  <Panel title="Identity">
  <div className="grid grid-cols-2 gap-3">
  <Input label="Customer name" required {...register('name')} error={errors.name?.message} />
  <Input label="Contact person" {...register('contact_person')} error={errors.contact_person?.message} />
+ <Input label="Contact role" {...register('contact_person_role')} error={errors.contact_person_role?.message} placeholder="Sales officer, manager, CEO" />
  <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
  <Input label="Phone" {...register('phone')} error={errors.phone?.message} />
  <Textarea label="Address" rows={2} className="col-span-2" {...register('address')} error={errors.address?.message} />
@@ -123,6 +142,14 @@ navigate(`/accounting/customers/${c.id}`);
  <Input label="Credit limit" min="0" prefix="₱" className="font-mono tabular-nums text-right" {...numberInputProps()} step="0.01" {...register('credit_limit')} error={errors.credit_limit?.message} />
  <Input label="Warranty duration (days)" type="number" min={0} max={3650} required={mode === 'create'} helper="Use 0 when no warranty applies." {...register('warranty_duration_days')} error={errors.warranty_duration_days?.message} />
  <Input label="Report within (days)" type="number" min={0} max={3650} required={mode === 'create'} helper="Measured from delivery." {...register('warranty_report_window_days')} error={errors.warranty_report_window_days?.message} />
+ </div>
+ <div className="mt-4 space-y-3 border-t border-default pt-4">
+  <Textarea label="Delivery address" helper="Used by dispatch. A map pin is required for new delivery locations." rows={3} {...register('delivery_address')} error={errors.delivery_address?.message} />
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+   <Input label="Receiving contact" {...register('delivery_contact_person')} error={errors.delivery_contact_person?.message} />
+   <Input label="Receiving phone" {...register('delivery_contact_phone')} error={errors.delivery_contact_phone?.message} />
+  </div>
+  <CustomerDeliveryLocationPicker />
  </div>
  <fieldset className="mt-4 border-t border-default pt-3">
   <legend className="text-label text-muted font-medium">Allowed payment methods</legend>
@@ -142,6 +169,7 @@ navigate(`/accounting/customers/${c.id}`);
  </Button>
  </FormActions>
  </form>
+ </FormProvider>
  </div>
  );
 }

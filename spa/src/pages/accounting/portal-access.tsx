@@ -18,6 +18,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Select } from '@/components/ui/Select';
@@ -134,7 +135,7 @@ function SuppliersSection() {
  const [filters, setFilters] = useUrlFilters<PortalAccessListParams>({ page: 1, per_page: 25 });
  const [inviteOpen, setInviteOpen] = useState(false);
  const [confirmAction, setConfirmAction] = useState<SupplierConfirmAction>(null);
- const [invite, setInvite] = useState({ vendor_id: '', name: '', email: '' });
+ const [invite, setInvite] = useState({ vendor_id: '', name: '', email: '', is_authorized_signatory: false });
 
   const supplierAccessQueryKey = ['b2b', 'portal-access', 'suppliers', filters] as const;
   const list = useQuery({
@@ -151,10 +152,10 @@ function SuppliersSection() {
 
  const refresh = () => queryClient.invalidateQueries({ queryKey: ['b2b', 'portal-access'] });
  const inviteMutation = useMutation({
-  mutationFn: () => portalAccessApi.inviteSupplier(invite.vendor_id, { name: invite.name.trim(), email: invite.email.trim() }),
+  mutationFn: () => portalAccessApi.inviteSupplier(invite.vendor_id, { name: invite.name.trim(), email: invite.email.trim(), is_authorized_signatory: invite.is_authorized_signatory }),
   onSuccess: () => {
    setInviteOpen(false);
-   setInvite({ vendor_id: '', name: '', email: '' });
+   setInvite({ vendor_id: '', name: '', email: '', is_authorized_signatory: false });
    refresh();
    toast.success('Invitation queued for email delivery.');
   },
@@ -238,12 +239,17 @@ function SuppliersSection() {
    <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite supplier contact">
     <form onSubmit={submitInvite} className="space-y-4">
      <p className="text-sm text-muted">The contact receives a one-time setup link by email and chooses a password before signing in.</p>
-     <Select label="Vendor" required value={invite.vendor_id} onChange={(event) => setInvite((current) => ({ ...current, vendor_id: event.target.value }))}>
+     <Select label="Vendor" required value={invite.vendor_id} onChange={(event) => {
+      const vendorId = event.target.value;
+      const vendor = vendors.data?.data.find((option) => option.id === vendorId);
+      setInvite((current) => ({ ...current, vendor_id: vendorId, name: vendor?.contact_person ?? '', email: vendor?.email ?? '' }));
+     }}>
       <option value="">Choose a vendor…</option>
       {(vendors.data?.data ?? []).map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
      </Select>
      <Input label="Contact name" required value={invite.name} onChange={(event) => setInvite((current) => ({ ...current, name: event.target.value }))} maxLength={200} />
      <Input label="Email" required type="email" value={invite.email} onChange={(event) => setInvite((current) => ({ ...current, email: event.target.value }))} maxLength={255} />
+     <Checkbox label={<span><span className="font-medium text-primary">Authorized signatory</span><span className="block text-xs text-muted">May sign supplier agreements on behalf of this vendor.</span></span>} checked={invite.is_authorized_signatory} onChange={(event) => setInvite((current) => ({ ...current, is_authorized_signatory: event.target.checked }))} />
      <ModalFooter>
       <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
       <Button type="submit" variant="primary" loading={inviteMutation.isPending} disabled={inviteMutation.isPending}>Send invitation</Button>
@@ -282,7 +288,7 @@ function CustomersSection() {
  const [filters, setFilters] = useUrlFilters<CustomerPortalAccessListParams>({ page: 1, per_page: 25 });
  const [inviteOpen, setInviteOpen] = useState(false);
  const [confirmAction, setConfirmAction] = useState<CustomerConfirmAction>(null);
- const [invite, setInvite] = useState({ customer_id: '', name: '', email: '' });
+ const [invite, setInvite] = useState({ customer_id: '', name: '', email: '', is_authorized_signatory: false });
 
   const customerAccessQueryKey = ['b2b', 'portal-access', 'customers', filters] as const;
   const list = useQuery({
@@ -299,10 +305,10 @@ function CustomersSection() {
 
  const refresh = () => queryClient.invalidateQueries({ queryKey: ['b2b', 'portal-access'] });
  const inviteMutation = useMutation({
-  mutationFn: () => portalAccessApi.inviteCustomer(invite.customer_id, { name: invite.name.trim(), email: invite.email.trim() }),
+  mutationFn: () => portalAccessApi.inviteCustomer(invite.customer_id, { name: invite.name.trim(), email: invite.email.trim(), is_authorized_signatory: invite.is_authorized_signatory }),
   onSuccess: () => {
    setInviteOpen(false);
-   setInvite({ customer_id: '', name: '', email: '' });
+   setInvite({ customer_id: '', name: '', email: '', is_authorized_signatory: false });
    refresh();
    toast.success('Invitation queued for email delivery.');
   },
@@ -386,12 +392,17 @@ function CustomersSection() {
    <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite customer contact">
     <form onSubmit={submitInvite} className="space-y-4">
      <p className="text-sm text-muted">The contact receives a one-time setup link by email and chooses a password before signing in.</p>
-     <Select label="Customer" required value={invite.customer_id} onChange={(event) => setInvite((current) => ({ ...current, customer_id: event.target.value }))}>
+     <Select label="Customer" required value={invite.customer_id} onChange={(event) => {
+      const customerId = event.target.value;
+      const customer = customers.data?.data.find((option) => option.id === customerId);
+      setInvite((current) => ({ ...current, customer_id: customerId, name: customer?.contact_person ?? '', email: customer?.email ?? '' }));
+     }}>
       <option value="">Choose a customer…</option>
       {(customers.data?.data ?? []).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
      </Select>
      <Input label="Contact name" required value={invite.name} onChange={(event) => setInvite((current) => ({ ...current, name: event.target.value }))} maxLength={200} />
      <Input label="Email" required type="email" value={invite.email} onChange={(event) => setInvite((current) => ({ ...current, email: event.target.value }))} maxLength={255} />
+     <Checkbox label={<span><span className="font-medium text-primary">Authorized signatory</span><span className="block text-xs text-muted">May sign customer agreements on behalf of this customer.</span></span>} checked={invite.is_authorized_signatory} onChange={(event) => setInvite((current) => ({ ...current, is_authorized_signatory: event.target.checked }))} />
      <ModalFooter>
       <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
       <Button type="submit" variant="primary" loading={inviteMutation.isPending} disabled={inviteMutation.isPending}>Send invitation</Button>

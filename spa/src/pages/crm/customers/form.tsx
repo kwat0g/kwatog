@@ -9,11 +9,13 @@ import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { numberInputProps } from '@/lib/numberInput';
+import { CustomerDeliveryLocationPicker } from '@/components/accounting/CustomerDeliveryLocationPicker';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const customerSchema = z.object({
  name: z.string().min(1, 'Required').max(200),
  contact_person: z.string().max(100).optional().or(z.literal('')),
+  contact_person_role: z.string().max(100).optional().or(z.literal('')),
  email: z.string().email('Invalid email').optional().or(z.literal('')),
  phone: z.string().max(20).optional().or(z.literal('')),
  address: z.string().max(500).optional().or(z.literal('')),
@@ -21,6 +23,8 @@ export const customerSchema = z.object({
  delivery_address: z.string().max(500).optional().or(z.literal('')),
  delivery_contact_person: z.string().max(100).optional().or(z.literal('')),
  delivery_contact_phone: z.string().max(20).optional().or(z.literal('')),
+  delivery_latitude: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number().min(-90).max(90).optional()),
+  delivery_longitude: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number().min(-180).max(180).optional()),
  credit_limit: z.coerce.number().min(0).max(99999999.99).optional().or(z.literal('').transform(() => undefined)),
  payment_terms_days: z.coerce.number().int().min(0).max(365),
  allowed_payment_methods: z.array(z.enum(['cash', 'check', 'bank_transfer'])).nullable().optional(),
@@ -35,9 +39,12 @@ export const customerSchema = z.object({
  is_active: z.boolean().default(true),
 }).refine((value) => !value.agreement_starts_on || !value.agreement_ends_on || value.agreement_ends_on >= value.agreement_starts_on, {
  message: 'Agreement end date must be on or after its start date.', path: ['agreement_ends_on'],
+}).refine((value) => (value.delivery_latitude == null) === (value.delivery_longitude == null), {
+ message: 'Choose a complete delivery location pin.', path: ['delivery_latitude'],
 });
 
 export type CustomerFormValues = z.infer<typeof customerSchema>;
+export type CustomerFormInput = z.input<typeof customerSchema>;
 // eslint-disable-next-line react-refresh/only-export-components
 export const customerResolver = zodResolver(customerSchema) as Resolver<z.input<typeof customerSchema>, unknown, CustomerFormValues>;
 // New customers need explicit warranty defaults; keep legacy customer edits optional.
@@ -45,6 +52,9 @@ export const customerResolver = zodResolver(customerSchema) as Resolver<z.input<
 export const customerCreateResolver = zodResolver(customerSchema.superRefine((value, context) => {
  if (value.warranty_duration_days == null) context.addIssue({ code: 'custom', path: ['warranty_duration_days'], message: 'Required' });
  if (value.warranty_report_window_days == null) context.addIssue({ code: 'custom', path: ['warranty_report_window_days'], message: 'Required' });
+ if (value.delivery_address?.trim() && (value.delivery_latitude == null || value.delivery_longitude == null)) {
+  context.addIssue({ code: 'custom', path: ['delivery_latitude'], message: 'Pin the delivery address on the map.' });
+ }
 })) as Resolver<z.input<typeof customerSchema>, unknown, CustomerFormValues>;
 
 export function CustomerForm({ requireWarrantyDefaults = false }: { requireWarrantyDefaults?: boolean }) {
@@ -59,6 +69,7 @@ export function CustomerForm({ requireWarrantyDefaults = false }: { requireWarra
  <Input label="Customer name" required {...register('name')} error={errors.name?.message as string} placeholder="Enter customer name" />
  </div>
  <Input label="Contact person" {...register('contact_person')} error={errors.contact_person?.message as string} placeholder="Enter contact name" />
+        <Input label="Contact role" {...register('contact_person_role')} error={errors.contact_person_role?.message as string} placeholder="Sales officer, manager, CEO" />
  <Input label="Phone" {...register('phone')} error={errors.phone?.message as string} placeholder="Enter phone number" />
  <Input label="Email" type="email" {...register('email')} error={errors.email?.message as string} />
  <div className="sm:col-span-2">
@@ -89,6 +100,7 @@ export function CustomerForm({ requireWarrantyDefaults = false }: { requireWarra
  <Input label="Receiving contact" {...register('delivery_contact_person')} error={errors.delivery_contact_person?.message as string} placeholder="Who signs at the gate" />
  <Input label="Contact phone" {...register('delivery_contact_phone')} error={errors.delivery_contact_phone?.message as string} placeholder="049-500-1234" className="font-mono tabular-nums" />
  </div>
+ <CustomerDeliveryLocationPicker />
  </Panel>
 
  <Panel title="Agreement and warranty" className="min-w-0 xl:col-span-7">

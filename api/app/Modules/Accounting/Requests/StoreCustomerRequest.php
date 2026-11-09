@@ -20,10 +20,13 @@ class StoreCustomerRequest extends FormRequest
             'name'              => ['required', 'string', 'max:200'],
             'code'              => ['prohibited'],
             'contact_person'    => ['nullable', 'string', 'max:100'],
+            'contact_person_role' => ['nullable', 'string', 'max:100'],
             'email'             => ['nullable', 'email', 'max:200'],
             'phone'             => ['nullable', 'string', 'max:20'],
             'address'           => ['nullable', 'string', 'max:500'],
             'delivery_address'         => ['nullable', 'string', 'max:500'],
+            'delivery_latitude'        => ['nullable', 'numeric', 'between:-90,90', 'required_with:delivery_address'],
+            'delivery_longitude'       => ['nullable', 'numeric', 'between:-180,180', 'required_with:delivery_address'],
             'delivery_contact_person'  => ['nullable', 'string', 'max:100'],
             'delivery_contact_phone'   => ['nullable', 'string', 'max:20'],
             'allowed_payment_methods' => ['nullable', 'array', 'list'],
@@ -48,6 +51,13 @@ class StoreCustomerRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            $hasLatitude = $this->filled('delivery_latitude');
+            $hasLongitude = $this->filled('delivery_longitude');
+            if ($hasLatitude !== $hasLongitude) {
+                $missingField = $hasLatitude ? 'delivery_longitude' : 'delivery_latitude';
+                $validator->errors()->add($missingField, 'Set both delivery coordinates by placing a pin on the map.');
+            }
+
             $startsOn = $this->input('agreement_starts_on');
             $endsOn = $this->input('agreement_ends_on');
             if ($startsOn && $endsOn && $endsOn < $startsOn) {

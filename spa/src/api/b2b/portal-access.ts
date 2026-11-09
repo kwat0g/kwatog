@@ -16,7 +16,7 @@ export const portalAccessApi = {
  listSuppliers: (params?: PortalAccessListParams) =>
   client.get<PaginatedResponse<SupplierPortalUser>>('/b2b/portal-access/suppliers', { params }).then((r) => r.data),
 
- inviteSupplier: (vendorId: string, data: { name: string; email: string }) =>
+ inviteSupplier: (vendorId: string, data: { name: string; email: string; is_authorized_signatory?: boolean }) =>
   client.post<ApiSuccess<SupplierPortalUser>>(`/b2b/portal-access/suppliers/${vendorId}/invite`, data).then((r) => r.data.data),
 
  resendSupplier: (id: string) =>
@@ -36,7 +36,7 @@ export const portalAccessApi = {
  listCustomers: (params?: CustomerPortalAccessListParams) =>
   client.get<PaginatedResponse<CustomerPortalUser>>('/b2b/portal-access/customers', { params }).then((r) => r.data),
 
- inviteCustomer: (customerId: string, data: { name: string; email: string }) =>
+ inviteCustomer: (customerId: string, data: { name: string; email: string; is_authorized_signatory?: boolean }) =>
   client.post<ApiSuccess<CustomerPortalUser>>(`/b2b/portal-access/customers/${customerId}/invite`, data).then((r) => r.data.data),
 
  resendCustomer: (id: string) =>

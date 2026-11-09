@@ -87,14 +87,16 @@ class PortalAccessService
         string $email,
         User $actor,
         Request $request,
+        ?bool $isAuthorizedSignatory = null,
     ): SupplierPortalUser {
-        $result = $this->invitations->inviteSupplier($vendor, $name, $email);
+        $result = $this->invitations->inviteSupplier($vendor, $name, $email, $isAuthorizedSignatory);
         $user = $result['user']->load('vendor:id,name,is_active');
 
         $this->record($user, 'portal_user.invited', null, [
             'vendor_id' => $user->vendor_id,
             'email' => $user->email,
             'is_active' => true,
+            'is_authorized_signatory' => (bool) $user->is_authorized_signatory,
         ], $actor, $request);
 
         return $user;
@@ -106,14 +108,16 @@ class PortalAccessService
         string $email,
         User $actor,
         Request $request,
+        ?bool $isAuthorizedSignatory = null,
     ): CustomerPortalUser {
-        $result = $this->invitations->inviteCustomer($customer, $name, $email);
+        $result = $this->invitations->inviteCustomer($customer, $name, $email, $isAuthorizedSignatory);
         $user = $result['user']->load('customer:id,name,is_active');
 
         $this->record($user, 'portal_user.invited', null, [
             'customer_id' => $user->customer_id,
             'email' => $user->email,
             'is_active' => true,
+            'is_authorized_signatory' => (bool) $user->is_authorized_signatory,
         ], $actor, $request);
 
         return $user;

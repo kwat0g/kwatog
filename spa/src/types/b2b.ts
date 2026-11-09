@@ -9,6 +9,7 @@ export interface SupplierPortalUser {
   name: string;
   email: string;
   must_change_password: boolean;
+  is_authorized_signatory: boolean;
   is_active: boolean;
   status: 'active' | 'inactive' | 'locked' | 'pending';
   deleted_at: string | null;
@@ -24,6 +25,7 @@ export interface CustomerPortalUser {
   customer_id: string;
   customer_name: string | null;
   must_change_password: boolean;
+  is_authorized_signatory: boolean;
   is_active: boolean;
   status: 'active' | 'inactive' | 'locked' | 'pending';
   deleted_at: string | null;

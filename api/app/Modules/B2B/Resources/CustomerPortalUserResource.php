@@ -16,6 +16,7 @@ class CustomerPortalUserResource extends JsonResource
             'name'                => $this->name,
             'email'               => $this->email,
             'is_active'           => (bool) $this->is_active,
+            'is_authorized_signatory' => (bool) $this->is_authorized_signatory,
             'must_change_password' => (bool) $this->must_change_password,
             'status'              => $this->portalStatus(),
             'deleted_at'          => optional($this->deleted_at)->toIso8601String(),
