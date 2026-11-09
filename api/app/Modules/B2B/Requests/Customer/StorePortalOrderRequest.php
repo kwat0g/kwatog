@@ -31,6 +31,7 @@ class StorePortalOrderRequest extends FormRequest
             'items.*.product_id'    => ['required', 'string', 'distinct'],
             'items.*.quantity'      => ['required', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],
             'items.*.delivery_date' => ['required', 'date'],
+            'items.*.warranty_option_id' => ['sometimes', 'nullable', 'string'],
         ];
     }
 

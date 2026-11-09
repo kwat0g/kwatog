@@ -8,30 +8,31 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Services\CustomerRealtimeService;
 use App\Modules\CRM\Models\CustomerAgreementDocument;
 use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
+use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use Illuminate\Support\Carbon;
 
 final class CustomerSubresourceRealtimeObserver
 {
-    public function created(CustomerAgreementDocument|CustomerProductWarrantyOverride $record): void
+    public function created(CustomerAgreementDocument|CustomerProductWarrantyOverride|CustomerProductWarrantyOption $record): void
     {
         $this->stageCustomerRefresh($record, $record->created_at);
     }
 
-    public function updated(CustomerAgreementDocument|CustomerProductWarrantyOverride $record): void
+    public function updated(CustomerAgreementDocument|CustomerProductWarrantyOverride|CustomerProductWarrantyOption $record): void
     {
         if ($record->wasChanged()) {
             $this->stageCustomerRefresh($record, $record->updated_at);
         }
     }
 
-    public function deleted(CustomerProductWarrantyOverride $record): void
+    public function deleted(CustomerProductWarrantyOverride|CustomerProductWarrantyOption $record): void
     {
         $this->stageCustomerRefresh($record, now());
     }
 
-    private function stageCustomerRefresh(CustomerAgreementDocument|CustomerProductWarrantyOverride $record, ?Carbon $changedAt): void
+    private function stageCustomerRefresh(CustomerAgreementDocument|CustomerProductWarrantyOverride|CustomerProductWarrantyOption $record, ?Carbon $changedAt): void
     {
-        $customer = $record instanceof CustomerProductWarrantyOverride
+        $customer = $record instanceof CustomerProductWarrantyOverride || $record instanceof CustomerProductWarrantyOption
             ? $record->customer
             : Customer::query()->find($record->customer_id);
 

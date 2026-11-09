@@ -53,10 +53,18 @@ class Product extends Model
         return $this->belongsToMany(Customer::class, 'customer_product_access');
     }
 
+    public function customerWarrantyOptions(): HasMany
+    {
+        return $this->hasMany(CustomerProductWarrantyOption::class);
+    }
+
     public function isAvailableToCustomer(int $customerId): bool
     {
+        $catalogMode = Customer::query()->whereKey($customerId)->value('portal_catalog_mode') ?? 'standard';
+
         return $this->is_active && ! $this->trashed()
-            && ($this->portal_visibility === 'standard' || $this->portalCustomers()->whereKey($customerId)->exists());
+            && ($this->portalCustomers()->whereKey($customerId)->exists()
+                || ($catalogMode === 'standard' && $this->portal_visibility === 'standard'));
     }
 
     public function priceAgreements(): HasMany

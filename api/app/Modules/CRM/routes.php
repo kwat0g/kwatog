@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\CRM\Controllers\ComplaintController;
 use App\Modules\CRM\Controllers\CustomerWarrantyTermsController;
+use App\Modules\CRM\Controllers\CustomerProductAccessController;
 use App\Modules\CRM\Controllers\CustomerAgreementDocumentController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
 use App\Modules\CRM\Controllers\ProductController;
@@ -40,14 +41,22 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission:accounting.customers.view');
     Route::get('/customers/{customer}/warranty-terms', [CustomerWarrantyTermsController::class, 'index'])
         ->middleware('permission:accounting.customers.view');
+    Route::post('/customers/{customer}/warranty-terms/{product}/options', [CustomerWarrantyTermsController::class, 'storeOption'])
+        ->middleware('permission:accounting.customers.manage')->withTrashed();
+    Route::delete('/customers/{customer}/warranty-terms/{product}/options/{option}', [CustomerWarrantyTermsController::class, 'destroyOption'])
+        ->middleware('permission:accounting.customers.manage')->withTrashed();
     Route::put('/customers/{customer}/warranty-terms/{product}', [CustomerWarrantyTermsController::class, 'upsert'])
         ->middleware('permission:accounting.customers.manage')->withTrashed();
     Route::delete('/customers/{customer}/warranty-terms/{product}', [CustomerWarrantyTermsController::class, 'destroy'])
         ->middleware('permission:accounting.customers.manage')->withTrashed();
+    Route::get('/customers/{customer}/product-access', [CustomerProductAccessController::class, 'index'])
+        ->middleware('permission:accounting.customers.view');
+    Route::put('/customers/{customer}/product-access', [CustomerProductAccessController::class, 'update'])
+        ->middleware('permission:accounting.customers.manage');
 
     /* ─── Products ─── */
     Route::get('/products/options', [ProductController::class, 'options'])
-        ->middleware('permission_any:crm.products.view,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view,forecasting.view');
+        ->middleware('permission_any:crm.products.view,accounting.customers.view,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view,forecasting.view');
     Route::get('/products/customer-options', [ProductController::class, 'customerOptions'])
         ->middleware('permission:crm.products.customer_access.manage');
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');

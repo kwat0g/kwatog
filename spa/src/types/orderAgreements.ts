@@ -50,11 +50,14 @@ export interface OrderAgreements {
 }
 
 export interface WarrantyTermsSnapshot {
+  warranty_option_id?: string;
+  warranty_option_label?: string;
   warranty_duration_days: number | null;
   warranty_report_window_days: number | null;
   warranty_start_basis: 'delivery' | 'invoice' | null;
   warranty_covered_issues: Array<'manufacturing_defect' | 'shipping_damage' | 'customer_caused_damage'> | null;
   warranty_remedies: Array<'repair' | 'replace' | 'credit' | 'refund'> | null;
+  additional_terms?: string | null;
 }
 
 export interface CustomerTermsSnapshot {

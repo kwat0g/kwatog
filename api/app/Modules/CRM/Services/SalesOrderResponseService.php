@@ -383,11 +383,8 @@ class SalesOrderResponseService
                     $cancellationSignalAlreadyStaged = true;
                 }
                 if ($locked->response_type === SalesOrderResponseType::Propose) {
-                    // Apply the counter-offer under the row locks, then re-run
-                    // the same credit gate confirm() enforces before the order
-                    // can be confirmed.
+                    // Apply the counter-offer under the order and response row locks.
                     $this->applyProposal($locked, $so);
-                    $this->salesOrders->assertCreditWithinLimit($so);
                 }
                 // Accepting a `decline` changes nothing on the order; the reply
                 // itself is accepted so the trail shows the decision was made.

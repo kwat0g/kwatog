@@ -115,6 +115,7 @@ use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\CustomerAgreementDocument;
 use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
+use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Observers\Complaint8DReportRealtimeObserver;
@@ -660,6 +661,7 @@ class AppServiceProvider extends ServiceProvider
         Customer::observe(CustomerRealtimeObserver::class);
         CustomerAgreementDocument::observe(CustomerSubresourceRealtimeObserver::class);
         CustomerProductWarrantyOverride::observe(CustomerSubresourceRealtimeObserver::class);
+        CustomerProductWarrantyOption::observe(CustomerSubresourceRealtimeObserver::class);
         Vendor::observe(VendorRealtimeObserver::class);
         ScheduledExport::observe(ScheduledExportRealtimeObserver::class);
         JournalEntry::observe(JournalEntryObserver::class);

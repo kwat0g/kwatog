@@ -17,6 +17,7 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderStockAllocation;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\CRM\Services\SalesOrderSupplyService;
+use App\Modules\CRM\Services\CustomerPortalOrderAvailabilityService;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
@@ -103,6 +104,19 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $service->allocate($other, $actor, Str::uuid()->toString());
         $this->assertSame('10.000', (string) StockLevel::where('item_id', $item->id)->value('reserved_quantity'));
         $this->assertSame('2.000', $service->lineCoverage($otherLine)['uncovered']);
+    }
+
+    public function test_customer_catalog_availability_matches_qc_reservation_and_safety_stock_rules(): void
+    {
+        [$so, $line, $item, $location, $actor] = $this->stockFixture();
+        $item->update(['safety_stock' => '3.000']);
+        $service = app(CustomerPortalOrderAvailabilityService::class);
+
+        $this->assertSame('7.000', $service->forProduct($so->customer, $line->product)['available_quantity']);
+
+        $line->update(['quantity' => '4.00']);
+        app(SalesOrderSupplyService::class)->allocate($so, $actor, Str::uuid()->toString());
+        $this->assertSame('3.000', $service->forProduct($so->customer, $line->product)['available_quantity']);
     }
 
     public function test_unrelated_order_output_and_expired_stock_are_not_eligible(): void

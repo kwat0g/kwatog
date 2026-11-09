@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Requests;
 
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreCustomerRequest extends FormRequest
 {
@@ -44,8 +45,16 @@ class StoreCustomerRequest extends FormRequest
             'tin'               => ['nullable', 'string', 'max:20'],
             'credit_limit'      => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'payment_terms_days'=> ['nullable', 'integer', 'min:0', 'max:365'],
+            'portal_catalog_mode' => ['sometimes', 'string', Rule::in(['standard', 'restricted'])],
             'is_active'         => ['nullable', 'boolean'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->exists('portal_catalog_mode')) {
+            $this->merge(['portal_catalog_mode' => 'restricted']);
+        }
     }
 
     public function withValidator(Validator $validator): void

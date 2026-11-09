@@ -41,7 +41,7 @@ class CustomerSubresourceRealtimeTest extends TestCase
 
         $response = $this->actingAs($actor)->post(
             "/api/v1/crm/customers/{$customer->hash_id}/agreement-documents",
-            ['file' => UploadedFile::fake()->create('terms.pdf', 8, 'application/pdf')],
+            ['file' => UploadedFile::fake()->createWithContent('terms.pdf', "%PDF-1.4\ncustomer agreement\n%%EOF")],
         );
 
         $response->assertCreated();

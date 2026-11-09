@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -59,6 +59,15 @@ export default function CustomerPricingPage() {
     resolver: zodResolver(schema),
     defaultValues: { product_id: '', quantity: '', requested_price: '', notes: '' },
   });
+  useEffect(() => {
+    const productId = searchParams.get('product_id');
+    const quantity = searchParams.get('quantity');
+    if (!productId) return;
+    setCreating(true);
+    form.setValue('product_id', productId);
+    form.setValue('quantity', quantity && /^\d+$/.test(quantity) && Number(quantity) > 0 ? quantity : '1');
+    form.setValue('notes', 'Please confirm pricing and availability for this quantity beyond current stock.');
+  }, [form, searchParams]);
   const submit = useMutation({
     mutationFn: (v: Values) =>
       customerPortalApi.requestPrice({

@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Requests;
 use App\Modules\Accounting\Models\Customer;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateCustomerRequest extends FormRequest
 {
@@ -46,6 +47,7 @@ class UpdateCustomerRequest extends FormRequest
             'tin'               => ['sometimes', 'nullable', 'string', 'max:20'],
             'credit_limit'      => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'payment_terms_days'=> ['sometimes', 'integer', 'min:0', 'max:365'],
+            'portal_catalog_mode' => ['sometimes', 'string', Rule::in(['standard', 'restricted'])],
             'is_active'         => ['sometimes', 'boolean'],
         ];
     }

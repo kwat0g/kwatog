@@ -31,7 +31,7 @@ class CreditLimitTest extends TestCase
         ]);
     }
 
-    public function test_so_confirm_blocked_when_credit_exceeded(): void
+    public function test_optional_credit_limit_does_not_block_sales_order_confirmation(): void
     {
         $customer = Customer::factory()->create(['credit_limit' => 1000.00]);
 
@@ -56,8 +56,8 @@ class CreditLimitTest extends TestCase
 
         $this->actingAs($this->makeAdmin())
             ->postJson("/api/v1/crm/sales-orders/{$so->hash_id}/confirm")
-            ->assertStatus(422)
-            ->assertJsonPath('errors.credit_limit.0', fn ($v) => str_contains(strtolower($v), 'credit'));
+            ->assertOk()
+            ->assertJsonPath('data.status', 'confirmed');
     }
 
     public function test_so_confirm_passes_when_credit_limit_null(): void

@@ -72,6 +72,7 @@ class CustomerResource extends JsonResource
             'credit_warning_ratio' => $warningRatio,
             'credit_warning'     => $creditWarning,
             'payment_terms_days' => (int) $this->payment_terms_days,
+            'portal_catalog_mode' => $this->portal_catalog_mode ?? 'standard',
             'is_active'          => (bool) $this->is_active,
             'invoices_count'     => $this->whenCounted('invoices'),
             'created_at'         => optional($this->created_at)->toIso8601String(),

@@ -471,7 +471,7 @@ class SalesOrderResponseTest extends TestCase
         ]);
     }
 
-    public function test_accept_of_propose_reruns_the_credit_gate(): void
+    public function test_accept_of_propose_is_not_blocked_by_optional_credit_limit(): void
     {
         // A tiny AR balance consumes the credit line once the proposal raises
         // this order's value.
@@ -494,16 +494,10 @@ class SalesOrderResponseTest extends TestCase
         $approver = $this->userWithRole('sales_officer');
         Mail::fake();
 
-        try {
-            $this->svc->resolve($response, $approver, 'accept');
-            $this->fail('Accepting a counter-offer beyond the credit limit must be refused.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('credit_limit', $e->errors());
-        }
+        $resolved = $this->svc->resolve($response, $approver, 'accept');
 
-        // The whole resolution rolled back: the line and the response are intact.
-        $this->assertSame('100.00', (string) $line->fresh()->unit_price);
-        $this->assertSame(SalesOrderResponseStatus::Pending, $response->fresh()->status);
+        $this->assertSame('200.00', (string) $line->fresh()->unit_price);
+        $this->assertSame(SalesOrderResponseStatus::Accepted, $resolved->fresh()->status);
     }
 
     public function test_reject_leaves_the_order_untouched(): void

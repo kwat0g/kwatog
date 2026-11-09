@@ -243,6 +243,28 @@ export interface PortalCatalogItem {
   unit_of_measure: string;
   unit_price: string | null;
   pricing_method: string | null;
+  description?: string | null;
+  specifications?: {
+    dimensions?: { length?: string; width?: string; height?: string; unit?: string } | null;
+    material?: string | null;
+    finish?: string | null;
+    tolerance?: string | null;
+    technical_notes?: string | null;
+  } | null;
+  is_customizable?: boolean;
+  images?: Array<{ id: string; url: string; position: number; alt_text: string | null; is_primary: boolean }>;
+  available_quantity?: string | null;
+  availability_mode?: 'stock_limited' | 'make_to_order';
+  warranty_options?: Array<{
+    id: string;
+    label: string;
+    warranty_duration_days: number | null;
+    warranty_report_window_days: number | null;
+    warranty_start_basis: 'delivery' | 'invoice' | null;
+    warranty_covered_issues: string[] | null;
+    warranty_remedies: string[] | null;
+    additional_terms?: string | null;
+  }>;
 }
 
 export interface PortalSoDetail extends PortalSoSummary {

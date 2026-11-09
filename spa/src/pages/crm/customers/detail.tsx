@@ -16,6 +16,8 @@ import { SkeletonDetail, SkeletonTable } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ShipToAddress } from '@/components/supply-chain/ShipToAddress';
+import { CustomerProductAccessManager } from '@/components/crm/CustomerProductAccessManager';
+import { CustomerWarrantyOptionsManager } from '@/components/crm/CustomerWarrantyOptionsManager';
 import { AgreementDocumentManager } from '@/components/contracts/AgreementDocumentManager';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -206,6 +208,8 @@ export default function CrmCustomerDetailPage() {
  </div>
  {customer.agreement_status === 'expired' && <p className="mt-4 rounded border border-warning p-3 text-xs text-warning-fg">Agreement expired. Review terms with the customer; this does not deactivate the customer.</p>}
  {customer.agreement_status === 'not_yet_effective' && <p className="mt-4 rounded border border-warning p-3 text-xs text-warning-fg">Agreement start date is in the future. Review before applying these terms.</p>}
+ <CustomerProductAccessManager customerId={customer.id} />
+ <CustomerWarrantyOptionsManager customerId={customer.id} />
  </Panel>
  </div>
 

@@ -296,6 +296,7 @@ export interface Customer {
   credit_warning_ratio?: number;
   credit_warning?: boolean;
   payment_terms_days: number;
+  portal_catalog_mode?: 'standard' | 'restricted';
   allowed_payment_methods: ('cash' | 'check' | 'bank_transfer')[] | null;
   shipping_payer: 'customer' | 'company' | null;
   agreement_starts_on: string | null;
@@ -325,6 +326,7 @@ export interface CreateCustomerData {
   tin?: string;
   credit_limit?: string | null;
   payment_terms_days?: number;
+  portal_catalog_mode?: 'standard' | 'restricted';
   allowed_payment_methods?: Customer['allowed_payment_methods'];
   shipping_payer?: Customer['shipping_payer'];
   agreement_starts_on?: string | null;

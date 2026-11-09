@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, useParams } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useParams } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { localIsoDate } from '@/lib/formatDate';
@@ -22,7 +22,7 @@ vi.mock('react-router-dom', async (importOriginal) => ({
   useParams: vi.fn(() => ({})),
 }));
 vi.mock('@/api/b2b/customer', () => ({
-  customerPortalApi: { listCatalog: vi.fn(), createOrder: vi.fn(), getOrder: vi.fn(), updateOrder: vi.fn(), businessPolicies: vi.fn(), quoteOrder: vi.fn() },
+  customerPortalApi: { listCatalog: vi.fn(), createOrder: vi.fn(), getOrder: vi.fn(), updateOrder: vi.fn(), businessPolicies: vi.fn(), quoteOrder: vi.fn(), me: vi.fn() },
 }));
 
 const product: PortalCatalogItem = {
@@ -32,7 +32,8 @@ const product: PortalCatalogItem = {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><MemoryRouter><CustomerPlaceOrderPage /></MemoryRouter></QueryClientProvider>);
+  const portalUser = { id: 'portal-user', name: 'Buyer', email: 'buyer@example.test', customer_id: 'customer-1', customer_name: 'Honda', must_change_password: false, is_active: true, status: 'active', deleted_at: null, customer: { id: 'customer-1', name: 'Honda' } };
+  render(<QueryClientProvider client={client}><MemoryRouter><Routes><Route element={<Outlet context={portalUser} />}><Route path="*" element={<CustomerPlaceOrderPage />} /></Route></Routes></MemoryRouter></QueryClientProvider>);
 }
 
 beforeEach(() => {
@@ -50,6 +51,13 @@ beforeEach(() => {
     functional_currency_code: 'PHP', reporting_currency_code: 'PHP', translation_adjustment_account_code: '',
     vat_rate: '0.12', vat_status: 'VAT Registered',
   } satisfies BusinessPolicies);
+  vi.mocked(customerPortalApi.me).mockResolvedValue({
+    id: 'portal-user', name: 'Buyer', email: 'buyer@example.test', customer_id: 'customer-1', customer_name: 'Honda',
+    must_change_password: false, is_active: true, is_authorized_signatory: false, last_login_at: null, created_at: orderDate(),
+    status: 'active', deleted_at: null, customer: { id: 'customer-1', name: 'Honda' },
+    customer_terms: { allowed_payment_methods: ['cash'], shipping_payer: 'company', agreement_starts_on: null, agreement_ends_on: null,
+      agreement_status: 'in_effect', payment_terms_days: 30, warranty_defaults: null },
+  });
 });
 afterEach(cleanup);
 
@@ -57,7 +65,7 @@ describe('customer order entry', () => {
   it('reuses the order form to edit a customer draft without changing its order date', async () => {
     vi.mocked(useParams).mockReturnValue({ id: 'so-1' });
     const requestedDate = dateAfterToday(7);
-    const existing = { id: 'so-1', so_number: 'SO-1', date: '2026-10-01', status: 'draft', total_amount: '22.50', created_at: '2026-10-01',
+    const existing = { id: 'so-1', so_number: 'SO-1', date: '2026-10-01', status: 'draft', total_amount: '22.50', created_at: '2026-10-01', payment_method: 'cash' as const,
       notes: 'Original note', requested_delivery_dates: [requestedDate], delivery_dates: [requestedDate], capabilities: { can_edit: true, can_cancel: true, can_respond: false, can_confirm: false },
       items: [{ id: 'item-1', product, quantity: '1', unit_price: '22.50', total: '22.50', delivery_date: requestedDate }],
     };
@@ -72,7 +80,7 @@ describe('customer order entry', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/portal/customer/orders/so-1'));
-    expect(customerPortalApi.updateOrder).toHaveBeenCalledWith('so-1', { notes: 'Original note', quote_signature: 'a'.repeat(64), items: [
+    expect(customerPortalApi.updateOrder).toHaveBeenCalledWith('so-1', { notes: 'Original note', payment_method: 'cash', quote_signature: 'a'.repeat(64), items: [
       { product_id: product.id, quantity: '50', delivery_date: requestedDate },
     ] });
     expect(customerPortalApi.createOrder).not.toHaveBeenCalled();
@@ -81,11 +89,17 @@ describe('customer order entry', () => {
   it('does not label a non-VAT order as VAT included', async () => {
     const policies = await customerPortalApi.businessPolicies();
     vi.mocked(customerPortalApi.businessPolicies).mockResolvedValue({ ...policies, vat_status: 'Non-VAT', vat_rate: null });
+    vi.mocked(customerPortalApi.quoteOrder).mockImplementation(async (form) => {
+      const items = form.items.map((item) => ({ ...item, unit_price: '22.50', total: (Number(item.quantity) * 22.5).toFixed(2), price_source: 'base' as const }));
+      const subtotal = items.reduce((sum, item) => sum + Number(item.total), 0);
+      return { items, subtotal: subtotal.toFixed(2), vat_amount: '0.00', total_amount: subtotal.toFixed(2), signature: 'a'.repeat(64) };
+    });
     renderPage();
+    fireEvent.change(screen.getByLabelText('Requested delivery date'), { target: { value: dateAfterToday(7) } });
     fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
     expect(screen.getByRole('textbox', { name: 'Search products' })).toHaveFocus();
     fireEvent.click(await screen.findByRole('button', { name: `Add ${product.name} to order` }));
-    expect(screen.getByTestId('order-vat')).toHaveTextContent('0.00');
+    await waitFor(() => expect(screen.getByTestId('order-vat')).toHaveTextContent('0.00'), { timeout: 3000 });
     expect(screen.getByTestId('order-total')).toHaveTextContent('22.50');
     expect(screen.getByText('No VAT applied')).toBeInTheDocument();
   });
@@ -105,6 +119,7 @@ describe('customer order entry', () => {
       product, { ...product, id: 'product-2', part_number: 'WB-002', name: 'Heavy Duty Bushing' },
     ]);
     renderPage();
+    fireEvent.change(screen.getByLabelText('Requested delivery date'), { target: { value: dateAfterToday(7) } });
     fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
     fireEvent.click(await screen.findByRole('button', { name: `Add ${product.name} to order` }));
     fireEvent.click(screen.getByRole('button', { name: 'Add Heavy Duty Bushing to order' }));
@@ -116,7 +131,7 @@ describe('customer order entry', () => {
     expect(screen.getByRole('table', { name: 'Selected order items' })).toBeVisible();
     expect(screen.getByRole('spinbutton', { name: 'Quantity for WB-001' })).toHaveValue(100);
     expect(screen.getByRole('spinbutton', { name: 'Quantity for WB-002' })).toHaveValue(1);
-    expect(screen.getByTestId('order-subtotal')).toHaveTextContent('2,272.50');
+    await waitFor(() => expect(screen.getByTestId('order-subtotal')).toHaveTextContent('2,272.50'));
     expect(screen.getByTestId('order-vat')).toHaveTextContent('272.70');
     expect(screen.getByTestId('order-total')).toHaveTextContent('2,545.20');
     expect(screen.getByRole('button', { name: 'Add products' })).toHaveAttribute('aria-expanded', 'false');
@@ -124,6 +139,7 @@ describe('customer order entry', () => {
 
   it('shows selected products and labeled editing fields, updates subtotal, and allows removal', async () => {
     renderPage();
+    fireEvent.change(screen.getByLabelText('Requested delivery date'), { target: { value: dateAfterToday(7) } });
     fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
     fireEvent.click(await screen.findByRole('button', { name: `Add ${product.name} to order` }));
     expect(screen.getByRole('button', { name: `${product.name} added to order` })).toBeDisabled();
@@ -131,7 +147,7 @@ describe('customer order entry', () => {
     const quantity = screen.getByRole('spinbutton', { name: 'Quantity for WB-001' });
     expect(screen.getAllByLabelText('Requested delivery date')).toHaveLength(1);
     fireEvent.change(quantity, { target: { value: '100' } });
-    expect(screen.getByTestId('order-subtotal')).toHaveTextContent('2,250.00');
+    await waitFor(() => expect(screen.getByTestId('order-subtotal')).toHaveTextContent('2,250.00'));
     fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Search products' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('button', { name: 'Done selecting products' }));
@@ -173,6 +189,7 @@ describe('customer order entry', () => {
         id: 'so-1', so_number: 'SO-1', date: '2026-10-03', total_amount: '2250.00', status: 'draft', created_at: '2026-10-03',
       } });
     renderPage();
+    fireEvent.change(screen.getByLabelText(/Payment method/), { target: { value: 'cash' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
     fireEvent.click(await screen.findByRole('button', { name: `Add ${product.name} to order` }));
     fireEvent.click(screen.getByRole('button', { name: 'Add Heavy Duty Bushing to order' }));
@@ -193,7 +210,7 @@ describe('customer order entry', () => {
     fireEvent.click(screen.getByRole('button', { name: /Submit order for review/ }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/portal/customer/orders/so-1'));
     const calls = vi.mocked(customerPortalApi.createOrder).mock.calls;
-    expect(calls[0][0]).toEqual({ notes: 'Test delivery', quote_signature: 'a'.repeat(64), items: [{ product_id: product.id, quantity: '100', delivery_date: requestedDate }, { product_id: 'product-2', quantity: '1', delivery_date: requestedDate }] });
+    expect(calls[0][0]).toEqual({ notes: 'Test delivery', payment_method: 'cash', quote_signature: 'a'.repeat(64), items: [{ product_id: product.id, quantity: '100', delivery_date: requestedDate }, { product_id: 'product-2', quantity: '1', delivery_date: requestedDate }] });
     expect(calls[1]).toEqual(calls[0]);
     expect(calls[0][1]).toMatch(/^[0-9a-f-]{36}$/);
   });
@@ -207,5 +224,55 @@ describe('customer order entry', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Quantity for WB-001' }), { target: { value: '100' } });
     await waitFor(() => expect(screen.getByTestId('order-total')).toHaveTextContent('2,240.00'));
     expect(screen.getByText('Agreed price')).toBeVisible();
+  });
+
+  it('shows and enforces current stock as the maximum order quantity', async () => {
+    vi.mocked(customerPortalApi.listCatalog).mockResolvedValue([{ ...product, availability_mode: 'stock_limited', available_quantity: '2.000' }]);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
+    expect(await screen.findByText('Available: 2.000 pcs')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: `Add ${product.name} to order` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done selecting products' }));
+    const quantity = screen.getByRole('spinbutton', { name: 'Quantity for WB-001' });
+    expect(quantity).toHaveAttribute('max', '2');
+    fireEvent.change(quantity, { target: { value: '3' } });
+    expect(screen.getByText('Maximum available is 2.000.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Submit order for review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Request price and availability' })).toBeVisible();
+  });
+
+  it('shows every customer-visible product gallery image', async () => {
+    vi.mocked(customerPortalApi.listCatalog).mockResolvedValue([{ ...product, images: [
+      { id: 'image-1', url: '/api/catalog/image-1', position: 0, alt_text: 'Front view', is_primary: true },
+      { id: 'image-2', url: '/api/catalog/image-2', position: 1, alt_text: 'Side view', is_primary: false },
+    ] }]);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
+
+    expect(await screen.findByRole('button', { name: 'View larger photo of Front view' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'View larger photo of Side view' })).toBeVisible();
+  });
+
+  it('requires a warranty choice and attaches the selected terms to the order line', async () => {
+    const requestedDate = dateAfterToday(7);
+    const warrantyOptions = [
+      { id: 'warranty-90', label: '90 days', warranty_duration_days: 90, warranty_report_window_days: 30, warranty_start_basis: 'delivery' as const, warranty_covered_issues: ['manufacturing_defect'], warranty_remedies: ['repair'], additional_terms: null },
+      { id: 'warranty-365', label: '1 year', warranty_duration_days: 365, warranty_report_window_days: 45, warranty_start_basis: 'invoice' as const, warranty_covered_issues: ['manufacturing_defect'], warranty_remedies: ['replace'], additional_terms: 'Replacement on approval.' },
+    ];
+    vi.mocked(customerPortalApi.listCatalog).mockResolvedValue([{ ...product, warranty_options: warrantyOptions }]);
+    vi.mocked(customerPortalApi.createOrder).mockResolvedValue({ message: 'Order submitted.', data: { id: 'so-1', so_number: 'SO-1', date: orderDate(), status: 'awaiting_confirmation', total_amount: '25.20', created_at: orderDate() } });
+    renderPage();
+    fireEvent.change(screen.getByLabelText('Requested delivery date'), { target: { value: requestedDate } });
+    fireEvent.change(screen.getByLabelText(/Payment method/), { target: { value: 'cash' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
+    fireEvent.click(await screen.findByRole('button', { name: `Add ${product.name} to order` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done selecting products' }));
+    expect(screen.getByRole('combobox', { name: /Warranty for Wiper Bushing/ })).toBeRequired();
+    fireEvent.change(screen.getByRole('combobox', { name: /Warranty for Wiper Bushing/ }), { target: { value: 'warranty-365' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Submit order for review' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Submit order for review' }));
+    await waitFor(() => expect(customerPortalApi.createOrder).toHaveBeenCalledWith(expect.objectContaining({ items: [expect.objectContaining({
+      product_id: product.id, warranty_option_id: 'warranty-365',
+    })] }), expect.any(String)));
   });
 });

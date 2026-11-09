@@ -51,7 +51,8 @@ class CustomerContactLocationTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.contact_person_role', 'Sales Officer')
             ->assertJsonPath('data.delivery_latitude', '14.2860000')
-            ->assertJsonPath('data.delivery_longitude', '120.9345000');
+            ->assertJsonPath('data.delivery_longitude', '120.9345000')
+            ->assertJsonPath('data.portal_catalog_mode', 'restricted');
 
         $this->actingAs($actor)
             ->postJson('/api/v1/crm/customers', $this->customerPayload([
