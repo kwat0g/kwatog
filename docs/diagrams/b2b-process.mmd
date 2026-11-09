@@ -1,0 +1,105 @@
+flowchart TB
+  start([B2B customer demand]) --> pipeline{Use lead and quote pipeline?}
+  pipeline -- Yes --> lead[Qualify lead and win opportunity] --> quote[/Accepted customer quote/]
+  pipeline -- Direct order --> customerPO[/Customer purchase order/]
+  quote --> salesOrder[Create draft sales order]
+  customerPO --> salesOrder
+  salesOrder --> confirm[Confirm sales order]
+
+  confirm --> mrp[Run MRP: explode BOM and net material demand]
+  mrp --> shortage{Raw materials short?}
+  shortage -- No --> schedule[Schedule MRP II capacity]
+  shortage -- Yes --> pr[Create, submit, and approve purchase request]
+  pr --> sourcing{Sourcing route?}
+  sourcing -- Direct --> directPO[Create direct purchase order]
+  sourcing -- Competitive RFQ --> rfq[Publish RFQ to suppliers]
+  rfq --> supplierQuotes[/Supplier quotes submitted/]
+  supplierQuotes --> award[Compare quotes and award winning lines]
+  directPO --> poApproval[Finance approval; VP if threshold is met]
+  award --> poApproval
+  poApproval --> sendPO[Send approved PO to supplier]
+  sendPO --> supplierShip[Supplier ships materials]
+  supplierShip --> grn["Record goods receipt (GRN)"]
+  grn --> incomingQC{Incoming QC passes?}
+  incomingQC -- Yes --> stockAccept[Accept materials into inventory]
+  stockAccept --> inventory[(Raw material inventory)]
+  inventory --> schedule
+  incomingQC -- No --> supplierNCR[Reject GRN and open supplier NCR]
+  supplierNCR --> supplierDisposition{Disposition?}
+  supplierDisposition -- Use as is --> stockAccept
+  supplierDisposition -- Return to supplier --> replacementPO[Return goods; create replacement purchase order]
+  replacementPO --> poApproval
+  supplierDisposition -- Supplier rework --> vendorRecovery[Return goods to supplier for rework]
+  vendorRecovery --> supplierShip
+  supplierDisposition -- Scrap and reorder --> pr
+  grn -. Parallel accounts-payable path .-> supplierInvoice[/Supplier submits invoice/]
+  supplierInvoice --> billReview[Match bill to PO and receipt; approve]
+  billReview --> supplierPayment[Post supplier payment]
+  supplierPayment --> apClosed([Supplier invoice settled])
+
+  schedule --> workOrder[Confirm work order and issue materials]
+  workOrder --> inProcessQC{In-process QC passes?}
+  inProcessQC -- Yes --> output[Complete work order and record output]
+  inProcessQC -- No --> inProcessNCR[Open NCR; contain or pause production]
+  inProcessNCR --> correction[Correct process or rework; sample again]
+  correction --> inProcessQC
+  output --> outgoingQC[Inspector completes outgoing AQL inspection; submit result]
+  outgoingQC --> qcReview{Independent reviewer passes lot?}
+  qcReview -- Yes --> coc[/"Certificate of Conformance (CoC)"/]
+  qcReview -- No --> outgoingNCR[Open NCR; block delivery]
+  outgoingNCR --> replan[MRP replans sales order and replacement work order]
+  replan --> schedule
+
+  coc --> fulfillmentType{Delivery context?}
+  fulfillmentType -- Sales order --> deliveryDraft[Automatically draft delivery]
+  fulfillmentType -- RMA replacement --> rmaDelivery[Create no-charge replacement delivery]
+  deliveryDraft --> dispatch[Reserve stock; assign vehicle and driver]
+  rmaDelivery --> dispatch
+  dispatch --> delivery[Scheduled → loading → in transit → delivered]
+  delivery --> podUpload[Upload signed proof of delivery]
+  podUpload --> pod[/Signed proof of delivery/]
+  pod --> customerConfirm[Customer or ImpEx confirms receipt]
+  customerConfirm --> billingRequired{Customer invoice required?}
+  billingRequired -- Yes --> invoiceHandoff{Automatic invoice handoff succeeds?}
+  billingRequired -- No; RMA replacement --> rmaClosed
+  invoiceHandoff -- Yes --> draftInvoice[Review draft customer invoice]
+  invoiceHandoff -- No; delivery remains confirmed --> manualInvoice[Finance creates or links invoice]
+  draftInvoice --> finalize[Finalize invoice and post to general ledger]
+  manualInvoice --> finalize
+  finalize --> collect[Record customer payment]
+  collect --> balance{Invoice balance paid?}
+  balance -- No; partial payment --> collect
+  balance -- Yes --> close([Order fulfilled, paid, and closed])
+
+  customerConfirm -. Post-sale issue .-> issue[/Customer complaint or return request/]
+  issue --> issueType{Issue type?}
+  issueType -- Complaint --> complaint[Record CRM complaint and link NCR]
+  complaint --> eightD[Investigate with 8D and verify corrective action]
+  eightD --> complaintClosed([Complaint verified and closed])
+  issueType -- Return (RMA) --> rma[Receive return and inspect goods]
+  rma --> rmaDisposition{Return disposition?}
+  rmaDisposition -- Replace --> replacement[Create RMA-linked replacement work order]
+  replacement --> schedule
+  rmaDisposition -- Repair --> repair[Repair or rework and reinspect]
+  repair --> repairedDelivery[Return repaired goods to customer]
+  repairedDelivery --> rmaClosed
+  rmaDisposition -- Credit --> relatedInvoice{Related customer invoice exists?}
+  relatedInvoice -- No --> credit[Issue customer credit memo]
+  relatedInvoice -- Yes --> invoiceFinal{Related invoice finalized?}
+  invoiceFinal -- Yes --> credit
+  invoiceFinal -- No; draft invoice --> finalizeCredit[Finalize invoice before crediting return]
+  finalizeCredit --> credit
+  credit --> rmaClosed([Return case closed])
+
+  classDef terminator fill:#102a43,stroke:#102a43,color:#ffffff,stroke-width:2px
+  classDef process fill:#f1f5f9,stroke:#526579,color:#102a43
+  classDef decision fill:#fff4cc,stroke:#c98a00,color:#513700,stroke-width:2px
+  classDef document fill:#e6f2ff,stroke:#3273a8,color:#163a59
+  classDef data fill:#dcfce7,stroke:#25803d,color:#174d29
+  classDef exception fill:#ffe4e6,stroke:#bd344d,color:#70202f
+  class start,close,complaintClosed,rmaClosed,apClosed terminator
+  class pipeline,shortage,sourcing,incomingQC,supplierDisposition,inProcessQC,qcReview,fulfillmentType,billingRequired,invoiceHandoff,balance,issueType,rmaDisposition,relatedInvoice,invoiceFinal decision
+  class lead,salesOrder,confirm,mrp,pr,directPO,rfq,award,poApproval,replacementPO,sendPO,supplierShip,grn,stockAccept,billReview,schedule,workOrder,output,outgoingQC,deliveryDraft,rmaDelivery,dispatch,delivery,podUpload,customerConfirm,draftInvoice,manualInvoice,finalize,collect,complaint,eightD,rma,replacement,repair,repairedDelivery,finalizeCredit,supplierPayment process
+  class quote,customerPO,supplierQuotes,supplierInvoice,coc,pod,issue document
+  class inventory data
+  class supplierNCR,inProcessNCR,outgoingNCR,replan,manualInvoice,credit exception
