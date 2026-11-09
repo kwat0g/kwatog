@@ -6,6 +6,8 @@ RUN apk add --no-cache \
         bash \
         git \
         curl \
+        ca-certificates \
+        openjdk21-jre-headless \
         zip \
         unzip \
         icu-dev \
@@ -24,6 +26,17 @@ RUN apk add --no-cache \
         g++ \
         make \
         linux-headers
+
+# Pin the standalone PDFtk Java build and verify its digest. The wrapper is a
+# minimal argv-preserving shim so Symfony Process never interpolates a shell.
+RUN mkdir -p /usr/local/lib/pdftk \
+    && curl --fail --location --silent --show-error \
+        --output /usr/local/lib/pdftk/pdftk-all.jar \
+        https://gitlab.com/pdftk-java/pdftk/-/jobs/1527259628/artifacts/raw/build/libs/pdftk-all.jar \
+    && echo '2f625bd6e2df0ff8cab0d97bb769746a421879179c25c22646bd8460b5f69b00  /usr/local/lib/pdftk/pdftk-all.jar' | sha256sum -c - \
+    && printf '%s\n' '#!/bin/sh' 'exec java -jar /usr/local/lib/pdftk/pdftk-all.jar "$@"' > /usr/local/bin/pdftk \
+    && chmod 0755 /usr/local/bin/pdftk \
+    && pdftk --version
 
 # PHP core extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \

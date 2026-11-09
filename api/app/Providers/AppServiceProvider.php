@@ -101,6 +101,8 @@ use App\Modules\B2B\Listeners\EmailSupplierOnInvoiceSubmitted;
 use App\Modules\B2B\Listeners\EmailSupplierOnPurchaseOrderCancelled;
 use App\Modules\B2B\Observers\DeliveryScheduleRealtimeObserver;
 use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
+use App\Modules\B2B\Services\PortalContractPdfProcessor;
+use App\Modules\B2B\Services\SystemPdfTkProcessor;
 use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
@@ -444,6 +446,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(CacheKeyAuditReader::class, RedisCacheKeyAuditReader::class);
         $this->app->bind(RetiredGenerationCacheKeyReader::class, RedisCacheKeyAuditReader::class);
         $this->app->bind(SupplierDispatchGateway::class, SupplierPortalDispatchGateway::class);
+        $this->app->singleton(PortalContractPdfProcessor::class, fn ($app) => new SystemPdfTkProcessor(
+            (string) $app['config']->get('pdftk.binary', '/usr/local/bin/pdftk'),
+        ));
         $this->app->scoped(SalesOrderSupplyService::class);
         $this->app->scoped(RolePermissionCacheGeneration::class);
     }

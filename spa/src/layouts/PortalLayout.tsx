@@ -76,6 +76,7 @@ const SUPPLIER_NAV: PortalNavSection[] = [
     items: [
       { to: '/portal/supplier', label: 'Dashboard', icon: DashboardIcon },
       { to: '/portal/supplier/notifications', label: 'Notifications', icon: LuBell },
+      { to: '/portal/supplier/agreements', label: 'Agreements', icon: LuFileText },
     ],
   },
   {
@@ -108,6 +109,7 @@ const CUSTOMER_NAV: PortalNavSection[] = [
     items: [
       { to: '/portal/customer', label: 'Dashboard', icon: DashboardIcon },
       { to: '/portal/customer/notifications', label: 'Notifications', icon: LuBell },
+      { to: '/portal/customer/agreements', label: 'Agreements', icon: LuFileText },
     ],
   },
   {

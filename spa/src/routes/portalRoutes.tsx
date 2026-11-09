@@ -10,6 +10,7 @@ import { PortalLoginRedirect } from '@/components/guards/PortalLoginRedirect';
 // Public portal recovery pages stay outside the protected portal layouts so
 // they remain reachable. Portal login URLs redirect to the unified sign-in.
 const PortalNotificationsPage = lazy(() => import('@/pages/portal/notifications'));
+const PortalAgreementsPage = lazy(() => import('@/pages/portal/agreements'));
 const SupplierPortalLayout = lazy(() => import('@/layouts/SupplierPortalLayout'));
 const PortalForgotPasswordPage = lazy(() => import('@/pages/portal/forgot-password'));
 const PortalPasswordResetPage = lazy(() => import('@/pages/portal/password-reset'));
@@ -93,6 +94,7 @@ export const portalRoutes = (
         path="/portal/supplier/notifications"
         element={<PortalNotificationsPage type="supplier" />}
       />
+      <Route path="/portal/supplier/agreements" element={<PortalAgreementsPage realm="supplier" />} />
       <Route path="/portal/supplier/purchase-orders" element={<SupplierPurchaseOrdersPage />} />
       <Route
         path="/portal/supplier/purchase-orders/:id"
@@ -124,6 +126,7 @@ export const portalRoutes = (
         path="/portal/customer/notifications"
         element={<PortalNotificationsPage type="customer" />}
       />
+      <Route path="/portal/customer/agreements" element={<PortalAgreementsPage realm="customer" />} />
       <Route path="/portal/customer/pricing" element={<CustomerPricingPage />} />
       <Route path="/portal/customer/orders" element={<CustomerOrdersPage />} />
       <Route path="/portal/customer/orders/new" element={<CustomerPlaceOrderPage />} />

@@ -9,7 +9,10 @@ use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\InternalSupplierActivityController;
 use App\Modules\B2B\Controllers\PortalAccessController;
+use App\Modules\B2B\Controllers\PortalContractTemplateController;
 use App\Modules\B2B\Controllers\PortalNotificationController;
+use App\Modules\B2B\Controllers\SupplierAgreementDocumentController;
+use App\Modules\CRM\Controllers\CustomerAgreementDocumentController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierDeliveryScheduleController;
 use App\Modules\B2B\Controllers\SupplierInvoiceController;
@@ -59,6 +62,9 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::delete('notifications/clear-read', [PortalNotificationController::class, 'clearRead']);
             Route::delete('notifications/{id}', [PortalNotificationController::class, 'destroy'])->whereUuid('id');
             Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
+            Route::get('agreement-documents', [SupplierAgreementDocumentController::class, 'portalIndex']);
+            Route::get('agreement-documents/{document}/download', [SupplierAgreementDocumentController::class, 'portalDownload']);
+            Route::post('agreement-documents/{document}/sign', [SupplierAgreementDocumentController::class, 'sign'])->middleware('throttle:sensitive');
             Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
             Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
             Route::get('purchase-orders/{purchaseOrder}/returns/{returnRequest}/defect-photo', [SupplierPortalController::class, 'returnDefectPhoto']);
@@ -125,6 +131,22 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
             ->withTrashed();
         Route::get('suppliers', [PortalAccessController::class, 'suppliers'])
             ->middleware('permission:b2b.portal_access.view');
+        Route::get('contract-templates', [PortalContractTemplateController::class, 'index'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::post('contract-templates', [PortalContractTemplateController::class, 'store'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::post('contract-templates/inspect', [PortalContractTemplateController::class, 'inspect'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::put('contract-templates/{template}', [PortalContractTemplateController::class, 'update'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::get('suppliers/{vendor}/agreement-documents', [SupplierAgreementDocumentController::class, 'internalIndex'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::get('suppliers/{vendor}/agreement-documents/{document}/download', [SupplierAgreementDocumentController::class, 'internalDownload'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::post('suppliers/{vendor}/agreement-documents/{document}/issue', [SupplierAgreementDocumentController::class, 'issue'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::post('suppliers/{vendor}/agreement-documents', [SupplierAgreementDocumentController::class, 'storeForVendor'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
         Route::post('suppliers/{vendor}/invite', [PortalAccessController::class, 'inviteSupplier'])
             ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
         Route::post('suppliers/{supplierPortalUser}/resend', [PortalAccessController::class, 'resendSupplier'])
@@ -186,6 +208,9 @@ Route::prefix('b2b/customer')->group(function () {
         Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
+            Route::get('agreement-documents', [CustomerAgreementDocumentController::class, 'portalIndex']);
+            Route::get('agreement-documents/{document}/download', [CustomerAgreementDocumentController::class, 'portalDownload']);
+            Route::post('agreement-documents/{document}/sign', [CustomerAgreementDocumentController::class, 'sign'])->middleware('throttle:sensitive');
             Route::get('notifications', [PortalNotificationController::class, 'index']);
             Route::patch('notifications/read-all', [PortalNotificationController::class, 'markAllRead']);
             Route::patch('notifications/{id}/read', [PortalNotificationController::class, 'markRead'])->whereUuid('id');

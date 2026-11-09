@@ -33,6 +33,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission:accounting.customers.view');
     Route::post('/customers/{customer}/agreement-documents', [CustomerAgreementDocumentController::class, 'store'])
         ->middleware(['permission:accounting.customers.manage', 'throttle:sensitive']);
+    Route::post('/customers/{customer}/agreement-documents/{document}/issue', [CustomerAgreementDocumentController::class, 'issue'])
+        ->middleware(['permission:accounting.customers.manage', 'throttle:sensitive']);
     Route::get('/customers/{customer}/agreement-documents/{document}/download', [CustomerAgreementDocumentController::class, 'download'])
         ->middleware('permission:accounting.customers.view');
     Route::get('/customers/{customer}/warranty-terms', [CustomerWarrantyTermsController::class, 'index'])

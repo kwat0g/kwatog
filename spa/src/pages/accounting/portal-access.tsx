@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LuBan, LuKeyRound, LuPlus, LuRefreshCw, LuShieldCheck } from '@/lib/icons';
+import { LuBan, LuFileText, LuKeyRound, LuPlus, LuRefreshCw, LuShieldCheck } from '@/lib/icons';
 import {
  portalAccessApi,
  type CustomerPortalAccessListParams,
@@ -32,6 +32,8 @@ import { useRealtimeList, useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
+import { AgreementDocumentManager } from '@/components/contracts/AgreementDocumentManager';
+import { ContractTemplatesSection } from '@/components/contracts/ContractTemplatesSection';
 import type { CustomerPortalUser, InternalDeliverySchedule, SupplierPortalUser } from '@/types/b2b';
 
 type PortalStatus = SupplierPortalUser['status'];
@@ -87,15 +89,15 @@ export default function PortalAccessPage() {
  );
 
  const [searchParams, setSearchParams] = useSearchParams();
- const [tab, setTab] = useState<'suppliers' | 'customers' | 'delivery-schedules'>(() => {
+ const [tab, setTab] = useState<'suppliers' | 'customers' | 'delivery-schedules' | 'contract-templates'>(() => {
   const requested = searchParams.get('tab');
-  return requested === 'customers' || requested === 'delivery-schedules' ? requested : 'suppliers';
+  return requested === 'customers' || requested === 'delivery-schedules' || requested === 'contract-templates' ? requested : 'suppliers';
  });
 
  // Tabs share the URL query string with their list filters; clear it when
  // switching so the incoming tab mounts on clean defaults instead of the
  // previous tab's page/status.
- const switchTab = (next: 'suppliers' | 'customers' | 'delivery-schedules') => {
+ const switchTab = (next: 'suppliers' | 'customers' | 'delivery-schedules' | 'contract-templates') => {
   if (next === tab) return;
   setTab(next);
   setSearchParams({}, { replace: true });
@@ -116,10 +118,11 @@ export default function PortalAccessPage() {
       { key: 'suppliers', label: 'Suppliers' },
       { key: 'customers', label: 'Customers' },
       { key: 'delivery-schedules', label: 'Delivery Schedules' },
+      { key: 'contract-templates', label: 'Contract templates' },
      ]}
     />
    </div>
-   {tab === 'suppliers' ? <SuppliersSection /> : tab === 'customers' ? <CustomersSection /> : <DeliverySchedulesSection />}
+   {tab === 'suppliers' ? <SuppliersSection /> : tab === 'customers' ? <CustomersSection /> : tab === 'delivery-schedules' ? <DeliverySchedulesSection /> : <ContractTemplatesSection />}
   </div>
  );
 }
@@ -134,6 +137,7 @@ function SuppliersSection() {
  const canManage = can('b2b.portal_access.manage');
  const [filters, setFilters] = useUrlFilters<PortalAccessListParams>({ page: 1, per_page: 25 });
  const [inviteOpen, setInviteOpen] = useState(false);
+ const [agreementVendor, setAgreementVendor] = useState<{ id: string; name: string } | null>(null);
  const [confirmAction, setConfirmAction] = useState<SupplierConfirmAction>(null);
  const [invite, setInvite] = useState({ vendor_id: '', name: '', email: '', is_authorized_signatory: false });
 
@@ -209,6 +213,7 @@ function SuppliersSection() {
       <Button size="xs" variant="ghost" icon={<LuBan size={12} />} onClick={() => setConfirmAction({ kind: 'deactivate', user: row })}>Deactivate</Button>
      )}
      <Button size="xs" variant="ghost" icon={<LuKeyRound size={12} />} onClick={() => setConfirmAction({ kind: 'revoke', user: row })}>Revoke sessions</Button>
+     {row.vendor && <Button size="xs" variant="ghost" icon={<LuFileText size={12} />} onClick={() => setAgreementVendor(row.vendor)}>Agreements</Button>}
     </div>
    ) : <span className="text-xs text-muted">View only</span>,
   },
@@ -256,6 +261,12 @@ function SuppliersSection() {
      </ModalFooter>
     </form>
    </Modal>
+
+   {agreementVendor && (
+    <Modal isOpen onClose={() => setAgreementVendor(null)} title={`Supplier agreements · ${agreementVendor.name}`} size="xl">
+     <AgreementDocumentManager realm="supplier" entityId={agreementVendor.id} entityName={agreementVendor.name} />
+    </Modal>
+   )}
 
    <ConfirmDialog
     isOpen={confirmAction !== null}

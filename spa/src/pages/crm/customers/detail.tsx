@@ -16,6 +16,7 @@ import { SkeletonDetail, SkeletonTable } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ShipToAddress } from '@/components/supply-chain/ShipToAddress';
+import { AgreementDocumentManager } from '@/components/contracts/AgreementDocumentManager';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
@@ -207,6 +208,25 @@ export default function CrmCustomerDetailPage() {
  {customer.agreement_status === 'not_yet_effective' && <p className="mt-4 rounded border border-warning p-3 text-xs text-warning-fg">Agreement start date is in the future. Review before applying these terms.</p>}
  </Panel>
  </div>
+
+ <AgreementDocumentManager
+  realm="customer"
+  entityId={customer.id}
+  entityName={customer.name}
+  previewValues={{
+   customer_name: customer.name,
+   customer_contact_name: customer.contact_person,
+   customer_contact_role: customer.contact_person_role,
+   customer_email: customer.email,
+   customer_phone: customer.phone,
+   customer_address: customer.address,
+   delivery_address: customer.delivery_address,
+   payment_terms: customer.payment_terms_days == null ? null : `${customer.payment_terms_days} days`,
+   effective_date: customer.agreement_starts_on,
+   expiry_date: customer.agreement_ends_on,
+   warranty_summary: customer.warranty_duration_days == null ? null : `${customer.warranty_duration_days} days from ${customer.warranty_start_basis ?? 'the agreed start date'}`,
+  }}
+ />
 
  </div>
  </> : activeTab === 'orders' ? (

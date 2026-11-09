@@ -17,7 +17,7 @@ final class CustomerSubresourceRealtimeObserver
         $this->stageCustomerRefresh($record, $record->created_at);
     }
 
-    public function updated(CustomerProductWarrantyOverride $record): void
+    public function updated(CustomerAgreementDocument|CustomerProductWarrantyOverride $record): void
     {
         if ($record->wasChanged()) {
             $this->stageCustomerRefresh($record, $record->updated_at);
