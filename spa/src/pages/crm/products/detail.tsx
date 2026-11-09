@@ -20,6 +20,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDateTime } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
 import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
+import { ProductTechnicalMedia } from './technical-media';
 import { useRealtimeProductBom, useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import type { Product } from '@/types/crm';
 import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
@@ -229,8 +230,35 @@ export default function ProductDetailPage() {
                     {data.description || 'No description added.'}
                   </dd>
                 </div>
+                <div>
+                  <dt className="text-xs text-muted">Dimensions</dt>
+                  <dd className="mt-1">
+                    {data.specifications?.dimensions
+                      ? `${data.specifications.dimensions.length} × ${data.specifications.dimensions.width} × ${data.specifications.dimensions.height} ${data.specifications.dimensions.unit}`
+                      : 'Not recorded'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Material</dt>
+                  <dd className="mt-1 break-words">{data.specifications?.material || 'Not recorded'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Surface finish</dt>
+                  <dd className="mt-1 break-words">{data.specifications?.finish || 'Not specified'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">Tolerance</dt>
+                  <dd className="mt-1 break-words">{data.specifications?.tolerances || 'Not specified'}</dd>
+                </div>
+                {data.is_customizable && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs text-muted">Customization</dt>
+                    <dd className="mt-1"><Chip variant="warning">Customer blueprint required</Chip></dd>
+                  </div>
+                )}
               </dl>
             </Panel>
+            <ProductTechnicalMedia product={data} canManage={canManage} />
             <Panel
               title="Pricing"
               actions={
@@ -263,6 +291,11 @@ export default function ProductDetailPage() {
               <dl className="grid gap-4 text-sm sm:grid-cols-3">
                 {[
                   ...(canViewCosts ? [costRow] : []),
+                  ...(canViewCosts && data.expected_margin_amount != null ? [{
+                    label: 'Expected unit margin',
+                    current: data.expected_margin_amount,
+                    proposed: undefined,
+                  }] : []),
                   { label: 'Base selling price', current: data.base_selling_price, proposed: undefined },
                   { label: 'Minimum selling price', current: data.minimum_selling_price, proposed: undefined },
                 ].map((row) => (
@@ -278,6 +311,9 @@ export default function ProductDetailPage() {
               </dl>
               <div className="mt-4 space-y-1 border-t border-subtle pt-3 text-xs text-muted">
                 <p>Prices exclude VAT.</p>
+                {canViewCosts && data.expected_margin_percent != null && (
+                  <p>Expected margin: {data.expected_margin_percent}% of the current base selling price.</p>
+                )}
                 <p>
                   Applicable customer agreements override the base price. A configured minimum
                   blocks lower selling prices.

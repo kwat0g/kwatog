@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { accountsApi } from '@/api/accounting/accounts';
 import { productsApi } from '@/api/crm/products';
 import { uomsApi } from '@/api/inventory/uoms';
@@ -62,6 +63,19 @@ export function ProductForm({ initial, mode }: Props) {
       standard_cost: initial?.standard_cost ?? '',
       revenue_account_id: initial?.revenue_account_id ?? '',
       is_active: initial?.is_active ?? true,
+      specifications: {
+        dimensions: {
+          length: initial?.specifications?.dimensions?.length ?? '',
+          width: initial?.specifications?.dimensions?.width ?? '',
+          height: initial?.specifications?.dimensions?.height ?? '',
+          unit: initial?.specifications?.dimensions?.unit ?? 'mm',
+        },
+        material: initial?.specifications?.material ?? '',
+        finish: initial?.specifications?.finish ?? '',
+        tolerances: initial?.specifications?.tolerances ?? '',
+        notes: initial?.specifications?.notes ?? '',
+      },
+      is_customizable: initial?.is_customizable ?? false,
     },
   });
   const {
@@ -89,6 +103,19 @@ export function ProductForm({ initial, mode }: Props) {
         standard_cost: initial.standard_cost ?? '',
         revenue_account_id: initial.revenue_account_id ?? '',
         is_active: initial.is_active,
+        specifications: {
+          dimensions: {
+            length: initial.specifications?.dimensions?.length ?? '',
+            width: initial.specifications?.dimensions?.width ?? '',
+            height: initial.specifications?.dimensions?.height ?? '',
+            unit: initial.specifications?.dimensions?.unit ?? 'mm',
+          },
+          material: initial.specifications?.material ?? '',
+          finish: initial.specifications?.finish ?? '',
+          tolerances: initial.specifications?.tolerances ?? '',
+          notes: initial.specifications?.notes ?? '',
+        },
+        is_customizable: initial.is_customizable ?? false,
       });
     }
   }, [initial, reset]);
@@ -116,6 +143,17 @@ export function ProductForm({ initial, mode }: Props) {
       const payload: CreateProductData | UpdateProductData = {
         ...values,
         description: values.description?.trim() ? values.description : null,
+        specifications: values.specifications ? {
+          dimensions: [
+            values.specifications.dimensions?.length,
+            values.specifications.dimensions?.width,
+            values.specifications.dimensions?.height,
+          ].some((value) => value?.trim()) ? values.specifications.dimensions : null,
+          material: values.specifications.material.trim() || null,
+          finish: values.specifications.finish.trim() || null,
+          tolerances: values.specifications.tolerances.trim() || null,
+          notes: values.specifications.notes.trim() || null,
+        } : null,
       };
       return mode === 'create'
         ? productsApi.create(payload as CreateProductData)
@@ -191,6 +229,40 @@ navigate(`/crm/products/${product.id}`);
             />
           </div>
         </div>
+      </fieldset>
+
+      <fieldset className="mb-8">
+        <legend className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
+          Physical specifications
+        </legend>
+        <p className="mb-4 max-w-3xl text-xs text-muted">
+          Record the finished product’s size, material, finish, and tolerances. Dimensions and material are required before customers can order this product.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Input label="Length" type="number" min="0.001" step="0.001" {...register('specifications.dimensions.length')} error={errors.specifications?.dimensions?.length?.message} />
+          <Input label="Width" type="number" min="0.001" step="0.001" {...register('specifications.dimensions.width')} error={errors.specifications?.dimensions?.width?.message} />
+          <Input label="Height" type="number" min="0.001" step="0.001" {...register('specifications.dimensions.height')} error={errors.specifications?.dimensions?.height?.message} />
+          <Select label="Dimension unit" {...register('specifications.dimensions.unit')} error={errors.specifications?.dimensions?.unit?.message}>
+            <option value="mm">Millimeters (mm)</option>
+            <option value="cm">Centimeters (cm)</option>
+            <option value="in">Inches (in)</option>
+          </Select>
+          <Input label="Material" maxLength={160} {...register('specifications.material')} error={errors.specifications?.material?.message} placeholder="e.g. Aluminum 6061" />
+          <Input label="Surface finish" maxLength={160} {...register('specifications.finish')} error={errors.specifications?.finish?.message} placeholder="e.g. Black anodized" />
+          <Input label="Tolerance" maxLength={255} {...register('specifications.tolerances')} error={errors.specifications?.tolerances?.message} placeholder="e.g. ±0.10 mm" />
+          <div className="sm:col-span-2 xl:col-span-4">
+            <Textarea label="Technical notes" rows={2} maxLength={2000} {...register('specifications.notes')} error={errors.specifications?.notes?.message} placeholder="Mounting points, connection details, or other measurable product requirements." />
+          </div>
+          <div className="sm:col-span-2 xl:col-span-4">
+            <Checkbox
+              label="This product requires customer customization"
+              checked={!!watch('is_customizable')}
+              onChange={(event) => setValue('is_customizable', event.target.checked, { shouldDirty: true })}
+            />
+            <p className="mt-1 text-xs text-muted">A blueprint must be uploaded before a customizable product can be listed for customers.</p>
+          </div>
+        </div>
+        {errors.specifications?.dimensions?.message && <p role="alert" className="mt-2 text-xs text-danger-fg">{errors.specifications.dimensions.message}</p>}
       </fieldset>
 
       <fieldset className="mb-8">

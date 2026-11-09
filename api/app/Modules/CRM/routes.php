@@ -9,6 +9,7 @@ use App\Modules\CRM\Controllers\CustomerAgreementDocumentController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
 use App\Modules\CRM\Controllers\ProductController;
 use App\Modules\CRM\Controllers\ProductImageController;
+use App\Modules\CRM\Controllers\ProductBlueprintController;
 use App\Modules\CRM\Controllers\SalesOrderController;
 use App\Modules\CRM\Controllers\SalesOrderResponseController;
 use Illuminate\Support\Facades\Route;
@@ -51,12 +52,29 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission:crm.products.customer_access.manage');
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');
     Route::get('/products/{product}/image', [ProductImageController::class, 'show'])
-        ->middleware('permission_any:crm.products.view,inventory.costs.approve,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view,forecasting.view')
+        ->middleware('permission_any:crm.products.view,crm.products.manage,inventory.costs.approve,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view,forecasting.view')
         ->withTrashed();
     Route::post('/products/{product}/image', [ProductImageController::class, 'upload'])
         ->middleware('permission:crm.products.manage')
         ->withTrashed();
-    Route::get('/products/{product}', [ProductController::class, 'show']) ->middleware('permission_any:crm.products.view,inventory.costs.approve');
+    Route::post('/products/{product}/images', [ProductImageController::class, 'uploadMany'])
+        ->middleware('permission:crm.products.manage')->withTrashed();
+    Route::patch('/products/{product}/images/{image}/primary', [ProductImageController::class, 'setPrimary'])
+        ->middleware('permission:crm.products.manage')->withTrashed();
+    Route::get('/products/{product}/images/{image}/file', [ProductImageController::class, 'showImage'])
+        ->middleware('permission_any:crm.products.view,crm.products.manage,inventory.costs.approve,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view,forecasting.view')
+        ->withTrashed();
+    Route::delete('/products/{product}/images/{image}', [ProductImageController::class, 'destroy'])
+        ->middleware('permission:crm.products.manage')->withTrashed();
+    Route::get('/products/{product}/blueprints', [ProductBlueprintController::class, 'index'])
+        ->middleware('permission_any:crm.products.view,crm.products.manage,inventory.costs.approve')->withTrashed();
+    Route::post('/products/{product}/blueprints', [ProductBlueprintController::class, 'store'])
+        ->middleware('permission:crm.products.manage')->withTrashed();
+    Route::get('/products/{product}/blueprints/{blueprint}/file', [ProductBlueprintController::class, 'show'])
+        ->middleware('permission_any:crm.products.view,crm.products.manage,inventory.costs.approve')->withTrashed();
+    Route::delete('/products/{product}/blueprints/{blueprint}', [ProductBlueprintController::class, 'destroy'])
+        ->middleware('permission:crm.products.manage')->withTrashed();
+    Route::get('/products/{product}', [ProductController::class, 'show']) ->middleware('permission_any:crm.products.view,crm.products.manage,inventory.costs.approve');
     Route::post('/products',          [ProductController::class, 'store']) ->middleware('permission:crm.products.manage');
     Route::put('/products/{product}/customer-access', [ProductController::class, 'updateCustomerAccess'])
         ->middleware('permission:crm.products.customer_access.manage');

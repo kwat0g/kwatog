@@ -46,6 +46,17 @@ class StoreProductRequest extends FormRequest
             'base_selling_price' => ['prohibited'],
             'minimum_selling_price' => ['prohibited'],
             'is_active'       => ['nullable', 'boolean'],
+            'specifications' => ['nullable', 'array:dimensions,material,finish,tolerances,notes'],
+            'specifications.dimensions' => ['nullable', 'array:length,width,height,unit'],
+            'specifications.dimensions.length' => ['required_with:specifications.dimensions', 'numeric', 'gt:0', 'max:1000000'],
+            'specifications.dimensions.width' => ['required_with:specifications.dimensions', 'numeric', 'gt:0', 'max:1000000'],
+            'specifications.dimensions.height' => ['required_with:specifications.dimensions', 'numeric', 'gt:0', 'max:1000000'],
+            'specifications.dimensions.unit' => ['required_with:specifications.dimensions', 'in:mm,cm,in'],
+            'specifications.material' => ['nullable', 'string', 'max:160'],
+            'specifications.finish' => ['nullable', 'string', 'max:160'],
+            'specifications.tolerances' => ['nullable', 'string', 'max:255'],
+            'specifications.notes' => ['nullable', 'string', 'max:2000'],
+            'is_customizable' => ['nullable', 'boolean'],
         ];
     }
 

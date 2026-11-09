@@ -43,7 +43,7 @@ class ProductService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = Product::query();
+        $q = Product::query()->with('images');
 
         TrashedFilter::apply($q, $filters);
 
@@ -89,7 +89,7 @@ class ProductService
 
     public function show(Product $product): Product
     {
-        $relations = ['portalCustomers:id,name', 'inventoryItem'];
+        $relations = ['portalCustomers:id,name', 'inventoryItem', 'images', 'blueprints'];
         if ($this->hasBomSchema()) {
             $relations[] = 'activeBom:id,product_id,version,is_active';
         }
@@ -112,7 +112,7 @@ class ProductService
                 app(FinishedGoodInventoryService::class)->ensureItem($product);
             }
 
-            return $product->load('portalCustomers:id,name');
+            return $product->load(['portalCustomers:id,name', 'images', 'blueprints']);
         });
     }
 
@@ -134,6 +134,12 @@ class ProductService
             if (isset($data['part_number'])) {
                 $this->assertUniquePartNumber((string) $data['part_number'], (int) $locked->id);
             }
+            $prospective = clone $locked;
+            $prospective->fill($data);
+            $currentlyVisible = $locked->portal_visibility === 'standard' || $locked->portalCustomers()->exists();
+            if ($currentlyVisible) {
+                $this->assertCatalogReady($prospective, true);
+            }
             if (
                 $locked->is_active
                 && isset($data['is_active'])
@@ -154,7 +160,7 @@ class ProductService
             if ($locked->wasChanged('standard_cost')) {
                 app(PricingReviewService::class)->request([(int) $locked->id], 'product_prices_changed');
             }
-            return $locked->fresh()->load('portalCustomers:id,name');
+            return $locked->fresh()->load(['portalCustomers:id,name', 'images', 'blueprints']);
         });
     }
 
@@ -173,6 +179,13 @@ class ProductService
             )));
             sort($previousCustomerIds);
             sort($nextCustomerIds);
+            $willBeVisible = $data['portal_visibility'] === 'standard' || $nextCustomerIds !== [];
+            $prospective = clone $locked;
+            $prospective->portal_visibility = $data['portal_visibility'];
+            $prospective->setRelation('portalCustomers', Customer::query()->whereKey($nextCustomerIds)->get());
+            if ($willBeVisible) {
+                $this->assertCatalogReady($prospective, true);
+            }
             $accessChanged = $previousCustomerIds !== $nextCustomerIds;
             $locked->update(['portal_visibility' => $data['portal_visibility']]);
             $locked->portalCustomers()->sync($nextCustomerIds);
@@ -180,8 +193,33 @@ class ProductService
                 app(ProductRealtimeService::class)->stage($locked, 'updated');
             }
 
-            return $locked->fresh()->load('portalCustomers:id,name');
+            return $locked->fresh()->load(['portalCustomers:id,name', 'images', 'blueprints']);
         });
+    }
+
+    private function assertCatalogReady(Product $product, bool $willBeVisible): void
+    {
+        if (! $willBeVisible) {
+            return;
+        }
+        $specifications = $product->specifications ?? [];
+        $dimensions = $specifications['dimensions'] ?? [];
+        $validDimensions = is_array($dimensions)
+            && in_array($dimensions['unit'] ?? null, ['mm', 'cm', 'in'], true)
+            && collect(['length', 'width', 'height'])->every(static fn (string $axis): bool =>
+                isset($dimensions[$axis]) && is_numeric($dimensions[$axis]) && bccomp((string) $dimensions[$axis], '0', 4) > 0
+            );
+        $hasMaterial = is_string($specifications['material'] ?? null) && trim($specifications['material']) !== '';
+        if (! $validDimensions || ! $hasMaterial) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'specifications' => 'Add the product dimensions, measurement unit, and material before making it available in the customer catalog.',
+            ]);
+        }
+        if ($product->is_customizable && ! $product->blueprints()->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'blueprints' => 'Upload an approved product blueprint before listing a customizable product.',
+            ]);
+        }
     }
 
     public function updateSellingPrices(Product $product, User $by, array $data): Product
@@ -213,7 +251,7 @@ class ProductService
                 app(PricingReviewService::class)->request([(int) $locked->id], 'product_prices_changed');
             }
 
-            return $locked->fresh()->load('portalCustomers:id,name');
+            return $locked->fresh()->load(['portalCustomers:id,name', 'images', 'blueprints']);
         });
     }
 
@@ -234,7 +272,7 @@ class ProductService
                 $locked->restore();
             }
 
-            return $locked->fresh();
+            return $locked->fresh()->load(['portalCustomers:id,name', 'images', 'blueprints']);
         });
     }
 

@@ -4,6 +4,12 @@ import type { Incoterm } from '@/types/supplyChain';
 import type { CustomerTermsSnapshot, WarrantyTermsSnapshot } from '@/types/orderAgreements';
 
 export interface Product {
+  specifications?: ProductSpecifications | null;
+  is_customizable?: boolean;
+  images?: ProductImage[];
+  blueprints?: ProductBlueprint[];
+  expected_margin_amount?: string | null;
+  expected_margin_percent?: string | null;
   financial_change_request?: {
     id: string;
     notes: string;
@@ -24,6 +30,7 @@ export interface Product {
   name: string;
   description: string | null;
   image_url?: string | null;
+  primary_image_url?: string | null;
   unit_of_measure: string;
   standard_cost: string | null;
   base_selling_price?: string | null;
@@ -37,6 +44,37 @@ export interface Product {
   inspection_spec?: { id: string; version: number; updated_at: string | null } | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProductSpecifications {
+  dimensions?: { length: string; width: string; height: string; unit: 'mm' | 'cm' | 'in' } | null;
+  material?: string | null;
+  finish?: string | null;
+  tolerances?: string | null;
+  notes?: string | null;
+}
+
+export interface ProductImage {
+  id: string;
+  url: string;
+  filename?: string;
+  mime?: string;
+  size?: number;
+  position: number;
+  alt_text: string | null;
+  is_primary: boolean;
+}
+
+export interface ProductBlueprint {
+  id: string;
+  title: string;
+  revision: string;
+  notes: string | null;
+  filename: string;
+  mime: string;
+  size: number;
+  download_url?: string;
+  created_at?: string;
 }
 
 export interface PriceAgreement {
@@ -76,6 +114,8 @@ export interface CreateProductData {
   standard_cost: string;
   revenue_account_id?: string | null;
   is_active?: boolean;
+  specifications?: ProductSpecifications | null;
+  is_customizable?: boolean;
 }
 
 export type UpdateProductData = Partial<CreateProductData>;

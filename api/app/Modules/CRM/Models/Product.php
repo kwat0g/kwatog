@@ -34,7 +34,7 @@ class Product extends Model
         'part_number', 'name', 'description', 'unit_of_measure',
         'standard_cost', 'revenue_account_id', 'is_active',
         'include_forecast_in_mrp', 'base_selling_price', 'minimum_selling_price', 'portal_visibility',
-        'image_path',
+        'image_path', 'specifications', 'is_customizable',
     ];
 
     protected $casts = [
@@ -44,6 +44,8 @@ class Product extends Model
         'minimum_selling_price' => 'decimal:2',
         'is_active' => 'boolean',
         'include_forecast_in_mrp' => 'boolean',
+        'specifications' => 'array',
+        'is_customizable' => 'boolean',
     ];
 
     public function portalCustomers(): BelongsToMany
@@ -65,6 +67,16 @@ class Product extends Model
     public function salesOrderItems(): HasMany
     {
         return $this->hasMany(SalesOrderItem::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function blueprints(): HasMany
+    {
+        return $this->hasMany(ProductBlueprint::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
     public function inventoryItem(): HasOne

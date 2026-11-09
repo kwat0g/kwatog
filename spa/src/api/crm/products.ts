@@ -1,13 +1,13 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Product, CreateProductData, UpdateProductData, UpdateProductSellingPricesData } from '@/types/crm';
+import type { Product, ProductBlueprint, CreateProductData, UpdateProductData, UpdateProductSellingPricesData } from '@/types/crm';
 
 export interface ProductListParams extends ListParams {
   is_active?: boolean | string;
   has_bom?: boolean | string;
 }
 
-export type ProductOption = Pick<Product, 'id' | 'part_number' | 'name' | 'unit_of_measure' | 'include_forecast_in_mrp' | 'image_url'>;
+export type ProductOption = Pick<Product, 'id' | 'part_number' | 'name' | 'unit_of_measure' | 'include_forecast_in_mrp' | 'image_url' | 'primary_image_url' | 'images' | 'specifications' | 'is_customizable'>;
 export interface ProductCustomerOption {
   id: string;
   name: string;
@@ -39,6 +39,30 @@ export const productsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadImages: (id: string, files: File[], altTexts: string[] = []) => {
+    const data = new FormData();
+    files.forEach((file) => data.append('images[]', file));
+    altTexts.forEach((altText) => data.append('alt_texts[]', altText));
+    return client.post(`/crm/products/${id}/images`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((response) => response.data.data);
+  },
+  setPrimaryImage: (productId: string, imageId: string) =>
+    client.patch(`/crm/products/${productId}/images/${imageId}/primary`).then((response) => response.data.data),
+  deleteImage: (productId: string, imageId: string) =>
+    client.delete(`/crm/products/${productId}/images/${imageId}`),
+  uploadBlueprint: (id: string, input: { title: string; revision: string; notes?: string; file: File }) => {
+    const data = new FormData();
+    data.append('title', input.title);
+    data.append('revision', input.revision);
+    if (input.notes) data.append('notes', input.notes);
+    data.append('file', input.file);
+    return client.post<{ data: ProductBlueprint }>(`/crm/products/${id}/blueprints`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((response) => response.data.data);
+  },
+  deleteBlueprint: (productId: string, blueprintId: string) =>
+    client.delete(`/crm/products/${productId}/blueprints/${blueprintId}`),
   proposeFinancial: (
     id: string,
     data: {

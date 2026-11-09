@@ -141,7 +141,7 @@ class CustomerPortalService
             ? Carbon::parse($asOf)->toDateString()
             : now()->toDateString();
 
-        $query = Product::query()->active()->where(function ($query) use ($customerId): void {
+        $query = Product::query()->active()->with('images')->where(function ($query) use ($customerId): void {
             $query->where('portal_visibility', 'standard')
                 ->orWhereHas('portalCustomers', fn ($customers) => $customers->whereKey($customerId));
         });
@@ -168,8 +168,19 @@ class CustomerPortalService
             }
             $catalog[] = [
                 'id' => $product->hash_id, 'part_number' => $product->part_number, 'name' => $product->name,
+                'description' => $product->description,
                 'unit_of_measure' => $product->unit_of_measure, 'unit_price' => $quote['unit_price'] ?? null,
                 'image_url' => $product->image_path ? "/api/v1/b2b/customer/catalog/{$product->hash_id}/image" : null,
+                'primary_image_url' => $product->image_path ? "/api/v1/b2b/customer/catalog/{$product->hash_id}/image" : null,
+                'images' => $product->images->map(fn ($image) => [
+                    'id' => $image->hash_id,
+                    'url' => "/api/v1/b2b/customer/catalog/{$product->hash_id}/images/{$image->hash_id}",
+                    'position' => (int) $image->position,
+                    'alt_text' => $image->alt_text,
+                    'is_primary' => (bool) $image->is_primary,
+                ])->values(),
+                'specifications' => $product->specifications,
+                'is_customizable' => (bool) $product->is_customizable,
                 'price_source' => $quote['price_source'] ?? null, 'pricing_method' => isset($quote['price_tier_min_qty']) ? 'tiered' : ($quote ? 'flat' : null),
                 'pricing_issue' => $pricingIssue,
             ];

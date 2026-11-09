@@ -219,6 +219,7 @@ Route::prefix('b2b/customer')->group(function () {
             Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
             Route::get('catalog', [CustomerPortalController::class, 'catalog']);
             Route::get('catalog/{product}/image', [ProductImageController::class, 'showForCustomer']);
+            Route::get('catalog/{product}/images/{image}', [ProductImageController::class, 'showForCustomerGallery']);
             Route::get('price-requests', [PriceNegotiationController::class, 'portalIndex']);
             Route::post('price-requests', [PriceNegotiationController::class, 'portalStore'])->middleware('throttle:sensitive');
             Route::post('price-requests/{priceRequest}/respond', [PriceNegotiationController::class, 'respond'])->middleware('throttle:sensitive');

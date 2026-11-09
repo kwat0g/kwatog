@@ -27,7 +27,7 @@ class UpdateProductCustomerAccessRequest extends FormRequest
     {
         return [
             'portal_visibility' => ['required', Rule::in(['standard', 'restricted'])],
-            'portal_customer_ids' => ['required', 'array'],
+            'portal_customer_ids' => ['present', 'array'],
             'portal_customer_ids.*' => ['integer', 'distinct', Rule::exists('customers', 'id')->where('is_active', true)->whereNull('deleted_at')],
         ];
     }

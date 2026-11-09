@@ -23,6 +23,8 @@ class ProductFactory extends Factory
             'unit_of_measure' => 'pcs',
             'standard_cost'  => fake()->randomFloat(2, 10, 500),
             'is_active'      => true,
+            'specifications' => null,
+            'is_customizable' => false,
         ];
     }
 }

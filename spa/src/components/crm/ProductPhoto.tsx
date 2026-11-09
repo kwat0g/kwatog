@@ -5,6 +5,7 @@ export interface ProductPhotoDetails {
   url: string;
   name: string;
   partNumber?: string;
+  altText?: string;
 }
 
 export function ProductPhotoButton({
@@ -19,7 +20,7 @@ export function ProductPhotoButton({
   return (
     <button
       type="button"
-      aria-label={`View larger photo of ${photo.name}`}
+      aria-label={`View larger photo of ${photo.altText || photo.name}`}
       title="View larger photo"
       className={`group relative block shrink-0 cursor-zoom-in overflow-hidden rounded border border-default bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${className}`}
       onClick={(event) => {
@@ -27,7 +28,7 @@ export function ProductPhotoButton({
         onView(photo);
       }}
     >
-      <img src={photo.url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+      <img src={photo.url} alt={photo.altText || ''} loading="lazy" decoding="async" className="h-full w-full object-cover" />
       <span aria-hidden="true" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded border border-default bg-canvas text-primary opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100">
         <LuEye size={13} />
       </span>
@@ -48,7 +49,7 @@ export function ProductPhotoViewer({
         <figure className="space-y-3">
           <img
             src={photo.url}
-            alt={`${photo.name} product photo`}
+            alt={photo.altText || `${photo.name} product photo`}
             className="mx-auto max-h-[72vh] w-auto max-w-full rounded object-contain"
           />
           {photo.partNumber && (
