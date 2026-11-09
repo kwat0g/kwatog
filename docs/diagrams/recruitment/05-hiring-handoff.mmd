@@ -1,0 +1,23 @@
+---
+title: Recruitment 5 — Hiring and employee handoff
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, sans-serif","fontSize":"18px","edgeLabelBackground":"#ffffff"}}}%%
+flowchart LR
+  offer[/Application at Offer stage/] --> hire[Authorized HR records Hired]
+  hire --> convert{Convert to an<br/>employee record?}
+  convert -- Yes --> employee[Create employee from<br/>hired application]
+  employee --> linked[Link employee to application]
+  linked --> onboarding([Onboarding tracker starts])
+  convert -- Not yet --> pending[/Hired application awaits<br/>employee conversion/]
+  hire -. When hired count reaches open posting slots .-> filled([Posting status: Filled])
+
+  classDef terminator fill:#102a43,stroke:#102a43,color:#ffffff,stroke-width:2px
+  classDef process fill:#f1f5f9,stroke:#526579,color:#102a43
+  classDef decision fill:#fff4cc,stroke:#c98a00,color:#513700,stroke-width:2px
+  classDef document fill:#e6f2ff,stroke:#3273a8,color:#163a59
+  classDef data fill:#dcfce7,stroke:#25803d,color:#174d29
+  class offer,pending document
+  class hire,employee process
+  class convert decision
+  class linked data
+  class onboarding,filled terminator

@@ -1,0 +1,20 @@
+---
+title: Recruitment 6 — Employee onboarding
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, sans-serif","fontSize":"18px","edgeLabelBackground":"#ffffff"}}}%%
+flowchart LR
+  employee([Employee created]) --> tracker[Initialize tracker;<br/>profile and leave start complete;<br/>existing ID/banking details auto-detected]
+  tracker --> checklist[/Track 7 steps:<br/>Profile · Shift · Leave · Account<br/>Team notice · Government IDs · Banking/]
+  checklist --> complete{All seven steps<br/>complete?}
+  complete -- Yes --> done([Onboarding complete])
+  complete -- No --> work[Finish missing items in any order:<br/>shift, account, team notice,<br/>government IDs, or banking]
+  work --> checklist
+
+  classDef terminator fill:#102a43,stroke:#102a43,color:#ffffff,stroke-width:2px
+  classDef process fill:#f1f5f9,stroke:#526579,color:#102a43
+  classDef decision fill:#fff4cc,stroke:#c98a00,color:#513700,stroke-width:2px
+  classDef document fill:#e6f2ff,stroke:#3273a8,color:#163a59
+  class employee,done terminator
+  class complete decision
+  class checklist document
+  class tracker,work process

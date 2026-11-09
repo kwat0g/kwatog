@@ -1,0 +1,18 @@
+---
+title: Recruitment 3 — Application screening
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, sans-serif","fontSize":"18px","edgeLabelBackground":"#ffffff"}}}%%
+flowchart TB
+  application[/Application received<br/>Stage: New/] --> review[HR reviews candidate<br/>Stage: Screening]
+  review --> advance{Advance to<br/>Interview?}
+  advance -- Yes --> interview[Move to Interview stage<br/>and schedule first round]
+  advance -- No --> reject([Reject application;<br/>candidate notified])
+
+  classDef terminator fill:#102a43,stroke:#102a43,color:#ffffff,stroke-width:2px
+  classDef process fill:#f1f5f9,stroke:#526579,color:#102a43
+  classDef decision fill:#fff4cc,stroke:#c98a00,color:#513700,stroke-width:2px
+  classDef document fill:#e6f2ff,stroke:#3273a8,color:#163a59
+  class application document
+  class review,interview process
+  class advance decision
+  class reject terminator

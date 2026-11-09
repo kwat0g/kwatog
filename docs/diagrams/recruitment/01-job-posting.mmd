@@ -1,0 +1,16 @@
+---
+title: Recruitment 1 — Job posting
+---
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, sans-serif","fontSize":"18px","edgeLabelBackground":"#ffffff"}}}%%
+flowchart TB
+  start([Vacancy identified]) --> draft[HR creates draft job posting]
+  draft --> publish[HR publishes posting<br/>Status: Open]
+  publish --> careers[Role appears on Careers]
+  publish -. When intake ends .-> close[HR closes posting]
+  close --> closed([Posting status: Closed])
+
+  classDef terminator fill:#102a43,stroke:#102a43,color:#ffffff,stroke-width:2px
+  classDef process fill:#f1f5f9,stroke:#526579,color:#102a43
+  classDef decision fill:#fff4cc,stroke:#c98a00,color:#513700,stroke-width:2px
+  class start,closed terminator
+  class draft,publish,careers,close process
