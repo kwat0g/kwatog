@@ -8,6 +8,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\ProductImage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -41,7 +42,7 @@ class ProductImageController
         ]);
         $storedPaths = [];
         try {
-            $product = DB::transaction(function () use ($product, $data, $request, &$storedPaths): Product {
+            $product = DB::transaction(function () use ($product, $data, &$storedPaths): Product {
                 $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
                 $existingCount = $locked->images()->count();
                 if ($existingCount + count($data['images']) > 10) {
@@ -170,7 +171,7 @@ class ProductImageController
         ];
     }
 
-    private function storeImage(Product $product, \Illuminate\Http\UploadedFile $file, ?string $altText, bool $makePrimary): ProductImage
+    private function storeImage(Product $product, UploadedFile $file, ?string $altText, bool $makePrimary): ProductImage
     {
         $path = $this->storePath($file);
         try {
@@ -206,7 +207,7 @@ class ProductImageController
         }
     }
 
-    private function storePath(\Illuminate\Http\UploadedFile $file): string
+    private function storePath(UploadedFile $file): string
     {
         $extension = strtolower($file->extension() ?: 'bin');
         $path = 'product-images/'.Str::uuid().'.'.$extension;

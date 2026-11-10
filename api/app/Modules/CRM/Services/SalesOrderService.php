@@ -7,7 +7,6 @@ namespace App\Modules\CRM\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\ChainBroadcaster;
-use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
@@ -24,12 +23,12 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderStatus;
-use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
-use App\Modules\CRM\Models\Product;
-use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
+use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
 use App\Modules\CRM\Models\CustomerProductWarrantyOption;
+use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
@@ -49,7 +48,9 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Models\ReturnCase;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Services\DeliveryService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -228,7 +229,7 @@ class SalesOrderService
             return 'This sales order cannot be cancelled at its current status.';
         }
 
-        $deliveryService = app(\App\Modules\SupplyChain\Services\DeliveryService::class);
+        $deliveryService = app(DeliveryService::class);
         foreach (Delivery::query()->where('sales_order_id', $so->id)->where('status', '!=', 'cancelled')->get() as $delivery) {
             if (! $deliveryService->isUntouchedAutomaticSupply($delivery)) {
                 return 'This sales order cannot be cancelled while a delivery is active.';
@@ -330,10 +331,11 @@ class SalesOrderService
             });
         }
 
-         $result = $q->orderByDesc('date')
+        $result = $q->orderByDesc('date')
             ->orderByDesc('id')
             ->paginate(min(max((int) ($filters['per_page'] ?? 25), 1), 100));
         app(SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+
         return $result;
     }
 
@@ -1050,8 +1052,7 @@ class SalesOrderService
         ?string $reason = null,
         ?CustomerPortalUser $customerActor = null,
         ?User $internalActor = null,
-    ): SalesOrder
-    {
+    ): SalesOrder {
         return DB::transaction(function () use ($so, $reason, $customerActor, $internalActor) {
             DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             // A stale route-bound SO must not overwrite a delivered/invoiced
@@ -1063,12 +1064,12 @@ class SalesOrderService
             app(SalesOrderAdvanceService::class)->assertCancellable($lockedSo);
             $this->assertCancellableDownstreamState($lockedSo);
             foreach (Delivery::where('sales_order_id', $lockedSo->id)->where('status', '!=', 'cancelled')->lockForUpdate()->get() as $delivery) {
-                if (app(\App\Modules\SupplyChain\Services\DeliveryService::class)->isUntouchedAutomaticSupply($delivery)) {
-                    app(\App\Modules\SupplyChain\Services\DeliveryService::class)->updateStatus($delivery, \App\Modules\SupplyChain\Enums\DeliveryStatus::Cancelled);
+                if (app(DeliveryService::class)->isUntouchedAutomaticSupply($delivery)) {
+                    app(DeliveryService::class)->updateStatus($delivery, DeliveryStatus::Cancelled);
                 }
             }
             $this->assertCancellableDownstreamState($lockedSo);
-            app(SalesOrderSupplyService::class)->releaseUnshipped($lockedSo, \App\Modules\Auth\Models\User::findOrFail($lockedSo->created_by), $reason ?? 'Order cancelled');
+            app(SalesOrderSupplyService::class)->releaseUnshipped($lockedSo, User::findOrFail($lockedSo->created_by), $reason ?? 'Order cancelled');
 
             $lockedSo->update([
                 'status' => SalesOrderStatus::Cancelled->value,
@@ -1597,7 +1598,9 @@ class SalesOrderService
         if ($stockLines->isNotEmpty()) {
             $stockOnly = ! WorkOrder::where('sales_order_id', $so->id)->where('status', '!=', 'cancelled')->exists();
             $supplyLabel = $stockOnly ? 'Ready from stock' : 'Stock + production';
-            if (! $isCancelled && $productionCovered === true) $qc = ['state' => 'done', 'date' => null];
+            if (! $isCancelled && $productionCovered === true) {
+                $qc = ['state' => 'done', 'date' => null];
+            }
         }
         if ($qc['state'] === 'done' && $status === SalesOrderStatus::InProduction && $productionCovered === false) {
             $qc['state'] = 'active';
@@ -1704,6 +1707,7 @@ class SalesOrderService
         if ($so->items()->where('fulfillment_policy', 'stock_first')->exists()) {
             return $so->items()->get()->every(function ($line) {
                 $coverage = app(SalesOrderSupplyService::class)->lineCoverage($line);
+
                 return bccomp($coverage['ready_quantity'], $coverage['demand'], 3) >= 0;
             });
         }
@@ -1755,6 +1759,7 @@ class SalesOrderService
                     return ['state' => 'active', 'date' => null];
                 }
             }
+
             return ['state' => 'done', 'date' => optional(Carbon::parse($row->completed_at))->toDateString()];
         }
         if ($status === 'failed') {

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
-use App\Common\Mail\UserNotificationMail;
-use Carbon\Carbon;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Mail\UserNotificationMail;
 use App\Common\Services\ChainBroadcaster;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
@@ -24,6 +24,7 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderResponse;
 use App\Modules\CRM\Models\SalesOrderResponseItem;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -60,6 +61,7 @@ class SalesOrderResponseService
     public function proposeDeliveryDate(SalesOrder $so, User $by, array $data): SalesOrderResponse
     {
         abort_unless($by->hasPermission('crm.sales_orders.confirm'), 403);
+
         return DB::transaction(function () use ($so, $by, $data): SalesOrderResponse {
             $row = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
             $this->assertDeliveryNegotiable($row);
@@ -106,7 +108,7 @@ class SalesOrderResponseService
             ];
             DB::afterCommit(function () use ($recipients, $notificationData, $response, $row): void {
                 if ($recipients->isEmpty()) {
-                    app(\App\Common\Services\EmailDeliveryFailureNotifier::class)->notifyPermission(
+                    app(EmailDeliveryFailureNotifier::class)->notifyPermission(
                         'crm.sales_orders.confirm',
                         'Customer delivery-date proposal',
                         'The proposal was recorded, but no active customer portal user has a valid email address.',
@@ -135,7 +137,7 @@ class SalesOrderResponseService
                             'recipient_user_id' => $recipient->id,
                             'error' => $e->getMessage(),
                         ]);
-                        app(\App\Common\Services\EmailDeliveryFailureNotifier::class)->notifyPermission(
+                        app(EmailDeliveryFailureNotifier::class)->notifyPermission(
                             'crm.sales_orders.confirm',
                             'Customer delivery-date proposal',
                             'The proposal was recorded, but an email could not be queued for a customer portal user.',
@@ -145,6 +147,7 @@ class SalesOrderResponseService
                     }
                 }
             });
+
             return $response->load('items');
         });
     }
@@ -233,11 +236,12 @@ class SalesOrderResponseService
             $this->broadcastRefresh($row, action: 'status_changed');
             $this->notifySalesAudience($row, $locked);
             $this->notifications->sendPortalInApp(CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->get(), 'sales_order.delivery_decided', [
-                'title' => "Delivery date ".($decision === 'accept' ? 'accepted' : 'declined')." for {$row->so_number}",
+                'title' => 'Delivery date '.($decision === 'accept' ? 'accepted' : 'declined')." for {$row->so_number}",
                 'message' => $decision === 'accept' ? 'Your agreed delivery date is saved. Sales will review and confirm the order.' : 'Your current schedule is unchanged. Sales has been notified and can propose another date.',
                 'link_to' => '/portal/customer/orders/'.$row->hash_id,
                 'entity_type' => 'sales_order', 'entity_id' => $row->hash_id,
             ], 'so:delivery:'.$locked->id.':'.$decision);
+
             return $locked->fresh()->load('items');
         });
     }
@@ -307,16 +311,16 @@ class SalesOrderResponseService
                 ->update(['status' => SalesOrderResponseStatus::Superseded->value]);
 
             $response = new SalesOrderResponse([
-                'sales_order_id'         => $row->id,
-                'customer_id'            => $row->customer_id,
-                'portal_user_id'         => $portalUserId,
-                'response_type'          => $type->value,
-                'status'                 => $type === SalesOrderResponseType::Accept
+                'sales_order_id' => $row->id,
+                'customer_id' => $row->customer_id,
+                'portal_user_id' => $portalUserId,
+                'response_type' => $type->value,
+                'status' => $type === SalesOrderResponseType::Accept
                     ? SalesOrderResponseStatus::Accepted->value
                     : SalesOrderResponseStatus::Pending->value,
                 'proposed_delivery_date' => $data['proposed_delivery_date'] ?? null,
-                'notes'                  => $data['notes'] ?? null,
-                'responded_at'           => now(),
+                'notes' => $data['notes'] ?? null,
+                'responded_at' => now(),
             ]);
             $response->save();
 
@@ -395,8 +399,8 @@ class SalesOrderResponseService
                 $locked->status = SalesOrderResponseStatus::Rejected;
             }
 
-            $locked->resolved_by      = $by->id;
-            $locked->resolved_at      = now();
+            $locked->resolved_by = $by->id;
+            $locked->resolved_at = now();
             $locked->resolution_notes = $notes;
             $locked->save();
 
@@ -452,10 +456,10 @@ class SalesOrderResponseService
 
             SalesOrderResponseItem::create([
                 'sales_order_response_id' => $response->id,
-                'sales_order_item_id'     => $itemId,
-                'proposed_quantity'       => $item['proposed_quantity'] ?? null,
-                'proposed_unit_price'     => $item['proposed_unit_price'] ?? null,
-                'reason'                  => $item['reason'] ?? null,
+                'sales_order_item_id' => $itemId,
+                'proposed_quantity' => $item['proposed_quantity'] ?? null,
+                'proposed_unit_price' => $item['proposed_unit_price'] ?? null,
+                'reason' => $item['reason'] ?? null,
             ]);
         }
     }
@@ -531,12 +535,12 @@ class SalesOrderResponseService
                 ->filter(fn (User $user): bool => $user->hasPermission('crm.sales_orders.view'));
 
             $this->notifications->sendForSubject($so, $audience, 'customer.so_responded', [
-                'title'       => "Sales order {$so->so_number} — customer {$response->response_type->label()}",
-                'message'     => $this->responseSummary($response),
-                'link_to'     => "/crm/sales-orders/{$so->hash_id}",
+                'title' => "Sales order {$so->so_number} — customer {$response->response_type->label()}",
+                'message' => $this->responseSummary($response),
+                'link_to' => "/crm/sales-orders/{$so->hash_id}",
                 'entity_type' => 'sales_order',
-                'entity_id'   => $so->hash_id,
-                'so_number'   => $so->so_number,
+                'entity_id' => $so->hash_id,
+                'so_number' => $so->so_number,
             ]);
         } catch (\Throwable $e) {
             Log::warning('SalesOrderResponseService::notifySalesAudience failed', ['error' => $e->getMessage()]);
@@ -546,7 +550,7 @@ class SalesOrderResponseService
     private function responseSummary(SalesOrderResponse $response): string
     {
         return match ($response->response_type) {
-            SalesOrderResponseType::Accept  => 'The customer accepted the sales order as ordered.',
+            SalesOrderResponseType::Accept => 'The customer accepted the sales order as ordered.',
             SalesOrderResponseType::Propose => 'The customer proposed changes to the order — review and accept or reject.',
             SalesOrderResponseType::Decline => 'The customer declined the sales order — decide whether to cancel or renegotiate.',
             SalesOrderResponseType::DeliveryDate => 'The customer '.($response->status === SalesOrderResponseStatus::Accepted ? 'accepted' : 'declined').' the proposed delivery date '.optional($response->proposed_delivery_date)->toDateString().'.',
@@ -574,7 +578,7 @@ class SalesOrderResponseService
             if ($recipients === []) {
                 $customerEmail = trim((string) ($so?->customer?->email ?? ''));
                 if (! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-                    app(\App\Common\Services\EmailDeliveryFailureNotifier::class)->notifyPermission(
+                    app(EmailDeliveryFailureNotifier::class)->notifyPermission(
                         'crm.sales_orders.confirm',
                         'Customer sales order decision',
                         "The decision for sales order {$so->so_number} was recorded, but no customer recipient has a usable email address.",
@@ -606,8 +610,8 @@ class SalesOrderResponseService
             // the decision itself is durable on the response row.
             Log::warning('SalesOrderResponseService::emailCustomerDecision failed', [
                 'response_id' => $response->id,
-                'decision'    => $decision,
-                'error'       => $e->getMessage(),
+                'decision' => $decision,
+                'error' => $e->getMessage(),
             ]);
         }
     }

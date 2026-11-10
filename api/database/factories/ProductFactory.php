@@ -17,12 +17,12 @@ class ProductFactory extends Factory
     public function definition(): array
     {
         return [
-            'part_number'    => strtoupper(fake()->unique()->bothify('PT-##??-##')),
-            'name'           => fake()->words(3, true),
-            'description'    => null,
+            'part_number' => strtoupper(fake()->unique()->bothify('PT-##??-##')),
+            'name' => fake()->words(3, true),
+            'description' => null,
             'unit_of_measure' => 'pcs',
-            'standard_cost'  => fake()->randomFloat(2, 10, 500),
-            'is_active'      => true,
+            'standard_cost' => fake()->randomFloat(2, 10, 500),
+            'is_active' => true,
             'specifications' => null,
             'is_customizable' => false,
         ];

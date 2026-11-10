@@ -9,13 +9,13 @@ use App\Modules\Quality\Controllers\CapabilityController;
 use App\Modules\Quality\Controllers\EffectivenessController;
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionDefectEvidenceController;
-use App\Modules\Quality\Controllers\WorkOrderFinalInspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
 use App\Modules\Quality\Controllers\NcrTemplateController;
 use App\Modules\Quality\Controllers\PpapController;
 use App\Modules\Quality\Controllers\ShipmentLotController;
 use App\Modules\Quality\Controllers\TraceabilityController;
+use App\Modules\Quality\Controllers\WorkOrderFinalInspectionController;
 use Illuminate\Support\Facades\Route;
 
 /*

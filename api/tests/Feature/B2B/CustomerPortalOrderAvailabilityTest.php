@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Models\CustomerProductWarrantyOption;
@@ -15,6 +18,7 @@ use App\Modules\Inventory\Models\Item;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class CustomerPortalOrderAvailabilityTest extends TestCase
@@ -27,7 +31,7 @@ class CustomerPortalOrderAvailabilityTest extends TestCase
     {
         parent::setUp();
         $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
-        app(\App\Common\Services\SettingsService::class)->set('company.vat_status', 'Non-VAT', 'company');
+        app(SettingsService::class)->set('company.vat_status', 'Non-VAT', 'company');
     }
 
     public function test_catalog_exposes_authoritative_stock_and_per_product_warranty_choices(): void
@@ -122,8 +126,8 @@ class CustomerPortalOrderAvailabilityTest extends TestCase
             'product_id' => $product->id, 'quantity' => '1.00', 'unit_price' => '1000.00',
             'total' => '1000.00', 'quantity_delivered' => '0.00', 'delivery_date' => now()->addDays(7),
         ]);
-        $admin = \App\Modules\Auth\Models\User::factory()->create([
-            'role_id' => \App\Modules\Auth\Models\Role::where('slug', 'system_admin')->value('id'),
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
         ]);
         $this->actingAs($admin)->postJson('/api/v1/crm/sales-orders/'.$order->hash_id.'/confirm')->assertOk();
     }
@@ -149,7 +153,7 @@ class CustomerPortalOrderAvailabilityTest extends TestCase
     }
 
     /** @param array<int, array<string, mixed>> $items */
-    private function postOrder(array $items): \Illuminate\Testing\TestResponse
+    private function postOrder(array $items): TestResponse
     {
         return $this->postJson('/api/v1/b2b/customer/orders', [
             'items' => $items,

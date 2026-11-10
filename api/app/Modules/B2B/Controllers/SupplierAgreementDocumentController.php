@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Controllers;
 
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\PortalContractTemplate;
 use App\Modules\B2B\Models\SupplierAgreementDocument;
 use App\Modules\B2B\Models\SupplierPortalUser;
@@ -48,7 +49,7 @@ class SupplierAgreementDocumentController
     {
         abort_unless((int) $document->vendor_id === (int) $vendor->id, 404);
         $issuer = $request->user('sanctum');
-        abort_unless($issuer instanceof \App\Modules\Auth\Models\User, 401);
+        abort_unless($issuer instanceof User, 401);
         $issued = $this->signatures->issueSupplierDocument($document, $issuer);
 
         return response()->json(['data' => $this->serialize($issued->load(['uploadedBy:id,name', 'issuedBy:id,name']))]);
@@ -221,7 +222,7 @@ class SupplierAgreementDocumentController
 
     private function safeFilename(string $filename): string
     {
-        $base = str_replace(["\"", "\r", "\n"], '_', basename(str_replace('\\', '/', $filename)));
+        $base = str_replace(['"', "\r", "\n"], '_', basename(str_replace('\\', '/', $filename)));
 
         return Str::limit($base, 255, '');
     }

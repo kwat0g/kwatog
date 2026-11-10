@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Modules\B2B\Models\PortalContractTemplate;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 final class PortalContractPdfService
 {

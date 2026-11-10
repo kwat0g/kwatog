@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Services;
 
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierAgreementDocument;
 use App\Modules\B2B\Models\SupplierPortalUser;
-use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\CustomerAgreementDocument;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;

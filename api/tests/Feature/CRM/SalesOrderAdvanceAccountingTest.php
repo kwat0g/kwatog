@@ -10,7 +10,6 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Resources\InvoiceResource;
-use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Models\SalesOrder;
@@ -26,6 +25,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class SalesOrderAdvanceAccountingTest extends TestCase
@@ -52,7 +52,7 @@ class SalesOrderAdvanceAccountingTest extends TestCase
         $this->assertSame('250.00', (string) $fixed->required_amount);
         $this->assertSame('25.00', (string) $percentage->percentage);
         $this->assertSame('500.00', (string) $percentage->required_amount);
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $service->configure($this->order('100.00'), '100.01', null, $sales);
     }
 
@@ -168,7 +168,7 @@ class SalesOrderAdvanceAccountingTest extends TestCase
                 'payment_date' => now('Asia/Manila')->toDateString(), 'idempotency_key' => (string) Str::uuid(),
             ], $this->proof(), $foreignPortal);
             $this->fail('A customer portal user cannot submit another customer’s payment proof.');
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+        } catch (HttpException $error) {
             $this->assertSame(404, $error->getStatusCode());
         }
 

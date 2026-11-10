@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Resources;
 
-use App\Common\Support\Money;
 use App\Common\Services\SettingsService;
+use App\Common\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,10 +18,10 @@ class CustomerResource extends JsonResource
 
         // Strict-mode safe: read from raw attributes since `credit_used`
         // is only added by CustomerService::list() / ::show() (withSum).
-        $attrs        = $this->resource->getAttributes();
+        $attrs = $this->resource->getAttributes();
         $creditUsedRaw = $attrs['credit_used'] ?? null;
-        $creditLimit  = (string) ($this->credit_limit ?? '0');
-        $creditUsed   = (string) ($creditUsedRaw ?? '0');
+        $creditLimit = (string) ($this->credit_limit ?? '0');
+        $creditUsed = (string) ($creditUsedRaw ?? '0');
 
         // A zero limit means "no limit is enforced" (SalesOrderService::
         // checkCreditLimit). This used to be detected with `!== '0'`, but the
@@ -30,8 +30,8 @@ class CustomerResource extends JsonResource
         // zero. DivisionByZeroError is a 500, and `credit_used` is attached on
         // every list and show, so one customer with credit_limit = 0.00 and at
         // least one invoice took down GET /customers entirely. Compare as money.
-        $hasLimit     = ! Money::isZero($creditLimit);
-        $creditAvail  = $hasLimit ? Money::sub($creditLimit, $creditUsed) : null;
+        $hasLimit = ! Money::isZero($creditLimit);
+        $creditAvail = $hasLimit ? Money::sub($creditLimit, $creditUsed) : null;
         $warningRatio = app(SettingsService::class)->requiredFloat('accounting.customer_credit.warning_ratio', 0, 1);
         // used/limit >= ratio, restated as used >= limit*ratio so there is no
         // division at all and the threshold stays exact peso arithmetic.
@@ -41,61 +41,73 @@ class CustomerResource extends JsonResource
             && Money::gte($creditUsed, Money::mul($creditLimit, number_format($warningRatio, 6, '.', '')));
 
         return [
-            'id'                 => $this->hash_id,
-            'name'               => $this->name,
-            'code'               => $this->code,
-            'contact_person'     => $this->contact_person,
+            'id' => $this->hash_id,
+            'name' => $this->name,
+            'code' => $this->code,
+            'contact_person' => $this->contact_person,
             'contact_person_role' => $this->contact_person_role,
-            'email'              => $this->email,
-            'phone'              => $this->phone,
-            'address'            => $this->address,
+            'email' => $this->email,
+            'phone' => $this->phone,
+            'address' => $this->address,
             // Chain 1 — the ship-to a driver is sent to, and who signs at the gate.
-            'delivery_address'   => $this->delivery_address,
-            'delivery_latitude'  => $this->delivery_latitude,
+            'delivery_address' => $this->delivery_address,
+            'delivery_latitude' => $this->delivery_latitude,
             'delivery_longitude' => $this->delivery_longitude,
             'delivery_contact_person' => $this->delivery_contact_person,
-            'delivery_contact_phone'  => $this->delivery_contact_phone,
+            'delivery_contact_phone' => $this->delivery_contact_phone,
             'allowed_payment_methods' => $this->allowed_payment_methods,
-            'shipping_payer'          => $this->shipping_payer,
-            'agreement_starts_on'     => $this->agreement_starts_on?->toDateString(),
-            'agreement_ends_on'       => $this->agreement_ends_on?->toDateString(),
-            'agreement_status'        => $this->agreementStatus(),
-            'warranty_duration_days'  => $this->warranty_duration_days,
+            'shipping_payer' => $this->shipping_payer,
+            'agreement_starts_on' => $this->agreement_starts_on?->toDateString(),
+            'agreement_ends_on' => $this->agreement_ends_on?->toDateString(),
+            'agreement_status' => $this->agreementStatus(),
+            'warranty_duration_days' => $this->warranty_duration_days,
             'warranty_report_window_days' => $this->warranty_report_window_days,
-            'warranty_start_basis'    => $this->warranty_start_basis,
+            'warranty_start_basis' => $this->warranty_start_basis,
             'warranty_covered_issues' => $this->warranty_covered_issues,
-            'warranty_remedies'       => $this->warranty_remedies,
-            'tin'                => $canSeeTin ? $this->tin : $this->maskTin($this->tin),
-            'credit_limit'       => $this->credit_limit ? (string) $this->credit_limit : null,
-            'credit_used'        => $creditUsedRaw !== null ? Money::round2($creditUsed) : null,
-            'credit_available'   => $creditAvail,
+            'warranty_remedies' => $this->warranty_remedies,
+            'tin' => $canSeeTin ? $this->tin : $this->maskTin($this->tin),
+            'credit_limit' => $this->credit_limit ? (string) $this->credit_limit : null,
+            'credit_used' => $creditUsedRaw !== null ? Money::round2($creditUsed) : null,
+            'credit_available' => $creditAvail,
             'credit_warning_ratio' => $warningRatio,
-            'credit_warning'     => $creditWarning,
+            'credit_warning' => $creditWarning,
             'payment_terms_days' => (int) $this->payment_terms_days,
             'portal_catalog_mode' => $this->portal_catalog_mode ?? 'standard',
-            'is_active'          => (bool) $this->is_active,
-            'invoices_count'     => $this->whenCounted('invoices'),
-            'created_at'         => optional($this->created_at)->toIso8601String(),
-            'updated_at'         => optional($this->updated_at)->toIso8601String(),
-            'deleted_at'         => optional($this->deleted_at)?->toIso8601String(),
+            'is_active' => (bool) $this->is_active,
+            'invoices_count' => $this->whenCounted('invoices'),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 
     private function maskTin(?string $tin): ?string
     {
-        if (! $tin) return null;
+        if (! $tin) {
+            return null;
+        }
         $len = mb_strlen($tin);
-        if ($len <= 4) return str_repeat('•', $len);
-        return str_repeat('•', $len - 4) . mb_substr($tin, -4);
+        if ($len <= 4) {
+            return str_repeat('•', $len);
+        }
+
+        return str_repeat('•', $len - 4).mb_substr($tin, -4);
     }
 
     private function agreementStatus(): string
     {
         $startsOn = $this->agreement_starts_on?->toDateString();
         $endsOn = $this->agreement_ends_on?->toDateString();
-        if ($startsOn === null && $endsOn === null) return 'not_recorded';
-        if ($startsOn !== null && today()->toDateString() < $startsOn) return 'not_yet_effective';
-        if ($endsOn !== null && today()->toDateString() > $endsOn) return 'expired';
+        if ($startsOn === null && $endsOn === null) {
+            return 'not_recorded';
+        }
+        if ($startsOn !== null && today()->toDateString() < $startsOn) {
+            return 'not_yet_effective';
+        }
+        if ($endsOn !== null && today()->toDateString() > $endsOn) {
+            return 'expired';
+        }
+
         return 'in_effect';
     }
 }

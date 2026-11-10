@@ -7,8 +7,8 @@ namespace App\Modules\CRM\Models;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
-use App\Modules\B2B\Models\PortalContractTemplate;
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Models\PortalContractTemplate;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 

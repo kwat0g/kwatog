@@ -9,6 +9,7 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,7 +20,7 @@ class CustomerWarrantyOptionsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+        $this->seed(RolePermissionSeeder::class);
     }
 
     public function test_staff_can_configure_multiple_warranty_choices_for_one_customer_product(): void

@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionDefectEvidence;
 use Illuminate\Database\Eloquent\Collection;
@@ -39,7 +40,7 @@ class InspectionDefectEvidenceService
                 if ($locked->stage !== InspectionStage::Incoming || ! $locked->grn_item_id) {
                     throw new BusinessRuleException('Defect photos can be attached only to an incoming inspection linked to a received item.');
                 }
-                if ($locked->status === \App\Modules\Quality\Enums\InspectionStatus::Cancelled) {
+                if ($locked->status === InspectionStatus::Cancelled) {
                     throw new BusinessRuleException('Defect evidence cannot be added to a cancelled inspection.');
                 }
 

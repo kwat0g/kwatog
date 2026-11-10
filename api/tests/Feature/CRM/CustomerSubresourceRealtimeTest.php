@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
-use App\Common\Services\SettingsService;
 use App\Common\Services\OutboxEventCodec;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Events\CustomerChanged;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;

@@ -20,6 +20,7 @@ class CustomerOrderAdvanceController
         abort_unless($portalUser instanceof CustomerPortalUser, 403);
         $data = $request->validated();
         $advance = $this->service->submitEvidence($salesOrder, $data, $request->file('proof_file'), $portalUser);
+
         return new SalesOrderAdvanceResource($advance->load(['salesOrder', 'customer']));
     }
 }

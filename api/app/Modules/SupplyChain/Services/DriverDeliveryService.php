@@ -25,8 +25,8 @@ class DriverDeliveryService
 {
     /** Driver-allowed forward transitions. */
     private const ALLOWED = [
-        'scheduled'  => 'loading',
-        'loading'    => 'in_transit',
+        'scheduled' => 'loading',
+        'loading' => 'in_transit',
         'in_transit' => 'delivered',
     ];
 
@@ -122,6 +122,7 @@ class DriverDeliveryService
     public function uploadReceipt(User $driver, Delivery $delivery, UploadedFile $file): Delivery
     {
         $this->assertOwned($driver, $delivery);
+
         return $this->deliveries->uploadReceiptPhoto($delivery, $file, $driver);
     }
 

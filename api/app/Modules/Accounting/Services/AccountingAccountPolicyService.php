@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\AccountType;
-use App\Common\Exceptions\BusinessRuleException;
 
 /**
  * The configured GL control accounts, and the COA classification each one is
@@ -72,27 +72,50 @@ final class AccountingAccountPolicyService
         'accounting.accounts.sss_employer_expense_code' => AccountType::Expense,
         'accounting.accounts.philhealth_employer_expense_code' => AccountType::Expense,
         'accounting.accounts.pagibig_employer_expense_code' => AccountType::Expense,
-         'accounting.accounts.payroll_cash_code' => AccountType::Asset,
-         'accounting.accounts.loan_disbursement_receivable_code' => AccountType::Asset,
-         'accounting.accounts.loan_disbursement_cash_code' => AccountType::Asset,
-         'accounting.accounts.loan_disbursement_interest_income_code' => AccountType::Revenue,
-         'accounting.accounts.loan_repayment_cash_code' => AccountType::Asset,
-         'accounting.accounts.loan_repayment_receivable_code' => AccountType::Asset,
-         'accounting.accounts.loan_write_off_expense_code' => AccountType::Expense,
-         'accounting.accounts.loan_write_off_receivable_code' => AccountType::Asset,
-     ];
+        'accounting.accounts.payroll_cash_code' => AccountType::Asset,
+        'accounting.accounts.loan_disbursement_receivable_code' => AccountType::Asset,
+        'accounting.accounts.loan_disbursement_cash_code' => AccountType::Asset,
+        'accounting.accounts.loan_disbursement_interest_income_code' => AccountType::Revenue,
+        'accounting.accounts.loan_repayment_cash_code' => AccountType::Asset,
+        'accounting.accounts.loan_repayment_receivable_code' => AccountType::Asset,
+        'accounting.accounts.loan_write_off_expense_code' => AccountType::Expense,
+        'accounting.accounts.loan_write_off_receivable_code' => AccountType::Asset,
+    ];
 
     public function __construct(
         private readonly SettingsService $settings,
         private readonly PostingAccountResolver $postingAccounts,
     ) {}
 
-    public function ar(): string { return $this->settings->requiredString('accounting.accounts.ar_code'); }
-    public function ap(): string { return $this->settings->requiredString('accounting.accounts.ap_code'); }
-    public function vatOutput(): string { return $this->settings->requiredString('accounting.accounts.vat_output_code'); }
-    public function vatInput(): string { return $this->settings->requiredString('accounting.accounts.vat_input_code'); }
-    public function discount(): string { return $this->settings->requiredString('accounting.accounts.discount_code'); }
-    public function revenue(): string { return $this->settings->requiredString('accounting.default_sales_revenue_account_code'); }
+    public function ar(): string
+    {
+        return $this->settings->requiredString('accounting.accounts.ar_code');
+    }
+
+    public function ap(): string
+    {
+        return $this->settings->requiredString('accounting.accounts.ap_code');
+    }
+
+    public function vatOutput(): string
+    {
+        return $this->settings->requiredString('accounting.accounts.vat_output_code');
+    }
+
+    public function vatInput(): string
+    {
+        return $this->settings->requiredString('accounting.accounts.vat_input_code');
+    }
+
+    public function discount(): string
+    {
+        return $this->settings->requiredString('accounting.accounts.discount_code');
+    }
+
+    public function revenue(): string
+    {
+        return $this->settings->requiredString('accounting.default_sales_revenue_account_code');
+    }
 
     /**
      * The classification a configured control-account code must have.

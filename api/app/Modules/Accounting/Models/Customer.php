@@ -7,19 +7,22 @@ namespace App\Modules\Accounting\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\CRM\Models\CustomerProductWarrantyOption;
+use App\Modules\CRM\Models\Product;
+use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
 {
-    use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
-    protected static function newFactory(): \Database\Factories\CustomerFactory
+    protected static function newFactory(): CustomerFactory
     {
-        return \Database\Factories\CustomerFactory::new();
+        return CustomerFactory::new();
     }
 
     protected $fillable = [
@@ -34,9 +37,9 @@ class Customer extends Model
     ];
 
     protected $casts = [
-        'tin'                => 'encrypted',
-        'is_active'          => 'boolean',
-        'credit_limit'       => 'decimal:2',
+        'tin' => 'encrypted',
+        'is_active' => 'boolean',
+        'credit_limit' => 'decimal:2',
         'payment_terms_days' => 'integer',
         'allowed_payment_methods' => 'array',
         'agreement_starts_on' => 'date:Y-m-d',
@@ -57,9 +60,9 @@ class Customer extends Model
         return $this->hasMany(CustomerProductWarrantyOption::class);
     }
 
-    public function portalProducts(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function portalProducts(): BelongsToMany
     {
-        return $this->belongsToMany(\App\Modules\CRM\Models\Product::class, 'customer_product_access');
+        return $this->belongsToMany(Product::class, 'customer_product_access');
     }
 
     public function scopeActive(Builder $q): Builder

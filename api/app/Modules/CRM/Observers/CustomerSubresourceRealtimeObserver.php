@@ -7,8 +7,8 @@ namespace App\Modules\CRM\Observers;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Services\CustomerRealtimeService;
 use App\Modules\CRM\Models\CustomerAgreementDocument;
-use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
 use App\Modules\CRM\Models\CustomerProductWarrantyOption;
+use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
 use Illuminate\Support\Carbon;
 
 final class CustomerSubresourceRealtimeObserver

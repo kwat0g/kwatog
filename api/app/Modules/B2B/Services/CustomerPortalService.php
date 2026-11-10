@@ -7,34 +7,37 @@ namespace App\Modules\B2B\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\NotificationService;
+use App\Common\Services\SystemUserResolver;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Services\StatementOfAccountService;
 use App\Modules\Auth\Models\User;
-use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\CustomerOrderFeedback;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
-use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
+use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderResponse;
-use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Services\ComplaintService;
-use App\Modules\CRM\Services\PriceAgreementService;
 use App\Modules\CRM\Services\CustomerPortalOrderAvailabilityService;
+use App\Modules\CRM\Services\PriceAgreementService;
 use App\Modules\CRM\Services\SalesOrderResponseService;
 use App\Modules\CRM\Services\SalesOrderService;
+use App\Modules\CRM\Services\SalesOrderSupplyService;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Quality\Enums\NcrStatus;
-use App\Common\Services\SystemUserResolver;
-use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnCase;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Services\ReturnCaseService;
 use App\Modules\ReturnManagement\Services\ReturnCaseSettlementService;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
@@ -42,7 +45,6 @@ use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Services\DeliveryService;
-use App\Modules\Production\Enums\WorkOrderStatus;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
@@ -152,7 +154,7 @@ class CustomerPortalService
             try {
                 $quote = $this->prices->quote($customerId, $product->id, Carbon::parse($date), '1');
                 $pricingIssue = null;
-            } catch (\Illuminate\Validation\ValidationException $exception) {
+            } catch (ValidationException $exception) {
                 $message = collect($exception->errors())->flatten()->implode(' ');
                 $pricingIssue = match (true) {
                     str_contains($message, 'No base selling price or applicable customer agreement') => 'No price is available for this delivery date. Contact Sales.',
@@ -223,14 +225,14 @@ class CustomerPortalService
 
             $deliveryDate = Carbon::parse($item['delivery_date']);
             $warrantyOptionId = isset($item['warranty_option_id'])
-                ? HashIdFilter::decode((string) $item['warranty_option_id'], \App\Modules\CRM\Models\CustomerProductWarrantyOption::class)
+                ? HashIdFilter::decode((string) $item['warranty_option_id'], CustomerProductWarrantyOption::class)
                 : null;
             if (isset($item['warranty_option_id']) && $warrantyOptionId === null) {
                 throw new BusinessRuleException("items.{$idx}.warranty_option_id is not a valid option.");
             }
             $items[] = [
-                'product_id'    => $productId,
-                'quantity'      => bcadd((string) $item['quantity'], '0', 2),
+                'product_id' => $productId,
+                'quantity' => bcadd((string) $item['quantity'], '0', 2),
                 'delivery_date' => $deliveryDate->toDateString(),
                 'warranty_option_id' => $warrantyOptionId,
             ];
@@ -353,11 +355,11 @@ class CustomerPortalService
             }
 
             $this->notifications->sendForSubject($so, $audience, 'portal.order_awaiting_review', [
-                'title'       => "Portal order {$so->so_number} awaits review",
-                'message'     => "{$portalUser->name} placed a sales order for {$so->customer?->name} via the customer portal. Review and confirm it to start MRP planning.",
-                'link_to'     => "/crm/sales-orders/{$so->hash_id}",
+                'title' => "Portal order {$so->so_number} awaits review",
+                'message' => "{$portalUser->name} placed a sales order for {$so->customer?->name} via the customer portal. Review and confirm it to start MRP planning.",
+                'link_to' => "/crm/sales-orders/{$so->hash_id}",
                 'entity_type' => 'sales_order',
-                'entity_id'   => $so->hash_id,
+                'entity_id' => $so->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('Portal order review notification failed', [
@@ -383,7 +385,8 @@ class CustomerPortalService
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
 
         $result = $query->paginate($perPage);
-        app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+        app(SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+
         return $result;
     }
 
@@ -459,9 +462,11 @@ class CustomerPortalService
         foreach ($data['items'] as $index => $item) {
             $this->assertRequestedDeliveryDate($item['delivery_date'], $index);
             $productId = Product::tryDecodeHash($item['product_id']);
-            if ($productId === null) { throw new BusinessRuleException('Invalid product in quote.'); }
+            if ($productId === null) {
+                throw new BusinessRuleException('Invalid product in quote.');
+            }
             $optionId = isset($item['warranty_option_id'])
-                ? HashIdFilter::decode((string) $item['warranty_option_id'], \App\Modules\CRM\Models\CustomerProductWarrantyOption::class)
+                ? HashIdFilter::decode((string) $item['warranty_option_id'], CustomerProductWarrantyOption::class)
                 : null;
             if (isset($item['warranty_option_id']) && $optionId === null) {
                 throw new BusinessRuleException("items.{$index}.warranty_option_id is not a valid option.");
@@ -474,8 +479,10 @@ class CustomerPortalService
             $line['product_id'] = app('hashids')->encode($line['product_id']);
             $line['price_agreement_id'] = $line['price_agreement_id'] ? app('hashids')->encode($line['price_agreement_id']) : null;
             unset($line['existing_id']);
+
             return $line;
         }, $quote['items']);
+
         return $quote;
     }
 
@@ -501,7 +508,7 @@ class CustomerPortalService
                 }
                 $this->assertRequestedDeliveryDate($item['delivery_date'], $idx);
                 $optionId = isset($item['warranty_option_id'])
-                    ? HashIdFilter::decode((string) $item['warranty_option_id'], \App\Modules\CRM\Models\CustomerProductWarrantyOption::class)
+                    ? HashIdFilter::decode((string) $item['warranty_option_id'], CustomerProductWarrantyOption::class)
                     : null;
                 if (isset($item['warranty_option_id']) && $optionId === null) {
                     throw new BusinessRuleException("items.{$idx}.warranty_option_id is not a valid option.");
@@ -517,6 +524,7 @@ class CustomerPortalService
                 'before' => $before, 'after' => $updated->toArray(),
             ]);
             $this->notifySalesOrderReview($updated, $user);
+
             return $updated;
         });
     }
@@ -567,9 +575,12 @@ class CustomerPortalService
             if (in_array($step['label'], ['Ready from stock', 'Stock + production'], true)) {
                 $step['label'] = $step['state'] === 'done' ? 'Supply ready' : 'Preparing supply';
             }
-            if ($step['label'] === 'QC approved stock') $step['label'] = 'Quality approved';
+            if ($step['label'] === 'QC approved stock') {
+                $step['label'] = 'Quality approved';
+            }
             $step['description'] = $step['state'] === 'rejected'
                 ? 'Order preparation needs attention. Our team is resolving it; contact sales for an update.' : null;
+
             return $step;
         }, $this->salesOrderService->chain($salesOrder));
     }
@@ -598,7 +609,7 @@ class CustomerPortalService
 
         $this->recordCustomerAudit('customer.order.responded', $response, $portalUserId, $customerId, [
             'sales_order_id' => $salesOrder->hash_id,
-            'response_type'  => $data['type'] ?? null,
+            'response_type' => $data['type'] ?? null,
         ]);
 
         return $response->load('items');
@@ -643,7 +654,7 @@ class CustomerPortalService
     {
         return ReturnRequest::query()
             ->where('customer_id', $customerId)
-            ->where('type', \App\Modules\ReturnManagement\Enums\ReturnRequestType::CustomerReturn->value)
+            ->where('type', ReturnRequestType::CustomerReturn->value)
             ->whereNull('delivery_attempt_outcome_id')
             ->withCount('items')
             ->orderByDesc('created_at')
@@ -955,6 +966,7 @@ class CustomerPortalService
                 $shipment['delivery']->proofs->sortBy('id')->map(fn ($proof) => [$proof->id, $proof->proof_type])->values()->all(),
             ], $shipments),
         ];
+
         return [
             'case' => $case, 'version' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)),
             'can_confirm' => $reason === null && collect($shipments)->contains(fn ($shipment) => ! $shipment['already_confirmed']),
@@ -965,6 +977,7 @@ class CustomerPortalService
     public function confirmReceiptGroup(int $customerId, Delivery $anchor, array $data, CustomerPortalUser $portalUser): array
     {
         abort_unless((int) $portalUser->customer_id === $customerId, 403);
+
         return DB::transaction(function () use ($customerId, $anchor, $data, $portalUser): array {
             $initial = $this->receiptGroup($customerId, $anchor);
             if (! $initial) {
@@ -1027,6 +1040,7 @@ class CustomerPortalService
             if ($original->status !== DeliveryStatus::Confirmed) {
                 $this->confirmDelivery($customerId, $original, $receiver + ['lines' => $payloads[$original->id]['lines']], $portalUser);
             }
+
             return $this->receiptGroup($customerId, $anchor);
         }, 3);
     }

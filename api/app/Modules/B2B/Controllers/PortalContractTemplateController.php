@@ -117,7 +117,7 @@ class PortalContractTemplateController
 
     private function safeFilename(string $filename): string
     {
-        $base = str_replace(["\"", "\r", "\n"], '_', basename(str_replace('\\', '/', $filename)));
+        $base = str_replace(['"', "\r", "\n"], '_', basename(str_replace('\\', '/', $filename)));
 
         return Str::limit($base, 255, '');
     }
@@ -145,8 +145,8 @@ class PortalContractTemplateController
     }
 
     /** @param list<array{name: string, type: string|null}> $fields
-     *  @param array<string, string> $fieldMappings
-     *  @param list<string> $requiredFields
+     * @param  array<string, string>  $fieldMappings
+     * @param  list<string>  $requiredFields
      */
     private function validateMapping(string $realm, array $fields, array $fieldMappings, array $requiredFields): void
     {

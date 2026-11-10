@@ -9,10 +9,12 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
-use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\ReturnManagement\Enums\ReturnCaseIntakeKind;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,7 +25,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Delivery extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'automatic_supply_key',
@@ -44,7 +46,7 @@ class Delivery extends Model
     ];
 
     protected $casts = [
-        'status'         => DeliveryStatus::class,
+        'status' => DeliveryStatus::class,
         'scheduled_date' => 'date',
         'expected_delivery_date' => 'date',
         'original_scheduled_date' => 'date',
@@ -52,14 +54,14 @@ class Delivery extends Model
         'shipment_weight_kg' => 'decimal:2',
         'delivery_latitude' => 'decimal:7',
         'delivery_longitude' => 'decimal:7',
-        'departed_at'    => 'datetime',
-        'delivered_at'   => 'datetime',
-        'confirmed_at'   => 'datetime',
+        'departed_at' => 'datetime',
+        'delivered_at' => 'datetime',
+        'confirmed_at' => 'datetime',
         'invoice_handoff_status' => DeliveryInvoiceHandoffStatus::class,
         'invoice_handoff_at' => 'datetime',
         'coc_handoff_status' => DeliveryCocHandoffStatus::class,
         'coc_handoff_at' => 'datetime',
-        'received_at'    => 'datetime',
+        'received_at' => 'datetime',
         'cost_recognition_mode' => DeliveryCostingMode::class,
     ];
 
@@ -114,10 +116,10 @@ class Delivery extends Model
      */
     public function blockingReturnCase(): HasOne
     {
-        return $this->hasOne(\App\Modules\ReturnManagement\Models\ReturnCase::class)
+        return $this->hasOne(ReturnCase::class)
             ->whereNotIn('status', ['resolved', 'withdrawn', 'rejected'])
             ->where(fn ($query) => $query
-                ->where('intake_kind', \App\Modules\ReturnManagement\Enums\ReturnCaseIntakeKind::DeliveryTrace->value)
+                ->where('intake_kind', ReturnCaseIntakeKind::DeliveryTrace->value)
                 ->orWhereHas('lines', fn ($q) => $q->where('missing_quantity', '>', 0)->orWhere('defective_quantity', '>', 0)))
             ->orderBy('id');
     }

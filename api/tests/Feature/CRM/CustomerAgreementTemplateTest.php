@@ -116,7 +116,8 @@ class CustomerAgreementTemplateTest extends TestCase
     public function test_contract_template_discovers_fields_and_rejects_unapproved_mapping_values(): void
     {
         $staff = $this->staffWithCustomerAgreementPermissions();
-        $this->app->instance(PortalContractPdfProcessor::class, new class implements PortalContractPdfProcessor {
+        $this->app->instance(PortalContractPdfProcessor::class, new class implements PortalContractPdfProcessor
+        {
             public function discoverFields(string $pdfPath): array
             {
                 return [['name' => 'Buyer Name', 'type' => 'Text']];
@@ -159,7 +160,8 @@ class CustomerAgreementTemplateTest extends TestCase
     public function test_ordinary_pdf_template_can_be_saved_without_auto_fill_fields(): void
     {
         $staff = $this->staffWithCustomerAgreementPermissions();
-        $this->app->instance(PortalContractPdfProcessor::class, new class implements PortalContractPdfProcessor {
+        $this->app->instance(PortalContractPdfProcessor::class, new class implements PortalContractPdfProcessor
+        {
             public function discoverFields(string $pdfPath): array
             {
                 return [];

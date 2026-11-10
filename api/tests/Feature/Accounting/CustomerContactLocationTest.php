@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Modules\Accounting\Models\Customer;
-use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;

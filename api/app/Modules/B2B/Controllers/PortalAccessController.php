@@ -6,6 +6,7 @@ namespace App\Modules\B2B\Controllers;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Resources\CustomerPortalUserResource;
@@ -28,7 +29,7 @@ class PortalAccessController
             'email' => ['required', 'email', 'max:255'],
             'is_authorized_signatory' => ['sometimes', 'boolean'],
         ]);
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->inviteCustomer(
             $customer,
@@ -57,7 +58,7 @@ class PortalAccessController
             'email' => ['required', 'email', 'max:255'],
             'is_authorized_signatory' => ['sometimes', 'boolean'],
         ]);
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->inviteSupplier(
             $vendor,
@@ -100,7 +101,7 @@ class PortalAccessController
 
     public function resendSupplier(Request $request, SupplierPortalUser $supplierPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->resendSupplier($supplierPortalUser, $actor, $request);
 
@@ -109,7 +110,7 @@ class PortalAccessController
 
     public function deactivateSupplier(Request $request, SupplierPortalUser $supplierPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->deactivate($supplierPortalUser, $actor, $request);
 
@@ -118,7 +119,7 @@ class PortalAccessController
 
     public function reactivateSupplier(Request $request, SupplierPortalUser $supplierPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->reactivate($supplierPortalUser, $actor, $request);
 
@@ -127,7 +128,7 @@ class PortalAccessController
 
     public function resendCustomer(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->resendCustomer($customerPortalUser, $actor, $request);
 
@@ -136,7 +137,7 @@ class PortalAccessController
 
     public function deactivateCustomer(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->deactivateCustomer($customerPortalUser, $actor, $request);
 
@@ -145,7 +146,7 @@ class PortalAccessController
 
     public function reactivateCustomer(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->reactivateCustomer($customerPortalUser, $actor, $request);
 
@@ -154,7 +155,7 @@ class PortalAccessController
 
     public function revokeSupplierTokens(Request $request, SupplierPortalUser $supplierPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->revokeTokens($supplierPortalUser, $actor, $request);
 
@@ -163,7 +164,7 @@ class PortalAccessController
 
     public function revokeCustomerTokens(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
     {
-        /** @var \App\Modules\Auth\Models\User $actor */
+        /** @var User $actor */
         $actor = $request->user('sanctum');
         $user = $this->access->revokeCustomerTokens($customerPortalUser, $actor, $request);
 

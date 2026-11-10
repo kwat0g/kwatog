@@ -23,7 +23,9 @@ class SupplierListingImageTest extends TestCase
     use RefreshDatabase;
 
     private Vendor $vendor;
+
     private SupplierPortalUser $supplier;
+
     private SupplierItemListing $listing;
 
     protected function setUp(): void

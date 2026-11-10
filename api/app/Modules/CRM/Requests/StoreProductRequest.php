@@ -28,14 +28,14 @@ class StoreProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'part_number'     => ['required', 'string', 'regex:/^[A-Z0-9-]{2,30}$/', 'unique:products,part_number'],
-            'name'            => ['required', 'string', 'max:200'],
-            'description'     => ['nullable', 'string', 'max:1000'],
+            'part_number' => ['required', 'string', 'regex:/^[A-Z0-9-]{2,30}$/', 'unique:products,part_number'],
+            'name' => ['required', 'string', 'max:200'],
+            'description' => ['nullable', 'string', 'max:1000'],
             'unit_of_measure' => [
                 'required', 'string', 'max:20',
                 Rule::exists('uoms', 'code')->whereNull('deleted_at'),
             ],
-            'standard_cost'   => ['required', 'decimal:0,2', 'min:0'],
+            'standard_cost' => ['required', 'decimal:0,2', 'min:0'],
             'revenue_account_id' => [
                 'nullable',
                 'integer',
@@ -45,7 +45,7 @@ class StoreProductRequest extends FormRequest
             ],
             'base_selling_price' => ['prohibited'],
             'minimum_selling_price' => ['prohibited'],
-            'is_active'       => ['nullable', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
             'specifications' => ['nullable', 'array:dimensions,material,finish,tolerances,notes'],
             'specifications.dimensions' => ['nullable', 'array:length,width,height,unit'],
             'specifications.dimensions.length' => ['required_with:specifications.dimensions', 'numeric', 'gt:0', 'max:1000000'],

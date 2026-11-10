@@ -19,19 +19,19 @@ class UpdateCustomerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'              => ['sometimes', 'string', 'max:200'],
+            'name' => ['sometimes', 'string', 'max:200'],
             // The code is issued once by CustomerService and is immutable.
-            'code'              => ['prohibited'],
-            'contact_person'    => ['sometimes', 'nullable', 'string', 'max:100'],
+            'code' => ['prohibited'],
+            'contact_person' => ['sometimes', 'nullable', 'string', 'max:100'],
             'contact_person_role' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'email'             => ['sometimes', 'nullable', 'email', 'max:200'],
-            'phone'             => ['sometimes', 'nullable', 'string', 'max:20'],
-            'address'           => ['sometimes', 'nullable', 'string', 'max:500'],
-            'delivery_address'         => ['sometimes', 'nullable', 'string', 'max:500'],
-            'delivery_latitude'        => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
-            'delivery_longitude'       => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
-            'delivery_contact_person'  => ['sometimes', 'nullable', 'string', 'max:100'],
-            'delivery_contact_phone'   => ['sometimes', 'nullable', 'string', 'max:20'],
+            'email' => ['sometimes', 'nullable', 'email', 'max:200'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'delivery_address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'delivery_latitude' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
+            'delivery_longitude' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
+            'delivery_contact_person' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'delivery_contact_phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'allowed_payment_methods' => ['sometimes', 'nullable', 'array', 'list'],
             'allowed_payment_methods.*' => ['required', 'string', 'distinct', 'in:cash,check,bank_transfer'],
             'shipping_payer' => ['sometimes', 'nullable', 'string', 'in:customer,company'],
@@ -44,11 +44,11 @@ class UpdateCustomerRequest extends FormRequest
             'warranty_covered_issues.*' => ['required', 'string', 'distinct', 'in:manufacturing_defect,shipping_damage,customer_caused_damage'],
             'warranty_remedies' => ['sometimes', 'nullable', 'array', 'list'],
             'warranty_remedies.*' => ['required', 'string', 'in:repair,replace,credit,refund'],
-            'tin'               => ['sometimes', 'nullable', 'string', 'max:20'],
-            'credit_limit'      => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:99999999.99'],
-            'payment_terms_days'=> ['sometimes', 'integer', 'min:0', 'max:365'],
+            'tin' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'credit_limit' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:99999999.99'],
+            'payment_terms_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'portal_catalog_mode' => ['sometimes', 'string', Rule::in(['standard', 'restricted'])],
-            'is_active'         => ['sometimes', 'boolean'],
+            'is_active' => ['sometimes', 'boolean'],
         ];
     }
 

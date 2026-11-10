@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Requests\Customer;
 
-use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePortalOrderRequest extends FormRequest
 {
@@ -23,13 +23,13 @@ class StorePortalOrderRequest extends FormRequest
     {
         return [
             'quote_signature' => ['sometimes', 'nullable', 'string', 'size:64'],
-            'idempotency_key'       => ['required', 'string', 'max:128', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
-            'date'                  => ['sometimes', 'nullable', 'date'],
-            'payment_method'        => ['required', 'string', Rule::in(['cash', 'check', 'bank_transfer'])],
-            'notes'                 => ['nullable', 'string', 'max:1000'],
-            'items'                 => ['required', 'array', 'min:1'],
-            'items.*.product_id'    => ['required', 'string', 'distinct'],
-            'items.*.quantity'      => ['required', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],
+            'idempotency_key' => ['required', 'string', 'max:128', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
+            'date' => ['sometimes', 'nullable', 'date'],
+            'payment_method' => ['required', 'string', Rule::in(['cash', 'check', 'bank_transfer'])],
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'string', 'distinct'],
+            'items.*.quantity' => ['required', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],
             'items.*.delivery_date' => ['required', 'date'],
             'items.*.warranty_option_id' => ['sometimes', 'nullable', 'string'],
         ];

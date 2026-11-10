@@ -7,13 +7,17 @@ namespace App\Modules\CRM\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
-use App\Modules\B2B\Models\CustomerOrderFeedback;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerOrderFeedback;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
+use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\SupplyChain\Models\Delivery;
+use Database\Factories\SalesOrderFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,11 +28,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SalesOrder extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
-    protected static function newFactory(): \Database\Factories\SalesOrderFactory
+    protected static function newFactory(): SalesOrderFactory
     {
-        return \Database\Factories\SalesOrderFactory::new();
+        return SalesOrderFactory::new();
     }
 
     protected $fillable = [
@@ -43,26 +47,26 @@ class SalesOrder extends Model
     ];
 
     protected $casts = [
-        'date'               => 'date',
-        'subtotal'           => 'decimal:2',
-        'vat_amount'         => 'decimal:2',
-        'total_amount'       => 'decimal:2',
-        'status'             => SalesOrderStatus::class,
-        'submission_source'  => SalesOrderSubmissionSource::class,
+        'date' => 'date',
+        'subtotal' => 'decimal:2',
+        'vat_amount' => 'decimal:2',
+        'total_amount' => 'decimal:2',
+        'status' => SalesOrderStatus::class,
+        'submission_source' => SalesOrderSubmissionSource::class,
         'payment_terms_days' => 'integer',
         'customer_terms_snapshot' => 'array',
-        'mrp_plan_id'        => 'integer',
-        'incoterm'           => Incoterm::class,
-        'confirmed_at'       => 'datetime',
+        'mrp_plan_id' => 'integer',
+        'incoterm' => Incoterm::class,
+        'confirmed_at' => 'datetime',
         'customer_confirmation_requested_at' => 'datetime',
-        'in_production_at'   => 'datetime',
+        'in_production_at' => 'datetime',
         'partially_delivered_at' => 'datetime',
-        'delivered_at'       => 'datetime',
-        'invoiced_at'        => 'datetime',
-        'paid_at'            => 'datetime',
-        'closed_at'          => 'datetime',
-        'cancelled_at'       => 'datetime',
-        'mrp_released_at'    => 'datetime',
+        'delivered_at' => 'datetime',
+        'invoiced_at' => 'datetime',
+        'paid_at' => 'datetime',
+        'closed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'mrp_released_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -102,12 +106,12 @@ class SalesOrder extends Model
      */
     public function mrpPlan(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\MRP\Models\MrpPlan::class);
+        return $this->belongsTo(MrpPlan::class);
     }
 
     public function workOrders(): HasMany
     {
-        return $this->hasMany(\App\Modules\Production\Models\WorkOrder::class);
+        return $this->hasMany(WorkOrder::class);
     }
 
     /** Relationship consumed by B2B Customer Portal order detail. */
@@ -139,7 +143,7 @@ class SalesOrder extends Model
 
     public function returnCase(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\ReturnManagement\Models\ReturnCase::class);
+        return $this->belongsTo(ReturnCase::class);
     }
 
     /** Delivery proposals retain every round, newest first. */
@@ -158,7 +162,7 @@ class SalesOrder extends Model
      * key, so a re-submission (newer id) is the row consumers should read —
      * superseded replies stay reachable through `responses()`.
      */
-    public function latestResponse(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function latestResponse(): HasOne
     {
         return $this->hasOne(SalesOrderResponse::class)->latestOfMany();
     }

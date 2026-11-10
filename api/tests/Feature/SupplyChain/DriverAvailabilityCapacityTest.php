@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
-use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DriverCredential;
 use App\Modules\SupplyChain\Models\Vehicle;

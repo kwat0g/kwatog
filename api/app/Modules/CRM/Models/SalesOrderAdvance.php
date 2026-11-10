@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SalesOrderAdvance extends Model
 {
-    use HasHashId, HasAuditLog;
+    use HasAuditLog, HasHashId;
 
     protected $fillable = [
         'sales_order_id', 'customer_id', 'attempt_number', 'order_total_snapshot', 'required_amount', 'percentage',
@@ -33,13 +33,48 @@ class SalesOrderAdvance extends Model
         'proof_size' => 'integer', 'verified_at' => 'datetime', 'reviewed_at' => 'datetime',
     ];
 
-    public function salesOrder(): BelongsTo { return $this->belongsTo(SalesOrder::class); }
-    public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
-    public function submitter(): BelongsTo { return $this->belongsTo(CustomerPortalUser::class, 'submitted_by'); }
-    public function configurator(): BelongsTo { return $this->belongsTo(User::class, 'configured_by'); }
-    public function reviewer(): BelongsTo { return $this->belongsTo(User::class, 'reviewed_by'); }
-    public function verifier(): BelongsTo { return $this->belongsTo(User::class, 'verified_by'); }
-    public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }
-    public function refundJournalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class, 'refund_journal_entry_id'); }
-    public function applications(): HasMany { return $this->hasMany(SalesOrderAdvanceApplication::class); }
+    public function salesOrder(): BelongsTo
+    {
+        return $this->belongsTo(SalesOrder::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(CustomerPortalUser::class, 'submitted_by');
+    }
+
+    public function configurator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'configured_by');
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function verifier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class);
+    }
+
+    public function refundJournalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class, 'refund_journal_entry_id');
+    }
+
+    public function applications(): HasMany
+    {
+        return $this->hasMany(SalesOrderAdvanceApplication::class);
+    }
 }

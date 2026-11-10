@@ -37,18 +37,18 @@ class CreditLimitTest extends TestCase
 
         // Existing unpaid invoice = 900 — uses 'finalized' (the open AR status)
         Invoice::factory()->create([
-            'customer_id'  => $customer->id,
+            'customer_id' => $customer->id,
             'total_amount' => 900.00,
-            'amount_paid'  => 0.00,
-            'balance'      => 900.00,
-            'status'       => 'finalized',
+            'amount_paid' => 0.00,
+            'balance' => 900.00,
+            'status' => 'finalized',
         ]);
 
         // New SO = 200 — total exposure 1100 > 1000 limit
         $so = SalesOrder::factory()->create([
-            'customer_id'  => $customer->id,
+            'customer_id' => $customer->id,
             'total_amount' => 200.00,
-            'status'       => 'draft',
+            'status' => 'draft',
         ]);
 
         // Add at least one item so the confirm doesn't reject on empty items
@@ -65,9 +65,9 @@ class CreditLimitTest extends TestCase
         $customer = Customer::factory()->create(['credit_limit' => null]);
 
         $so = SalesOrder::factory()->create([
-            'customer_id'  => $customer->id,
+            'customer_id' => $customer->id,
             'total_amount' => 200.00,
-            'status'       => 'draft',
+            'status' => 'draft',
         ]);
         SalesOrderItem::factory()->create(['sales_order_id' => $so->id]);
 
@@ -80,9 +80,9 @@ class CreditLimitTest extends TestCase
     {
         $customer = Customer::factory()->create(['credit_limit' => '0.00']);
         $so = SalesOrder::factory()->create([
-            'customer_id'  => $customer->id,
+            'customer_id' => $customer->id,
             'total_amount' => 200.00,
-            'status'       => 'draft',
+            'status' => 'draft',
         ]);
         SalesOrderItem::factory()->create(['sales_order_id' => $so->id]);
 

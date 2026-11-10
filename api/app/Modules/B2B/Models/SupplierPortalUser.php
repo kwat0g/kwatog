@@ -6,6 +6,7 @@ namespace App\Modules\B2B\Models;
 
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Vendor;
+use Database\Factories\SupplierPortalUserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -17,9 +18,9 @@ class SupplierPortalUser extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasHashId, Notifiable, SoftDeletes;
 
-    protected static function newFactory(): \Database\Factories\SupplierPortalUserFactory
+    protected static function newFactory(): SupplierPortalUserFactory
     {
-        return \Database\Factories\SupplierPortalUserFactory::new();
+        return SupplierPortalUserFactory::new();
     }
 
     protected $fillable = [
@@ -46,13 +47,13 @@ class SupplierPortalUser extends Authenticatable
     protected function casts(): array
     {
         return [
-            'is_active'           => 'boolean',
+            'is_active' => 'boolean',
             'is_authorized_signatory' => 'boolean',
             'must_change_password' => 'boolean',
-            'last_login_at'       => 'datetime',
-            'locked_until'        => 'datetime',
+            'last_login_at' => 'datetime',
+            'locked_until' => 'datetime',
             'password_changed_at' => 'datetime',
-            'password'            => 'hashed',
+            'password' => 'hashed',
         ];
     }
 

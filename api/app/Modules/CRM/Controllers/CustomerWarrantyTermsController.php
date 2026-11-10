@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Controllers;
 
 use App\Modules\Accounting\Models\Customer;
-use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
 use App\Modules\CRM\Models\CustomerProductWarrantyOption;
+use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CustomerWarrantyTermsController
 {
@@ -49,7 +50,7 @@ class CustomerWarrantyTermsController
             if (CustomerProductWarrantyOption::query()
                 ->where('customer_id', $customer->id)->where('product_id', $product->id)
                 ->where('label', $validated['label'])->exists()) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'label' => ['A warranty choice with this name already exists for this product.'],
                 ]);
             }

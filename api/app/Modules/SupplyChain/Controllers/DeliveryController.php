@@ -4,24 +4,25 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Controllers;
 
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DriverCredential;
-use App\Modules\SupplyChain\Requests\AssignDeliveryRequest;
-use App\Modules\SupplyChain\Requests\ShipmentPlanRequest;
 use App\Modules\SupplyChain\Requests\AmendDeliveryAttemptRequest;
+use App\Modules\SupplyChain\Requests\AssignDeliveryRequest;
+use App\Modules\SupplyChain\Requests\CreateDeliveryRequest;
+use App\Modules\SupplyChain\Requests\DeliveryFormOptionsRequest;
+use App\Modules\SupplyChain\Requests\DeliveryInspectionOptionsRequest;
+use App\Modules\SupplyChain\Requests\RescheduleDeliveryRequest;
 use App\Modules\SupplyChain\Requests\ReserveDeliveryStockRequest;
 use App\Modules\SupplyChain\Requests\RetryDeliveryCostRequest;
-use App\Modules\SupplyChain\Services\DeliveryCostRecognitionService;
-use App\Modules\SupplyChain\Requests\CreateDeliveryRequest;
-use App\Modules\SupplyChain\Requests\DeliveryInspectionOptionsRequest;
-use App\Modules\SupplyChain\Requests\DeliveryFormOptionsRequest;
-use App\Modules\SupplyChain\Requests\RescheduleDeliveryRequest;
+use App\Modules\SupplyChain\Requests\ShipmentPlanRequest;
 use App\Modules\SupplyChain\Requests\StoreDeliveryAttemptOutcomeRequest;
 use App\Modules\SupplyChain\Requests\StoreTruckReturnReceiptRequest;
 use App\Modules\SupplyChain\Resources\DeliveryResource;
 use App\Modules\SupplyChain\Services\DeliveryAttemptOutcomeService;
+use App\Modules\SupplyChain\Services\DeliveryCostRecognitionService;
 use App\Modules\SupplyChain\Services\DeliveryReceiptService;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Http\JsonResponse;
@@ -55,6 +56,7 @@ class DeliveryController
     {
         $rows = $this->service->list($request->query());
         $rows->getCollection()->loadMissing(['stockReservationBatch', 'stockReservations.item', 'stockReservations.location', 'stockReservations.deliveryItem', 'costHandoffs']);
+
         return DeliveryResource::collection($rows);
     }
 
@@ -136,8 +138,11 @@ class DeliveryController
             ], true)) {
                 continue;
             }
-            if ($status->canTransitionTo($candidate)) return $candidate;
+            if ($status->canTransitionTo($candidate)) {
+                return $candidate;
+            }
         }
+
         return null;
     }
 
@@ -187,8 +192,9 @@ class DeliveryController
     {
         $data = $request->validate([
             'status' => ['required', Rule::in(DeliveryStatus::values())],
-            'note'   => ['nullable', 'string', 'max:500'],
+            'note' => ['nullable', 'string', 'max:500'],
         ]);
+
         return new DeliveryResource($this->service->updateStatus(
             $delivery,
             DeliveryStatus::from((string) $data['status']),
@@ -199,6 +205,7 @@ class DeliveryController
     public function uploadReceipt(Request $request, Delivery $delivery): DeliveryResource
     {
         $request->validate(['file' => ['required', 'mimes:jpg,jpeg,png,webp', 'max:10240']]);
+
         return new DeliveryResource(
             $this->service->uploadReceiptPhoto($delivery, $request->file('file'), $request->user())
         );
@@ -207,10 +214,11 @@ class DeliveryController
     public function confirm(Request $request, Delivery $delivery): DeliveryResource
     {
         $data = $request->validate([
-            'receiver_name'     => ['nullable', 'string', 'max:200'],
+            'receiver_name' => ['nullable', 'string', 'max:200'],
             'receiver_position' => ['nullable', 'string', 'max:100'],
-            'delivery_remarks'  => ['nullable', 'string', 'max:1000'],
+            'delivery_remarks' => ['nullable', 'string', 'max:1000'],
         ]);
+
         return new DeliveryResource($this->service->confirm($delivery, $request->user(), $data));
     }
 
@@ -254,6 +262,7 @@ class DeliveryController
     public function retryCost(RetryDeliveryCostRequest $request, Delivery $delivery): DeliveryResource
     {
         $this->costs->retry($delivery, $request->validated('kind'), $request->validated('request_key'), $request->user());
+
         return new DeliveryResource($this->service->show($delivery));
     }
 
@@ -261,7 +270,7 @@ class DeliveryController
     {
         try {
             return new DeliveryResource($this->service->retryCocHandoff($delivery, $request->user()));
-        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
@@ -270,7 +279,7 @@ class DeliveryController
     {
         try {
             return new DeliveryResource($this->service->retryInvoiceHandoff($delivery, $request->user()));
-        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+        } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
     }
@@ -292,15 +301,15 @@ class DeliveryController
         }
 
         $contents = $disk->get($delivery->receipt_photo_path);
-        $mime     = $disk->mimeType($delivery->receipt_photo_path) ?? 'application/octet-stream';
+        $mime = $disk->mimeType($delivery->receipt_photo_path) ?? 'application/octet-stream';
         $filename = basename($delivery->receipt_photo_path);
 
         return response()->stream(
             fn () => print $contents,
             200,
             [
-                'Content-Type'        => $mime,
-                'Cache-Control'       => 'private, no-store, max-age=0',
+                'Content-Type' => $mime,
+                'Cache-Control' => 'private, no-store, max-age=0',
                 'Content-Disposition' => sprintf('inline; filename="%s"', $filename),
             ],
         );
@@ -309,12 +318,14 @@ class DeliveryController
     public function destroy(Delivery $delivery): JsonResponse
     {
         $this->service->delete($delivery);
+
         return response()->json([], 204);
     }
 
     public function restore(Delivery $delivery): JsonResponse
     {
         $this->service->restore($delivery);
+
         return response()->json(['message' => 'Delivery restored.']);
     }
 }

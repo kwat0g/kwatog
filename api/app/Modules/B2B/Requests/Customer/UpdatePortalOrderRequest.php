@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Requests\Customer;
 
-use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdatePortalOrderRequest extends FormRequest
 {

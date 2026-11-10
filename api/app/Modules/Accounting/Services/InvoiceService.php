@@ -19,6 +19,7 @@ use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Accounting\Events\InvoiceFinalized;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
@@ -27,6 +28,7 @@ use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Services\SalesOrderAdvanceService;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\ReturnManagement\Services\ReturnCaseService;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
@@ -551,7 +553,7 @@ class InvoiceService
             if (($lockedInvoice->lifecycle_type ?? 'standard') === 'standard' && $lockedInvoice->sales_order_id) {
                 app(SalesOrderService::class)
                     ->markInvoiced((int) $lockedInvoice->sales_order_id);
-                app(\App\Modules\CRM\Services\SalesOrderAdvanceService::class)
+                app(SalesOrderAdvanceService::class)
                     ->applyToInvoice(
                         SalesOrder::query()->findOrFail($lockedInvoice->sales_order_id),
                         $lockedInvoice->fresh(),
@@ -656,9 +658,9 @@ class InvoiceService
             if (($data['payment_method'] ?? null) === 'bank_transfer') {
                 app(InvoicePaymentSubmissionService::class)->bankAccountId((string) $data['cash_account_id']);
             }
-            $cashAccount = \App\Modules\Accounting\Models\Account::query()->findOrFail($cashAccountId);
+            $cashAccount = Account::query()->findOrFail($cashAccountId);
             if (! str_starts_with($cashAccount->code, '10')
-                || \App\Modules\Accounting\Models\Account::query()->where('parent_id', $cashAccountId)->exists()) {
+                || Account::query()->where('parent_id', $cashAccountId)->exists()) {
                 throw new BusinessRuleException('Select an active, postable cash or bank account.');
             }
 

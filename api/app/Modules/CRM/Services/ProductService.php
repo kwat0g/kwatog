@@ -9,8 +9,8 @@ use App\Common\Services\NotificationService;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
-use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\PriceRequest;
 use App\Modules\CRM\Models\Product;
@@ -160,6 +160,7 @@ class ProductService
             if ($locked->wasChanged('standard_cost')) {
                 app(PricingReviewService::class)->request([(int) $locked->id], 'product_prices_changed');
             }
+
             return $locked->fresh()->load(['portalCustomers:id,name', 'images', 'blueprints']);
         });
     }
@@ -206,17 +207,16 @@ class ProductService
         $dimensions = $specifications['dimensions'] ?? [];
         $validDimensions = is_array($dimensions)
             && in_array($dimensions['unit'] ?? null, ['mm', 'cm', 'in'], true)
-            && collect(['length', 'width', 'height'])->every(static fn (string $axis): bool =>
-                isset($dimensions[$axis]) && is_numeric($dimensions[$axis]) && bccomp((string) $dimensions[$axis], '0', 4) > 0
+            && collect(['length', 'width', 'height'])->every(static fn (string $axis): bool => isset($dimensions[$axis]) && is_numeric($dimensions[$axis]) && bccomp((string) $dimensions[$axis], '0', 4) > 0
             );
         $hasMaterial = is_string($specifications['material'] ?? null) && trim($specifications['material']) !== '';
         if (! $validDimensions || ! $hasMaterial) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'specifications' => 'Add the product dimensions, measurement unit, and material before making it available in the customer catalog.',
             ]);
         }
         if ($product->is_customizable && ! $product->blueprints()->exists()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'blueprints' => 'Upload an approved product blueprint before listing a customizable product.',
             ]);
         }

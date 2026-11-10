@@ -27,6 +27,7 @@ class ChartOfAccountsSeeder extends Seeder
     {
         if (! Schema::hasTable('accounts')) {
             $this->command?->warn('ChartOfAccountsSeeder: accounts table missing — run migrations first.');
+
             return;
         }
 
@@ -44,8 +45,8 @@ class ChartOfAccountsSeeder extends Seeder
             ['1010', 'Cash on Hand',                 'asset', 'debit', '1000'],
             ['1020', 'Cash in Bank',                 'asset', 'debit', '1000'],
             ['1030', 'Petty Cash',                   'asset', 'debit', '1000'],
-             ['1100', 'Accounts Receivable',          'asset', 'debit', '1000'],
-             ['1110', 'Employee Loans Receivable',    'asset', 'debit', '1000'],
+            ['1100', 'Accounts Receivable',          'asset', 'debit', '1000'],
+            ['1110', 'Employee Loans Receivable',    'asset', 'debit', '1000'],
             ['1200', 'Inventory - Raw Materials',    'asset', 'debit', '1000'],
             ['1210', 'Inventory - Finished Goods',   'asset', 'debit', '1000'],
             ['1220', 'Inventory - Packaging',        'asset', 'debit', '1000'],
@@ -54,7 +55,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['1300', 'Prepaid Expenses',             'asset', 'debit', '1000'],
             ['1310', 'VAT Input',                    'asset', 'debit', '1000'],
             ['1400', 'Property Plant & Equipment',   'asset', 'debit', '1000'],
-            ['1410', 'Accumulated Depreciation',     'asset', 'credit','1000'],
+            ['1410', 'Accumulated Depreciation',     'asset', 'credit', '1000'],
 
             // ─── Liabilities ───────────────────────────────
             ['2010', 'Accounts Payable',             'liability', 'credit', '2000'],
@@ -96,18 +97,18 @@ class ChartOfAccountsSeeder extends Seeder
             ['6015', 'Overtime Expense',             'expense', 'debit', '6000'],
             ['6020', 'Employee Benefits Expense',    'expense', 'debit', '6000'],
             ['6030', 'SSS Expense (Employer)',       'expense', 'debit', '6000'],
-            ['6040', 'PhilHealth Expense (Employer)','expense', 'debit', '6000'],
+            ['6040', 'PhilHealth Expense (Employer)', 'expense', 'debit', '6000'],
             ['6050', 'Pag-IBIG Expense (Employer)',  'expense', 'debit', '6000'],
             ['6060', 'Utilities Expense',            'expense', 'debit', '6000'],
             ['6070', 'Rent Expense',                 'expense', 'debit', '6000'],
             ['6080', 'Depreciation Expense',         'expense', 'debit', '6000'],
             ['6090', 'Office Supplies Expense',      'expense', 'debit', '6000'],
-            ['6100', 'Repairs & Maintenance Expense','expense', 'debit', '6000'],
+            ['6100', 'Repairs & Maintenance Expense', 'expense', 'debit', '6000'],
             ['6110', 'Transportation Expense',       'expense', 'debit', '6000'],
-             ['6120', 'Loss on Disposal of Asset',    'expense', 'debit', '6000'],
+            ['6120', 'Loss on Disposal of Asset',    'expense', 'debit', '6000'],
             ['6130', 'Employee Loan Write-off Expense', 'expense', 'debit', '6000'],
             ['6135', 'Delivery Loss Expense',       'expense', 'debit', '6000'],
-            ['4030', 'Gain on Disposal of Asset',    'revenue', 'credit','4000'],
+            ['4030', 'Gain on Disposal of Asset',    'revenue', 'credit', '4000'],
         ];
 
         // Pass 1: insert/upsert without parent_id.
@@ -115,12 +116,12 @@ class ChartOfAccountsSeeder extends Seeder
             DB::table('accounts')->updateOrInsert(
                 ['code' => $code],
                 [
-                    'name'           => $name,
-                    'type'           => $type,
+                    'name' => $name,
+                    'type' => $type,
                     'normal_balance' => $normal,
-                    'is_active'      => true,
-                    'updated_at'     => now(),
-                    'created_at'     => now(),
+                    'is_active' => true,
+                    'updated_at' => now(),
+                    'created_at' => now(),
                 ],
             );
         }
@@ -128,11 +129,13 @@ class ChartOfAccountsSeeder extends Seeder
         // Pass 2: resolve parent_id by code.
         $idsByCode = DB::table('accounts')->pluck('id', 'code');
         foreach ($rows as [$code, , , , $parentCode]) {
-            if ($parentCode === null) continue;
+            if ($parentCode === null) {
+                continue;
+            }
             DB::table('accounts')
                 ->where('code', $code)
                 ->update([
-                    'parent_id'  => $idsByCode[$parentCode] ?? null,
+                    'parent_id' => $idsByCode[$parentCode] ?? null,
                     'updated_at' => now(),
                 ]);
         }

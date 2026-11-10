@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\E2E;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
@@ -40,7 +41,7 @@ class PortalOrderAgreementDeliveryFlowTest extends TestCase
     {
         parent::setUp();
         $this->seed([RolePermissionSeeder::class, SettingsSeeder::class, ChartOfAccountsSeeder::class]);
-        app(\App\Common\Services\SettingsService::class)->set('company.vat_status', 'Non-VAT', 'company');
+        app(SettingsService::class)->set('company.vat_status', 'Non-VAT', 'company');
         Storage::fake('local');
     }
 

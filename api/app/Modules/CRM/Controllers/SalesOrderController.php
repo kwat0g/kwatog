@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Controllers;
 
-use App\Modules\CRM\Models\SalesOrder;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Requests\CancelSalesOrderRequest;
 use App\Modules\CRM\Requests\ListSalesOrderRequest;
 use App\Modules\CRM\Requests\StoreSalesOrderRequest;
@@ -15,7 +16,6 @@ use App\Modules\CRM\Resources\SalesOrderResource;
 use App\Modules\CRM\Services\SalesOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use App\Common\Exceptions\BusinessRuleException;
 
 class SalesOrderController
 {
@@ -51,6 +51,7 @@ class SalesOrderController
     public function store(StoreSalesOrderRequest $request): JsonResponse
     {
         $so = $this->service->create($request->validated(), $request->user()->id);
+
         return (new SalesOrderResource($so))->response()->setStatusCode(201);
     }
 
@@ -61,6 +62,7 @@ class SalesOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new SalesOrderResource($so);
     }
 
@@ -71,6 +73,7 @@ class SalesOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json(null, 204);
     }
 
@@ -81,6 +84,7 @@ class SalesOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new SalesOrderResource($so);
     }
 
@@ -126,6 +130,7 @@ class SalesOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new SalesOrderResource($so);
     }
 

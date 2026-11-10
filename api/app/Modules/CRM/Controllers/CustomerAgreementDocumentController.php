@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Controllers;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\PortalContractTemplate;
 use App\Modules\B2B\Services\PortalContractPdfService;
@@ -105,7 +106,7 @@ class CustomerAgreementDocumentController
     {
         abort_unless((int) $document->customer_id === (int) $customer->id, 404);
         $issuer = $request->user('sanctum');
-        abort_unless($issuer instanceof \App\Modules\Auth\Models\User, 401);
+        abort_unless($issuer instanceof User, 401);
         $issued = $this->signatures->issueCustomerDocument($document, $issuer);
 
         return response()->json(['data' => $this->serialize($issued->load(['uploadedBy:id,name', 'issuedBy:id,name']))]);
@@ -231,7 +232,7 @@ class CustomerAgreementDocumentController
 
     private function safeFilename(string $filename): string
     {
-        $base = str_replace(["\"", "\r", "\n"], '_', basename(str_replace('\\', '/', $filename)));
+        $base = str_replace(['"', "\r", "\n"], '_', basename(str_replace('\\', '/', $filename)));
 
         return Str::limit($base, 255, '');
     }

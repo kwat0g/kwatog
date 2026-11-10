@@ -7,9 +7,7 @@ namespace App\Modules\CRM\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use App\Common\Support\Money;
-use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\InvoiceStatus;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\InvoicePaymentSubmissionService;
@@ -26,12 +24,12 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class SalesOrderAdvanceService
 {
     private const LIABILITY_SETTING = 'accounting.accounts.customer_advances_code';
+
     private const PROOF_MAX_BYTES = 10 * 1024 * 1024;
 
     public function __construct(
@@ -60,6 +58,7 @@ class SalesOrderAdvanceService
                 if ($latest?->status === 'configured') {
                     $latest->delete();
                 }
+
                 return null;
             }
 
@@ -93,17 +92,18 @@ class SalesOrderAdvanceService
             }
 
             $attributes = [
-                    'sales_order_id' => $lockedOrder->id,
-                    'customer_id' => $lockedOrder->customer_id,
-                    'attempt_number' => $latest?->attempt_number ?? 1,
-                    'order_total_snapshot' => $lockedOrder->total_amount,
-                    'required_amount' => $required,
-                    'percentage' => $percent,
-                    'status' => 'configured',
-                    'configured_by' => $by->id,
-                ];
+                'sales_order_id' => $lockedOrder->id,
+                'customer_id' => $lockedOrder->customer_id,
+                'attempt_number' => $latest?->attempt_number ?? 1,
+                'order_total_snapshot' => $lockedOrder->total_amount,
+                'required_amount' => $required,
+                'percentage' => $percent,
+                'status' => 'configured',
+                'configured_by' => $by->id,
+            ];
             if ($latest) {
                 $latest->update($attributes);
+
                 return $latest->fresh();
             }
 
@@ -116,7 +116,9 @@ class SalesOrderAdvanceService
     {
         $latest = SalesOrderAdvance::query()->where('sales_order_id', $order->id)
             ->orderByDesc('attempt_number')->lockForUpdate()->first();
-        if (! $latest || $latest->status !== 'configured') return $latest;
+        if (! $latest || $latest->status !== 'configured') {
+            return $latest;
+        }
 
         $required = $latest->percentage === null
             ? (string) $latest->required_amount
@@ -165,6 +167,7 @@ class SalesOrderAdvanceService
                     if (! hash_equals((string) $existing->request_fingerprint, $fingerprint)) {
                         throw ValidationException::withMessages(['idempotency_key' => ['This submission key was used with different payment details.']]);
                     }
+
                     return $existing;
                 }
 
@@ -215,7 +218,9 @@ class SalesOrderAdvanceService
                 return $latest->fresh();
             }, 3);
         } catch (\Throwable $error) {
-            if ($storedPath) Storage::disk('local')->delete($storedPath);
+            if ($storedPath) {
+                Storage::disk('local')->delete($storedPath);
+            }
             if ($error instanceof QueryException && $error->getCode() === '23505') {
                 throw ValidationException::withMessages(['reference_number' => ['This bank reference has already been submitted. Reload the order and review the existing proof.']]);
             }
@@ -229,7 +234,9 @@ class SalesOrderAdvanceService
             $orderId = (int) SalesOrderAdvance::query()->whereKey($advance->getKey())->value('sales_order_id');
             $order = SalesOrder::query()->lockForUpdate()->findOrFail($orderId);
             $locked = SalesOrderAdvance::query()->lockForUpdate()->findOrFail($advance->getKey());
-            if ($locked->status === 'verified') return $locked->fresh();
+            if ($locked->status === 'verified') {
+                return $locked->fresh();
+            }
             if ($locked->status !== 'pending') {
                 throw new BusinessRuleException('Only a pending customer down payment can be verified.');
             }
@@ -255,6 +262,7 @@ class SalesOrderAdvanceService
                 'reviewed_by' => $financeUser->id, 'reviewed_at' => now(), 'journal_entry_id' => $entry->id,
             ]);
             $this->releaseProductionIfReady($order);
+
             return $locked->fresh();
         }, 3);
     }
@@ -265,12 +273,17 @@ class SalesOrderAdvanceService
             $orderId = (int) SalesOrderAdvance::query()->whereKey($advance->getKey())->value('sales_order_id');
             SalesOrder::query()->lockForUpdate()->findOrFail($orderId);
             $locked = SalesOrderAdvance::query()->lockForUpdate()->findOrFail($advance->getKey());
-            if ($locked->status === 'rejected') return $locked->fresh();
-            if ($locked->status !== 'pending') throw new BusinessRuleException('Only pending payment proof can be rejected.');
+            if ($locked->status === 'rejected') {
+                return $locked->fresh();
+            }
+            if ($locked->status !== 'pending') {
+                throw new BusinessRuleException('Only pending payment proof can be rejected.');
+            }
             $locked->update([
                 'status' => 'rejected', 'reviewed_by' => $financeUser->id, 'reviewed_at' => now(),
                 'review_reason' => trim($reason),
             ]);
+
             return $locked->fresh();
         }, 3);
     }
@@ -281,7 +294,9 @@ class SalesOrderAdvanceService
             $orderId = (int) SalesOrderAdvance::query()->whereKey($advance->getKey())->value('sales_order_id');
             $order = SalesOrder::query()->lockForUpdate()->findOrFail($orderId);
             $locked = SalesOrderAdvance::query()->lockForUpdate()->findOrFail($advance->getKey());
-            if ($locked->status === 'waived') return $locked->fresh();
+            if ($locked->status === 'waived') {
+                return $locked->fresh();
+            }
             if (! in_array($locked->status, ['configured', 'rejected'], true)) {
                 throw new BusinessRuleException('Only an unpaid down-payment requirement can be waived.');
             }
@@ -290,6 +305,7 @@ class SalesOrderAdvanceService
                 'review_reason' => trim($reason),
             ]);
             $this->releaseProductionIfReady($order);
+
             return $locked->fresh();
         }, 3);
     }
@@ -308,7 +324,9 @@ class SalesOrderAdvanceService
 
             $advances = SalesOrderAdvance::query()->where('sales_order_id', $lockedOrder->id)->where('status', 'verified')
                 ->orderBy('attempt_number')->orderBy('id')->lockForUpdate()->get();
-            if ($advances->isEmpty()) return [];
+            if ($advances->isEmpty()) {
+                return [];
+            }
 
             $applications = [];
             $remainingInvoice = (string) $lockedInvoice->balance;
@@ -316,11 +334,17 @@ class SalesOrderAdvanceService
             $arId = $this->accounts->controlAccountIdForSetting('accounting.accounts.ar_code');
 
             foreach ($advances as $advance) {
-                if (Money::isZero($remainingInvoice)) break;
-                if (SalesOrderAdvanceApplication::query()->where('sales_order_advance_id', $advance->id)->where('invoice_id', $lockedInvoice->id)->exists()) continue;
+                if (Money::isZero($remainingInvoice)) {
+                    break;
+                }
+                if (SalesOrderAdvanceApplication::query()->where('sales_order_advance_id', $advance->id)->where('invoice_id', $lockedInvoice->id)->exists()) {
+                    continue;
+                }
                 $applied = (string) SalesOrderAdvanceApplication::query()->where('sales_order_advance_id', $advance->id)->sum('amount');
                 $available = Money::sub(Money::sub((string) $advance->submitted_amount, $applied), (string) $advance->refunded_amount);
-                if (Money::lte($available, '0')) continue;
+                if (Money::lte($available, '0')) {
+                    continue;
+                }
                 $amount = Money::lte($available, $remainingInvoice) ? $available : $remainingInvoice;
                 $application = SalesOrderAdvanceApplication::query()->create([
                     'sales_order_advance_id' => $advance->id, 'invoice_id' => $lockedInvoice->id,
@@ -350,6 +374,7 @@ class SalesOrderAdvanceService
             if ($lockedInvoice->sales_order_id && $lockedInvoice->status === InvoiceStatus::Paid) {
                 app(SalesOrderService::class)->synchronizeCompletionState((int) $lockedInvoice->sales_order_id);
             }
+
             return $applications;
         }, 3);
     }
@@ -373,7 +398,9 @@ class SalesOrderAdvanceService
             }
             $applied = (string) SalesOrderAdvanceApplication::query()->where('sales_order_advance_id', $locked->id)->sum('amount');
             $unapplied = Money::sub(Money::sub((string) $locked->submitted_amount, $applied), (string) $locked->refunded_amount);
-            if (Money::lte($unapplied, '0')) throw new BusinessRuleException('There is no unapplied customer advance to refund.');
+            if (Money::lte($unapplied, '0')) {
+                throw new BusinessRuleException('There is no unapplied customer advance to refund.');
+            }
             $bankId = $this->invoicePayments->bankAccountId($bankAccountId);
             $liabilityId = $this->accounts->controlAccountIdForSetting(self::LIABILITY_SETTING);
             $entry = $this->journals->create([
@@ -391,6 +418,7 @@ class SalesOrderAdvanceService
                 'refund_journal_entry_id' => $entry->id, 'refund_reference' => trim($reference),
                 'refund_reason' => trim($reason), 'reviewed_by' => $financeUser->id, 'reviewed_at' => now(),
             ]);
+
             return $locked->fresh();
         }, 3);
     }
@@ -432,9 +460,13 @@ class SalesOrderAdvanceService
             SalesOrderStatus::Delivered,
             SalesOrderStatus::Invoiced,
             SalesOrderStatus::Paid,
-        ], true) || $lockedOrder->mrp_released_at !== null) return false;
+        ], true) || $lockedOrder->mrp_released_at !== null) {
+            return false;
+        }
         $latest = SalesOrderAdvance::query()->where('sales_order_id', $lockedOrder->id)->orderByDesc('attempt_number')->first();
-        if ($latest && ! in_array($latest->status, ['verified', 'waived'], true)) return false;
+        if ($latest && ! in_array($latest->status, ['verified', 'waived'], true)) {
+            return false;
+        }
 
         $lockedOrder->update(['mrp_released_at' => now()]);
         if (! $latest) {
@@ -449,6 +481,7 @@ class SalesOrderAdvanceService
             new SalesOrderAdvanceReleased($fresh), $fresh, 'o2c', 'sales_order', 'production_released',
             'sales-order-production-release:'.$fresh->id,
         );
+
         return true;
     }
 }
