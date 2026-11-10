@@ -53,7 +53,7 @@ describe('Portal access invitations', () => {
     vi.mocked(portalAccessApi.inviteSupplier).mockResolvedValue({} as never);
   });
 
-  it('prefills customer contact details and allows the operator to designate a signatory', async () => {
+  it('requires manually entered customer details and allows the operator to designate a signatory', async () => {
     vi.mocked(customersApi.list).mockResolvedValue(customerPage([{
       id: 'customer-1', name: 'Honda Philippines', contact_person: 'Mika Sato', email: 'mika@honda.example',
     }]) as never);
@@ -63,8 +63,10 @@ describe('Portal access invitations', () => {
     await screen.findByRole('option', { name: 'Honda Philippines' });
     fireEvent.change(await screen.findByRole('combobox', { name: 'Customer' }), { target: { value: 'customer-1' } });
 
-    expect(screen.getByRole('textbox', { name: 'Contact name' })).toHaveProperty('value', 'Mika Sato');
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveProperty('value', 'mika@honda.example');
+    expect(screen.getByRole('textbox', { name: 'Contact name' })).toHaveProperty('value', '');
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveProperty('value', '');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Contact name' }), { target: { value: 'Mika Sato' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'mika@honda.example' } });
 
     fireEvent.click(screen.getByRole('checkbox', { name: /authorized signatory/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
@@ -90,7 +92,7 @@ describe('Portal access invitations', () => {
     expect(screen.getByRole('textbox', { name: 'Email' })).not.toHaveProperty('disabled', true);
   });
 
-  it('prefills supplier contact details from the selected vendor', async () => {
+  it('requires manually entered supplier details even when the vendor has contact data', async () => {
     vi.mocked(vendorsApi.list).mockResolvedValue(customerPage([{
       id: 'vendor-1', name: 'Supplier One', contact_person: 'Lee Santos', email: 'lee@supplier.example',
     }]) as never);
@@ -100,7 +102,14 @@ describe('Portal access invitations', () => {
     await screen.findByRole('option', { name: 'Supplier One' });
     fireEvent.change(await screen.findByRole('combobox', { name: 'Vendor' }), { target: { value: 'vendor-1' } });
 
-    expect(screen.getByRole('textbox', { name: 'Contact name' })).toHaveProperty('value', 'Lee Santos');
-    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveProperty('value', 'lee@supplier.example');
+    expect(screen.getByRole('textbox', { name: 'Contact name' })).toHaveProperty('value', '');
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveProperty('value', '');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Contact name' }), { target: { value: 'Lee Santos' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), { target: { value: 'lee@supplier.example' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+
+    await waitFor(() => expect(portalAccessApi.inviteSupplier).toHaveBeenCalledWith('vendor-1', {
+      name: 'Lee Santos', email: 'lee@supplier.example', is_authorized_signatory: false,
+    }));
   });
 });

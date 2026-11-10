@@ -7,15 +7,13 @@ namespace Tests\Feature\B2B;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
-use App\Modules\B2B\Models\CustomerPortalUser;
-use App\Modules\B2B\Models\SupplierPortalUser;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
-class PortalInvitationPrefillTest extends TestCase
+class PortalInvitationTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -29,31 +27,6 @@ class PortalInvitationPrefillTest extends TestCase
     private function operator(): User
     {
         return User::factory()->withRole('finance_officer')->create(['is_active' => true]);
-    }
-
-    public function test_account_records_expose_contact_name_and_email_for_invitation_prefill(): void
-    {
-        $customer = Customer::factory()->create([
-            'contact_person' => 'Honda Sales Contact',
-            'email' => 'honda-sales@example.test',
-        ]);
-        $vendor = Vendor::factory()->create([
-            'contact_person' => 'Supplier Contact',
-            'email' => 'supplier@example.test',
-        ]);
-        $operator = $this->operator();
-
-        $this->actingAs($operator)
-            ->getJson('/api/v1/customers?is_active=1')
-            ->assertOk()
-            ->assertJsonPath('data.0.contact_person', 'Honda Sales Contact')
-            ->assertJsonPath('data.0.email', 'honda-sales@example.test');
-
-        $this->actingAs($operator)
-            ->getJson('/api/v1/vendors?is_active=1')
-            ->assertOk()
-            ->assertJsonPath('data.0.contact_person', 'Supplier Contact')
-            ->assertJsonPath('data.0.email', 'supplier@example.test');
     }
 
     public function test_invitation_can_designate_customer_and_supplier_signatories(): void

@@ -18,6 +18,7 @@
 7. [Alternative Scenarios & Edge Cases](#alternative-scenarios--edge-cases)
 8. [Recommended Testing Order](#recommended-testing-order)
 9. [API Quick Reference](#api-quick-reference)
+10. [Customer and Supplier Portal Workflows](#customer-and-supplier-portal-workflows)
 
 ---
 
@@ -1814,3 +1815,126 @@ The Redis retry lease must exceed the longest job timeout (payroll currently
 [findings register](SYSTEM-AUDIT-FINDINGS-2026-08-13.md) and
 [lifecycle registry](SYSTEM-AUDIT-FINDING-LIFECYCLE.json) for recovery-control
 status and the remaining external-evidence limitations.
+
+## Customer and Supplier Portal Workflows
+
+These portal steps join the order-to-cash and procure-to-pay chains above. Staff
+configure the commercial relationship first; portal users then work against
+that customer or supplier record rather than re-entering its master data.
+
+### Customer setup and agreement
+
+1. In the customer record, add each contact's name, email, and job role (for
+   example, Sales Officer). Add the delivery address and set its map pin. A
+   billing address alone does not identify where a driver should unload.
+2. Add the customer agreement and its effective dates, payment terms, allowed
+   catalog, and warranty options for each allowed product. A product can have
+   multiple warranty choices. Set the customer's default payment terms once;
+   they carry to the whole order and authorized Sales can override them on that
+   order.
+3. Upload the customer agreement PDF. A fillable PDF can be mapped once to
+   approved customer and agreement fields, then auto-filled for later customer
+   agreements. Review the generated document before issuing it. An ordinary or
+   scanned PDF can still be attached, but it is not OCR-filled. Only a portal
+   contact explicitly marked as an authorized signatory can sign an issued
+   document; the system records the signer, time, and signed file hash.
+4. Grant portal access from the customer record. Select the customer account to
+   link the portal user, then manually enter that user's name and email. Do not
+   copy contact fields automatically from the customer record. The invited user
+   changes their temporary password and confirms the new password at first
+   login.
+
+### Customer order, payment, and feedback
+
+1. The customer portal's first-run guide introduces its actual navigation
+   sections. The customer can skip it and replay it later from **Help**. The
+   supplier portal has the same first-run and replay behavior.
+2. The customer sees only the catalog available to that customer, with product
+   specifications and images. On each line, choose one of that customer's
+   warranty options. The order records the selected terms so a later agreement
+   change cannot rewrite an existing order.
+3. Stock-limited quantities cannot exceed eligible-to-promise stock. The
+   server rechecks stock when accepting the order; if the customer needs more,
+   use the existing price-request flow. Products without a finished-goods
+   inventory mapping follow the existing make-to-order process.
+4. The customer's payment terms appear on the order. Credit limit is optional
+   customer data and does not block order placement. Sales may optionally set
+   a fixed or percentage down payment for an order before confirmation.
+5. When a down payment is required, the customer submits the bank, reference,
+   payment date, amount, and PDF/JPEG/PNG proof through the order. Finance
+   verifies the proof and posts it as a customer advance. Production remains
+   held while proof is pending; Finance can instead waive the requirement with
+   a recorded reason. The verified advance applies once to a later finalized
+   invoice for that order. This is an advance liability, not sales revenue.
+6. Delivery still follows Chain 1: released stock is dispatched, delivery
+   proof is captured, and receipt is confirmed. After a delivery is recorded,
+   the customer may submit one 1–5 rating and an optional comment on the order.
+   The customer sees submission state; the feedback content is shown only in
+   the internal sales-order view.
+
+### Product definition and customization
+
+Product setup records dimensions, units, material, and finish in structured
+specifications and supports multiple images. A product marked customizable
+needs an approved, privately stored blueprint before it is released to the
+customer catalog. BOM remains the source of production material quantities and
+cost; product costs and expected margins remain internal to authorized users.
+
+### Supplier portal and procure-to-pay
+
+1. Staff manage supplier access and agreement documents from the supplier
+record. Select the supplier account to link the portal user, then manually
+enter that user's name and email. Designate an authorized signatory, upload and
+review the supplier agreement, then issue it for signature. The same
+fillable-PDF mapping and attachment-only behavior used for customer agreements
+applies here.
+2. Supplier item listings can show their own images; this does not replace or
+change the shared inventory item image. During supplier invoice submission,
+attach the invoice PDF/JPEG/PNG as evidence and complete the required invoice
+and PO/GRN details. Existing bill review and three-way matching still apply.
+3. Incoming inspection is linked to the GRN. When recording a defect, select
+Minor, Major, or Critical, enter affected quantity and notes, and attach a
+photo when available. Evidence is private and remains linked to the inspection
+and received item.
+
+### Dispatch and warehouse terminology
+
+Before dispatch, Fleet records a driver's license identifier and expiry and
+the vehicle's type, plate, and capacity. Dispatch enters the total shipment
+weight because product master data does not currently provide weight. A driver
+must be available for the scheduled date, the vehicle must be active and large
+enough for that weight, and the customer delivery location must have a map pin.
+Existing drivers without a credential record remain schedulable during the
+credential rollout; an explicitly expired license blocks assignment. Shipment
+history supports 7-, 30-, and 90-day presets and a custom date range.
+
+Warehouse screens use the existing hierarchy: **warehouse → zone →
+location/bin**. Stock labels describe state as **available**, **reserved**,
+**held/QC**, or **damaged**. These labels clarify existing records and do not
+change inventory or quality release rules.
+
+### Deployment and data setup
+
+- Both development and production API images include the checksum-pinned
+  PDFtk Java binary at `/usr/local/bin/pdftk`. Keep `PDFTK_BINARY` pointed at
+  the installed executable when changing the image layout.
+- Finance verifies customer advances against a postable liability account.
+  `accounting.accounts.customer_advances_code` defaults to `2090`; confirm that
+  code resolves to an active liability account in the chart of accounts before
+  enabling down-payment workflows.
+- Existing customer delivery coordinates stay null during migration. Open each
+  legacy customer with a delivery address and set its real map pin before
+  scheduling delivery to it. Do not guess coordinates from the billing address.
+- Existing product `image_path` values become the initial primary image, and
+  existing per-customer/product warranty terms become one named warranty
+  option. Review those migrated values before offering additional choices.
+
+### Regression coverage
+
+The portal regression combines customer order submission, order-wide payment
+terms, product warranty snapshot, deposit proof review and one-time invoice
+application, and post-delivery feedback visibility. The existing order-to-cash,
+customer/supplier contract, supplier invoice, delivery-readiness, and incoming
+inspection suites cover their detailed lifecycles. In the SPA, the customer
+order-flow and supplier RFQ browser specs cover feedback and the skippable,
+replayable portal guides at desktop and mobile widths.

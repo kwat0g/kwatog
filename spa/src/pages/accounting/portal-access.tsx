@@ -244,10 +244,10 @@ function SuppliersSection() {
    <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite supplier contact">
     <form onSubmit={submitInvite} className="space-y-4">
      <p className="text-sm text-muted">The contact receives a one-time setup link by email and chooses a password before signing in.</p>
+     <p className="text-xs text-muted">Enter the contact name and email manually; they are not copied from the vendor record.</p>
      <Select label="Vendor" required value={invite.vendor_id} onChange={(event) => {
       const vendorId = event.target.value;
-      const vendor = vendors.data?.data.find((option) => option.id === vendorId);
-      setInvite((current) => ({ ...current, vendor_id: vendorId, name: vendor?.contact_person ?? '', email: vendor?.email ?? '' }));
+      setInvite((current) => ({ ...current, vendor_id: vendorId, name: '', email: '' }));
      }}>
       <option value="">Choose a vendor…</option>
       {(vendors.data?.data ?? []).map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
@@ -403,10 +403,10 @@ function CustomersSection() {
    <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite customer contact">
     <form onSubmit={submitInvite} className="space-y-4">
      <p className="text-sm text-muted">The contact receives a one-time setup link by email and chooses a password before signing in.</p>
+     <p className="text-xs text-muted">Enter the contact name and email manually; they are not copied from the customer record.</p>
      <Select label="Customer" required value={invite.customer_id} onChange={(event) => {
       const customerId = event.target.value;
-      const customer = customers.data?.data.find((option) => option.id === customerId);
-      setInvite((current) => ({ ...current, customer_id: customerId, name: customer?.contact_person ?? '', email: customer?.email ?? '' }));
+      setInvite((current) => ({ ...current, customer_id: customerId, name: '', email: '' }));
      }}>
       <option value="">Choose a customer…</option>
       {(customers.data?.data ?? []).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
