@@ -16,6 +16,7 @@ use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Services\StatementOfAccountService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Models\CustomerOrderFeedback;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Enums\ComplaintStatus;
@@ -395,6 +396,7 @@ class CustomerPortalService
             'latestResponse.items',
             'deliveryNegotiations',
             'deliveries:id,sales_order_id,delivery_number,status,delivered_at,confirmed_at',
+            'customerFeedback',
             'invoices:id,sales_order_id,invoice_number,total_amount,status,created_at',
             'workOrders:id,sales_order_id,wo_number,status,quantity_target,quantity_produced,planned_start',
             'advances',
@@ -416,6 +418,31 @@ class CustomerPortalService
         });
 
         return $salesOrder;
+    }
+
+    public function submitOrderFeedback(SalesOrder $salesOrder, CustomerPortalUser $portalUser, array $data): CustomerOrderFeedback
+    {
+        return DB::transaction(function () use ($salesOrder, $portalUser, $data): CustomerOrderFeedback {
+            $order = SalesOrder::query()->lockForUpdate()->findOrFail($salesOrder->id);
+            abort_if((int) $order->customer_id !== (int) $portalUser->customer_id, 403);
+
+            if (! $order->deliveries()->whereIn('status', [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value])->exists()) {
+                throw ValidationException::withMessages([
+                    'order' => ['Feedback is available after a delivery is marked delivered or confirmed.'],
+                ]);
+            }
+
+            if ($order->customerFeedback()->exists()) {
+                abort(409, 'Feedback has already been submitted for this order.');
+            }
+
+            return $order->customerFeedback()->create([
+                'customer_id' => $portalUser->customer_id,
+                'customer_portal_user_id' => $portalUser->id,
+                'rating' => $data['rating'],
+                'comment' => $data['comment'] ?? null,
+            ]);
+        });
     }
 
     public function quoteOrder(CustomerPortalUser $user, array $data): array

@@ -13,6 +13,7 @@ import { supplierPortalApi } from '@/api/b2b/supplier';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
+import { PortalWalkthrough } from '@/components/portal/PortalWalkthrough';
 import { Avatar } from '@/components/ui/Avatar';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/ui/Button';
@@ -65,7 +66,7 @@ interface PortalBadgeSignal {
   variant: 'danger' | 'warning';
 }
 
-interface PortalNavSection {
+export interface PortalNavSection {
   label: string;
   items: PortalNavItem[];
 }
@@ -705,6 +706,7 @@ export default function PortalLayout({
                 linkPrefix={`/portal/${type}`}
               />
             )}
+            {user && <PortalWalkthrough realm={type} userId={user.id} sections={sections} />}
             <Avatar size="md" name={user?.name} />
           </div>
         </header>

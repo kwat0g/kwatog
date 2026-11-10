@@ -68,7 +68,7 @@ export default function SalesOrderDetailPage() {
     if (!data?.advance_requirement) return;
     setAdvanceMode(data.advance_requirement.percentage !== null ? 'percentage' : 'fixed');
     setAdvanceValue(data.advance_requirement.percentage ?? data.advance_requirement.required_amount);
-  }, [data?.advance_requirement?.id, data?.advance_requirement?.required_amount, data?.advance_requirement?.percentage]);
+  }, [data?.advance_requirement]);
   const refreshSalesOrder = (fresh?: SalesOrder) => {
     const orderId = id ?? fresh?.id;
     if (!orderId) return;
@@ -744,6 +744,14 @@ export default function SalesOrderDetailPage() {
           </div>
 
           <div className="space-y-4">
+            {data.customer_feedback && (
+              <Panel title="Customer feedback" meta={data.customer_feedback.submitted_at ? formatDateTime(data.customer_feedback.submitted_at, 'Date not recorded') : undefined}>
+                <p className="text-sm font-medium">{data.customer_feedback.rating} out of 5</p>
+                {data.customer_feedback.customer_name && <p className="mt-1 text-xs text-muted">Submitted by {data.customer_feedback.customer_name}</p>}
+                {data.customer_feedback.comment && <p className="mt-3 whitespace-pre-wrap text-sm text-secondary">{data.customer_feedback.comment}</p>}
+                {!data.customer_feedback.comment && <p className="mt-3 text-sm text-muted">No comment was added.</p>}
+              </Panel>
+            )}
             <Panel title="Order deposit">
               {data.advance_requirement ? (
                 <div className="mb-3 flex items-start justify-between gap-3 text-sm">

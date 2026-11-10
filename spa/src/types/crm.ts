@@ -283,6 +283,12 @@ export interface SalesOrder {
   is_cancellable: boolean;
   item_count: number;
   customer?: { id: string; name: string };
+  customer_feedback?: {
+    rating: number;
+    comment: string | null;
+    submitted_at: string | null;
+    customer_name: string | null;
+  } | null;
   creator?: { id: string; name: string };
   items?: SalesOrderItem[];
   status_history?: SalesOrderStatusHistoryEvent[];

@@ -152,6 +152,22 @@ describe('SalesOrderDetailPage activity', () => {
   });
 });
 
+it('shows customer feedback on the internal sales order record', async () => {
+  renderPage({
+    ...order(),
+    customer_feedback: {
+      rating: 4,
+      comment: 'The order arrived on time.',
+      submitted_at: '2026-11-10T09:30:00Z',
+      customer_name: 'Portal Customer',
+    },
+  } as SalesOrder);
+
+  expect(await screen.findByText('4 out of 5')).toBeVisible();
+  expect(screen.getByText('The order arrived on time.')).toBeVisible();
+  expect(screen.getByText('Submitted by Portal Customer')).toBeVisible();
+});
+
 it('renders the confirmed API record immediately without refetching stale detail data', async () => {
   const draft = {
     ...order(),

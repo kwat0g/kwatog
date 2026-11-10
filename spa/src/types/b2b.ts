@@ -312,6 +312,11 @@ export interface PortalSoDetail extends PortalSoSummary {
     awaiting_delivery_response?: boolean;
   };
   delivery_negotiations?: DeliveryNegotiation[];
+  customer_feedback?: {
+    can_submit: boolean;
+    submitted: boolean;
+    submitted_at?: string | null;
+  } | null;
   latest_response?: {
     id: string;
     type: 'accept' | 'propose' | 'decline' | 'delivery_date' | 'cancellation_request' | string;

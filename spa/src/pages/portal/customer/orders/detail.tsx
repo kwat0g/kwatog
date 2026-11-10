@@ -39,6 +39,8 @@ export default function CustomerOrderDetailPage() {
   const [responseType, setResponseType] = useState<'accept' | 'propose' | 'decline'>('accept');
   const [responseNotes, setResponseNotes] = useState('');
   const [proposedDeliveryDate, setProposedDeliveryDate] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState('5');
+  const [feedbackComment, setFeedbackComment] = useState('');
   const [proposals, setProposals] = useState<
     Record<string, { quantity: string; unitPrice: string; reason: string }>
   >({});
@@ -120,6 +122,23 @@ export default function CustomerOrderDetailPage() {
     },
     onError: (error: Error & { response?: { data?: { message?: string } } }) =>
       toast.error(error.response?.data?.message ?? 'Could not submit your order response.'),
+  });
+
+  const feedbackMutation = useMutation({
+    mutationFn: () => customerPortalApi.submitOrderFeedback(id!, {
+      rating: Number(feedbackRating),
+      comment: feedbackComment.trim() || undefined,
+    }),
+    onSuccess: async (feedbackState) => {
+      queryClient.setQueryData(['portal', 'customer', 'order', id], (current: typeof order) => current
+        ? { ...current, customer_feedback: feedbackState }
+        : current);
+      await queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'orders'] });
+      setFeedbackComment('');
+      toast.success('Thank you for sharing feedback.');
+    },
+    onError: (error: Error & { response?: { data?: { message?: string } } }) =>
+      toast.error(error.response?.data?.message ?? 'Could not send feedback. Refresh the order and try again.'),
   });
 
   return (
@@ -419,6 +438,27 @@ export default function CustomerOrderDetailPage() {
                 )}
             </Panel>
             <OrderAgreementsPanel orderId={order.id} realm="customer" />
+            {order.customer_feedback?.submitted ? (
+              <Panel title="Order feedback">
+                <p role="status" className="text-sm text-secondary">Thank you for sharing feedback.</p>
+              </Panel>
+            ) : order.customer_feedback?.can_submit ? (
+              <Panel title="Order feedback">
+                <p className="mb-3 text-sm text-secondary">How did this order and delivery go? Your feedback helps Ogami improve.</p>
+                <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); feedbackMutation.mutate(); }}>
+                  <Select label="Rating" fieldSize="lg" className="!min-h-[44px]" value={feedbackRating} onChange={(event) => setFeedbackRating(event.target.value)} disabled={feedbackMutation.isPending}>
+                    <option value="5">5 — Very satisfied</option>
+                    <option value="4">4 — Satisfied</option>
+                    <option value="3">3 — Neutral</option>
+                    <option value="2">2 — Dissatisfied</option>
+                    <option value="1">1 — Very dissatisfied</option>
+                  </Select>
+                  <Textarea label="Comment (optional)" value={feedbackComment} onChange={(event) => setFeedbackComment(event.target.value)} maxLength={2000} rows={3} disabled={feedbackMutation.isPending} />
+                  {feedbackMutation.isError && <p role="alert" className="text-sm text-danger-fg">{(feedbackMutation.error as Error & { response?: { data?: { message?: string } } }).response?.data?.message ?? feedbackMutation.error.message ?? 'Feedback could not be sent. Try again.'}</p>}
+                  <Button type="submit" variant="primary" size="touch" className="!min-h-[44px]" loading={feedbackMutation.isPending}>Send feedback</Button>
+                </form>
+              </Panel>
+            ) : null}
             {order.notes && (
               <Panel title="Notes">
                 <p className="text-sm whitespace-pre-wrap">{order.notes}</p>

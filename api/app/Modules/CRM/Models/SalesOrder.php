@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\B2B\Models\CustomerOrderFeedback;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
@@ -113,6 +114,11 @@ class SalesOrder extends Model
     public function deliveries(): HasMany
     {
         return $this->hasMany(Delivery::class);
+    }
+
+    public function customerFeedback(): HasOne
+    {
+        return $this->hasOne(CustomerOrderFeedback::class);
     }
 
     /** Relationship consumed by B2B Customer Portal order detail. */

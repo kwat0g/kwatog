@@ -42,7 +42,10 @@ class SalesOrderController
 
     public function show(SalesOrder $salesOrder): SalesOrderResource
     {
-        return new SalesOrderResource($this->service->show($salesOrder));
+        $order = $this->service->show($salesOrder);
+        $order->loadMissing('customerFeedback.portalUser:id,name');
+
+        return new SalesOrderResource($order);
     }
 
     public function store(StoreSalesOrderRequest $request): JsonResponse

@@ -157,6 +157,14 @@ export const customerPortalApi = {
  return data.data;
  },
 
+ submitOrderFeedback: async (id: string, form: { rating: number; comment?: string }) => {
+  const { data } = await portalClient.post<{
+   data: NonNullable<PortalSoDetail['customer_feedback']>;
+   message: string;
+  }>(`/b2b/customer/orders/${id}/feedback`, form);
+  return data.data;
+ },
+
  agreements: async (id: string) => {
   const { data } = await portalClient.get<{ data: OrderAgreements }>(`/b2b/customer/orders/${id}/agreements`);
   return data.data;

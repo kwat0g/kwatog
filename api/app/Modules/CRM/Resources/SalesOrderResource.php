@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderResponseStatus;
 use App\Modules\CRM\Enums\SalesOrderResponseType;
 use App\Modules\CRM\Enums\SalesOrderStatus;
@@ -40,6 +41,7 @@ class SalesOrderResource extends JsonResource
         }
 
         $internalViewer = $request->user() instanceof User ? $request->user() : null;
+        $portalViewer = $request->user('customer_portal') instanceof CustomerPortalUser;
         $isCancellable = $this->resource->relationLoaded('workOrders')
             ? app(SalesOrderService::class)->canCancel($this->resource)
             : (bool) $this->resource->is_cancellable;
@@ -202,6 +204,25 @@ class SalesOrderResource extends JsonResource
                         && in_array($advance->status, ['configured', 'rejected'], true),
                 ];
             }),
+            'customer_feedback' => $internalViewer !== null
+                ? ($this->whenLoaded('customerFeedback', fn () => $this->customerFeedback ? [
+                    'rating' => (int) $this->customerFeedback->rating,
+                    'comment' => $this->customerFeedback->comment,
+                    'submitted_at' => optional($this->customerFeedback->created_at)->toIso8601String(),
+                    'customer_name' => $this->customerFeedback->portalUser?->name,
+                ] : null))
+                : ($portalViewer && $this->relationLoaded('customerFeedback') && $this->relationLoaded('deliveries')
+                    ? [
+                        'can_submit' => $this->customerFeedback === null && $this->deliveries->contains(
+                            fn ($delivery): bool => in_array(
+                                (string) ($delivery->status?->value ?? $delivery->status),
+                                [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value],
+                                true,
+                            ),
+                        ),
+                        'submitted' => $this->customerFeedback !== null,
+                    ]
+                    : null),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
             'deleted_at'         => optional($this->deleted_at)?->toIso8601String(),
