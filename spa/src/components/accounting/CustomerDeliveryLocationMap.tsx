@@ -25,13 +25,17 @@ function PinPlacement({ onPick }: Pick<Props, 'onPick'>) {
 
 function MapView({ center }: Pick<Props, 'center'>) {
   const map = useMap();
+  const latitude = center?.lat;
+  const longitude = center?.lng;
   useEffect(() => {
     const frame = requestAnimationFrame(() => map.invalidateSize());
     return () => cancelAnimationFrame(frame);
   }, [map]);
   useEffect(() => {
-    if (center) map.setView([center.lat, center.lng], Math.max(map.getZoom(), 15), { animate: false });
-  }, [center?.lat, center?.lng, map]);
+    if (latitude !== undefined && longitude !== undefined) {
+      map.setView([latitude, longitude], Math.max(map.getZoom(), 15), { animate: false });
+    }
+  }, [latitude, longitude, map]);
   return null;
 }
 
