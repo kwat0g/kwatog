@@ -18,10 +18,12 @@ trait PreparesDeliveryShipment
             'vehicle_id' => $delivery->vehicle_id ?? Vehicle::create([
                 'plate_number' => 'TEST-'.substr(uniqid(), -8),
                 'name' => 'Shipment test vehicle', 'vehicle_type' => 'van', 'status' => 'available',
+                'capacity_kg' => '1000.00',
             ])->id,
             'driver_id' => $delivery->driver_id ?? User::factory()->withRole('driver')->create(['is_active' => true])->id,
             'carrier' => 'Test carrier',
             'expected_delivery_date' => $delivery->scheduled_date->copy()->addDay()->toDateString(),
+            'shipment_weight_kg' => $delivery->shipment_weight_kg ?? '1.00',
         ])->save();
         $this->attachDeliveryEvidence($delivery, 'loading_photo');
 

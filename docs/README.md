@@ -29,6 +29,7 @@ external-evidence gate (F-030).
 ## Product and defense
 
 - `USER-MANUAL.md` — user-facing workflows.
+- `PROCESS-FLOWS.md` and `USER-MANUAL.md` include the customer/supplier portal setup, agreement, ordering, payment evidence, dispatch, and feedback workflows from the November 2026 panel review.
 - `DEMO-SCRIPT.md` — live defense walkthrough.
 - `DEFENSE-TRACEABILITY.md` — adviser requirement-to-implementation mapping.
 - `SUPPLIER-RFQ-BIDDING-PLAN.md` - approved supplier RFQ bidding requirements and implementation plan.
