@@ -1,6 +1,6 @@
 import { DeliveryNegotiationHistory } from '@/components/crm/DeliveryNegotiationHistory';
 import { OrderAgreementsPanel } from '@/components/crm/OrderAgreementsPanel';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuBan, LuCheck, LuPencil, LuFileText, LuArrowRight } from '@/lib/icons';
@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { Select } from '@/components/ui/Select';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ActivityStream } from '@/components/chain/ActivityStream';
 import { Panel } from '@/components/ui/Panel';
@@ -54,6 +55,8 @@ export default function SalesOrderDetailPage() {
     code?: string;
   } | null>(null);
   const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
+  const [advanceMode, setAdvanceMode] = useState<'none' | 'fixed' | 'percentage'>('none');
+  const [advanceValue, setAdvanceValue] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'sales-orders', 'detail', id],
@@ -61,6 +64,11 @@ export default function SalesOrderDetailPage() {
     enabled: !!id,
   });
   const orderDetailKey = ['crm', 'sales-orders', 'detail', id] as const;
+  useEffect(() => {
+    if (!data?.advance_requirement) return;
+    setAdvanceMode(data.advance_requirement.percentage !== null ? 'percentage' : 'fixed');
+    setAdvanceValue(data.advance_requirement.percentage ?? data.advance_requirement.required_amount);
+  }, [data?.advance_requirement?.id, data?.advance_requirement?.required_amount, data?.advance_requirement?.percentage]);
   const refreshSalesOrder = (fresh?: SalesOrder) => {
     const orderId = id ?? fresh?.id;
     if (!orderId) return;
@@ -156,6 +164,19 @@ export default function SalesOrderDetailPage() {
       setConfirmError({ message: msg, errors, code: e.response?.data?.code });
       toast.error(msg);
     },
+  });
+
+  const advanceRequirement = useMutation({
+    mutationFn: () => salesOrdersApi.configureAdvance(id!, {
+      down_payment_amount: advanceMode === 'fixed' ? advanceValue : null,
+      down_payment_percentage: advanceMode === 'percentage' ? advanceValue : null,
+    }),
+    onSuccess: () => {
+      refreshSalesOrder();
+      toast.success(advanceMode === 'none' ? 'Order deposit requirement removed.' : 'Order deposit requirement saved.');
+    },
+    onError: (error: AxiosError<{ message?: string }>) =>
+      toast.error(error.response?.data?.message ?? 'Could not save the order deposit requirement.'),
   });
 
   const cancel = useMutation({
@@ -723,6 +744,44 @@ export default function SalesOrderDetailPage() {
           </div>
 
           <div className="space-y-4">
+            <Panel title="Order deposit">
+              {data.advance_requirement ? (
+                <div className="mb-3 flex items-start justify-between gap-3 text-sm">
+                  <div>
+                    <p className="font-medium">{formatPeso(data.advance_requirement.required_amount)} required</p>
+                    {data.advance_requirement.percentage && <p className="text-xs text-muted">{data.advance_requirement.percentage}% of order total</p>}
+                  </div>
+                  <Chip variant={data.advance_requirement.status === 'verified' || data.advance_requirement.status === 'waived' ? 'success' : data.advance_requirement.status === 'rejected' ? 'danger' : 'warning'}>
+                    {data.advance_requirement.status.replace(/_/g, ' ')}
+                  </Chip>
+                </div>
+              ) : <p className="mb-3 text-sm text-muted">No deposit is required for this order.</p>}
+              {can('crm.sales_orders.update') && ['draft', 'awaiting_confirmation', 'delivery_negotiation'].includes(data.status) ? (
+                <div className="space-y-3 border-t border-default pt-3">
+                  <Select label="Deposit requirement" value={advanceMode} onChange={(event) => setAdvanceMode(event.target.value as typeof advanceMode)}>
+                    <option value="none">No deposit</option>
+                    <option value="fixed">Fixed amount</option>
+                    <option value="percentage">Percentage of order</option>
+                  </Select>
+                  {advanceMode !== 'none' && (
+                    <Input
+                      label={advanceMode === 'fixed' ? 'Required amount' : 'Percentage'}
+                      type="number" min="0.01" max={advanceMode === 'fixed' ? data.total_amount : 100}
+                      step="0.01" prefix={advanceMode === 'fixed' ? '₱' : undefined}
+                      suffix={advanceMode === 'percentage' ? '%' : undefined}
+                      value={advanceValue} onChange={(event) => setAdvanceValue(event.target.value)}
+                      helper={advanceMode === 'fixed' ? `Order total: ${formatPeso(data.total_amount)}.` : 'Choose a percentage from 0.01 to 100.'}
+                    />
+                  )}
+                  <Button
+                    size="sm" variant="primary" loading={advanceRequirement.isPending}
+                    disabled={advanceRequirement.isPending || (advanceMode !== 'none' && (!advanceValue || Number(advanceValue) <= 0 || (advanceMode === 'fixed' && Number(advanceValue) > Number(data.total_amount)) || (advanceMode === 'percentage' && Number(advanceValue) > 100)))}
+                    onClick={() => advanceRequirement.mutate()}
+                  >Save deposit requirement</Button>
+                  <p className="text-xs text-muted">Set this before confirming. Production remains on hold until Finance verifies the customer transfer or records a waiver.</p>
+                </div>
+              ) : data.advance_requirement && <p className="text-xs text-muted">This requirement is locked after order confirmation.</p>}
+            </Panel>
             <Panel title="Linked records">
               {/* Sprint 6 audit §3.2: render LinkedRecords with the actual chain
  context — MRP plan + draft/in-progress WOs eager-loaded by

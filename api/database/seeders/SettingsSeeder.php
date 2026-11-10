@@ -392,6 +392,7 @@ class SettingsSeeder extends Seeder
             ],
             ['key' => 'accounting.accounts.ar_code', 'value' => '1100', 'group' => 'accounting', 'label' => 'AR Control Account Code', 'description' => 'Chart-of-accounts mapping used for receivables postings.'],
             ['key' => 'accounting.accounts.ap_code', 'value' => '2010', 'group' => 'accounting', 'label' => 'AP Control Account Code', 'description' => 'Chart-of-accounts mapping used for payables postings.'],
+            ['key' => 'accounting.accounts.customer_advances_code', 'value' => '2090', 'group' => 'accounting', 'label' => 'Customer Advances Liability Account Code', 'description' => 'Liability account credited when Finance verifies a customer order deposit.'],
             ['key' => 'accounting.accounts.vat_output_code', 'value' => '2060', 'group' => 'accounting', 'label' => 'VAT Output Account Code', 'description' => 'Chart-of-accounts mapping used for output VAT postings.'],
             ['key' => 'accounting.accounts.vat_input_code', 'value' => '1310', 'group' => 'accounting', 'label' => 'VAT Input Account Code', 'description' => 'Chart-of-accounts mapping used for input VAT postings.'],
             ['key' => 'accounting.accounts.discount_code', 'value' => '4040', 'group' => 'accounting', 'label' => 'Sales Discount Account Code', 'description' => 'Chart-of-accounts mapping used for contra-revenue discounts.'],

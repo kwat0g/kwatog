@@ -198,6 +198,21 @@ export interface PortalSoSummary {
   created_at: string;
   customer_terms_snapshot?: CustomerTermsSnapshot | null;
   payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
+  advance_requirement?: CustomerOrderAdvance | null;
+}
+
+export interface CustomerOrderAdvance {
+  id: string;
+  attempt_number?: number;
+  required_amount: string;
+  percentage?: string | null;
+  submitted_amount?: string | null;
+  refunded_amount?: string;
+  status: 'configured' | 'pending' | 'verified' | 'rejected' | 'waived' | 'refunded' | string;
+  payment_date?: string | null;
+  proof_file_name?: string | null;
+  review_reason?: string | null;
+  can_submit?: boolean;
 }
 
 export interface PortalSoItem {

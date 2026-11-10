@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SalesOrder extends Model
@@ -37,6 +38,7 @@ class SalesOrder extends Model
         'portal_idempotency_key', 'portal_idempotency_fingerprint',
         'in_production_at', 'partially_delivered_at', 'delivered_at',
         'invoiced_at', 'paid_at', 'closed_at', 'cancelled_at',
+        'mrp_released_at',
     ];
 
     protected $casts = [
@@ -59,6 +61,7 @@ class SalesOrder extends Model
         'paid_at'            => 'datetime',
         'closed_at'          => 'datetime',
         'cancelled_at'       => 'datetime',
+        'mrp_released_at'    => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -116,6 +119,16 @@ class SalesOrder extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class, 'sales_order_id');
+    }
+
+    public function advances(): HasMany
+    {
+        return $this->hasMany(SalesOrderAdvance::class)->orderBy('attempt_number');
+    }
+
+    public function latestAdvance(): HasOne
+    {
+        return $this->hasOne(SalesOrderAdvance::class)->latestOfMany('attempt_number');
     }
 
     public function returnCase(): BelongsTo
@@ -192,7 +205,12 @@ class SalesOrder extends Model
             SalesOrderStatus::Cancelled->value,
             SalesOrderStatus::Closed->value,
         ])->whereHas('items', fn (Builder $items): Builder => $items
-            ->whereColumn('quantity_delivered', '<', 'quantity'));
+            ->whereColumn('quantity_delivered', '<', 'quantity'))
+            // An explicitly configured down payment is a production release
+            // gate. Exclude these orders from every MRP entry point until the
+            // latest attempt is verified or Finance records a waiver.
+            ->whereDoesntHave('latestAdvance', fn (Builder $advances): Builder => $advances
+                ->whereIn('status', ['configured', 'pending', 'rejected']));
     }
 
     public function getIsEditableAttribute(): bool

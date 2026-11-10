@@ -34,6 +34,9 @@ export const salesOrdersApi = {
  client.post<ApiSuccess<SalesOrder>>('/crm/sales-orders', data).then((r) => r.data.data),
  update: (id: string, data: UpdateSalesOrderData) =>
  client.put<ApiSuccess<SalesOrder>>(`/crm/sales-orders/${id}`, data).then((r) => r.data.data),
+ configureAdvance: async (id: string, data: { down_payment_amount: string | null; down_payment_percentage: string | null }) => {
+  await client.put(`/crm/sales-orders/${id}/advance-requirement`, data);
+ },
  delete: (id: string) =>
   client.delete(`/crm/sales-orders/${id}`),
  restore: (id: string) =>

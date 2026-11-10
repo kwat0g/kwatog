@@ -68,6 +68,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['2060', 'VAT Output',                   'liability', 'credit', '2000'],
             ['2070', 'Accrued Expenses',             'liability', 'credit', '2000'],
             ['2080', '13th Month Pay Payable',       'liability', 'credit', '2000'],
+            ['2090', 'Customer Advances',             'liability', 'credit', '2000'],
             ['2100', 'Loans Payable',                'liability', 'credit', '2000'],
 
             // ─── Equity ────────────────────────────────────

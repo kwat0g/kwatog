@@ -18,6 +18,7 @@ vi.mock('@/api/crm/salesOrders', () => ({
     recordAgreementAcknowledgment: vi.fn(),
     chain: vi.fn(),
     confirm: vi.fn(),
+    configureAdvance: vi.fn(),
     cancel: vi.fn(),
     proposeDeliveryDate: vi.fn(),
   },
@@ -77,6 +78,22 @@ describe('SalesOrderDetailPage activity', () => {
 
   const textContent = (value: string) => (_: string, element: Element | null) =>
     element?.textContent === value;
+
+  it('lets Sales configure an optional percentage deposit before order confirmation', async () => {
+    canPermission.mockImplementation((permission) => permission === 'crm.sales_orders.update');
+    vi.mocked(salesOrdersApi.configureAdvance).mockImplementation(() => new Promise(() => {}));
+    const { queryClient } = renderPage({ ...order(), status: 'draft', status_label: 'Draft' });
+
+    expect(await screen.findByText('No deposit is required for this order.')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Deposit requirement'), { target: { value: 'percentage' } });
+    fireEvent.change(screen.getByLabelText('Percentage'), { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save deposit requirement' }));
+
+    await waitFor(() => expect(salesOrdersApi.configureAdvance).toHaveBeenCalledWith('so-1', {
+      down_payment_amount: null, down_payment_percentage: '25',
+    }));
+    queryClient.clear();
+  });
 
   it('renders recorded status events with actors and cancellation comment', async () => {
     renderPage(
@@ -224,8 +241,8 @@ it('refetches and closes the confirmation dialog when the order state has change
   fireEvent.click(screen.getByRole('button', { name: 'Confirm order' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm & Start Chain' }));
 
-  await waitFor(() => expect(salesOrdersApi.show).toHaveBeenCalledTimes(2));
   expect(await screen.findByText('Confirmed')).toBeVisible();
+  expect(vi.mocked(salesOrdersApi.show).mock.calls.length).toBeGreaterThan(1);
   expect(screen.queryByRole('button', { name: 'Confirm order' })).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

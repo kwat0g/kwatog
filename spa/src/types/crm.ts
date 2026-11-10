@@ -198,6 +198,19 @@ export interface SalesOrder {
   next_statuses?: Array<{ value: string; label: string }>;
   payment_terms_days: number;
   payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
+  advance_requirement?: {
+    id: string;
+    attempt_number: number;
+    required_amount: string;
+    percentage: string | null;
+    submitted_amount: string | null;
+    refunded_amount: string;
+    status: string;
+    payment_date: string | null;
+    proof_file_name: string | null;
+    review_reason: string | null;
+    can_submit: boolean;
+  } | null;
   customer_terms_snapshot?: CustomerTermsSnapshot | null;
   // Sprint 6 audit §3.2: linked chain context populated on the detail
   // payload only (whenLoaded on the resource).

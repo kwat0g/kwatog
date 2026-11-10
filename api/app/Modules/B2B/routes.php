@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerInvoicePaymentController;
+use App\Modules\B2B\Controllers\CustomerOrderAdvanceController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\InternalSupplierActivityController;
@@ -227,6 +228,7 @@ Route::prefix('b2b/customer')->group(function () {
             Route::post('orders/quote', [CustomerPortalController::class, 'quoteOrder']);
             Route::post('orders', [CustomerPortalController::class, 'storeOrder'])->middleware('throttle:sensitive');
             Route::put('orders/{salesOrder}', [CustomerPortalController::class, 'updateOrder'])->middleware('throttle:sensitive');
+            Route::post('orders/{salesOrder}/advance-evidence', [CustomerOrderAdvanceController::class, 'submit'])->middleware('throttle:sensitive');
             Route::post('orders/{salesOrder}/delivery-proposals/{response}/respond', [CustomerPortalController::class, 'respondToDeliveryProposal'])->middleware('throttle:sensitive');
             Route::post('orders/{salesOrder}/cancel', [CustomerPortalController::class, 'cancelOrder'])->middleware('throttle:sensitive');
             Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);

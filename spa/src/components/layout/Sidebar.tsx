@@ -616,6 +616,14 @@ export const SECTIONS: NavSection[] = [
         badgeKeys: ['overdue_invoices', 'unpaid_invoices', 'payment_review_invoices', 'draft_invoices'],
       },
       {
+        to: '/accounting/customer-advances',
+        label: 'Customer Order Deposits',
+        description: 'Verify customer deposits and manage unused advance balances',
+        icon: LuArrowLeftRight,
+        feature: 'accounting',
+        permission: 'accounting.invoices.collect',
+      },
+      {
         to: '/accounting/bills',
         label: 'Accounts Payable Bills',
         icon: BillIcon,

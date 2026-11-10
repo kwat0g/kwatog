@@ -397,6 +397,7 @@ class CustomerPortalService
             'deliveries:id,sales_order_id,delivery_number,status,delivered_at,confirmed_at',
             'invoices:id,sales_order_id,invoice_number,total_amount,status,created_at',
             'workOrders:id,sales_order_id,wo_number,status,quantity_target,quantity_produced,planned_start',
+            'advances',
         ]);
 
         $salesOrder->workOrders->each(function ($workOrder): void {

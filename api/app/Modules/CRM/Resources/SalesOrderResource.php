@@ -183,6 +183,25 @@ class SalesOrderResource extends JsonResource
                     'balance' => (string) $invoice->balance,
                 ])->values()
             ),
+            'advance_requirement' => $this->whenLoaded('advances', function (): ?array {
+                $advance = $this->advances->last();
+                if (! $advance) return null;
+
+                return [
+                    'id' => $advance->hash_id,
+                    'attempt_number' => (int) $advance->attempt_number,
+                    'required_amount' => (string) $advance->required_amount,
+                    'percentage' => $advance->percentage === null ? null : (string) $advance->percentage,
+                    'submitted_amount' => $advance->submitted_amount === null ? null : (string) $advance->submitted_amount,
+                    'refunded_amount' => (string) $advance->refunded_amount,
+                    'status' => (string) $advance->status,
+                    'payment_date' => $advance->payment_date?->toDateString(),
+                    'proof_file_name' => $advance->proof_file_name,
+                    'review_reason' => $advance->review_reason,
+                    'can_submit' => ! $this->status->isBeforeConfirmation()
+                        && in_array($advance->status, ['configured', 'rejected'], true),
+                ];
+            }),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
             'deleted_at'         => optional($this->deleted_at)?->toIso8601String(),

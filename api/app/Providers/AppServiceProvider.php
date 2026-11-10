@@ -107,6 +107,7 @@ use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
+use App\Modules\CRM\Events\SalesOrderAdvanceReleased;
 use App\Modules\CRM\Listeners\AutoSpawn8DOnNcrRecurrence;
 use App\Modules\CRM\Listeners\CreateNcrOnComplaintRequested;
 use App\Modules\CRM\Listeners\EmailCustomerOnComplaintUpdated;
@@ -266,6 +267,7 @@ use App\Modules\MRP\Events\MrpReplanRequested;
 use App\Modules\MRP\Listeners\QueueMrpOnOutgoingInspectionFailed;
 use App\Modules\MRP\Listeners\QueueMrpOnReplanRequested;
 use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderConfirmed;
+use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderAdvanceReleased;
 use App\Modules\MRP\Listeners\QueueMrpOnStockMovementCompleted;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\Machine;
@@ -804,6 +806,7 @@ class AppServiceProvider extends ServiceProvider
         // published. The queued job coalesces repeated requests and performs
         // both demand planning and finite-capacity scheduling.
         Event::listen(SalesOrderConfirmed::class, [QueueMrpOnSalesOrderConfirmed::class, 'handle']);
+        Event::listen(SalesOrderAdvanceReleased::class, [QueueMrpOnSalesOrderAdvanceReleased::class, 'handle']);
         Event::listen(StockMovementCompleted::class, [QueueMrpOnStockMovementCompleted::class, 'handle']);
         Event::listen(InspectionFailed::class, [QueueMrpOnOutgoingInspectionFailed::class, 'handle']);
         Event::listen(BomPricingReviewRequested::class, [PricingReviewService::class, 'handle']);

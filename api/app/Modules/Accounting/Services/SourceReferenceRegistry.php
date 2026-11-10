@@ -30,6 +30,8 @@ use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
+use App\Modules\CRM\Models\SalesOrderAdvance;
+use App\Modules\CRM\Models\SalesOrderAdvanceApplication;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -47,6 +49,8 @@ final class SourceReferenceRegistry
         'collection' => ['model' => Collection::class],
         'credit_note' => ['model' => CreditNote::class],
         'invoice' => ['model' => Invoice::class],
+        'sales_order_advance' => ['model' => SalesOrderAdvance::class],
+        'sales_order_advance_application' => ['model' => SalesOrderAdvanceApplication::class],
         'payroll_period' => ['model' => PayrollPeriod::class],
         'journal_entry_reversal' => ['model' => JournalEntry::class],
         'asset_depreciation' => ['model' => null, 'nullable_id' => true],

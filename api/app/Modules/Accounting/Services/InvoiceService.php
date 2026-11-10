@@ -104,6 +104,7 @@ class InvoiceService
     {
         $invoice->load([
             'paymentSubmissions',
+            'advanceApplications.advance:id,sales_order_id,attempt_number',
             'customer',
             'items.revenueAccount:id,code,name',
             'collections.cashAccount:id,code,name',
@@ -550,6 +551,12 @@ class InvoiceService
             if (($lockedInvoice->lifecycle_type ?? 'standard') === 'standard' && $lockedInvoice->sales_order_id) {
                 app(SalesOrderService::class)
                     ->markInvoiced((int) $lockedInvoice->sales_order_id);
+                app(\App\Modules\CRM\Services\SalesOrderAdvanceService::class)
+                    ->applyToInvoice(
+                        SalesOrder::query()->findOrFail($lockedInvoice->sales_order_id),
+                        $lockedInvoice->fresh(),
+                        $by,
+                    );
             }
 
             // 2026-08-08 — final P2P-analog link: broadcast the chain step so

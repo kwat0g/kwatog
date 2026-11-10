@@ -131,6 +131,13 @@ export const customerPortalApi = {
   return data;
  },
 
+ submitOrderAdvance: async (id: string, form: FormData) => {
+  const { data } = await portalClient.post<{ data: import('@/types/b2b').CustomerOrderAdvance }>(
+   `/b2b/customer/orders/${id}/advance-evidence`, form,
+  );
+  return data.data;
+ },
+
  cancelOrder: async (id: string, reason?: string) => {
   const { data } = await portalClient.post<{
    data: PortalSoDetail;

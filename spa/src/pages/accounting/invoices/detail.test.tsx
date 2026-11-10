@@ -81,6 +81,26 @@ function renderPage(value: Invoice) {
 describe('standard invoice delivery gate', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('shows verified customer advances applied to the invoice', async () => {
+    renderPage({
+      ...invoice(),
+      status: 'finalized',
+      display_status: 'unpaid',
+      amount_paid: '25.00',
+      balance: '75.00',
+      advance_applications: [{
+        id: 'advance-application-1', amount: '25.00', applied_at: '2026-10-05T09:30:00Z', advance_attempt: 1,
+      }],
+    });
+
+    const heading = await screen.findByRole('heading', { name: 'Applied order deposits' });
+    const section = heading.closest('[data-layout="section"]');
+    expect(section).not.toBeNull();
+    expect(within(section as HTMLElement).getByText('Attempt 1')).toBeInTheDocument();
+    expect(within(section as HTMLElement).getByText(/25\.00/)).toBeInTheDocument();
+    expect(within(section as HTMLElement).getByText(/Applied on/)).toBeInTheDocument();
+  });
+
   it('shows invoice history and does not present a cancelled approval as active', async () => {
     const cancelledPrebill = {
       ...invoice(),

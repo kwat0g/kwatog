@@ -12,6 +12,11 @@ class QueueMrpOnSalesOrderConfirmed
 {
     public function handle(SalesOrderConfirmed $event): void
     {
+        // MRP's planningRelevant scope is the authoritative release gate: it
+        // excludes orders whose latest deposit is configured, pending, or
+        // rejected. The normal confirmation trigger remains unchanged for
+        // orders without a deposit; a verified/waived deposit publishes its
+        // own one-time release event.
         RunAutomaticMrpJob::dispatch([(int) $event->salesOrder->getKey()], 'sales_order_confirmed');
     }
 }

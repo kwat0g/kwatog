@@ -23,6 +23,7 @@ const CreateCustomerPage = lazy(() => import('@/pages/accounting/customers/creat
 const EditCustomerPage = lazy(() => import('@/pages/accounting/customers/edit'));
 const CustomerDetailPage = lazy(() => import('@/pages/accounting/customers/detail'));
 const InvoicesPage = lazy(() => import('@/pages/accounting/invoices'));
+const CustomerAdvancesPage = lazy(() => import('@/pages/accounting/customer-advances'));
 const InvoiceFormPage = lazy(() => import('@/pages/accounting/invoices/create'));
 const InvoiceDetailPage = lazy(() => import('@/pages/accounting/invoices/detail'));
 const TrialBalancePage = lazy(() => import('@/pages/accounting/trial-balance'));
@@ -88,6 +89,8 @@ export const accountingRoutes = (
 
  <Route path="/accounting/invoices"
  element={<PermissionGuard permission="accounting.invoices.view"><InvoicesPage /></PermissionGuard>} />
+ <Route path="/accounting/customer-advances"
+ element={<PermissionGuard permission="accounting.invoices.collect"><CustomerAdvancesPage /></PermissionGuard>} />
  <Route path="/accounting/invoices/create"
  element={<PermissionGuard permission="accounting.invoices.create"><InvoiceFormPage /></PermissionGuard>} />
  <Route path="/accounting/invoices/:id/edit"

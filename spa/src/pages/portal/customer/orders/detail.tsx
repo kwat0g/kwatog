@@ -22,6 +22,7 @@ import { Select } from '@/components/ui/Select';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { salesOrderStatusVariant, workOrderStatusVariant } from '@/lib/statusVariants';
+import { SubmitOrderAdvanceDialog } from './SubmitOrderAdvanceDialog';
 
 export default function CustomerOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +35,7 @@ export default function CustomerOrderDetailPage() {
   } | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
   const [responseType, setResponseType] = useState<'accept' | 'propose' | 'decline'>('accept');
   const [responseNotes, setResponseNotes] = useState('');
   const [proposedDeliveryDate, setProposedDeliveryDate] = useState('');
@@ -281,6 +283,34 @@ export default function CustomerOrderDetailPage() {
               />
               <StatCard label="Delivery Terms" value={order.delivery_terms ?? '—'} />
             </KpiGrid>
+
+            {order.advance_requirement && (
+              <Panel title="Order deposit">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted">Required amount</p>
+                    <p className="mt-1 text-lg font-semibold">{formatPeso(order.advance_requirement.required_amount)}</p>
+                    {order.advance_requirement.submitted_amount && (
+                      <p className="mt-1 text-sm text-muted">Submitted: {formatPeso(order.advance_requirement.submitted_amount)}</p>
+                    )}
+                  </div>
+                  <Chip variant={chipVariantForStatus(order.advance_requirement.status)}>
+                    {order.advance_requirement.status.replace(/_/g, ' ')}
+                  </Chip>
+                </div>
+                {order.advance_requirement.status === 'pending' && (
+                  <p role="status" className="mt-3 text-sm text-muted">Payment evidence is with Finance for verification. Production starts after Finance verifies or waives the deposit.</p>
+                )}
+                {order.advance_requirement.status === 'rejected' && order.advance_requirement.review_reason && (
+                  <p className="mt-3 rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm">Finance requested a new submission: {order.advance_requirement.review_reason}</p>
+                )}
+                {order.advance_requirement.can_submit && (
+                  <Button className="mt-4" onClick={() => setAdvanceDialogOpen(true)}>
+                    {order.advance_requirement.status === 'rejected' ? 'Resubmit payment evidence' : 'Submit payment evidence'}
+                  </Button>
+                )}
+              </Panel>
+            )}
 
             <p role="note" className="rounded-md border border-default bg-subtle px-4 py-3 text-sm text-muted">
               {order.customer_terms_snapshot?.agreement_status === 'expired' || order.customer_terms_snapshot?.agreement_status === 'not_yet_effective'
@@ -600,6 +630,13 @@ export default function CustomerOrderDetailPage() {
                   </table>
                 </div>
               </Panel>
+            )}
+            {advanceDialogOpen && order.advance_requirement && (
+              <SubmitOrderAdvanceDialog
+                order={order}
+                requirement={order.advance_requirement}
+                onClose={() => setAdvanceDialogOpen(false)}
+              />
             )}
           </>
         )}

@@ -12,6 +12,7 @@ use App\Modules\CRM\Controllers\ProductController;
 use App\Modules\CRM\Controllers\ProductImageController;
 use App\Modules\CRM\Controllers\ProductBlueprintController;
 use App\Modules\CRM\Controllers\SalesOrderController;
+use App\Modules\CRM\Controllers\SalesOrderAdvanceController;
 use App\Modules\CRM\Controllers\SalesOrderResponseController;
 use Illuminate\Support\Facades\Route;
 
@@ -135,6 +136,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::get('/sales-orders',                    [SalesOrderController::class, 'index']) ->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders/{salesOrder}',       [SalesOrderController::class, 'show'])  ->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders/{salesOrder}/chain', [SalesOrderController::class, 'chain']) ->middleware('permission:crm.sales_orders.view');
+    Route::put('/sales-orders/{salesOrder}/advance-requirement', [SalesOrderAdvanceController::class, 'configure'])
+        ->middleware('permission:crm.sales_orders.update');
     Route::get('/sales-orders/{salesOrder}/responses', [SalesOrderResponseController::class, 'index'])->middleware('permission:crm.sales_orders.view');
     Route::post('/sales-orders',                   [SalesOrderController::class, 'store']) ->middleware('permission:crm.sales_orders.create');
     Route::put('/sales-orders/{salesOrder}',       [SalesOrderController::class, 'update'])->middleware('permission:crm.sales_orders.update');
@@ -144,6 +147,12 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission:crm.sales_orders.delete');
     Route::post('/sales-orders/{salesOrder}/propose-delivery-date', [SalesOrderResponseController::class, 'proposeDeliveryDate'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm'])->middleware('permission:crm.sales_orders.confirm');
+    Route::get('/sales-order-advances', [SalesOrderAdvanceController::class, 'index'])->middleware('permission:accounting.invoices.collect');
+    Route::get('/sales-order-advances/{advance}/proof', [SalesOrderAdvanceController::class, 'downloadProof'])->middleware('permission:accounting.invoices.collect');
+    Route::post('/sales-order-advances/{advance}/verify', [SalesOrderAdvanceController::class, 'verify'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
+    Route::post('/sales-order-advances/{advance}/reject', [SalesOrderAdvanceController::class, 'reject'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
+    Route::post('/sales-order-advances/{advance}/waive', [SalesOrderAdvanceController::class, 'waive'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
+    Route::post('/sales-order-advances/{advance}/refund', [SalesOrderAdvanceController::class, 'refund'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
     Route::post('/sales-orders/{salesOrder}/request-customer-confirmation', [SalesOrderController::class, 'requestCustomerConfirmation'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/cancel',  [SalesOrderController::class, 'cancel']) ->middleware('permission:crm.sales_orders.cancel');
 

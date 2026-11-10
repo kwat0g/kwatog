@@ -84,6 +84,11 @@ class Invoice extends Model
         return $this->hasMany(InvoicePaymentSubmission::class)->orderByDesc('id');
     }
 
+    public function advanceApplications(): HasMany
+    {
+        return $this->hasMany(\App\Modules\CRM\Models\SalesOrderAdvanceApplication::class)->orderBy('applied_at');
+    }
+
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);

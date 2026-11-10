@@ -363,6 +363,12 @@ export interface Collection {
   created_at?: string;
 }
 export interface Invoice {
+  advance_applications?: Array<{
+    id: string;
+    amount: string;
+    applied_at: string | null;
+    advance_attempt: number | null;
+  }>;
   payment_submissions?: import('./invoice-payments').InvoicePaymentSubmission[];
   can_submit_payment?: boolean;
   payment_submission_blocked_reason?: string | null;

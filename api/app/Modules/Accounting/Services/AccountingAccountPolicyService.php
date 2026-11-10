@@ -31,6 +31,7 @@ final class AccountingAccountPolicyService
         'accounting.default_expense_account_code' => AccountType::Expense,
         'accounting.accounts.ar_code' => AccountType::Asset,
         'accounting.accounts.ap_code' => AccountType::Liability,
+        'accounting.accounts.customer_advances_code' => AccountType::Liability,
         'accounting.accounts.vat_output_code' => AccountType::Liability,
         'accounting.accounts.vat_input_code' => AccountType::Asset,
         'accounting.accounts.discount_code' => AccountType::Revenue,

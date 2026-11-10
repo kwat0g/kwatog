@@ -355,6 +355,7 @@ class SalesOrderService
             'workOrders.inspections:id,inspection_number,stage,status,entity_type,entity_id,completed_at',
             'deliveries:id,delivery_number,sales_order_id,status,scheduled_date',
             'invoices:id,invoice_number,sales_order_id,status,total_amount,balance',
+            'advances',
         ]);
 
         $so->setAttribute('status_history', AuditLog::query()
@@ -741,6 +742,7 @@ class SalesOrderService
                 }
             }
             $lockedSo->items()->whereNotIn('id', $keepIds)->forceDelete();
+            app(SalesOrderAdvanceService::class)->recalculateConfiguredRequirement($lockedSo);
 
             $fresh = $lockedSo->fresh();
             $currentActor = auth()->user();
@@ -1058,6 +1060,7 @@ class SalesOrderService
                 ->lockForUpdate()
                 ->findOrFail($so->id);
             $this->assertCancellationActor($lockedSo, $customerActor, $internalActor);
+            app(SalesOrderAdvanceService::class)->assertCancellable($lockedSo);
             $this->assertCancellableDownstreamState($lockedSo);
             foreach (Delivery::where('sales_order_id', $lockedSo->id)->where('status', '!=', 'cancelled')->lockForUpdate()->get() as $delivery) {
                 if (app(\App\Modules\SupplyChain\Services\DeliveryService::class)->isUntouchedAutomaticSupply($delivery)) {
@@ -1249,6 +1252,7 @@ class SalesOrderService
             if ($lockedSo->status !== SalesOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft sales orders can be deleted.');
             }
+            app(SalesOrderAdvanceService::class)->assertCancellable($lockedSo);
             if ($lockedSo->agreements()->exists()) {
                 throw new BusinessRuleException('Sales orders with published terms cannot be deleted.');
             }

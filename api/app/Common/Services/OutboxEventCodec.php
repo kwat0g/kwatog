@@ -58,6 +58,7 @@ use App\Modules\CRM\Events\PriceAgreementChanged;
 use App\Modules\CRM\Events\PriceRequestChanged;
 use App\Modules\CRM\Events\ProductChanged;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
+use App\Modules\CRM\Events\SalesOrderAdvanceReleased;
 use App\Modules\Dashboard\Events\AdminDashboardChanged;
 use App\Modules\Dashboard\Events\BadgesChanged;
 use App\Modules\Dashboard\Events\ChainBottlenecksChanged;
@@ -235,6 +236,7 @@ class OutboxEventCodec
         AdminAuditLogsChanged::class,
         AdminSessionsChanged::class,
         SalesOrderConfirmed::class,
+        SalesOrderAdvanceReleased::class,
         ComplaintNcrRequested::class,
         CustomerComplaintChanged::class,
         CustomerCatalogChanged::class,
