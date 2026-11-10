@@ -27,6 +27,7 @@ import { formatDateTime } from '@/lib/formatDate';
 import { formatQuantity } from '@/lib/formatNumber';
 import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
 import { inspectionQueryKeys } from '@/lib/queryKeys/inspections';
+import { InspectionDefectEvidencePanel } from '@/components/quality/InspectionDefectEvidencePanel';
 import { InspectionChecklistPanel } from './components/InspectionChecklistPanel';
 
 export default function InspectionDetailPage() {
@@ -858,6 +859,12 @@ export default function InspectionDetailPage() {
               </div>
             </section>
           )}
+          {data.stage === 'incoming' && <InspectionDefectEvidencePanel
+            inspectionId={data.id}
+            grnItemId={data.incoming_acceptance?.grn_item_id}
+            receivedQuantity={data.incoming_acceptance?.quantity_received}
+            canManage={data.can_manage === true && can('quality.inspections.manage')}
+          />}
         </div>
       </div>
       <ReasonDialog

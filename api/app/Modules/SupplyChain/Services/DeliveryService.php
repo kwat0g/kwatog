@@ -47,6 +47,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Models\DeliveryReschedule;
+use App\Modules\SupplyChain\Models\DriverCredential;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -113,7 +114,7 @@ class DeliveryService
             // delivery carries no snapshot; eager-load it so the list stays two
             // queries instead of one per row.
             'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
-            'vehicle:id,plate_number,name',
+            'vehicle:id,plate_number,name,capacity_kg',
             'driver:id,name,role_id',
         ]);
 
@@ -255,7 +256,7 @@ class DeliveryService
             // (Delivery::resolvedDeliveryAddress), so they must be here rather
             // than lazy-loaded once per row.
             'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
-            'vehicle:id,plate_number,name,vehicle_type',
+            'vehicle:id,plate_number,name,vehicle_type,capacity_kg',
             'driver:id,name,role_id',
             'confirmer:id,name,role_id',
             'creator:id,name,role_id',
@@ -358,10 +359,16 @@ class DeliveryService
                 $requestedByItem = $this->normaliseRequestedQuantities($data['items']);
                 $this->assertDeliveryQuantitiesAvailable($so, $requestedByItem);
 
+                if (! empty($data['vehicle_id']) || ! empty($data['driver_id'])) {
+                    $this->assertCustomerDeliveryPin($so);
+                }
+
                 $this->assertDispatchAssignmentAvailable(
                     isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
                     isset($data['driver_id']) ? (int) $data['driver_id'] : null,
                     (string) $data['scheduled_date'],
+                    null,
+                    isset($data['shipment_weight_kg']) ? (string) $data['shipment_weight_kg'] : null,
                 );
 
                 $delivery = Delivery::create([
@@ -372,6 +379,7 @@ class DeliveryService
                     'status' => DeliveryStatus::Scheduled->value,
                     'cost_recognition_mode' => DeliveryCostingMode::Transit->value,
                     'scheduled_date' => $data['scheduled_date'],
+                    'shipment_weight_kg' => $data['shipment_weight_kg'] ?? null,
                     'automatic_supply_key' => $data['automatic_supply_key'] ?? null,
                     'notes' => $data['notes'] ?? null,
                     'created_by' => $by->id,
@@ -678,7 +686,15 @@ class DeliveryService
                     }
                 } else {
                     // Validate the new assignment on the new date, not an obsolete booking.
-                    $this->assertDispatchAssignmentAvailable((int) $data['vehicle_id'], (int) $data['driver_id'], $newDate, $locked->id);
+                    $locked = $this->snapshotShipTo($locked);
+                    $this->assertDeliveryHasPin($locked);
+                    $this->assertDispatchAssignmentAvailable(
+                        (int) $data['vehicle_id'],
+                        (int) $data['driver_id'],
+                        $newDate,
+                        $locked->id,
+                        (string) $data['shipment_weight_kg'],
+                    );
                 }
                 if ($newDate !== $locked->scheduled_date?->toDateString()) {
                     DeliveryReschedule::create([
@@ -693,10 +709,15 @@ class DeliveryService
                 $locked->forceFill([
                     'scheduled_date' => $newDate, 'expected_delivery_date' => $data['expected_delivery_date'],
                     'carrier' => trim((string) $data['carrier']),
+                    'shipment_weight_kg' => (string) $data['shipment_weight_kg'],
                 ])->save();
                 // Still pre-dispatch, so a corrected ship-to in the customer master
                 // must reach the run sheet before the truck leaves.
                 $locked = $this->snapshotShipTo($locked);
+                $this->assertDeliveryHasPin($locked);
+                if ($locked->status === DeliveryStatus::Loading) {
+                    $this->assertShipmentWeightFitsVehicle((int) $locked->vehicle_id, (string) $locked->shipment_weight_kg);
+                }
                 if ($locked->status === DeliveryStatus::Scheduled) {
                     $locked = $this->assign($locked, $data, $by);
                 }
@@ -768,6 +789,13 @@ class DeliveryService
             }
         }
 
+        foreach (['delivery_latitude', 'delivery_longitude'] as $coordinate) {
+            $value = $customer->{$coordinate};
+            if ($value !== null && (string) ($delivery->{$coordinate} ?? '') !== (string) $value) {
+                $patch[$coordinate] = $value;
+            }
+        }
+
         if ($patch) {
             $delivery->forceFill($patch)->save();
         }
@@ -784,6 +812,9 @@ class DeliveryService
         if (! $delivery->driver_id) {
             $errors['driver_id'] = ['Assign a driver before dispatch.'];
         }
+        if ($delivery->shipment_weight_kg === null || bccomp((string) $delivery->shipment_weight_kg, '0', 2) <= 0) {
+            $errors['shipment_weight_kg'] = ['Enter the total shipment weight before dispatch.'];
+        }
         if (! trim((string) $delivery->carrier)) {
             $errors['carrier'] = ['Enter the carrier before dispatch.'];
         }
@@ -796,12 +827,60 @@ class DeliveryService
         if ($delivery->expected_delivery_date && $delivery->scheduled_date && $delivery->expected_delivery_date->isBefore($delivery->scheduled_date)) {
             $errors['expected_delivery_date'] = ['Expected arrival cannot precede the shipment date.'];
         }
+        if (trim((string) $delivery->delivery_address) !== ''
+            && ($delivery->delivery_latitude === null || $delivery->delivery_longitude === null)) {
+            $errors['delivery_location'] = ['Add a map pin to the delivery address before dispatch.'];
+        }
         $photo = $delivery->proofs()->where('proof_type', DeliveryProofType::LoadingPhoto->value)->get();
         if (! $photo->contains(fn ($proof) => Storage::disk('local')->exists($proof->file_path))) {
             $errors['loading_photo'] = ['Attach a loading photo before dispatch.'];
         }
         if ($errors) {
             throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function assertCustomerDeliveryPin(SalesOrder $salesOrder): void
+    {
+        $customer = $salesOrder->relationLoaded('customer') ? $salesOrder->customer : $salesOrder->customer()->first();
+        if ($customer && trim((string) $customer->delivery_address) !== ''
+            && ($customer->delivery_latitude === null || $customer->delivery_longitude === null)) {
+            throw ValidationException::withMessages(['delivery_location' => ['Add a map pin to the customer delivery address before assigning a shipment.']]);
+        }
+    }
+
+    private function assertDeliveryHasPin(Delivery $delivery): void
+    {
+        if (trim((string) $delivery->delivery_address) !== ''
+            && ($delivery->delivery_latitude === null || $delivery->delivery_longitude === null)) {
+            throw ValidationException::withMessages(['delivery_location' => ['Add a map pin to the delivery address before assigning or dispatching this shipment.']]);
+        }
+    }
+
+    private function assertShipmentWeightFitsVehicle(int $vehicleId, string $shipmentWeightKg): void
+    {
+        $vehicle = Vehicle::query()->lockForUpdate()->find($vehicleId);
+        if (! $vehicle) {
+            throw ValidationException::withMessages(['vehicle_id' => ['Select an active vehicle before dispatch.']]);
+        }
+        if ($vehicle->capacity_kg === null) {
+            throw ValidationException::withMessages(['vehicle_id' => ['Set a payload capacity for this vehicle before dispatch.']]);
+        }
+        if (bccomp($shipmentWeightKg, (string) $vehicle->capacity_kg, 2) > 0) {
+            throw ValidationException::withMessages(['shipment_weight_kg' => [
+                "Shipment weight exceeds the selected vehicle capacity of {$vehicle->capacity_kg} kg.",
+            ]]);
+        }
+    }
+
+    private function assertDriverCredentialCurrent(int $driverId): void
+    {
+        $credential = DriverCredential::query()->where('user_id', $driverId)->lockForUpdate()->first();
+        // Drivers who predate credential tracking remain schedulable until a
+        // fleet manager records their credential; an explicitly expired one
+        // is always blocked. The fleet screen identifies missing records.
+        if ($credential && $credential->expires_at?->isBefore(today())) {
+            throw ValidationException::withMessages(['driver_id' => ['The selected driver license has expired. Update the credential before assigning this delivery.']]);
         }
     }
 
@@ -829,11 +908,15 @@ class DeliveryService
 
             $previousDriverId = $locked->driver_id === null ? null : (int) $locked->driver_id;
 
+            $locked = $this->snapshotShipTo($locked);
+            $this->assertDeliveryHasPin($locked);
+
             $this->assertDispatchAssignmentAvailable(
                 (int) $data['vehicle_id'],
                 (int) $data['driver_id'],
                 $locked->scheduled_date->toDateString(),
                 $locked->id,
+                (string) $data['shipment_weight_kg'],
             );
 
             $reason = trim((string) $data['reason']);
@@ -846,12 +929,9 @@ class DeliveryService
             $locked->forceFill([
                 'vehicle_id' => (int) $data['vehicle_id'],
                 'driver_id' => (int) $data['driver_id'],
+                'shipment_weight_kg' => (string) $data['shipment_weight_kg'],
                 'notes' => trim(($locked->notes ? $locked->notes."\n" : '').$assignmentNote),
             ])->save();
-
-            // Assignment is an act of arranging the run, so the ship-to is pinned
-            // here too (this route is reachable without the shipment-plan form).
-            $locked = $this->snapshotShipTo($locked);
 
             $this->stockReservations->ensureForDelivery($locked, $by);
 
@@ -901,6 +981,7 @@ class DeliveryService
                 $locked->driver_id,
                 $newDate,
                 $locked->id,
+                $locked->shipment_weight_kg === null ? null : (string) $locked->shipment_weight_kg,
             );
             $reason = trim($reason);
             $note = sprintf('[Reschedule %s] %s', now()->toIso8601String(), $reason);
@@ -941,6 +1022,7 @@ class DeliveryService
         ?int $driverId,
         string $scheduledDate,
         ?int $deliveryId = null,
+        ?string $shipmentWeightKg = null,
     ): void {
         if ($vehicleId !== null) {
             $vehicle = Vehicle::query()->lockForUpdate()->find($vehicleId);
@@ -949,6 +1031,16 @@ class DeliveryService
             }
             if ($vehicle->status !== 'available') {
                 throw new BusinessRuleException("Vehicle {$vehicle->plate_number} is not available for assignment.");
+            }
+            if ($shipmentWeightKg !== null) {
+                if ($vehicle->capacity_kg === null) {
+                    throw ValidationException::withMessages(['vehicle_id' => ['Set a payload capacity for this vehicle before assigning a shipment.']]);
+                }
+                if (bccomp($shipmentWeightKg, (string) $vehicle->capacity_kg, 2) > 0) {
+                    throw ValidationException::withMessages(['shipment_weight_kg' => [
+                        "Shipment weight exceeds the selected vehicle capacity of {$vehicle->capacity_kg} kg.",
+                    ]]);
+                }
             }
 
             $hasActiveDelivery = Delivery::query()
@@ -988,6 +1080,8 @@ class DeliveryService
             if (! $driver) {
                 throw new BusinessRuleException('Assigned user is not an active driver.');
             }
+
+            $this->assertDriverCredentialCurrent($driver->id);
 
             $this->assertDriverAvailable($driver->id, $deliveryId);
             $hasScheduledDelivery = Delivery::query()
@@ -1142,6 +1236,13 @@ class DeliveryService
                 throw new BusinessRuleException('Use the delivery confirmation action so proof, invoicing, and SO reconciliation are applied together.');
             }
 
+            if (in_array($next, [DeliveryStatus::Loading, DeliveryStatus::InTransit], true)) {
+                if ($current === DeliveryStatus::Scheduled) {
+                    $locked = $this->snapshotShipTo($locked, $so);
+                }
+                $this->assertDeliveryHasPin($locked);
+            }
+
             if ($next === DeliveryStatus::InTransit) {
                 $this->assertShipmentReady($locked);
                 $this->stockReservations->assertReadyForDeparture($locked);
@@ -1194,6 +1295,17 @@ class DeliveryService
                     ->exists();
 
                 if (in_array($next, [DeliveryStatus::Loading, DeliveryStatus::InTransit], true)) {
+                    if ($locked->shipment_weight_kg === null || bccomp((string) $locked->shipment_weight_kg, '0', 2) <= 0) {
+                        throw ValidationException::withMessages(['shipment_weight_kg' => ['Enter the total shipment weight before dispatch.']]);
+                    }
+                    if ($vehicle->capacity_kg === null) {
+                        throw ValidationException::withMessages(['vehicle_id' => ['Set a payload capacity for this vehicle before dispatch.']]);
+                    }
+                    if (bccomp((string) $locked->shipment_weight_kg, (string) $vehicle->capacity_kg, 2) > 0) {
+                        throw ValidationException::withMessages(['shipment_weight_kg' => [
+                            "Shipment weight exceeds the selected vehicle capacity of {$vehicle->capacity_kg} kg.",
+                        ]]);
+                    }
                     if ($activeOtherDelivery) {
                         throw new BusinessRuleException(
                             "Vehicle {$vehicle->plate_number} is already assigned to another active delivery."
@@ -1222,6 +1334,7 @@ class DeliveryService
                 if (! $driver) {
                     throw new BusinessRuleException('Assigned user is not an active driver.');
                 }
+                $this->assertDriverCredentialCurrent($driver->id);
                 $this->assertDriverAvailable($driver->id, $locked->id);
             }
 

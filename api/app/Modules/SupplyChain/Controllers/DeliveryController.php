@@ -7,6 +7,7 @@ namespace App\Modules\SupplyChain\Controllers;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DriverCredential;
 use App\Modules\SupplyChain\Requests\AssignDeliveryRequest;
 use App\Modules\SupplyChain\Requests\ShipmentPlanRequest;
 use App\Modules\SupplyChain\Requests\AmendDeliveryAttemptRequest;
@@ -85,24 +86,32 @@ class DeliveryController
 
     public function driverOptions(): JsonResponse
     {
+        $drivers = User::query()
+            ->where('is_active', true)
+            ->whereHas('role', static fn ($query) => $query->where('slug', 'driver'))
+            ->whereNotIn('id', Delivery::query()
+                ->whereNotNull('driver_id')
+                ->whereIn('status', [
+                    DeliveryStatus::Loading->value,
+                    DeliveryStatus::InTransit->value,
+                    DeliveryStatus::ReturnPending->value,
+                ])
+                ->select('driver_id'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $credentials = DriverCredential::query()->whereIn('user_id', $drivers->modelKeys())->get()->keyBy('user_id');
+
         return response()->json([
-            'data' => User::query()
-                ->where('is_active', true)
-                ->whereHas('role', static fn ($query) => $query->where('slug', 'driver'))
-                ->whereNotIn('id', Delivery::query()
-                    ->whereNotNull('driver_id')
-                    ->whereIn('status', [
-                        DeliveryStatus::Loading->value,
-                        DeliveryStatus::InTransit->value,
-                        DeliveryStatus::ReturnPending->value,
-                    ])
-                    ->select('driver_id'))
-                ->orderBy('name')
-                ->get(['id', 'name'])
-                ->map(static fn (User $driver): array => [
+            'data' => $drivers->map(static function (User $driver) use ($credentials): array {
+                $credential = $credentials->get($driver->id);
+
+                return [
                     'id' => $driver->hash_id,
                     'name' => $driver->name,
-                ])
+                    'credential_status' => $credential?->status ?? 'missing',
+                    'credential_expires_at' => $credential?->expires_at?->toDateString(),
+                ];
+            })
                 ->values()
                 ->all(),
         ]);

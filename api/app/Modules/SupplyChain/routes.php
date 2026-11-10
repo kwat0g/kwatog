@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\SupplyChain\Controllers\ContainerController;
 use App\Modules\SupplyChain\Controllers\DeliveryController;
 use App\Modules\SupplyChain\Controllers\DeliveryProofController;
+use App\Modules\SupplyChain\Controllers\DriverCredentialController;
 use App\Modules\SupplyChain\Controllers\DriverDeliveryController;
 use App\Modules\SupplyChain\Controllers\ImpexDocumentController;
 use App\Modules\SupplyChain\Controllers\ShipmentController;
@@ -102,6 +103,13 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::patch('/vehicles/{vehicle}/restore', [VehicleController::class, 'restore'])
         ->middleware('permission:supply_chain.fleet.manage')
         ->withTrashed();
+
+    Route::get('/drivers/credentials', [DriverCredentialController::class, 'index'])
+        ->middleware('permission:supply_chain.fleet.manage');
+    Route::put('/drivers/{driver}/credential', [DriverCredentialController::class, 'store'])
+        ->middleware('permission:supply_chain.fleet.manage');
+    Route::get('/driver-credentials/{credential}/document', [DriverCredentialController::class, 'document'])
+        ->middleware('permission:supply_chain.fleet.manage');
 
     /* ─── Deliveries (Task 66) ─── */
     /*

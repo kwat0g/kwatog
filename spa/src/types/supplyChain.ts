@@ -179,6 +179,7 @@ export interface Delivery extends DeliveryAttemptFields {
  status: DeliveryStatus;
  status_label?: string;
  scheduled_date: string | null;
+ shipment_weight_kg?: string | null;
  expected_delivery_date?: string | null;
  carrier?: string | null;
  departed_at: string | null;
@@ -200,6 +201,8 @@ export interface Delivery extends DeliveryAttemptFields {
   };
  /** Chain 1 — the resolved ship-to, snapshotted when the run sheet was issued. */
  delivery_address: string | null;
+ delivery_latitude?: string | null;
+ delivery_longitude?: string | null;
  delivery_contact_person: string | null;
  delivery_contact_phone: string | null;
  /** ADV7 — Proof of Delivery receiver fields. */
@@ -214,7 +217,7 @@ export interface Delivery extends DeliveryAttemptFields {
   so_number: string;
   customer?: { id: string; name: string } | null;
  } | null;
- vehicle?: { id: string; plate_number: string; name: string } | null;
+ vehicle?: { id: string; plate_number: string; name: string; capacity_kg?: number | null } | null;
  driver?: { id: string; name: string } | null;
  invoice?: { id: string; invoice_number: string; total_amount: string; status: string; status_label?: string } | null;
  items?: Array<{

@@ -29,7 +29,7 @@ class Delivery extends Model
         'automatic_supply_key',
         'delivery_number', 'sales_order_id', 'vehicle_id', 'driver_id',
         'status', 'scheduled_date', 'original_scheduled_date', 'reschedule_count',
-        'expected_delivery_date', 'carrier',
+        'expected_delivery_date', 'carrier', 'shipment_weight_kg',
         'departed_at', 'delivered_at',
         'confirmed_at', 'confirmed_by', 'receipt_photo_path',
         'invoice_id', 'notes', 'created_by',
@@ -40,7 +40,7 @@ class Delivery extends Model
         'receiver_name', 'receiver_position', 'received_at', 'delivery_remarks',
         'cost_recognition_mode',
         // Chain 1 — ship-to snapshot taken while the run sheet was prepared.
-        'delivery_address', 'delivery_contact_person', 'delivery_contact_phone',
+        'delivery_address', 'delivery_latitude', 'delivery_longitude', 'delivery_contact_person', 'delivery_contact_phone',
     ];
 
     protected $casts = [
@@ -49,6 +49,9 @@ class Delivery extends Model
         'expected_delivery_date' => 'date',
         'original_scheduled_date' => 'date',
         'reschedule_count' => 'integer',
+        'shipment_weight_kg' => 'decimal:2',
+        'delivery_latitude' => 'decimal:7',
+        'delivery_longitude' => 'decimal:7',
         'departed_at'    => 'datetime',
         'delivered_at'   => 'datetime',
         'confirmed_at'   => 'datetime',

@@ -369,6 +369,10 @@ export default function DeliveryDetailPage() {
                 <dt className="text-2xs uppercase tracking-wider text-muted">Carrier</dt>
                 <dd>{data.carrier ?? 'Not arranged'}</dd>
               </div>
+              {data.shipment_weight_kg && <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Shipment weight</dt>
+                <dd className="font-mono tabular-nums">{new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(data.shipment_weight_kg))} kg</dd>
+              </div>}
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Departed</dt>
                 <dd className="font-mono tabular-nums">{formatDateTime(data.departed_at)}</dd>

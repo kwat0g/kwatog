@@ -8,6 +8,7 @@ use App\Modules\Quality\Controllers\CalibrationController;
 use App\Modules\Quality\Controllers\CapabilityController;
 use App\Modules\Quality\Controllers\EffectivenessController;
 use App\Modules\Quality\Controllers\InspectionController;
+use App\Modules\Quality\Controllers\InspectionDefectEvidenceController;
 use App\Modules\Quality\Controllers\WorkOrderFinalInspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
@@ -87,6 +88,12 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/inspections/{inspection}', [InspectionController::class, 'show'])
         ->middleware('permission:quality.inspections.view');
     Route::get('/inspections/{inspection}/chain', [InspectionController::class, 'chain'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/{inspection}/defect-evidence', [InspectionDefectEvidenceController::class, 'index'])
+        ->middleware('permission:quality.inspections.view');
+    Route::post('/inspections/{inspection}/defect-evidence', [InspectionDefectEvidenceController::class, 'store'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::get('/defect-evidence/{evidence}/photo', [InspectionDefectEvidenceController::class, 'photo'])
         ->middleware('permission:quality.inspections.view');
     Route::post('/inspections', [InspectionController::class, 'store'])
         ->middleware('permission:quality.inspections.manage');

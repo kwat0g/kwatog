@@ -12,6 +12,7 @@ import type { Inspection, InspectionMeasurement } from '@/types/quality';
 const navigation = vi.hoisted(() => ({ navigate: vi.fn() }));
 
 const permissionState = vi.hoisted(() => ({ can: vi.fn((_permission: string) => true) }));
+const defectEvidenceMocks = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn() }));
 
 vi.mock('@/api/quality/inspections', () => ({
   inspectionsApi: {
@@ -28,6 +29,9 @@ vi.mock('@/api/quality/inspections', () => ({
     cancel: vi.fn(),
     review: vi.fn(),
   },
+}));
+vi.mock('@/api/quality/defectEvidence', () => ({
+  defectEvidenceApi: { list: defectEvidenceMocks.list, create: defectEvidenceMocks.create },
 }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: permissionState.can }) }));
 vi.mock('@/hooks/useRealtimeRecord', () => ({ useRealtimeRecord: vi.fn() }));
@@ -505,4 +509,57 @@ it('shows incoming warehouse acceptance and existing recovery without granting d
   expect(screen.getByText('NCR-100')).toBeVisible();
   expect(screen.queryByRole('link', { name: 'RAW — Material' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Open NCR' })).not.toBeInTheDocument();
+});
+
+it('shows defect severity and private image evidence on an incoming inspection', async () => {
+  vi.mocked(inspectionsApi.show).mockResolvedValue({
+    ...inspection, stage: 'incoming', status: 'failed', can_manage: true,
+    available_actions: ['cancel'],
+    product: { id: 'p-1', part_number: 'RAW', name: 'Material' },
+  });
+  defectEvidenceMocks.list.mockResolvedValue([{
+    id: 'defect-1', category: 'surface_damage', category_label: 'Surface damage', severity: 'major',
+    severity_label: 'Major', affected_quantity: 2, notes: 'Cracked edges on the sampled pieces.',
+    photo_url: '/api/v1/quality/defect-evidence/defect-1/photo', grn_item: { id: 'grn-line-1', item_code: 'RAW-01', item_name: 'Resin' },
+    created_by: { id: 'qc-1', name: 'QC Inspector' }, created_at: '2026-11-10T08:00:00Z',
+  }]);
+
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter><InspectionDetailPage /></MemoryRouter></QueryClientProvider>);
+
+  expect(await screen.findByRole('heading', { name: 'Defect evidence' })).toBeVisible();
+  expect(await screen.findByText('Major')).toBeVisible();
+  expect(screen.getByText('Cracked edges on the sampled pieces.')).toBeVisible();
+  expect(screen.getByRole('img', { name: 'Defect evidence photo: Surface damage' })).toHaveAttribute('src', '/api/v1/quality/defect-evidence/defect-1/photo');
+  expect(screen.getByText('GRN item: RAW-01 — Resin')).toBeVisible();
+});
+
+it('uploads an incoming defect image with its severity and affected quantity', async () => {
+  permissionState.can.mockReturnValue(true);
+  vi.mocked(inspectionsApi.show).mockResolvedValue({
+    ...inspection, stage: 'incoming', status: 'in_progress', can_manage: true,
+    available_actions: ['cancel'],
+    product: { id: 'p-1', part_number: 'RAW', name: 'Material' },
+    incoming_acceptance: { grn_item_id: 'grn-line-1', grn_id: 'grn-1', grn_number: 'GRN-1', quantity_received: '10', quantity_accepted: '8', unit: 'pcs', status: 'pending', status_label: 'Pending' },
+  });
+  defectEvidenceMocks.list.mockResolvedValue([]);
+  defectEvidenceMocks.create.mockResolvedValue({ id: 'defect-new' });
+
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><MemoryRouter><InspectionDetailPage /></MemoryRouter></QueryClientProvider>);
+
+  await screen.findByRole('heading', { name: 'Defect evidence' });
+  fireEvent.change(screen.getByLabelText('Defect category', { exact: false }), { target: { value: 'other' } });
+  fireEvent.change(screen.getByLabelText('Other defect category', { exact: false }), { target: { value: 'Unusual finish' } });
+  fireEvent.change(screen.getByLabelText('Severity', { exact: false }), { target: { value: 'critical' } });
+  fireEvent.change(screen.getByLabelText('Affected quantity', { exact: false }), { target: { value: '4' } });
+  const photo = new File(['image'], 'defect.png', { type: 'image/png' });
+  fireEvent.change(screen.getByLabelText('Defect photo', { exact: false }), { target: { files: [photo] } });
+  const addEvidenceButton = screen.getByRole('button', { name: 'Add defect evidence' });
+  expect(addEvidenceButton).toBeEnabled();
+  const evidenceForm = addEvidenceButton.closest('form');
+  expect(evidenceForm).not.toBeNull();
+  fireEvent.submit(evidenceForm!);
+
+  await waitFor(() => expect(defectEvidenceMocks.create).toHaveBeenCalledWith('insp-1', expect.objectContaining({
+    category: 'other', other_category: 'Unusual finish', severity: 'critical', affected_quantity: 4, photo,
+  })));
 });

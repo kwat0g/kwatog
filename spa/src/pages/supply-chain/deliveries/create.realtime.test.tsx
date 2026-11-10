@@ -130,4 +130,42 @@ describe('Delivery create freshness', () => {
     ])).toEqual(createdDelivery));
     queryClient.clear();
   });
+
+  it('checks shipment weight against the selected vehicle capacity before creating', async () => {
+    vi.mocked(vehiclesApi.list).mockResolvedValue({ data: [{
+      id: 'truck-1', name: 'Payload truck', plate_number: 'CAP-500', capacity_kg: 1500,
+    }] } as never);
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/supply-chain/deliveries/create']}>
+          <Routes>
+            <Route path="/supply-chain/deliveries/create" element={<CreateDeliveryPage />} />
+            <Route path="/supply-chain/deliveries/:id" element={<span>Delivery detail route</span>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole('option', { name: /SO-2026-0001/ });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sales order' }), { target: { value: 'so-1' } });
+    await screen.findByRole('option', { name: /PC-1.*Test part/ });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sales order line' }), { target: { value: 'so-item-1' } });
+    await screen.findByRole('option', { name: /QC-2026-0001/ });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Passed outgoing inspection' }), { target: { value: 'inspection-1' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Qty' }), { target: { value: '1' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Vehicle' }), { target: { value: 'truck-1' } });
+
+    const weight = screen.getByLabelText('Shipment weight (kg)', { exact: false });
+    fireEvent.change(weight, { target: { value: '1500.01' } });
+    expect(screen.getByText('Shipment weight exceeds the selected vehicle capacity of 1,500 kg.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Create delivery' })).toBeDisabled();
+    expect(deliveriesApi.create).not.toHaveBeenCalled();
+
+    fireEvent.change(weight, { target: { value: '1499.99' } });
+    expect(screen.getByRole('button', { name: 'Create delivery' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create delivery' }));
+    await waitFor(() => expect(deliveriesApi.create).toHaveBeenCalledWith(expect.objectContaining({
+      vehicle_id: 'truck-1', shipment_weight_kg: '1499.99',
+    }), expect.any(String)));
+  });
 });

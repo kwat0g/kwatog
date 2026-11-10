@@ -1,4 +1,5 @@
 /** Sprint 7 — Task 67 — Shipments list (inbound, imported POs). */
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuPlus } from '@/lib/icons';
@@ -19,11 +20,30 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { sameQueryExceptPage } from '@/lib/queryKeys/pageScope';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { useRealtimeList } from '@/hooks/useRealtimeRecord';
+import { Input } from '@/components/ui/Input';
+
+function localDateValue(date: Date): string {
+ return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function rangeForDays(days: number, now = new Date()): { from_date: string; to_date: string } {
+ const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+ const start = new Date(end);
+ start.setDate(start.getDate() - days + 1);
+ return { from_date: localDateValue(start), to_date: localDateValue(end) };
+}
+
 export default function ShipmentsListPage() {
  const navigate = useNavigate();
  const { can } = usePermission();
  useRealtimeList('shipment', can('supply_chain.view') || can('supply_chain.shipments.view') ? 'visible' : undefined);
  const [filters, setFilters] = useUrlFilters<ShipmentListParams>({ page: 1, per_page: 25 });
+ const [fromDate, setFromDate] = useState(filters.from_date ?? '');
+ const [toDate, setToDate] = useState(filters.to_date ?? '');
+ useEffect(() => {
+  setFromDate(filters.from_date ?? '');
+  setToDate(filters.to_date ?? '');
+ }, [filters.from_date, filters.to_date]);
   const queryKey = ['supply-chain', 'shipments', filters] as const;
   const { data, isLoading, isError, refetch } = useQuery({
   queryKey,
@@ -37,6 +57,10 @@ export default function ShipmentsListPage() {
  staleTime: 300_000,
  });
  const statusLabels = new Map((shipmentOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const customRangeValid = Boolean(fromDate && toDate && fromDate <= toDate);
+ const applyRange = (range: { from_date: string; to_date: string }) => {
+  setFilters((current) => ({ ...current, ...range, page: 1 }));
+ };
 
  const columns: Column<Shipment>[] = [
  { key: 'shipment_number', header: 'Shipment',
@@ -87,6 +111,20 @@ export default function ShipmentsListPage() {
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  searchPlaceholder="Search shipment, container, or B/L number…"
  />
+ <fieldset className="flex flex-wrap items-end gap-2 border-b border-default px-5 py-3">
+  <legend className="sr-only">Shipment date range</legend>
+  <div className="flex flex-wrap items-center gap-1.5" aria-label="Date range presets">
+   {[7, 30, 90].map((days) => {
+    const range = rangeForDays(days);
+    const selected = filters.from_date === range.from_date && filters.to_date === range.to_date;
+    return <Button key={days} type="button" size="sm" variant={selected ? 'secondary' : 'ghost'} aria-pressed={selected} onClick={() => applyRange(range)}>Last {days} days</Button>;
+   })}
+  </div>
+  <Input label="From date" type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} containerClassName="w-full sm:w-40" />
+  <Input label="To date" type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} containerClassName="w-full sm:w-40" />
+  <Button type="button" size="sm" variant="secondary" disabled={!customRangeValid} onClick={() => applyRange({ from_date: fromDate, to_date: toDate })}>Apply date range</Button>
+  {(filters.from_date || filters.to_date) && <Button type="button" size="sm" variant="ghost" onClick={() => setFilters((current) => { const next = { ...current, page: 1 }; delete next.from_date; delete next.to_date; return next; })}>Clear dates</Button>}
+ </fieldset>
  {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load shipments"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}

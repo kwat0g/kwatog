@@ -176,12 +176,16 @@ class DeliveryResource extends JsonResource
             // Chain 1 — where the run sheet sends the truck, resolved once in
             // Delivery::resolvedDeliveryAddress() rather than re-derived here.
             'delivery_address' => $this->resolvedDeliveryAddress(),
+            'delivery_latitude' => $this->delivery_latitude,
+            'delivery_longitude' => $this->delivery_longitude,
+            'shipment_weight_kg' => $this->shipment_weight_kg === null ? null : (string) $this->shipment_weight_kg,
             'delivery_contact_person' => $this->resolvedDeliveryContactPerson(),
             'delivery_contact_phone' => $this->resolvedDeliveryContactPhone(),
             'vehicle' => $this->whenLoaded('vehicle', fn () => $this->vehicle ? [
                 'id' => $this->vehicle->hash_id,
                 'plate_number' => $this->vehicle->plate_number,
                 'name' => $this->vehicle->name,
+                'capacity_kg' => $this->vehicle->capacity_kg !== null ? (float) $this->vehicle->capacity_kg : null,
             ] : null),
             'driver' => $this->whenLoaded('driver', fn () => $this->driver ? [
                 'id' => $this->driver->hash_id,

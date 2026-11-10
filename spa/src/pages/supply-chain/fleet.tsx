@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { vehiclesApi, type VehicleListParams } from '@/api/supply-chain';
+import { driverCredentialsApi, vehiclesApi, type DriverCredentialRow, type VehicleListParams } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Panel } from '@/components/ui/Panel';
 import { usePermission } from '@/hooks/usePermission';
 import type { PaginatedResponse } from '@/types';
 import type { Vehicle } from '@/types/supplyChain';
@@ -68,6 +69,11 @@ export default function FleetPage() {
  const [remoteVehicleChanged, setRemoteVehicleChanged] = useState(false);
  const [form, setForm] = useState<VehicleForm>(EMPTY_FORM);
  const [archiveVehicle, setArchiveVehicle] = useState<Vehicle | null>(null);
+ const [credentialDriver, setCredentialDriver] = useState<DriverCredentialRow | null>(null);
+ const [licenseNumber, setLicenseNumber] = useState('');
+ const [licenseExpiry, setLicenseExpiry] = useState('');
+ const [credentialFile, setCredentialFile] = useState<File>();
+ const [credentialFileError, setCredentialFileError] = useState('');
  const [filters, setFilters] = useUrlFilters<VehicleListParams>({ page: 1, per_page: 50 });
  const markRemoteVehicleChange = useCallback(() => setRemoteVehicleChanged(true), []);
  useRealtimeRecord('vehicle', canManage && canViewFleet ? editing?.id : undefined, [], markRemoteVehicleChange);
@@ -87,6 +93,11 @@ export default function FleetPage() {
  queryKey: ['supply-chain', 'vehicle-options'],
  queryFn: () => vehiclesApi.options(),
  staleTime: 300_000,
+ });
+ const credentialsQuery = useQuery({
+  queryKey: ['supply-chain', 'driver-credentials'],
+  queryFn: driverCredentialsApi.list,
+  enabled: canManage,
  });
  const statusLabels = Object.fromEntries((vehicleOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const typeLabels = Object.fromEntries((vehicleOptions?.types ?? []).map((option) => [option.value, option.label]));
@@ -168,6 +179,25 @@ export default function FleetPage() {
  },
  });
 
+ const saveCredential = useMutation({
+  mutationFn: () => {
+   if (!credentialDriver) throw new Error('Select a driver before saving a credential.');
+   return driverCredentialsApi.update(credentialDriver.id, {
+    license_number: licenseNumber.trim(),
+    expires_at: licenseExpiry,
+    credential_document: credentialFile,
+   });
+  },
+  onSuccess: () => {
+   toast.success('Driver credential saved.');
+   setCredentialDriver(null);
+   setCredentialFile(undefined);
+   setCredentialFileError('');
+   void qc.invalidateQueries({ queryKey: ['supply-chain', 'driver-credentials'] });
+  },
+  onError: (error) => toast.error(errorMessage(error, 'Could not save driver credential.')),
+ });
+
  const openCreate = () => {
   setEditing(null);
   setRemoteVehicleChanged(false);
@@ -204,6 +234,25 @@ export default function FleetPage() {
  const changePageSize = (nextPerPage: number) => {
   setFilters((current) => ({ ...current, per_page: nextPerPage, page: 1 }));
  };
+
+ const openCredential = (driver: DriverCredentialRow) => {
+  setCredentialDriver(driver);
+  setLicenseNumber(driver.credential?.license_number ?? '');
+  setLicenseExpiry(driver.credential?.expires_at ?? '');
+  setCredentialFile(undefined);
+  setCredentialFileError('');
+ };
+
+ const credentialColumns: Column<DriverCredentialRow>[] = [
+  { key: 'driver', header: 'Driver', cell: (row) => <span className="font-medium">{row.name}{row.is_active ? '' : ' · Inactive'}</span> },
+  { key: 'license', header: 'License identifier', cell: (row) => row.credential?.license_number ?? <span className="text-muted">Not recorded</span> },
+  { key: 'expiry', header: 'Expires', cell: (row) => row.credential?.expires_at ?? '—' },
+  { key: 'status', header: 'Credential status', cell: (row) => {
+   const status = row.credential?.status ?? 'missing';
+   return <Chip variant={status === 'valid' ? 'success' : status === 'expired' ? 'danger' : 'warning'}>{status === 'missing' ? 'Missing' : status === 'expired' ? 'Expired' : 'Valid'}</Chip>;
+  } },
+  { key: 'actions', header: 'Actions', align: 'right', cell: (row) => <Button size="sm" variant="secondary" onClick={() => openCredential(row)}>Update license for {row.name}</Button> },
+ ];
 
  const columns: Column<Vehicle>[] = [
   { key: 'plate', header: 'Plate', cell: (r) => <span className="font-mono">{r.plate_number}</span> },
@@ -257,6 +306,15 @@ export default function FleetPage() {
   {data && data.data.length === 0 && <EmptyState icon="truck" title={filters.status === 'maintenance' ? 'No vehicles in maintenance' : showArchived ? 'No archived vehicles' : 'No vehicles'} description={canManage ? 'Create a vehicle to make it available for delivery assignment.' : undefined} />}
   {data && data.data.length > 0 && <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((current) => ({ ...current, page }))} onPageSizeChange={changePageSize} /></div>}
 
+  {canManage && <section className="px-5 pb-5" aria-label="Driver credentials">
+   <Panel title="Driver credentials" meta="License expiry is checked when a delivery is assigned.">
+    {credentialsQuery.isLoading && <SkeletonTable columns={5} rows={3} />}
+    {credentialsQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger-fg">Driver credentials could not be loaded. <Button size="sm" variant="secondary" onClick={() => void credentialsQuery.refetch()}>Retry</Button></div>}
+    {credentialsQuery.data && credentialsQuery.data.length === 0 && <p className="text-sm text-muted">No driver accounts are configured.</p>}
+    {credentialsQuery.data && credentialsQuery.data.length > 0 && <DataTable columns={credentialColumns} data={credentialsQuery.data} />}
+   </Panel>
+  </section>}
+
   <Modal isOpen={formOpen} onClose={closeForm} title={editing ? `Edit ${editing.name}` : 'New vehicle'}>
    <div className="space-y-3">
     {editing && remoteVehicleChanged && <div role="alert" className="rounded-md bg-warning-bg p-3 text-sm text-warning-fg">
@@ -286,6 +344,37 @@ export default function FleetPage() {
      <Button variant="primary" onClick={() => save.mutate()} loading={save.isPending} disabled={remoteVehicleChanged || !form.plate_number.trim() || !form.name.trim() || !form.vehicle_type}>Save vehicle</Button>
     </ModalFooter>
    </div>
+  </Modal>
+
+  <Modal isOpen={Boolean(credentialDriver)} onClose={() => { if (!saveCredential.isPending) setCredentialDriver(null); }} title={credentialDriver ? `Driver license · ${credentialDriver.name}` : 'Driver license'} size="md">
+   {credentialDriver && <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); if (!saveCredential.isPending && licenseNumber.trim() && licenseExpiry && !credentialFileError) saveCredential.mutate(); }}>
+    <p className="text-sm text-muted">Record the license identifier and expiry. Upload a current scan when available; documents are private to Fleet managers.</p>
+    {credentialDriver.credential?.document_url && <a className="text-sm text-link underline underline-offset-2 hover:text-link-hover" href={credentialDriver.credential.document_url} target="_blank" rel="noreferrer">View current license document</a>}
+    <Input label="License identifier" required maxLength={100} value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} disabled={saveCredential.isPending} />
+    <Input label="License expiry" type="date" required value={licenseExpiry} onChange={(event) => setLicenseExpiry(event.target.value)} disabled={saveCredential.isPending} />
+    <div className="space-y-1">
+     <Input label="License document" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+       setCredentialFile(undefined);
+       setCredentialFileError('Choose a PDF, JPG, or PNG no larger than 10MB.');
+       return;
+      }
+      setCredentialFile(file);
+      setCredentialFileError('');
+     }} disabled={saveCredential.isPending} />
+     <p className="text-xs text-muted">PDF, JPG, or PNG · up to 10MB · stored privately</p>
+     {credentialFile && <p className="text-xs text-muted break-words">Selected: {credentialFile.name}</p>}
+     {credentialFileError && <p role="alert" className="text-sm text-danger-fg">{credentialFileError}</p>}
+    </div>
+    {saveCredential.isError && <p role="alert" className="text-sm text-danger-fg">{errorMessage(saveCredential.error, 'Could not save driver credential. Check the fields and retry.')}</p>}
+    <ModalFooter>
+     <Button type="button" variant="secondary" disabled={saveCredential.isPending} onClick={() => setCredentialDriver(null)}>Cancel</Button>
+     <Button type="submit" variant="primary" loading={saveCredential.isPending} disabled={saveCredential.isPending || !licenseNumber.trim() || !licenseExpiry || Boolean(credentialFileError)}>Save driver credential</Button>
+    </ModalFooter>
+   </form>}
   </Modal>
 
   <ConfirmDialog

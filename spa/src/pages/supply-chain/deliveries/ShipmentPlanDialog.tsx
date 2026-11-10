@@ -25,6 +25,7 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
   const [carrier, setCarrier] = useState(delivery.carrier ?? '');
   const [vehicleId, setVehicleId] = useState(delivery.vehicle?.id ?? '');
   const [driverId, setDriverId] = useState(delivery.driver?.id ?? '');
+  const [shipmentWeight, setShipmentWeight] = useState(delivery.shipment_weight_kg ?? '');
   const [reason, setReason] = useState('');
   const [photo, setPhoto] = useState<File>();
   const [preview, setPreview] = useState('');
@@ -55,6 +56,7 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
       scheduled_date: scheduledDate,
       expected_delivery_date: expectedDate,
       carrier: carrier.trim(),
+      shipment_weight_kg: shipmentWeight.trim(),
       vehicle_id: vehicleId,
       driver_id: driverId,
       reason: reason.trim() || 'Initial shipment arrangement.',
@@ -78,7 +80,23 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const futureShipment = scheduledDate > today;
   const datesValid = !scheduledDate || !expectedDate || expectedDate >= scheduledDate;
-  const complete = Boolean(scheduledDate && expectedDate && carrier.trim() && vehicleId && driverId) &&
+  const selectedVehicle = (vehicles.data?.data ?? []).find((vehicle) => vehicle.id === vehicleId)
+    ?? (delivery.vehicle?.id === vehicleId ? delivery.vehicle : undefined);
+  const vehicleCapacity = selectedVehicle?.capacity_kg ?? null;
+  const weightFormatValid = /^\d+(?:\.\d{1,2})?$/.test(shipmentWeight.trim());
+  const shipmentWeightHundredths = weightFormatValid ? Math.round(Number(shipmentWeight) * 100) : null;
+  const capacityHundredths = vehicleCapacity === null ? null : Math.round(vehicleCapacity * 100);
+  const overweight = shipmentWeightHundredths !== null && capacityHundredths !== null && shipmentWeightHundredths > capacityHundredths;
+  const weightValid = shipmentWeightHundredths !== null && shipmentWeightHundredths > 0 && !overweight && capacityHundredths !== null;
+  const formatWeight = (weight: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(weight);
+  const weightError = fieldError('shipment_weight_kg') ?? (shipmentWeight && !weightValid
+    ? vehicleCapacity === null
+      ? 'This vehicle has no payload capacity configured. Ask Fleet to update it.'
+      : overweight
+        ? `Shipment weight exceeds the selected vehicle capacity of ${formatWeight(vehicleCapacity)} kg.`
+        : 'Enter a weight greater than zero with up to two decimal places.'
+    : undefined);
+  const complete = Boolean(scheduledDate && expectedDate && carrier.trim() && vehicleId && driverId) && weightValid &&
     datesValid && (!assignmentChanged || reason.trim().length >= 5);
   const lookupsUnavailable = vehicles.isLoading || vehicles.isError || drivers.isLoading || drivers.isError;
 
@@ -96,13 +114,17 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
         <Select label="Vehicle" required value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} error={fieldError('vehicle_id')} disabled={save.isPending || vehicles.isLoading || vehicles.isError || delivery.status === 'loading'}>
           <option value="">{vehicles.isLoading ? 'Loading vehicles…' : 'Select available vehicle'}</option>
           {delivery.vehicle && !vehicles.data?.data.some((vehicle) => vehicle.id === delivery.vehicle?.id) && <option value={delivery.vehicle.id}>{delivery.vehicle.name} ({delivery.vehicle.plate_number})</option>}
-          {(vehicles.data?.data ?? []).map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name} ({vehicle.plate_number})</option>)}
+          {(vehicles.data?.data ?? []).map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.name} ({vehicle.plate_number}){vehicle.capacity_kg == null ? ' · payload capacity not set' : ` · ${formatWeight(vehicle.capacity_kg)} kg`}</option>)}
         </Select>
         <Select label="Driver" required value={driverId} onChange={(event) => setDriverId(event.target.value)} error={fieldError('driver_id')} disabled={save.isPending || drivers.isLoading || drivers.isError || delivery.status === 'loading'}>
           <option value="">{drivers.isLoading ? 'Loading drivers…' : 'Select active driver'}</option>
           {delivery.driver && !drivers.data?.some((driver) => driver.id === delivery.driver?.id) && <option value={delivery.driver.id}>{delivery.driver.name}</option>}
-          {(drivers.data ?? []).map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}
+          {(drivers.data ?? []).map((driver) => <option key={driver.id} value={driver.id} disabled={driver.credential_status === 'expired'}>{driver.name}{driver.credential_status === 'expired' ? ` · license expired${driver.credential_expires_at ? ` ${driver.credential_expires_at}` : ''}` : driver.credential_status === 'missing' ? ' · license not recorded' : ''}</option>)}
         </Select>
+      </div>
+      <div className="space-y-1.5">
+        <Input label="Shipment weight (kg)" type="number" min="0.01" max="9999999999.99" step="0.01" required value={shipmentWeight} onChange={(event) => setShipmentWeight(event.target.value)} error={weightError} disabled={save.isPending} />
+        {vehicleCapacity !== null && <p className="text-xs text-muted">Vehicle payload capacity: {formatWeight(vehicleCapacity)} kg</p>}
       </div>
       {delivery.status === 'loading' && <p className="text-xs text-muted">Vehicle and driver are fixed after loading begins.</p>}
       {vehicles.isError && <p role="alert" className="text-sm text-danger-fg">Could not load vehicles. <Button size="sm" type="button" onClick={() => vehicles.refetch()}>Retry vehicles</Button></p>}

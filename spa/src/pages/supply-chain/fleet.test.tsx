@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Vehicle } from '@/types/supplyChain';
@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   options: vi.fn(),
   update: vi.fn(),
   record: vi.fn(),
+  listCredentials: vi.fn(),
+  saveCredential: vi.fn(),
 }));
 
 vi.mock('@/api/supply-chain', () => ({
@@ -21,6 +23,7 @@ vi.mock('@/api/supply-chain', () => ({
     destroy: vi.fn(),
     restore: vi.fn(),
   },
+  driverCredentialsApi: { list: mocks.listCredentials, update: mocks.saveCredential },
 }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
 vi.mock('@/hooks/useRealtimeRecord', () => ({
@@ -52,6 +55,7 @@ describe('Fleet edit realtime conflict handling', () => {
       types: [{ value: 'truck', label: 'Truck' }],
       statuses: [{ value: 'available', label: 'Available' }, { value: 'maintenance', label: 'Maintenance' }],
     });
+    mocks.listCredentials.mockResolvedValue([]);
   });
 
   it('subscribes to the edited vehicle and disables stale saves when it changes remotely', async () => {
@@ -127,5 +131,50 @@ describe('Fleet edit realtime conflict handling', () => {
     const row = await screen.findByRole('row', { name: /ABC-123/ });
     expect(within(row).queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Driver license credentials', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.list.mockResolvedValue({
+      data: [vehicle],
+      meta: { current_page: 1, from: 1, last_page: 1, per_page: 50, to: 1, total: 1 },
+    });
+    mocks.options.mockResolvedValue({
+      types: [{ value: 'truck', label: 'Truck' }],
+      statuses: [{ value: 'available', label: 'Available' }, { value: 'maintenance', label: 'Maintenance' }],
+    });
+    mocks.listCredentials.mockResolvedValue([{
+      id: 'driver-1', name: 'Nestor Flores',
+      credential: {
+        license_number: 'DL-2024-11', expires_at: '2025-11-01', status: 'expired',
+        document_url: '/api/v1/supply-chain/driver-credentials/cred-1/document',
+      },
+    }]);
+  });
+
+  it('shows expired credential state and lets a fleet manager replace the license document', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
+        <MemoryRouter><FleetPage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Driver credentials' })).toBeVisible();
+    expect((await screen.findAllByText('DL-2024-11')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Expired')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Update license for Nestor Flores' })[0]);
+
+    expect(screen.getByRole('link', { name: 'View current license document' })).toHaveAttribute('href', '/api/v1/supply-chain/driver-credentials/cred-1/document');
+    fireEvent.change(screen.getByRole('textbox', { name: 'License identifier' }), { target: { value: 'DL-2027-44' } });
+    fireEvent.change(screen.getByLabelText('License expiry', { exact: false }), { target: { value: '2027-10-31' } });
+    const file = new File(['license'], 'license.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('License document', { exact: false }), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save driver credential' }));
+
+    await waitFor(() => expect(mocks.saveCredential).toHaveBeenCalledWith('driver-1', expect.objectContaining({
+      license_number: 'DL-2027-44', expires_at: '2027-10-31', credential_document: file,
+    })));
   });
 });

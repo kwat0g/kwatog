@@ -62,7 +62,7 @@ class DeliveryReceiptService
         $delivery->loadMissing([
             'salesOrder:id,so_number,customer_id',
             'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
-            'vehicle:id,plate_number,name',
+            'vehicle:id,plate_number,name,capacity_kg',
             'driver:id,name',
             'items.salesOrderItem.product:id,part_number,name,unit_of_measure',
         ]);

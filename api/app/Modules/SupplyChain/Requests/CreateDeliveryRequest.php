@@ -57,6 +57,7 @@ class CreateDeliveryRequest extends FormRequest
                 },
             ],
             'scheduled_date'              => ['required', 'date'],
+            'shipment_weight_kg'          => ['nullable', 'required_with:vehicle_id,driver_id', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999.99'],
             'notes'                       => ['nullable', 'string', 'max:2000'],
             'items'                       => ['required', 'array', 'min:1'],
             'items.*.sales_order_item_id' => ['required', 'integer', 'exists:sales_order_items,id'],
