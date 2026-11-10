@@ -28,10 +28,19 @@ const env = (k: string, fallback?: string): string | undefined => {
 };
 
 async function buildEcho() {
-  const [{ default: Echo }, { default: Pusher }] = await Promise.all([
+  const [{ default: Echo }, pusherModule] = await Promise.all([
     import('laravel-echo'),
     import('pusher-js'),
   ]);
+  type PusherConstructor = typeof import('pusher-js').default;
+  const pusherDefault = pusherModule.default;
+  const Pusher = typeof pusherDefault === 'function'
+    ? pusherDefault
+    : (pusherDefault as unknown as { Pusher?: PusherConstructor }).Pusher
+      ?? (pusherModule as unknown as { Pusher?: PusherConstructor }).Pusher;
+  if (typeof Pusher !== 'function') {
+    throw new TypeError('The Pusher client module did not expose a constructor.');
+  }
 
   (window as unknown as { Pusher: typeof Pusher }).Pusher = Pusher;
 
