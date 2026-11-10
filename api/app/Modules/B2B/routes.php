@@ -18,6 +18,7 @@ use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierDeliveryScheduleController;
 use App\Modules\B2B\Controllers\SupplierInvoiceController;
 use App\Modules\B2B\Controllers\SupplierListingPortalController;
+use App\Modules\B2B\Controllers\SupplierListingImageController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
 use App\Modules\B2B\Controllers\SupplierRfqController;
 use App\Modules\B2B\Controllers\SupplierShipmentController;
@@ -96,6 +97,8 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::post('item-listings', [SupplierListingPortalController::class, 'store'])->middleware('throttle:sensitive');
             Route::post('item-listings/bulk', [SupplierListingPortalController::class, 'storeBulk'])->middleware('throttle:sensitive');
             Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update'])->middleware('throttle:sensitive');
+            Route::post('item-listings/{supplierItemListing}/image', [SupplierListingImageController::class, 'upload'])->middleware('throttle:sensitive');
+            Route::get('item-listings/{supplierItemListing}/image', [SupplierListingImageController::class, 'portalImage']);
             // PPAP submissions (read-only, scoped to this supplier).
             Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
             // Invite-only sealed RFQs: one quotation per supplier. The service

@@ -672,6 +672,7 @@ export type PortalListingStatus = 'pending' | 'approved' | 'rejected' | 'superse
 export interface PortalSupplierListing {
   id: string;
   item?: { id: string; code: string; name: string; unit_of_measure: string };
+  image?: { original_filename: string; mime_type: string; size_bytes: number; url: string } | null;
   supplier_item_code: string | null;
   supplier_item_name: string | null;
   price: string;

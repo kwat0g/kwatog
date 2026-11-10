@@ -114,6 +114,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── Supplier Item Listings (supplier-submitted offers, reviewed here) ─── */
     Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.supplier_listings.view');
+    Route::get('/supplier-listings/{supplierItemListing}/image', [\App\Modules\B2B\Controllers\SupplierListingImageController::class, 'internalImage'])->middleware('permission:purchasing.supplier_listings.view');
     // Literal bulk segments BEFORE the {supplierItemListing} binding routes.
     Route::patch('/supplier-listings/bulk-approve', [SupplierListingController::class, 'bulkApprove'])->middleware('approval_permission:purchasing.supplier_listings.review');
     Route::patch('/supplier-listings/bulk-reject', [SupplierListingController::class, 'bulkReject'])->middleware('approval_permission:purchasing.supplier_listings.review');
