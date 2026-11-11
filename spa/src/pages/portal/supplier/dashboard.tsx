@@ -39,38 +39,40 @@ export default function SupplierDashboardPage() {
     >
       {(data) => (
         <>
-          <KpiGrid count={5}>
-            <StatCard
-              label="RFQs to quote"
-              value={data.open_rfq_count ?? 0}
-              helper="Invitations waiting for your quotation"
-              linkTo="/portal/supplier/rfqs?status=open"
-            />
-            <StatCard
-              label="Open POs"
-              value={data.open_po_count}
-              helper="Awaiting your response or in progress"
-              linkTo="/portal/supplier/purchase-orders"
-            />
-            <StatCard
-              label="Awaiting Delivery"
-              value={data.pending_delivery_count}
-              helper="Accepted POs with quantity to deliver"
-              linkTo="/portal/supplier/deliveries"
-            />
-            <StatCard
-              label="Unpaid Invoices"
-              value={data.unpaid_invoice_count}
-              helper="Invoices due"
-              linkTo="/portal/supplier/invoices"
-            />
-            <StatCard
-              label="Total Unpaid"
-              value={formatPeso(data.total_unpaid_amount)}
-              helper="Outstanding balance"
-              linkTo="/portal/supplier/statement-of-account"
-            />
-          </KpiGrid>
+          <div data-layout="section">
+            <KpiGrid count={5}>
+              <StatCard
+                label="RFQs to quote"
+                value={data.open_rfq_count ?? 0}
+                helper="Invitations waiting for your quotation"
+                linkTo="/portal/supplier/rfqs?status=open"
+              />
+              <StatCard
+                label="Open POs"
+                value={data.open_po_count}
+                helper="Awaiting your response or in progress"
+                linkTo="/portal/supplier/purchase-orders"
+              />
+              <StatCard
+                label="Awaiting Delivery"
+                value={data.pending_delivery_count}
+                helper="Accepted POs with quantity to deliver"
+                linkTo="/portal/supplier/deliveries"
+              />
+              <StatCard
+                label="Unpaid Invoices"
+                value={data.unpaid_invoice_count}
+                helper="Invoices due"
+                linkTo="/portal/supplier/invoices"
+              />
+              <StatCard
+                label="Total Unpaid"
+                value={formatPeso(data.total_unpaid_amount)}
+                helper="Outstanding balance"
+                linkTo="/portal/supplier/statement-of-account"
+              />
+            </KpiGrid>
+          </div>
 
           <PanelRow>
             <Panel title="Recent Purchase Orders" actions={viewAll('/portal/supplier/purchase-orders')} noPadding>

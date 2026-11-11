@@ -188,7 +188,7 @@ export default function CustomerPlaceOrderPage() {
       <ProductPhotoViewer photo={photoPreview} onClose={() => setPhotoPreview(null)} />
       <PageHeader title={id ? `Edit ${existingOrder?.so_number ?? 'order'}` : 'Place an Order'} subtitle={id ? 'Changes are allowed until sales confirms this order.' : 'Select products and quantities. Prices reflect your delivery date and any customer agreement.'}
         backTo={id ? `/portal/customer/orders/${id}` : '/portal/customer/orders'} backLabel={id ? 'Order' : 'My orders'} />
-      <form onSubmit={(event) => {
+      <form data-portal-guide-target="form" onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) createMut.mutate();
       }} className="min-w-0 w-full space-y-5 px-4 py-5 sm:px-5 lg:py-6">

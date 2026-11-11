@@ -177,7 +177,7 @@ export default function NotificationsListPage({ api = notificationsApi, queryKey
  />
 
  {/* Filter chips */}
- <div className="px-5 py-3 border-b border-default flex items-center">
+ <div data-portal-guide-target="filters" className="px-5 py-3 border-b border-default flex items-center">
  <SegmentedControl
  size="sm"
  label="Notification filter"

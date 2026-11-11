@@ -99,16 +99,18 @@ export default function SupplierStatementOfAccountPage() {
 
         {!isLoading && !isError && soa && (
           <>
-            <KpiGrid count={soa.aging_bucket_options.length + 1}>
-              <StatCard label="Total Outstanding" value={formatPeso(soa.total_outstanding)} />
-              {soa.aging_bucket_options.map((option) => (
-                <StatCard
-                  key={option.value}
-                  label={option.label}
-                  value={formatPeso(soa.aging_buckets[option.value])}
-                />
-              ))}
-            </KpiGrid>
+            <div data-layout="section">
+              <KpiGrid count={soa.aging_bucket_options.length + 1}>
+                <StatCard label="Total Outstanding" value={formatPeso(soa.total_outstanding)} />
+                {soa.aging_bucket_options.map((option) => (
+                  <StatCard
+                    key={option.value}
+                    label={option.label}
+                    value={formatPeso(soa.aging_buckets[option.value])}
+                  />
+                ))}
+              </KpiGrid>
+            </div>
 
             <DataTable
               tableKey="portal-supplier-open-invoices"

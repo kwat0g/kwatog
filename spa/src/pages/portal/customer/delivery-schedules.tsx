@@ -99,7 +99,7 @@ export default function DeliverySchedulesPage() {
 
         {!isLoading && !isError && showForm && (
           <Panel title="Submit monthly delivery requirements">
-            <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-4">
+            <form data-portal-guide-target="form" onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-4">
               <Select label="Month" value={month} onChange={(e) => setMonth(e.target.value)} containerClassName="max-w-xs">
                 {MONTH_OPTIONS.map((m) => (
                   <option key={m} value={m}>{m}</option>

@@ -159,12 +159,12 @@ export function PageHeader(props: PageHeaderProps) {
           )}
         </div>
         {primaryAction ? (
-          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+          <div data-layout="page-actions" className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
             {secondaryActions && <div className="flex flex-wrap items-center gap-1.5">{secondaryActions}</div>}
             <div className="flex flex-wrap items-center gap-1.5">{primaryAction}</div>
           </div>
         ) : actions ? (
-          <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">{actions}</div>
+          <div data-layout="page-actions" className="flex flex-wrap items-center gap-1.5 sm:shrink-0">{actions}</div>
         ) : null}
       </div>
       {bottom && <div className="mt-3">{bottom}</div>}

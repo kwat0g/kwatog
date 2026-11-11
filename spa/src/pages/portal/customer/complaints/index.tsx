@@ -264,6 +264,7 @@ export default function CustomerComplaintsPage() {
         {showForm && (
           <Panel title="Submit a complaint">
             <form
+              data-portal-guide-target="form"
               onSubmit={(e) => {
                 e.preventDefault();
                 createMut.mutate();

@@ -381,7 +381,7 @@ export default function SupplierItemListingsPage() {
       <div className="px-5 py-4 space-y-4">
         {showForm && (
           <Panel title={form.id ? 'Edit listing' : 'New listing'}>
-            <form onSubmit={submitForm} className="space-y-4">
+            <form data-portal-guide-target="form" onSubmit={submitForm} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Select label="Ogami item" required value={form.item_id} disabled={!!form.id} onChange={(event) => setForm((current) => ({ ...current, item_id: event.target.value }))}>
                   <option value="">Select item…</option>

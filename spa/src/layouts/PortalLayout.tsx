@@ -13,6 +13,7 @@ import { supplierPortalApi } from '@/api/b2b/supplier';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
+import { PortalWalkthrough } from '@/components/portal/PortalWalkthrough';
 import { Avatar } from '@/components/ui/Avatar';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { Button } from '@/components/ui/Button';
@@ -409,7 +410,7 @@ function PortalSidebar({
       </div>
 
       {/* Navigation */}
-      <nav aria-label={`${brand} navigation`} className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain py-3">
+      <nav data-portal-guide-target="navigation" aria-label={`${brand} navigation`} className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain py-3">
         {sections.map((section, idx) => {
           const isActiveSection = activeSectionLabel === section.label;
           return (
@@ -703,6 +704,7 @@ export default function PortalLayout({
                 linkPrefix={`/portal/${type}`}
               />
             )}
+            {user && <PortalWalkthrough realm={type} userId={user.id} sections={sections} />}
             <Avatar size="md" name={user?.name} />
           </div>
         </header>
