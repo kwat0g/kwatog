@@ -66,16 +66,18 @@ export default function StatementOfAccountPage() {
 
         {!isLoading && !isError && soa && (
           <>
-            <KpiGrid count={soa.aging_options.length + 1}>
-              <StatCard label="Total Outstanding" value={formatPeso(soa.total_outstanding)} />
-              {soa.aging_options.map((option) => (
-                <StatCard
-                  key={option.value}
-                  label={option.label}
-                  value={formatPeso(soa.aging[option.value])}
-                />
-              ))}
-            </KpiGrid>
+            <div data-layout="section">
+              <KpiGrid count={soa.aging_options.length + 1}>
+                <StatCard label="Total Outstanding" value={formatPeso(soa.total_outstanding)} />
+                {soa.aging_options.map((option) => (
+                  <StatCard
+                    key={option.value}
+                    label={option.label}
+                    value={formatPeso(soa.aging[option.value])}
+                  />
+                ))}
+              </KpiGrid>
+            </div>
 
             <DataTable
               tableKey="portal-customer-statement"

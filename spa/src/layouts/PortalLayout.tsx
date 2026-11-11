@@ -412,7 +412,7 @@ function PortalSidebar({
       </div>
 
       {/* Navigation */}
-      <nav aria-label={`${brand} navigation`} className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain py-3">
+      <nav data-portal-guide-target="navigation" aria-label={`${brand} navigation`} className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain py-3">
         {sections.map((section, idx) => {
           const isActiveSection = activeSectionLabel === section.label;
           return (

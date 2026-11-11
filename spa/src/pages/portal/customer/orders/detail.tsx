@@ -284,8 +284,9 @@ export default function CustomerOrderDetailPage() {
 
         {!isLoading && !isError && order && (
           <>
-            <KpiGrid count={3}>
-              <StatCard
+            <div data-layout="section">
+              <KpiGrid count={3}>
+                <StatCard
                 label="Product total"
                 value={formatPeso(order.total_amount)}
                 helper={
@@ -587,7 +588,8 @@ export default function CustomerOrderDetailPage() {
               </Panel>
             )}
 
-            <Panel title="Line items" meta={String(order.items?.length ?? 0)} noPadding>
+            <div data-portal-guide-target="records">
+              <Panel title="Line items" meta={String(order.items?.length ?? 0)} noPadding>
               {order.items && order.items.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className={tableCls}>

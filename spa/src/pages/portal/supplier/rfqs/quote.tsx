@@ -221,7 +221,7 @@ export default function SupplierRfqQuotePage() {
         backLabel="RFQ"
       />
 
-      <div className="min-w-0 w-full px-5 py-4 space-y-4">
+      <div data-portal-guide-target="form" className="min-w-0 w-full px-5 py-4 space-y-4">
         <Panel title="Your prices">
           <div className="space-y-4">
             {rfq.items.map((item) => {

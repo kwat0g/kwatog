@@ -216,6 +216,7 @@ export default function CustomerPricingPage() {
       <div className="space-y-4 p-5">
         {creating && (
           <form
+            data-portal-guide-target="form"
             className="space-y-4 rounded-lg border border-default p-4"
             onSubmit={form.handleSubmit((v) => submit.mutate(v), onFormInvalid<Values>())}
           >

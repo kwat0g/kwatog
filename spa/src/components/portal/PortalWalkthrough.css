@@ -1,0 +1,67 @@
+.portal-walkthrough {
+  box-shadow: var(--shadow-menu);
+  animation: portal-walkthrough-enter var(--duration-slow) var(--ease-default) both;
+}
+
+.portal-walkthrough__step {
+  animation: portal-walkthrough-step var(--duration-normal) var(--ease-default) both;
+}
+
+[data-portal-guide-active='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 17%, transparent);
+  animation: portal-walkthrough-target var(--duration-slow) var(--ease-default) 1;
+}
+
+@keyframes portal-walkthrough-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes portal-walkthrough-step {
+  from {
+    opacity: 0.45;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes portal-walkthrough-target {
+  0% {
+    outline-offset: 1px;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+  55% {
+    outline-offset: 5px;
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  100% {
+    outline-offset: 3px;
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 17%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-walkthrough,
+  .portal-walkthrough__step {
+    animation: none;
+  }
+
+  [data-portal-guide-active='true'] {
+    animation: none;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 17%, transparent);
+  }
+}

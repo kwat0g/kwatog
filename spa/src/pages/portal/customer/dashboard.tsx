@@ -43,32 +43,34 @@ export default function CustomerDashboardPage() {
     >
       {(data) => (
         <>
-          <KpiGrid count={4}>
-            <StatCard
-              label="Open Orders"
-              value={data.open_so_count}
-              helper="Pending fulfillment"
-              linkTo="/portal/customer/orders"
-            />
-            <StatCard
-              label="Pending Deliveries"
-              value={data.pending_delivery_count}
-              helper="Awaited deliveries"
-              linkTo="/portal/customer/deliveries"
-            />
-            <StatCard
-              label="Open Invoices"
-              value={data.open_invoice_count}
-              helper="Invoices due"
-              linkTo="/portal/customer/invoices?signal=unpaid"
-            />
-            <StatCard
-              label="Outstanding"
-              value={formatPeso(data.total_outstanding)}
-              helper="Total balance"
-              linkTo="/portal/customer/statement-of-account"
-            />
-          </KpiGrid>
+          <div data-layout="section">
+            <KpiGrid count={4}>
+              <StatCard
+                label="Open Orders"
+                value={data.open_so_count}
+                helper="Pending fulfillment"
+                linkTo="/portal/customer/orders"
+              />
+              <StatCard
+                label="Pending Deliveries"
+                value={data.pending_delivery_count}
+                helper="Awaited deliveries"
+                linkTo="/portal/customer/deliveries"
+              />
+              <StatCard
+                label="Open Invoices"
+                value={data.open_invoice_count}
+                helper="Invoices due"
+                linkTo="/portal/customer/invoices?signal=unpaid"
+              />
+              <StatCard
+                label="Outstanding"
+                value={formatPeso(data.total_outstanding)}
+                helper="Total balance"
+                linkTo="/portal/customer/statement-of-account"
+              />
+            </KpiGrid>
+          </div>
 
           <Panel title="Terms for your account">
             {account.isLoading ? <p className="text-sm text-muted">Loading your terms…</p>

@@ -531,9 +531,10 @@ export default function SupplierPurchaseOrderDetailPage() {
                 Add a shipment after dispatch. Include its quantity, expected arrival, and a photo of the dispatched items. OGAMI confirms receipt in a GRN.
               </p>
             )}
-            <KpiGrid count={5}>
-              <StatCard label="Total Amount" value={formatPeso(po.total_amount)} />
-              <StatCard
+            <div data-layout="section">
+              <KpiGrid count={5}>
+                <StatCard label="Total Amount" value={formatPeso(po.total_amount)} />
+                <StatCard
                 label="Required Delivery"
                 value={po.expected_delivery_date ? formatDate(po.expected_delivery_date) : '—'}
               />
@@ -681,7 +682,8 @@ export default function SupplierPurchaseOrderDetailPage() {
                   </div>
                 </Panel>
               )}
-              <Panel title="Shipments" meta={String(po.shipments?.length ?? 0)} noPadding>
+              <div data-portal-guide-target="records">
+                <Panel title="Shipments" meta={String(po.shipments?.length ?? 0)} noPadding>
                 {po.shipments && po.shipments.length > 0 ? (
                   <div className="overflow-x-auto">
                     {hasUnquantifiedShipment && <p role="alert" className="px-4 py-2 text-sm text-warning-fg">Record quantities on earlier shipments before adding another.</p>}
@@ -951,7 +953,8 @@ export default function SupplierPurchaseOrderDetailPage() {
               </form>
             </Modal>
 
-            <Panel title="Line items" meta={String(po.items?.length ?? 0)} noPadding>
+            <div data-portal-guide-target="records">
+              <Panel title="Line items" meta={String(po.items?.length ?? 0)} noPadding>
               {po.items && po.items.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className={tableCls}>
