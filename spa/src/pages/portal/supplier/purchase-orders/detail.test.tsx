@@ -18,7 +18,7 @@ vi.mock('@/api/b2b/supplier', () => ({ supplierPortalApi: {
 } }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 
-it('opens invoice entry in a modal and submits the selected receipt', async () => {
+it('retains invoice evidence after a failed submit and sends it on retry', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(2026, 9, 9, 0, 30));
   const po: PortalPoDetail = {
@@ -35,7 +35,9 @@ it('opens invoice entry in a modal and submits the selected receipt', async () =
   };
   vi.mocked(supplierPortalApi.getPo).mockResolvedValue(po);
   vi.mocked(supplierPortalApi.listShippingDocuments).mockResolvedValue([]);
-  vi.mocked(supplierPortalApi.submitInvoice).mockResolvedValue({ message: 'Invoice submitted.' } as Awaited<ReturnType<typeof supplierPortalApi.submitInvoice>>);
+  vi.mocked(supplierPortalApi.submitInvoice)
+    .mockRejectedValueOnce(new Error('Network unavailable'))
+    .mockResolvedValueOnce({ message: 'Invoice submitted.' } as Awaited<ReturnType<typeof supplierPortalApi.submitInvoice>>);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><MemoryRouter><SupplierPurchaseOrderDetailPage /></MemoryRouter></QueryClientProvider>);
 
@@ -55,15 +57,23 @@ it('opens invoice entry in a modal and submits the selected receipt', async () =
   expect(total).toHaveAttribute('readonly');
   expect(total).toHaveValue(formatPeso('11200.00'));
   fireEvent.change(within(modal).getByLabelText(/Your invoice #/), { target: { value: 'TEST-INV-001' } });
+  const invoiceFile = new File(['invoice image'], 'supplier-invoice.jpg', { type: 'image/jpeg' });
+  fireEvent.change(within(modal).getByLabelText('Attach invoice file (optional)'), { target: { files: [invoiceFile] } });
   fireEvent.submit(modal.querySelector('form')!);
 
   await waitFor(() => expect(supplierPortalApi.submitInvoice).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('dialog', { name: 'Submit invoice' })).toBeInTheDocument();
+  expect(within(modal).getByLabelText('Attach invoice file (optional)')).toHaveProperty('files.0', invoiceFile);
   const [poId, form] = vi.mocked(supplierPortalApi.submitInvoice).mock.calls[0];
   expect(poId).toBe('po-1');
   expect(form.get('bill_number')).toBe('TEST-INV-001');
   expect(form.get('date')).toBe('2026-10-10');
   expect(form.getAll('bill_ids[]')).toEqual(['bill-1']);
   expect(form.get('gross_total')).toBe('11200.00');
+  expect(form.get('file')).toBe(invoiceFile);
+  fireEvent.submit(modal.querySelector('form')!);
+  await waitFor(() => expect(supplierPortalApi.submitInvoice).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(supplierPortalApi.submitInvoice).mock.calls[1][1].get('file')).toBe(invoiceFile);
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Submit invoice' })).not.toBeInTheDocument());
   client.clear();
 });

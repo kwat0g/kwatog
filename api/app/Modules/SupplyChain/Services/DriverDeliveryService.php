@@ -25,8 +25,8 @@ class DriverDeliveryService
 {
     /** Driver-allowed forward transitions. */
     private const ALLOWED = [
-        'scheduled'  => 'loading',
-        'loading'    => 'in_transit',
+        'scheduled' => 'loading',
+        'loading' => 'in_transit',
         'in_transit' => 'delivered',
     ];
 
@@ -75,7 +75,7 @@ class DriverDeliveryService
             // The run sheet's destination. Delivery::resolvedDeliveryAddress()
             // resolves snapshot → ship-to → billing address from these columns.
             'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
-            'vehicle:id,plate_number,name',
+            'vehicle:id,plate_number,name,capacity_kg',
             'proofs' => static fn ($query) => $query->select([
                 'id', 'delivery_id', 'proof_type', 'file_name', 'created_at',
             ])->orderByDesc('created_at'),
@@ -122,6 +122,7 @@ class DriverDeliveryService
     public function uploadReceipt(User $driver, Delivery $delivery, UploadedFile $file): Delivery
     {
         $this->assertOwned($driver, $delivery);
+
         return $this->deliveries->uploadReceiptPhoto($delivery, $file, $driver);
     }
 

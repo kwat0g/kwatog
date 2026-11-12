@@ -13,6 +13,8 @@
         "laravel/tinker": "^2.9",
         "phpoffice/phpspreadsheet": "^5.9",
         "predis/predis": "^2.2",
+        "mikehaertl/php-pdftk": "0.14.4",
+        "symfony/process": "^7.0",
         "vinkla/hashids": "^13.0"
     },
     "require-dev": {

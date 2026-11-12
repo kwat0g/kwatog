@@ -21,6 +21,7 @@ import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from
 interface OrderLine {
   product: PortalCatalogItem & { unit_price: string };
   quantity: string;
+  warranty_option_id?: string;
 }
 
 const PAYMENT_METHODS = [
@@ -56,6 +57,8 @@ export default function CustomerPlaceOrderPage() {
   const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'check' | 'bank_transfer' | ''>('');
+  const [paymentTermsDays, setPaymentTermsDays] = useState('');
+  const paymentTermsTouchedRef = useRef(false);
   const [lines, setLines] = useState<OrderLine[]>([]);
   const addProductsRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -91,13 +94,35 @@ export default function CustomerPlaceOrderPage() {
     setDeliveryDate(existingOrder.requested_delivery_dates?.[0] ?? existingOrder.items?.[0]?.delivery_date ?? '');
     setNotes(existingOrder.notes ?? '');
     setPaymentMethod(existingOrder.payment_method ?? '');
+    setPaymentTermsDays(String(existingOrder.payment_terms_days ?? ''));
     setLines((existingOrder.items ?? []).flatMap((item) => item.product ? [{
       product: { ...item.product, part_number: item.product.part_number ?? '', name: item.product.name ?? '', unit_of_measure: item.product.unit_of_measure ?? '', unit_price: item.unit_price, price_source: item.price_source, pricing_method: 'flat' },
       quantity: item.quantity,
+      warranty_option_id: item.warranty_terms_snapshot?.warranty_option_id,
     }] : []));
   }, [id, existingOrder]);
+  useEffect(() => {
+    if (id || !portalUser || paymentTermsTouchedRef.current) return;
+    setPaymentTermsDays(String(portalUser.customer_terms?.payment_terms_days ?? ''));
+  }, [id, portalUser]);
   const taxReady = !!policies?.vat_status && (!vatRegistered || (rate != null && Number.isFinite(rate) && rate >= 0 && rate <= 1));
-  const invalidLines = lines.filter((line) => !(Number.isSafeInteger(Number(line.quantity)) && Number(line.quantity) >= 1));
+  const invalidLines = lines.filter((line) => {
+    const quantity = Number(line.quantity);
+    const minimum = Number(line.product.minimum_order_quantity ?? 1);
+    const maximum = line.product.maximum_order_quantity == null ? null : Number(line.product.maximum_order_quantity);
+    const exceedsStock = line.product.availability_mode === 'stock_limited'
+      && line.product.available_quantity != null
+      && quantity > Number(line.product.available_quantity);
+    const belowMinimum = Number.isFinite(minimum) && quantity < minimum;
+    const exceedsAgreementMaximum = maximum !== null && Number.isFinite(maximum) && quantity > maximum;
+    const warrantyRequired = (line.product.warranty_options?.length ?? 0) > 1 && !line.warranty_option_id;
+    return !(Number.isSafeInteger(quantity) && quantity >= 1) || belowMinimum || exceedsAgreementMaximum || exceedsStock || warrantyRequired;
+  });
+  const paymentTermsValue = Number(paymentTermsDays);
+  const paymentTermsValid = /^\d+$/.test(paymentTermsDays) && Number.isSafeInteger(paymentTermsValue)
+    && paymentTermsValue >= 0 && paymentTermsValue <= 365;
+  const paymentTermsError = paymentTermsValid ? undefined
+    : paymentTermsDays === '' ? 'Enter the payment terms requested for this order.' : 'Use a whole number from 0 to 365 days.';
   const deliveryError = !deliveryDate ? 'Choose a delivery date.'
     : deliveryDate < earliestDeliveryDate ? 'Choose a date more than 3 days from today.' : undefined;
   const quotePayload = JSON.stringify({
@@ -127,7 +152,12 @@ export default function CustomerPlaceOrderPage() {
     const unitPrice = product.unit_price;
     if (unitPrice === null) return;
     if (lines.some((line) => line.product.id === product.id)) return;
-    setLines([...lines, { product: { ...product, unit_price: unitPrice }, quantity: '1' }]);
+    const minimum = Math.max(1, Math.ceil(Number(product.minimum_order_quantity ?? 1)));
+    setLines([...lines, {
+      product: { ...product, unit_price: unitPrice },
+      quantity: String(minimum),
+      warranty_option_id: product.warranty_options?.length === 1 ? product.warranty_options[0].id : undefined,
+    }]);
   };
 
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
@@ -136,21 +166,27 @@ export default function CustomerPlaceOrderPage() {
     setLines(lines.map((line, i) => i === idx ? { ...line, quantity } : line));
   };
 
+  const updateWarranty = (idx: number, warranty_option_id: string) => {
+    setLines(lines.map((line, i) => i === idx ? { ...line, warranty_option_id: warranty_option_id || undefined } : line));
+  };
+
 
   const createMut = useMutation({
     mutationFn: () => {
       const payload = {
         notes: notes.trim() || undefined,
         payment_method: paymentMethod || undefined,
+        payment_terms_days: paymentTermsValue,
         quote_signature: quote?.signature,
         items: lines.map((line) => ({
           product_id: line.product.id,
           quantity: line.quantity,
           delivery_date: deliveryDate,
+          ...(line.warranty_option_id ? { warranty_option_id: line.warranty_option_id } : {}),
         })),
       };
       if (id) return customerPortalApi.updateOrder(id, payload);
-      const fingerprint = JSON.stringify({ notes: payload.notes, payment_method: payload.payment_method, items: payload.items });
+      const fingerprint = JSON.stringify({ notes: payload.notes, payment_method: payload.payment_method, payment_terms_days: payload.payment_terms_days, items: payload.items });
       if (orderRequestRef.current?.fingerprint !== fingerprint) {
         orderRequestRef.current = { fingerprint, key: window.crypto.randomUUID() };
       }
@@ -168,7 +204,7 @@ export default function CustomerPlaceOrderPage() {
   });
 
   const canSubmit =
-    (!id || !!existingOrder?.capabilities?.can_edit) && !!portalUser && !!paymentMethod && paymentMethodOptions.some((method) => method.value === paymentMethod) && taxReady && !!quote && !deliveryError && lines.length > 0 && invalidLines.length === 0 && !createMut.isPending;
+    (!id || !!existingOrder?.capabilities?.can_edit) && !!portalUser && !!paymentMethod && paymentMethodOptions.some((method) => method.value === paymentMethod) && paymentTermsValid && taxReady && !!quote && !deliveryError && lines.length > 0 && invalidLines.length === 0 && !createMut.isPending;
   const submissionError = createMut.isError
     ? createMut.error.response?.data?.message ?? 'Unable to submit your order. Your items are saved on this page; please try again.'
     : null;
@@ -211,7 +247,12 @@ export default function CustomerPlaceOrderPage() {
                 <option value="">Choose payment method</option>
                 {paymentMethodOptions.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}
               </Select>
-              <p className="col-span-2 -mt-1 text-xs text-muted">Select your requested payment method. Finance records payment against the invoice.</p>
+              <Input fieldSize="lg" containerClassName="col-span-2" label="Requested payment terms (days)" aria-label="Requested payment terms (days)"
+                type="number" min={0} max={365} step={1} inputMode="numeric" required value={paymentTermsDays}
+                error={paymentTermsDays !== '' && !paymentTermsValid ? paymentTermsError : undefined}
+                helper={`Customer default: ${portalUser?.customer_terms?.payment_terms_days ?? '—'} days. Sales reviews your request before confirming the order.`}
+                onChange={(event) => { paymentTermsTouchedRef.current = true; setPaymentTermsDays(event.target.value); }} />
+              {!paymentTermsValid && paymentTermsDays === '' && <p role="status" className="col-span-2 -mt-2 text-xs text-warning-fg">{paymentTermsError}</p>}
               {paymentMethodOptions.length === 0 && <p role="alert" className="col-span-2 text-sm text-warning-fg">No payment methods are configured for this account. Contact Sales before placing an order.</p>}
             </div>
           </section>
@@ -247,9 +288,18 @@ export default function CustomerPlaceOrderPage() {
                     className="max-h-64 overflow-y-auto overscroll-contain divide-y divide-default bg-canvas">
                     {catalog.map((product) => {
                       const added = lines.some((line) => line.product.id === product.id);
+                      const outOfStock = product.availability_mode === 'stock_limited' && Number(product.available_quantity ?? 0) < 1;
+                      const productPhotos = product.images?.length
+                        ? product.images.map((image) => ({ url: image.url, name: product.name, partNumber: product.part_number, altText: image.alt_text ?? undefined }))
+                        : product.image_url ? [{ url: product.image_url, name: product.name, partNumber: product.part_number }] : [];
                       return <li key={product.id} className={`grid grid-cols-[44px_minmax(0,1fr)_80px] items-center gap-x-3 px-4 py-2 sm:grid-cols-[44px_minmax(0,1fr)_100px_80px] sm:px-5 ${added ? 'bg-surface' : 'hover:bg-surface'}`}>
-                        {product.image_url ? (
-                          <ProductPhotoButton photo={{ url: product.image_url, name: product.name, partNumber: product.part_number }} className="col-start-1 row-span-2 row-start-1 h-11 w-11" onView={setPhotoPreview} />
+                        {productPhotos.length > 1 ? (
+                          <div aria-label={`Photos of ${product.name}`} className="col-start-1 row-span-2 row-start-1 grid max-h-11 w-11 grid-cols-2 gap-0.5 overflow-y-auto self-center">
+                            {productPhotos.map((photo, index) => <ProductPhotoButton key={`${product.id}-photo-${index}`} photo={photo}
+                              className="h-5 w-5" onView={setPhotoPreview} />)}
+                          </div>
+                        ) : productPhotos.length === 1 ? (
+                          <ProductPhotoButton photo={productPhotos[0]} className="col-start-1 row-span-2 row-start-1 h-11 w-11" onView={setPhotoPreview} />
                         ) : (
                           <div aria-hidden="true" className="col-start-1 row-span-2 row-start-1 flex h-11 w-11 items-center justify-center rounded border border-default bg-canvas text-muted">
                             <LuPackage size={18} />
@@ -260,11 +310,17 @@ export default function CustomerPlaceOrderPage() {
                         <p className="col-start-2 row-start-2 text-xs text-muted sm:col-start-3 sm:row-start-1 sm:text-right">
                           <span className="font-mono tabular-nums">{product.unit_price === null ? 'Price unavailable' : formatPeso(product.unit_price)}</span>{product.unit_price !== null && <> / {product.unit_of_measure || 'unit'}</>}
                           {product.pricing_issue && <span className="mt-1 block text-warning-fg">{product.pricing_issue}</span>}
+                          <span className="mt-1 block">{product.availability_mode === 'stock_limited'
+                            ? `Available: ${product.available_quantity ?? '0'} ${product.unit_of_measure || 'units'}`
+                            : 'Made to order'}</span>
+                          {product.specifications && <span className="mt-1 block">{[product.specifications.material, product.specifications.finish].filter(Boolean).join(' · ')}</span>}
+                          {product.is_customizable && <span className="mt-1 block text-accent">Customizable · blueprint available</span>}
                         </p>
                         <Button type="button" size="sm" className="col-start-3 row-span-2 row-start-1 min-h-11 disabled:opacity-100 disabled:text-muted sm:col-start-4 sm:row-span-1"
                           icon={added ? <LuCheck size={14} /> : <LuPlus size={14} />}
                           aria-label={added ? `${product.name} added to order` : product.unit_price === null ? `${product.name} cannot be ordered: ${product.pricing_issue ?? 'price unavailable'}` : `Add ${product.name} to order`}
-                          disabled={added || product.unit_price === null} onClick={() => addLine(product)}>{added ? 'Added' : product.unit_price === null ? 'Unavailable' : 'Add'}</Button>
+                          disabled={added || product.unit_price === null || outOfStock} onClick={() => addLine(product)}>{added ? 'Added' : product.unit_price === null || outOfStock ? 'Unavailable' : 'Add'}</Button>
+                        {outOfStock && <button type="button" className="col-start-2 col-span-2 row-start-3 justify-self-start text-xs font-medium text-accent underline underline-offset-2" onClick={() => navigate(`/portal/customer/pricing?product_id=${encodeURIComponent(product.id)}&quantity=1`)}>Request price and availability</button>}
                       </li>;
                     })}
                   </ul>
@@ -299,14 +355,37 @@ export default function CustomerPlaceOrderPage() {
                             <div className="min-w-0">
                               <p className="font-medium leading-snug break-words">{line.product.name}</p>
                               <p className="mt-0.5 font-mono text-xs text-muted">{line.product.part_number} <span className="font-sans">· {line.product.unit_of_measure || 'unit'}</span></p>
+                              {line.product.warranty_options && line.product.warranty_options.length > 0 && <div className="mt-2 max-w-sm">
+                                <Select label={`Warranty for ${line.product.name}`} required={line.product.warranty_options.length > 1} value={line.warranty_option_id ?? ''} onChange={(event) => updateWarranty(idx, event.target.value)}>
+                                  {line.product.warranty_options.length > 1 && <option value="">Choose warranty</option>}
+                                  {line.product.warranty_options.map((option) => <option key={option.id} value={option.id}>{option.label} · {option.warranty_duration_days == null ? 'duration agreed separately' : `${option.warranty_duration_days} days`}</option>)}
+                                </Select>
+                                {line.product.warranty_options.find((option) => option.id === line.warranty_option_id)?.additional_terms && <p className="mt-1 text-xs text-muted">{line.product.warranty_options.find((option) => option.id === line.warranty_option_id)?.additional_terms}</p>}
+                              </div>}
                             </div>
                           </div>
                         </Td>
                         <Td>
-                          <Input fieldSize="lg" aria-label={`Quantity for ${line.product.part_number}`} type="number" min={1} step={1} inputMode="numeric" required
+                          {(() => {
+                            const minimum = Math.max(1, Math.ceil(Number(line.product.minimum_order_quantity ?? 1)));
+                            const agreementMaximum = line.product.maximum_order_quantity == null ? null : Number(line.product.maximum_order_quantity);
+                            const stockMaximum = line.product.availability_mode === 'stock_limited' && line.product.available_quantity != null
+                              ? Number(line.product.available_quantity) : null;
+                            const maximum = agreementMaximum == null ? stockMaximum
+                              : stockMaximum == null ? agreementMaximum : Math.min(agreementMaximum, stockMaximum);
+                            const quantity = Number(line.quantity);
+                            const error = !(Number.isSafeInteger(quantity) && quantity >= 1) ? 'Enter a whole number of at least 1.'
+                              : quantity < minimum ? `Minimum order quantity is ${line.product.minimum_order_quantity ?? '1.000'}.`
+                                : agreementMaximum !== null && quantity > agreementMaximum ? `Maximum order quantity is ${line.product.maximum_order_quantity} per sales order.`
+                                  : stockMaximum !== null && quantity > stockMaximum ? `Maximum available is ${line.product.available_quantity}.` : undefined;
+                            return <Input fieldSize="lg" aria-label={`Quantity for ${line.product.part_number}`} type="number" min={minimum}
+                            max={maximum ?? undefined}
+                            step={1} inputMode="numeric" required
                             className="font-mono tabular-nums" value={line.quantity}
-                            error={!(Number.isSafeInteger(Number(line.quantity)) && Number(line.quantity) >= 1) ? 'Enter a whole number of at least 1.' : undefined}
-                            onChange={(e) => updateQuantity(idx, e.target.value)} />
+                            helper={`Allowed: ${line.product.minimum_order_quantity ?? '1.000'}–${line.product.maximum_order_quantity ?? 'no maximum'}${stockMaximum === null ? '' : ` · Available: ${line.product.available_quantity}`}`}
+                            error={error} onChange={(e) => updateQuantity(idx, e.target.value)} />;
+                          })()}
+                          {line.product.availability_mode === 'stock_limited' && Number(line.quantity) > Number(line.product.available_quantity ?? 0) && <button type="button" className="mt-1 text-xs font-medium text-accent underline underline-offset-2" onClick={() => navigate(`/portal/customer/pricing?product_id=${encodeURIComponent(line.product.id)}&quantity=${encodeURIComponent(line.quantity)}`)}>Request price and availability</button>}
                         </Td>
                         <Td align="right" mono className="whitespace-nowrap text-muted">{quotedLine(line) ? formatPeso(quotedLine(line)!.unit_price) : pricingError ? 'Unavailable' : 'Pending'}<p className="mt-1 font-sans text-xs">{quotedLine(line)?.price_source === 'agreement' ? 'Agreed price' : quotedLine(line)?.price_source === 'base' ? 'Standard price' : quote ? 'Price unavailable' : pricingError ? 'Price check failed' : 'Checking price…'}</p></Td>
                         <Td align="right" mono className="whitespace-nowrap font-medium">{quotedLine(line) ? formatPeso(quotedLine(line)!.total) : pricingError ? 'Unavailable' : 'Pending'}</Td>

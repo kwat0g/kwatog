@@ -157,21 +157,29 @@ export const ROLES: Array<{ slug: string; email: string; password: string }> = [
 type E2EAccountManifest = { accounts?: Array<{ actor?: unknown; realm?: unknown; email?: unknown }> };
 let isolatedActorEmails: Promise<Map<string, string>> | undefined;
 
-async function resolveIsolatedActorEmail(email: string): Promise<string> {
+async function readIsolatedActorEmails(): Promise<Map<string, string>> {
   const manifestPath = process.env.E2E_ACCOUNT_MANIFEST;
-  if (!manifestPath) return email;
+  if (!manifestPath) return new Map();
 
   isolatedActorEmails ??= readFile(manifestPath, 'utf8').then((source) => {
     const manifest = JSON.parse(source) as E2EAccountManifest;
     const entries = Array.isArray(manifest.accounts) ? manifest.accounts : [];
     return new Map(entries
       .filter((entry): entry is { actor: string; realm: string; email: string } =>
-        typeof entry.actor === 'string' && entry.realm === 'internal' && typeof entry.email === 'string')
+        typeof entry.actor === 'string' && typeof entry.realm === 'string' && typeof entry.email === 'string')
       .map((entry) => [entry.actor, entry.email]));
   });
 
+  return isolatedActorEmails;
+}
+
+async function resolveIsolatedActorEmail(email: string): Promise<string> {
   const actor = ROLES.find((role) => role.email === email)?.slug;
-  return actor ? (await isolatedActorEmails).get(actor) ?? email : email;
+  return actor ? (await readIsolatedActorEmails()).get(actor) ?? email : email;
+}
+
+export async function resolveIsolatedPortalEmail(actor: string, fallback: string): Promise<string> {
+  return (await readIsolatedActorEmails()).get(actor) ?? fallback;
 }
 
 export interface NetworkCapture {
@@ -303,9 +311,10 @@ export async function loginAs(
 
 /** UI-driven login (exercises the real sign-in form). Use sparingly (rate limit). */
 export async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
+  const effectivePassword = process.env.E2E_ACCOUNT_PASSWORD || password;
   await page.goto('/sign-in');
   await page.getByRole('textbox', { name: 'Email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill(password);
+  await page.getByRole('textbox', { name: 'Password' }).fill(effectivePassword);
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).not.toHaveURL(/sign-in/, { timeout: 20_000 });
 }

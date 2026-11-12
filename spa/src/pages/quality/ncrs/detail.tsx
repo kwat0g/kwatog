@@ -180,6 +180,7 @@ export default function NcrDetailPage() {
     ? Math.max(0, Number(data?.inspection?.batch_quantity ?? 0) - reportedDefects)
     : null;
   const repairBatch = fullBatch && effectiveDisposition === 'rework' && !mrbLocked;
+  const fixedQcGoodQuantity = fullBatch && ['scrap', 'rework'].includes(effectiveDisposition) && !mrbLocked;
   const repairNotes = fullBatch && effectiveDisposition === 'rework';
 
   const recoveryQuantity = Number(
@@ -189,8 +190,12 @@ export default function NcrDetailPage() {
       data?.affected_quantity ??
       0,
   );
-  const mrbAcceptedQuantity = enteredAcceptedQuantity ??
-    (fullBatch && conformingQuantity !== null ? String(Math.min(conformingQuantity, recoveryQuantity)) : '');
+  const mrbAcceptedQuantity = fixedQcGoodQuantity
+    ? conformingQuantity !== null ? String(Math.min(conformingQuantity, recoveryQuantity)) : ''
+    : enteredAcceptedQuantity ??
+      (fullBatch && conformingQuantity !== null ? String(Math.min(conformingQuantity, recoveryQuantity)) : '');
+  const systemSeparationReference = data?.ncr_number ? `${data.ncr_number}-SEP` : '';
+  const effectiveSortingReference = fixedQcGoodQuantity ? systemSeparationReference : sortingReference;
   const sortingPerformer = enteredSortingPerformer ??
     (fullBatch ? assignees.find((person) => person.id === data?.inspection?.inspector?.id)?.id ?? '' : '');
   const countable = Boolean(
@@ -212,13 +217,13 @@ export default function NcrDetailPage() {
     !mrbLocked &&
     Boolean(data?.is_incoming_mrb || data?.is_outgoing_recovery || data?.is_process_recovery) &&
     (positiveGood ||
-      (data?.is_outgoing_recovery && effectiveDisposition === 'rework') ||
+      (data?.is_outgoing_recovery && ['scrap', 'rework'].includes(effectiveDisposition)) ||
       data?.is_process_recovery ||
       (data?.is_incoming_mrb && effectiveDisposition === 'use_as_is'));
   const goodQuantityValid =
     mrbLocked ||
     !canKeepGood ||
-    (!repairBatch && !trialRecovery && mrbAcceptedQuantity === '') ||
+    (!fixedQcGoodQuantity && !trialRecovery && mrbAcceptedQuantity === '') ||
     (/^\d+(?:\.\d{1,3})?$/.test(mrbAcceptedQuantity) &&
       Number(mrbAcceptedQuantity) >= 0 &&
       (conformingQuantity === null || Number(mrbAcceptedQuantity) <= conformingQuantity) &&
@@ -241,7 +246,7 @@ export default function NcrDetailPage() {
     !needsSortingEvidence ||
     (Number(coveredQuantity) === recoveryQuantity &&
       Number(coveredQuantity) > 0 &&
-      Boolean(sortingReference.trim()) &&
+      Boolean(effectiveSortingReference.trim()) &&
       Boolean(sortingPerformer) &&
       recoveryPassed && (!data?.full_piece_inspection || defectsSegregated));
   const needsConcession = needsSortingEvidence && effectiveDisposition === 'use_as_is';
@@ -266,7 +271,7 @@ export default function NcrDetailPage() {
           ? {
               sorting_evidence: {
                 inspected_quantity: coveredQuantity,
-                evidence_reference: sortingReference.trim(),
+                evidence_reference: effectiveSortingReference.trim(),
                 concession_approval_reference: needsConcession
                   ? concessionReference.trim()
                   : undefined,
@@ -724,6 +729,8 @@ export default function NcrDetailPage() {
                     helper={
                       mrbLocked
                         ? 'Fixed by the MRB decision — the receipt was settled against it.'
+                        : fullBatch && effectiveDisposition === 'scrap'
+                          ? 'Discard the separated defective pieces and release the good quantity below. For stock orders, closing this NCR creates a replacement work order for the shortfall; sales-order shortages are replanned by production planning.'
                         : fullBatch && !repairBatch
                           ? 'Applies to defective pieces; conforming stock is handled separately.'
                           : undefined
@@ -744,7 +751,7 @@ export default function NcrDetailPage() {
                       .map((option) => (
                         <option key={option.value} value={option.value}>
                           {fullBatch && option.value === 'rework'
-                            ? 'Repair defective pieces'
+                            ? 'Rework defective pieces'
                             : fullBatch && option.value === 'scrap'
                               ? 'Scrap defective pieces'
                               : option.label}
@@ -754,10 +761,10 @@ export default function NcrDetailPage() {
                 </div>
                 {canKeepGood && !mrbLocked && (
                   <Input
-                    label={repairBatch ? 'Good pieces to release' : 'Verified good quantity after sorting'}
-                    required={repairBatch}
+                    label={fixedQcGoodQuantity ? 'Good pieces to release' : 'Verified good quantity after sorting'}
+                    required={fixedQcGoodQuantity}
                     helper={
-                      repairBatch ? 'From QC results. Change only if fewer good pieces can release.' : fullBatch
+                      fixedQcGoodQuantity ? 'Calculated from final QC results and fixed for this disposition.' : fullBatch
                         ? `Enter physically separated conforming pieces${conformingQuantity !== null ? `, up to ${conformingQuantity}` : ''}. Enter 0 if none can release.`
                         : trialRecovery
                           ? 'Enter actual trial pieces kept good, including 0. Good plus scrap must equal the affected batch.'
@@ -772,6 +779,7 @@ export default function NcrDetailPage() {
                     containerClassName="sm:max-w-sm"
                     inputMode={countable ? 'numeric' : 'decimal'}
                     value={mrbAcceptedQuantity}
+                    readOnly={fixedQcGoodQuantity}
                     disabled={setDispositionMut.isPending}
                     error={
                       !goodQuantityValid && mrbAcceptedQuantity !== ''
@@ -962,22 +970,25 @@ export default function NcrDetailPage() {
                     </div>
                     <Input
                       label={
-                        repairBatch ? 'Separation reference' : data.full_piece_inspection
+                        fixedQcGoodQuantity ? 'System-generated separation reference' : data.full_piece_inspection
                           ? 'Segregation evidence reference'
                           : 'Sorting / reinspection evidence reference'
                       }
                       required
                       maxLength={500}
-                      value={sortingReference}
+                      value={effectiveSortingReference}
                       disabled={setDispositionMut.isPending}
                       helper={
-                        repairBatch ? undefined : data.full_piece_inspection
+                        fixedQcGoodQuantity
+                          ? 'Generated from this NCR and saved with its disposition. Use this same ID on a hold-lot tag if you label the separated defects.'
+                          : data.full_piece_inspection
                           ? 'Reference the segregation record or held-lot label.'
                           : 'Reference the external sorting and reinspection document and segregated good-lot label.'
                       }
                       placeholder={
-                        fullBatch ? 'Held-lot label or log reference' : undefined
+                        !fixedQcGoodQuantity && fullBatch ? 'Held-lot label or log reference' : undefined
                       }
+                      readOnly={fixedQcGoodQuantity}
                       onChange={(event) => setSortingReference(event.target.value)}
                     />
                     {needsConcession && (
@@ -1241,7 +1252,7 @@ export default function NcrDetailPage() {
         title="Close NCR?"
         description={
           data.disposition === 'scrap'
-            ? 'On scrap from outgoing inspection, a replacement work order will be auto-created.'
+            ? 'This scraps the separated defective quantity. Stock orders get a replacement work order for the shortfall; sales-order shortages are replanned by production planning.'
             : data.disposition === 'return_to_supplier'
               ? 'Purchasing will be notified to coordinate the supplier return.'
               : 'This will lock the NCR. Actions can no longer be added after closure.'

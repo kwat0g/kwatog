@@ -36,12 +36,25 @@ const itemSchema = z.object({
  inspection_id: z.string().min(1, 'Select a passed outgoing inspection'),
 });
 
+function decimalHundredths(value: string): bigint | null {
+ if (!/^\d{1,10}(?:\.\d{1,2})?$/.test(value.trim())) return null;
+ const [whole, fraction = ''] = value.trim().split('.');
+ return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
+}
+
 const schema = z.object({
  sales_order_id: z.string().min(1, 'Sales order is required'),
  vehicle_id: z.string().optional(),
+ shipment_weight_kg: z.string().optional(),
  scheduled_date: z.string().min(1, 'Scheduled date is required'),
  notes: z.string().max(2000).optional(),
  items: z.array(itemSchema).min(1, 'Add at least one delivery line'),
+}).superRefine((values, context) => {
+ if (!values.vehicle_id) return;
+ const weight = decimalHundredths(values.shipment_weight_kg ?? '');
+ if (weight === null || weight <= 0n) {
+  context.addIssue({ code: 'custom', path: ['shipment_weight_kg'], message: 'Enter a positive shipment weight with up to two decimal places.' });
+ }
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -96,6 +109,7 @@ export default function CreateDeliveryPage() {
  defaultValues: submission?.data ?? {
  sales_order_id: '',
  vehicle_id: '',
+ shipment_weight_kg: '',
  scheduled_date: localIsoDate(),
  notes: '',
  items: [{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }],
@@ -114,6 +128,24 @@ export default function CreateDeliveryPage() {
 
  // Watch SO selection to populate line item options.
   const selectedSoId = watch('sales_order_id');
+ const selectedVehicleId = watch('vehicle_id') ?? '';
+ const shipmentWeight = watch('shipment_weight_kg') ?? '';
+ const selectedVehicle = vehicleList.find((vehicle) => vehicle.id === selectedVehicleId);
+ const parsedWeight = decimalHundredths(shipmentWeight);
+ const selectedCapacity = selectedVehicle?.capacity_kg;
+ const parsedCapacity = selectedCapacity == null ? null : decimalHundredths(String(selectedCapacity));
+ const shipmentWeightOverCapacity = parsedWeight !== null && parsedCapacity !== null && parsedWeight > parsedCapacity;
+ const shipmentWeightInvalid = Boolean(selectedVehicleId && (
+  parsedWeight === null || parsedWeight <= 0n || parsedCapacity === null || shipmentWeightOverCapacity
+ ));
+ const formatWeight = (weight: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(weight);
+ const shipmentWeightError = errors.shipment_weight_kg?.message ?? (selectedVehicleId && shipmentWeightInvalid
+  ? selectedCapacity == null
+   ? 'This vehicle has no payload capacity configured. Ask Fleet to update it.'
+   : shipmentWeightOverCapacity
+    ? `Shipment weight exceeds the selected vehicle capacity of ${formatWeight(selectedCapacity)} kg.`
+    : 'Enter a positive shipment weight with up to two decimal places.'
+  : undefined);
 
  const selectedOrderQuery = useQuery({
   queryKey: ['supply-chain', 'deliveries', 'form-options', selectedSoId],
@@ -138,6 +170,7 @@ export default function CreateDeliveryPage() {
   return deliveriesApi.create({
  sales_order_id: data.sales_order_id,
  vehicle_id: data.vehicle_id || undefined,
+ shipment_weight_kg: data.vehicle_id ? data.shipment_weight_kg : undefined,
  scheduled_date: data.scheduled_date,
  notes: data.notes || undefined,
  items: data.items.map((i) => ({
@@ -264,10 +297,23 @@ navigate(`/supply-chain/deliveries/${delivery.id}`);
  </option>
  {vehicleList.map((v) => (
  <option key={v.id} value={v.id}>
- {v.name} ({v.plate_number})
+ {v.name} ({v.plate_number}){v.capacity_kg == null ? ' · payload capacity not set' : ` · ${formatWeight(v.capacity_kg)} kg`}
  </option>
  ))}
  </Select>
+ {selectedVehicleId && <div className="mt-3 space-y-1.5">
+  <Input
+   label="Shipment weight (kg)"
+   type="number"
+   min="0.01"
+   max={selectedCapacity ?? undefined}
+   step="0.01"
+   required
+   {...register('shipment_weight_kg')}
+   error={shipmentWeightError}
+  />
+  {selectedCapacity != null && <p className="text-xs text-muted">Vehicle payload capacity: {formatWeight(selectedCapacity)} kg.</p>}
+ </div>}
  {vehiclesQuery.isError && <div role="alert" className="mt-2 text-sm text-danger-fg">Vehicles could not be loaded. You can assign one after creating the delivery. <Button type="button" onClick={() => void vehiclesQuery.refetch()}>Retry vehicles</Button></div>}
  </fieldset>
 
@@ -423,7 +469,7 @@ navigate(`/supply-chain/deliveries/${delivery.id}`);
  <Button
  type="submit"
  variant="primary"
- disabled={isSubmitting || mutation.isPending || Boolean(submission) || selectedOrderQuery.isError || inspectionQuery.isError}
+ disabled={isSubmitting || mutation.isPending || Boolean(submission) || selectedOrderQuery.isError || inspectionQuery.isError || shipmentWeightInvalid}
  loading={mutation.isPending}
  >
  {mutation.isPending ? 'Creating…' : 'Create delivery'}

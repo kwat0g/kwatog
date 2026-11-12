@@ -7,14 +7,16 @@ namespace Tests\Feature\CRM;
 use App\Common\Events\ChainStepAdvanced;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderResponseStatus;
 use App\Modules\CRM\Enums\SalesOrderResponseType;
 use App\Modules\CRM\Mail\CustomerSalesOrderDecisionMail;
@@ -29,7 +31,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
@@ -415,11 +416,11 @@ class SalesOrderResponseTest extends TestCase
             self::assertStringNotContainsString('onerror', $html);
             self::assertStringContainsString('Decision: Accepted.', $html);
             self::assertStringContainsString('your response', $html);
-            self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $html);
+            self::assertStringContainsString(app(CurrencyDisplayService::class)->format('125.00'), $html);
             self::assertStringContainsString(config('app.frontend_url').'/portal/customer/orders/'.$mail->snapshot['sales_order_hash_id'], $html);
             self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
             self::assertLessThan(102400, strlen($html));
-            self::assertSame('['.app(\App\Common\Services\EmailBrandingService::class)->data()['name'].'] Sales order response accepted: '.$mail->snapshot['so_number'].' · '.app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $mail->envelope()->subject);
+            self::assertSame('['.app(EmailBrandingService::class)->data()['name'].'] Sales order response accepted: '.$mail->snapshot['so_number'].' · '.app(CurrencyDisplayService::class)->format('125.00'), $mail->envelope()->subject);
             $mail->assertSeeInText('Review your sales order');
             self::assertStringNotContainsString('Changed Contact', $html);
             self::assertStringNotContainsString('999.00', $html);
@@ -471,7 +472,7 @@ class SalesOrderResponseTest extends TestCase
         ]);
     }
 
-    public function test_accept_of_propose_reruns_the_credit_gate(): void
+    public function test_accept_of_propose_is_not_blocked_by_optional_credit_limit(): void
     {
         // A tiny AR balance consumes the credit line once the proposal raises
         // this order's value.
@@ -494,16 +495,10 @@ class SalesOrderResponseTest extends TestCase
         $approver = $this->userWithRole('sales_officer');
         Mail::fake();
 
-        try {
-            $this->svc->resolve($response, $approver, 'accept');
-            $this->fail('Accepting a counter-offer beyond the credit limit must be refused.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('credit_limit', $e->errors());
-        }
+        $resolved = $this->svc->resolve($response, $approver, 'accept');
 
-        // The whole resolution rolled back: the line and the response are intact.
-        $this->assertSame('100.00', (string) $line->fresh()->unit_price);
-        $this->assertSame(SalesOrderResponseStatus::Pending, $response->fresh()->status);
+        $this->assertSame('200.00', (string) $line->fresh()->unit_price);
+        $this->assertSame(SalesOrderResponseStatus::Accepted, $resolved->fresh()->status);
     }
 
     public function test_reject_leaves_the_order_untouched(): void

@@ -15,7 +15,7 @@ vi.mock('react-router-dom', async (original) => ({ ...(await original<typeof imp
 vi.mock('@/api/supply-chain', () => ({
   deliveriesApi: {
     show: vi.fn(), updateStatus: vi.fn(), shipmentPlan: vi.fn(), confirm: vi.fn(),
-    driverOptions: vi.fn().mockResolvedValue([{ id: 'driver-1', name: 'Nestor Flores' }]),
+    driverOptions: vi.fn().mockResolvedValue([{ id: 'driver-1', name: 'Nestor Flores', credential_status: 'valid' }]),
     options: vi.fn().mockResolvedValue({ statuses: [
       { value: 'scheduled', label: 'Scheduled', next_status: 'loading' },
       { value: 'loading', label: 'Loading', next_status: 'in_transit' },
@@ -23,11 +23,11 @@ vi.mock('@/api/supply-chain', () => ({
     ] }),
   },
   deliveryProofsApi: { upload: vi.fn(), options: vi.fn().mockResolvedValue({ proof_types: [{ value: 'signed_dr', label: 'Signed receipt' }, { value: 'photo', label: 'Delivery photo' }, { value: 'loading_photo', label: 'Loading photo' }, { value: 'coc', label: 'Certificate of Conformance' }, { value: 'other', label: 'Other document' }] }) },
-  vehiclesApi: { list: vi.fn().mockResolvedValue({ data: [{ id: 'truck-1', name: 'Truck', plate_number: 'ABC-123' }] }) },
+  vehiclesApi: { list: vi.fn().mockResolvedValue({ data: [{ id: 'truck-1', name: 'Truck', plate_number: 'ABC-123', capacity_kg: 1500 }] }) },
 }));
 vi.mock('@/api/accounting/invoices', () => ({ invoicesApi: { finalize: vi.fn() } }));
 const delivery = {
-  id: 'dr-1', delivery_number: 'DR-202610-0001', status: 'scheduled', scheduled_date: '2026-10-10',
+  id: 'dr-1', delivery_number: 'DR-202610-0001', status: 'scheduled', scheduled_date: '2026-10-10', shipment_weight_kg: '500.00',
   sales_order: { id: 'so-1', so_number: 'SO-202610-0025' }, vehicle: null, driver: null,
   stock_reservation_status: 'reserved', can_reserve_stock: false,
   items: [
@@ -57,11 +57,12 @@ function deferred<T>() {
   return { promise, resolve };
 }
 beforeEach(() => {
+  vi.mocked(deliveriesApi.driverOptions).mockResolvedValue([{ id: 'driver-1', name: 'Nestor Flores', credential_status: 'valid' }]);
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:loading-preview');
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 });
 afterEach(() => { cleanup(); permissions.edit = true; vi.clearAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); });
-const assigned = { ...delivery, scheduled_date: '2026-10-08', expected_delivery_date: '2026-10-10', carrier: 'Ogami fleet', vehicle: { id: 'truck-1', name: 'Truck', plate_number: 'ABC-123' }, driver: { id: 'driver-1', name: 'Nestor Flores' } };
+const assigned = { ...delivery, scheduled_date: '2026-10-08', expected_delivery_date: '2026-10-10', shipment_weight_kg: '500.00', carrier: 'Ogami fleet', vehicle: { id: 'truck-1', name: 'Truck', plate_number: 'ABC-123', capacity_kg: 1500 }, driver: { id: 'driver-1', name: 'Nestor Flores' } };
 const loadingPhoto = {
   id: 'loading-1', proof_type: 'loading_photo' as const, file_name: 'loaded.jpg', file_size: 10,
   mime_type: 'image/jpeg', is_image: true, notes: null, view_url: '/loading.jpg', deleted_at: null,
@@ -95,6 +96,10 @@ it('shows released quantities with one shipment action and no premature receipt 
   expect(screen.queryByRole('heading', { name: 'Customer receipt' })).not.toBeInTheDocument();
   expect(screen.queryByText('Awaiting invoice')).not.toBeInTheDocument();
 });
+it('shows the recorded shipment weight with delivery details', async () => {
+  show({ ...delivery, shipment_weight_kg: '1465.50' });
+  expect(await screen.findByText('1,465.5 kg')).toBeVisible();
+});
 it('requires complete shipment details and loading photo before dispatch', async () => {
   vi.mocked(deliveriesApi.shipmentPlan).mockResolvedValue({ ...assigned, status: 'in_transit' });
   show(delivery);
@@ -114,9 +119,42 @@ it('requires complete shipment details and loading photo before dispatch', async
   fireEvent.click(screen.getByRole('button', { name: 'Dispatch shipment' }));
   await waitFor(() => expect(deliveriesApi.shipmentPlan).toHaveBeenCalledWith('dr-1', {
     scheduled_date: '2026-10-08', expected_delivery_date: '2026-10-10', carrier: 'Ogami fleet',
-    vehicle_id: 'truck-1', driver_id: 'driver-1', reason: 'Initial shipment arrangement.', dispatch: true, loading_photo: photo,
+    shipment_weight_kg: '500.00', vehicle_id: 'truck-1', driver_id: 'driver-1', reason: 'Initial shipment arrangement.', dispatch: true, loading_photo: photo,
   }));
   expect(deliveriesApi.updateStatus).not.toHaveBeenCalled();
+});
+it('blocks drivers whose license credential is missing', async () => {
+  vi.mocked(deliveriesApi.driverOptions).mockResolvedValue([
+    { id: 'driver-1', name: 'Nestor Flores', credential_status: 'missing' },
+  ]);
+  show(delivery);
+  fireEvent.click(await screen.findByRole('button', { name: 'Arrange shipment' }));
+
+  expect(await screen.findByRole('option', { name: /Nestor Flores · license credential required/ })).toBeDisabled();
+  expect(screen.getByText(/No assignable driver has a current license credential/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save plan' })).toBeDisabled();
+});
+it('shows vehicle payload capacity and blocks an overweight shipment plan', async () => {
+  vi.mocked(vehiclesApi.list).mockResolvedValue({
+    data: [{ id: 'truck-cap', name: 'Capacity truck', plate_number: 'CAP-500', capacity_kg: 1500, vehicle_type: 'truck', status: 'available', notes: null }],
+    meta: { current_page: 1, last_page: 1, per_page: 100, total: 1, from: 1, to: 1 },
+    links: { first: '/supply-chain/vehicles?page=1', last: '/supply-chain/vehicles?page=1', prev: null, next: null },
+  });
+  show(delivery);
+  fireEvent.click(await screen.findByRole('button', { name: 'Arrange shipment' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save plan' })).toBeDisabled());
+
+  await waitFor(() => expect(screen.getByLabelText('Vehicle', { exact: false })).not.toBeDisabled());
+  await waitFor(() => expect(screen.getByLabelText('Driver', { exact: false })).not.toBeDisabled());
+  fireEvent.change(screen.getByLabelText('Vehicle', { exact: false }), { target: { value: 'truck-cap' } });
+  fireEvent.change(screen.getByLabelText('Driver', { exact: false }), { target: { value: 'driver-1' } });
+  fireEvent.change(screen.getByLabelText('Carrier', { exact: false }), { target: { value: 'Ogami fleet' } });
+  fireEvent.change(screen.getByLabelText('Shipment weight (kg)', { exact: false }), { target: { value: '1500.01' } });
+
+  expect(screen.getByText('Vehicle payload capacity: 1,500 kg')).toBeVisible();
+  expect(screen.getByText('Shipment weight exceeds the selected vehicle capacity of 1,500 kg.')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save plan' })).toBeDisabled();
+  expect(deliveriesApi.shipmentPlan).not.toHaveBeenCalled();
 });
 it('saves future shipment plans without a loading photo', async () => {
   vi.mocked(deliveriesApi.shipmentPlan).mockResolvedValue({ ...assigned, scheduled_date: '2099-10-10', expected_delivery_date: '2099-10-11' });
@@ -176,6 +214,7 @@ it('rejects oversized loading photos', async () => {
 });
 it('completes legacy loading shipments with retained assignment and saved loading evidence', async () => {
   vi.mocked(deliveriesApi.shipmentPlan).mockResolvedValue({ ...assigned, status: 'in_transit', proofs: [loadingPhoto] });
+  vi.mocked(deliveriesApi.driverOptions).mockResolvedValue([]);
   show({ ...assigned, status: 'loading', proofs: [loadingPhoto] });
   fireEvent.click(await screen.findByRole('button', { name: 'Arrange shipment' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Dispatch shipment' })).toBeEnabled());

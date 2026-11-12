@@ -23,6 +23,7 @@ const CreateCustomerPage = lazy(() => import('@/pages/accounting/customers/creat
 const EditCustomerPage = lazy(() => import('@/pages/accounting/customers/edit'));
 const CustomerDetailPage = lazy(() => import('@/pages/accounting/customers/detail'));
 const InvoicesPage = lazy(() => import('@/pages/accounting/invoices'));
+const CustomerAdvancesPage = lazy(() => import('@/pages/accounting/customer-advances'));
 const InvoiceFormPage = lazy(() => import('@/pages/accounting/invoices/create'));
 const InvoiceDetailPage = lazy(() => import('@/pages/accounting/invoices/detail'));
 const TrialBalancePage = lazy(() => import('@/pages/accounting/trial-balance'));
@@ -68,7 +69,7 @@ export const accountingRoutes = (
  element={<PermissionGuard permission="accounting.vendors.view"><VendorDetailPage /></PermissionGuard>} />
  <Route path="/accounting/vendors/:id/edit"
  element={<PermissionGuard permission="accounting.vendors.manage"><EditVendorPage /></PermissionGuard>} />  <Route path="/accounting/portal-access"
- element={<PermissionGuard permission="b2b.portal_access.view"><PortalAccessPage /></PermissionGuard>} />
+ element={<PermissionGuard anyOf={['b2b.portal_access.view', 'accounting.customers.manage']}><PortalAccessPage /></PermissionGuard>} />
 
  <Route path="/accounting/bills"
  element={<PermissionGuard permission="accounting.bills.view"><BillsPage /></PermissionGuard>} />
@@ -88,6 +89,8 @@ export const accountingRoutes = (
 
  <Route path="/accounting/invoices"
  element={<PermissionGuard permission="accounting.invoices.view"><InvoicesPage /></PermissionGuard>} />
+ <Route path="/accounting/customer-advances"
+ element={<PermissionGuard permission="accounting.invoices.collect"><CustomerAdvancesPage /></PermissionGuard>} />
  <Route path="/accounting/invoices/create"
  element={<PermissionGuard permission="accounting.invoices.create"><InvoiceFormPage /></PermissionGuard>} />
  <Route path="/accounting/invoices/:id/edit"

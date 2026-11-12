@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Controllers;
 
-use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Enums\InvoiceStatus;
-use App\Modules\B2B\Resources\CustomerPortalInvoiceResource;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Requests\Customer\ConfirmPortalDeliveryRequest;
@@ -17,9 +16,10 @@ use App\Modules\B2B\Requests\Customer\RespondToSalesOrderRequest;
 use App\Modules\B2B\Requests\Customer\StoreCustomerReturnRequest;
 use App\Modules\B2B\Requests\Customer\StorePortalOrderRequest;
 use App\Modules\B2B\Requests\Customer\UpdatePortalOrderRequest;
-use App\Modules\B2B\Resources\CustomerPortalComplaintResource;
-use App\Modules\B2B\Resources\CustomerReturnRequestResource;
 use App\Modules\B2B\Resources\CustomerDeliveryResource;
+use App\Modules\B2B\Resources\CustomerPortalComplaintResource;
+use App\Modules\B2B\Resources\CustomerPortalInvoiceResource;
+use App\Modules\B2B\Resources\CustomerReturnRequestResource;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\B2B\Services\CustomerPortalService;
 use App\Modules\CRM\Enums\ComplaintStatus;
@@ -27,21 +27,21 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderResponse;
-use App\Modules\CRM\Services\SalesOrderResponseService;
 use App\Modules\CRM\Resources\SalesOrderResource;
 use App\Modules\CRM\Resources\SalesOrderResponseResource;
-use App\Modules\ReturnManagement\Models\ReturnRequest;
-use App\Modules\SupplyChain\Models\Delivery;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
-use App\Modules\SupplyChain\Models\DeliveryProof;
+use App\Modules\CRM\Services\SalesOrderResponseService;
 use App\Modules\Quality\Enums\NcrSeverity;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryProof;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerPortalController extends Controller
 {
@@ -82,7 +82,7 @@ class CustomerPortalController extends Controller
     {
         $user = $this->user($request);
         $params = $request->validate([
-            'as_of'  => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'as_of' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'search' => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
 
@@ -106,7 +106,9 @@ class CustomerPortalController extends Controller
             'items.*.product_id' => ['required', 'string', 'distinct'],
             'items.*.quantity' => ['required', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],
             'items.*.delivery_date' => ['required', 'date_format:Y-m-d'],
+            'items.*.warranty_option_id' => ['sometimes', 'nullable', 'string'],
         ]);
+
         return response()->json(['data' => $this->service->quoteOrder($this->user($request), $data)]);
     }
 
@@ -116,7 +118,7 @@ class CustomerPortalController extends Controller
         $result = $this->service->placeOrder($user->customer_id, $request->validated(), $user);
 
         return response()->json([
-            'data'    => new SalesOrderResource($result['order']),
+            'data' => new SalesOrderResource($result['order']),
             'message' => 'Order submitted. It will be confirmed by our sales team.',
         ], $result['replayed'] ? 200 : 201);
     }
@@ -129,6 +131,7 @@ class CustomerPortalController extends Controller
     public function respondToDeliveryProposal(Request $request, SalesOrder $salesOrder, SalesOrderResponse $response): SalesOrderResponseResource
     {
         $data = $request->validate(['decision' => ['required', Rule::in(['accept', 'reject'])]]);
+
         return new SalesOrderResponseResource(app(SalesOrderResponseService::class)
             ->respondToDeliveryProposal($salesOrder, $response, $this->user($request), $data['decision']));
     }
@@ -202,7 +205,7 @@ class CustomerPortalController extends Controller
         );
 
         return response()->json([
-            'data'    => new SalesOrderResponseResource($response),
+            'data' => new SalesOrderResponseResource($response),
             'message' => 'Your response was submitted to our sales team.',
         ], 201);
     }
@@ -290,7 +293,7 @@ class CustomerPortalController extends Controller
         $confirmed = $this->service->confirmDelivery($user->customer_id, $delivery, $request->validated(), $user);
 
         return response()->json([
-            'data'    => new CustomerDeliveryResource($confirmed),
+            'data' => new CustomerDeliveryResource($confirmed),
             'message' => 'Delivery confirmed. Thank you for confirming receipt.',
         ]);
     }
@@ -298,6 +301,7 @@ class CustomerPortalController extends Controller
     public function receiptGroup(Delivery $delivery, Request $request): JsonResponse
     {
         $user = $this->user($request);
+
         return response()->json(['data' => $this->serializeReceiptGroup($this->service->receiptGroup($user->customer_id, $delivery))]);
     }
 
@@ -305,6 +309,7 @@ class CustomerPortalController extends Controller
     {
         $user = $this->user($request);
         $group = $this->service->confirmReceiptGroup($user->customer_id, $delivery, $request->validated(), $user);
+
         return response()->json(['data' => $this->serializeReceiptGroup($group), 'message' => 'Shipment receipts confirmed. Replacement pieces are free.']);
     }
 
@@ -317,8 +322,10 @@ class CustomerPortalController extends Controller
         $group['case'] = ['id' => $case->hash_id, 'case_number' => $case->case_number, 'status' => $case->status->value];
         $group['shipments'] = array_map(static function (array $shipment): array {
             $shipment['delivery'] = new CustomerDeliveryResource($shipment['delivery']);
+
             return $shipment;
         }, $group['shipments']);
+
         return $group;
     }
 
@@ -503,7 +510,7 @@ class CustomerPortalController extends Controller
     {
         $user = $this->user($request);
         $filters = $request->validate([
-            'page'     => ['sometimes', 'integer', 'min:1'],
+            'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -533,7 +540,7 @@ class CustomerPortalController extends Controller
         $rma = $this->service->createReturn($user->customer_id, $request->validated(), $user);
 
         return response()->json([
-            'data'    => new CustomerReturnRequestResource($rma->load('items.product')),
+            'data' => new CustomerReturnRequestResource($rma->load('items.product')),
             'message' => 'Return request submitted. Our team will review it and get back to you.',
         ], 201);
     }

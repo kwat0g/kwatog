@@ -30,6 +30,11 @@ class DssParameterService
 
     private const RESTORE_VERSION_KEY = 'dss:params:restore_version';
 
+    /** Advisory-only detectors that are safe to surface without a DB override. */
+    private const DEFAULT_DETECTOR_MODES = [
+        'dss.inventory_stockout' => 'advisory',
+    ];
+
     public function get(string $detectorId, string $key, mixed $default = null, bool $globalFallback = true): mixed
     {
         $version = CacheGeneration::currentDefault(
@@ -173,7 +178,8 @@ class DssParameterService
 
     public function detectorMode(string $detectorId): string
     {
-        $mode = $this->get($detectorId, 'mode', 'shadow', globalFallback: false);
+        $default = self::DEFAULT_DETECTOR_MODES[$detectorId] ?? 'shadow';
+        $mode = $this->get($detectorId, 'mode', $default, globalFallback: false);
 
         return in_array($mode, ['shadow', 'advisory'], true) ? $mode : 'shadow';
     }

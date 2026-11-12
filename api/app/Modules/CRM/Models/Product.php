@@ -34,7 +34,7 @@ class Product extends Model
         'part_number', 'name', 'description', 'unit_of_measure',
         'standard_cost', 'revenue_account_id', 'is_active',
         'include_forecast_in_mrp', 'base_selling_price', 'minimum_selling_price', 'portal_visibility',
-        'image_path',
+        'image_path', 'specifications', 'is_customizable',
     ];
 
     protected $casts = [
@@ -44,6 +44,8 @@ class Product extends Model
         'minimum_selling_price' => 'decimal:2',
         'is_active' => 'boolean',
         'include_forecast_in_mrp' => 'boolean',
+        'specifications' => 'array',
+        'is_customizable' => 'boolean',
     ];
 
     public function portalCustomers(): BelongsToMany
@@ -51,10 +53,18 @@ class Product extends Model
         return $this->belongsToMany(Customer::class, 'customer_product_access');
     }
 
+    public function customerWarrantyOptions(): HasMany
+    {
+        return $this->hasMany(CustomerProductWarrantyOption::class);
+    }
+
     public function isAvailableToCustomer(int $customerId): bool
     {
+        $catalogMode = Customer::query()->whereKey($customerId)->value('portal_catalog_mode') ?? 'standard';
+
         return $this->is_active && ! $this->trashed()
-            && ($this->portal_visibility === 'standard' || $this->portalCustomers()->whereKey($customerId)->exists());
+            && ($this->portalCustomers()->whereKey($customerId)->exists()
+                || ($catalogMode === 'standard' && $this->portal_visibility === 'standard'));
     }
 
     public function priceAgreements(): HasMany
@@ -65,6 +75,16 @@ class Product extends Model
     public function salesOrderItems(): HasMany
     {
         return $this->hasMany(SalesOrderItem::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function blueprints(): HasMany
+    {
+        return $this->hasMany(ProductBlueprint::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
     public function inventoryItem(): HasOne

@@ -370,6 +370,11 @@ class Inspection extends Model
         return $this->hasMany(InspectionMeasurement::class)->orderBy('sample_index')->orderBy('id');
     }
 
+    public function defectEvidence(): HasMany
+    {
+        return $this->hasMany(InspectionDefectEvidence::class)->orderBy('id');
+    }
+
     public function defectivePieces(): HasMany
     {
         return $this->hasMany(InspectionDefectivePiece::class)->orderBy('piece_number');

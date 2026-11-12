@@ -7,6 +7,7 @@ namespace App\Modules\DSS;
 use App\Modules\DSS\Detectors\ApprovalBottleneckDetector;
 use App\Modules\DSS\Detectors\AtRiskOrderDetector;
 use App\Modules\DSS\Detectors\CollectionPriorityDetector;
+use App\Modules\DSS\Detectors\InventoryStockoutDetector;
 use App\Modules\DSS\Detectors\MasterHygieneDetector;
 use App\Modules\DSS\Detectors\NcrSlaBreachDetector;
 use App\Modules\DSS\Detectors\PrePayrollChecklistDetector;
@@ -40,6 +41,7 @@ class DssServiceProvider extends ServiceProvider
             $registry->register(CollectionPriorityDetector::ID, CollectionPriorityDetector::class);
             $registry->register(AtRiskOrderDetector::ID, AtRiskOrderDetector::class);
             $registry->register(PrePayrollChecklistDetector::ID, PrePayrollChecklistDetector::class);
+            $registry->register(InventoryStockoutDetector::ID, InventoryStockoutDetector::class);
 
             return $registry;
         });

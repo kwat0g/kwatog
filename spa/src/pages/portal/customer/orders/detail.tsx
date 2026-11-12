@@ -22,6 +22,7 @@ import { Select } from '@/components/ui/Select';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { salesOrderStatusVariant, workOrderStatusVariant } from '@/lib/statusVariants';
+import { SubmitOrderAdvanceDialog } from './SubmitOrderAdvanceDialog';
 
 export default function CustomerOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,9 +35,12 @@ export default function CustomerOrderDetailPage() {
   } | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
   const [responseType, setResponseType] = useState<'accept' | 'propose' | 'decline'>('accept');
   const [responseNotes, setResponseNotes] = useState('');
   const [proposedDeliveryDate, setProposedDeliveryDate] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState('5');
+  const [feedbackComment, setFeedbackComment] = useState('');
   const [proposals, setProposals] = useState<
     Record<string, { quantity: string; unitPrice: string; reason: string }>
   >({});
@@ -118,6 +122,23 @@ export default function CustomerOrderDetailPage() {
     },
     onError: (error: Error & { response?: { data?: { message?: string } } }) =>
       toast.error(error.response?.data?.message ?? 'Could not submit your order response.'),
+  });
+
+  const feedbackMutation = useMutation({
+    mutationFn: () => customerPortalApi.submitOrderFeedback(id!, {
+      rating: Number(feedbackRating),
+      comment: feedbackComment.trim() || undefined,
+    }),
+    onSuccess: async (feedbackState) => {
+      queryClient.setQueryData(['portal', 'customer', 'order', id], (current: typeof order) => current
+        ? { ...current, customer_feedback: feedbackState }
+        : current);
+      await queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'orders'] });
+      setFeedbackComment('');
+      toast.success('Thank you for sharing feedback.');
+    },
+    onError: (error: Error & { response?: { data?: { message?: string } } }) =>
+      toast.error(error.response?.data?.message ?? 'Could not send feedback. Refresh the order and try again.'),
   });
 
   return (
@@ -276,12 +297,41 @@ export default function CustomerOrderDetailPage() {
                     : undefined
                 }
               />
-              <StatCard
+                <StatCard
                 label="Payment Terms"
                 value={order.payment_terms_days != null ? `${order.payment_terms_days} days` : '—'}
               />
-              <StatCard label="Delivery Terms" value={order.delivery_terms ?? '—'} />
-            </KpiGrid>
+                <StatCard label="Delivery Terms" value={order.delivery_terms ?? '—'} />
+              </KpiGrid>
+            </div>
+
+            {order.advance_requirement && (
+              <Panel title="Order deposit">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted">Required amount</p>
+                    <p className="mt-1 text-lg font-semibold">{formatPeso(order.advance_requirement.required_amount)}</p>
+                    {order.advance_requirement.submitted_amount && (
+                      <p className="mt-1 text-sm text-muted">Submitted: {formatPeso(order.advance_requirement.submitted_amount)}</p>
+                    )}
+                  </div>
+                  <Chip variant={chipVariantForStatus(order.advance_requirement.status)}>
+                    {order.advance_requirement.status.replace(/_/g, ' ')}
+                  </Chip>
+                </div>
+                {order.advance_requirement.status === 'pending' && (
+                  <p role="status" className="mt-3 text-sm text-muted">Payment evidence is with Finance for verification. Production starts after Finance verifies or waives the deposit.</p>
+                )}
+                {order.advance_requirement.status === 'rejected' && order.advance_requirement.review_reason && (
+                  <p className="mt-3 rounded-md border border-danger bg-danger-bg px-3 py-2 text-sm">Finance requested a new submission: {order.advance_requirement.review_reason}</p>
+                )}
+                {order.advance_requirement.can_submit && (
+                  <Button className="mt-4" onClick={() => setAdvanceDialogOpen(true)}>
+                    {order.advance_requirement.status === 'rejected' ? 'Resubmit payment evidence' : 'Submit payment evidence'}
+                  </Button>
+                )}
+              </Panel>
+            )}
 
             <p role="note" className="rounded-md border border-default bg-subtle px-4 py-3 text-sm text-muted">
               {order.customer_terms_snapshot?.agreement_status === 'expired' || order.customer_terms_snapshot?.agreement_status === 'not_yet_effective'
@@ -390,6 +440,27 @@ export default function CustomerOrderDetailPage() {
                 )}
             </Panel>
             <OrderAgreementsPanel orderId={order.id} realm="customer" />
+            {order.customer_feedback?.submitted ? (
+              <Panel title="Order feedback">
+                <p role="status" className="text-sm text-secondary">Thank you for sharing feedback.</p>
+              </Panel>
+            ) : order.customer_feedback?.can_submit ? (
+              <Panel title="Order feedback">
+                <p className="mb-3 text-sm text-secondary">How did this order and delivery go? Your feedback helps Ogami improve.</p>
+                <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); feedbackMutation.mutate(); }}>
+                  <Select label="Rating" fieldSize="lg" className="!min-h-[44px]" value={feedbackRating} onChange={(event) => setFeedbackRating(event.target.value)} disabled={feedbackMutation.isPending}>
+                    <option value="5">5 — Very satisfied</option>
+                    <option value="4">4 — Satisfied</option>
+                    <option value="3">3 — Neutral</option>
+                    <option value="2">2 — Dissatisfied</option>
+                    <option value="1">1 — Very dissatisfied</option>
+                  </Select>
+                  <Textarea label="Comment (optional)" value={feedbackComment} onChange={(event) => setFeedbackComment(event.target.value)} maxLength={2000} rows={3} disabled={feedbackMutation.isPending} />
+                  {feedbackMutation.isError && <p role="alert" className="text-sm text-danger-fg">{(feedbackMutation.error as Error & { response?: { data?: { message?: string } } }).response?.data?.message ?? feedbackMutation.error.message ?? 'Feedback could not be sent. Try again.'}</p>}
+                  <Button type="submit" variant="primary" size="touch" className="!min-h-[44px]" loading={feedbackMutation.isPending}>Send feedback</Button>
+                </form>
+              </Panel>
+            ) : null}
             {order.notes && (
               <Panel title="Notes">
                 <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
@@ -563,7 +634,8 @@ export default function CustomerOrderDetailPage() {
               ) : (
                 <EmptyState icon="package" title="No items" />
               )}
-            </Panel>
+              </Panel>
+            </div>
 
             {order.work_orders && order.work_orders.length > 0 && (
               <Panel title="Work Orders" meta={String(order.work_orders.length)} noPadding>
@@ -602,6 +674,13 @@ export default function CustomerOrderDetailPage() {
                   </table>
                 </div>
               </Panel>
+            )}
+            {advanceDialogOpen && order.advance_requirement && (
+              <SubmitOrderAdvanceDialog
+                order={order}
+                requirement={order.advance_requirement}
+                onClose={() => setAdvanceDialogOpen(false)}
+              />
             )}
           </>
         )}

@@ -599,6 +599,13 @@ export const SECTIONS: NavSection[] = [
     label: 'Finance',
     items: [
       {
+        to: '/crm/price-agreements/requests',
+        label: 'Pricing approvals',
+        icon: PriceAgreementIcon,
+        feature: 'crm',
+        permission: 'crm.price_agreements.approve',
+      },
+      {
         to: '/budgeting',
         label: 'Budgeting',
         icon: LuWallet,
@@ -810,7 +817,7 @@ export const SECTIONS: NavSection[] = [
         to: '/accounting/portal-access',
         label: 'Portal Access',
         icon: LuKeyRound,
-        permission: 'b2b.portal_access.view',
+        anyPermissions: ['b2b.portal_access.view', 'accounting.customers.manage'],
       },
       {
         to: '/admin/backups',

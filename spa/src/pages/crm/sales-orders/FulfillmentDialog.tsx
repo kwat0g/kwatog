@@ -84,7 +84,7 @@ export function FulfillmentDialog({ orderId, onClose }: { orderId: string; onClo
       {changedElsewhere && <p role="status" className="text-sm text-warning-fg">Order supply changed while you were reviewing it. Your entries are preserved. Refresh supply and review the latest figures before confirming.</p>}
       {preview.isLoading && <p>Checking supply…</p>}
       {preview.isError && <p role="alert" className="text-danger-fg">Unable to load supply. Refresh to try again.</p>}
-      {preview.data?.lines.map((line) => <div key={line.id} className="space-y-3 border-b border-border pb-4">
+      {preview.data?.lines?.map((line) => <div key={line.id} className="space-y-3 border-b border-border pb-4">
         <p>{line.part_number} · {line.name}</p>
         <Select label="Fulfillment policy" value={policies[line.id] ?? line.policy} disabled={locked || !preview.data?.editable} onChange={(event) => setPolicies({ ...policies, [line.id]: event.target.value as 'stock_first' | 'produce_new' })}>
           <option value="stock_first">Approved stock first; produce shortage</option><option value="produce_new">Fresh production</option>

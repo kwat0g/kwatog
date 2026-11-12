@@ -16,9 +16,11 @@ use App\Modules\Purchasing\Enums\SupplierListingStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class SupplierListingService
 {
@@ -129,6 +131,45 @@ class SupplierListingService
 
             return $listing->fresh(['item:id,code,name,unit_of_measure']);
         });
+    }
+
+    /** Replace a pending listing image while keeping the prior file until commit. */
+    public function setImage(SupplierItemListing $listing, UploadedFile $image): SupplierItemListing
+    {
+        $newPath = $image->store('supplier-listing-images', 'local');
+        if (! $newPath) {
+            throw new BusinessRuleException('The listing image could not be stored. Please try again.');
+        }
+
+        $oldPath = null;
+        try {
+            $updated = DB::transaction(function () use ($listing, $image, $newPath, &$oldPath): SupplierItemListing {
+                $locked = SupplierItemListing::query()->lockForUpdate()->findOrFail($listing->getKey());
+                if ($locked->status !== SupplierListingStatus::Pending) {
+                    throw new BusinessRuleException('Only pending listings can have their image changed.');
+                }
+                $oldPath = $locked->image_path;
+                $locked->update([
+                    'image_path' => $newPath,
+                    'image_original_filename' => mb_substr(basename(str_replace('\\', '/', $image->getClientOriginalName())), 0, 255),
+                    'image_mime_type' => $image->getMimeType(),
+                    'image_size_bytes' => $image->getSize(),
+                    'image_sha256' => hash_file('sha256', $image->getRealPath()),
+                ]);
+                $this->realtime->changed('updated', $locked->vendor_id);
+
+                return $locked->fresh(['item:id,code,name,unit_of_measure']);
+            }, 3);
+        } catch (\Throwable $error) {
+            Storage::disk('local')->delete($newPath);
+            throw $error;
+        }
+
+        if ($oldPath && $oldPath !== $newPath) {
+            Storage::disk('local')->delete($oldPath);
+        }
+
+        return $updated;
     }
 
     /**

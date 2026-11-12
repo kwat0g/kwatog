@@ -11,10 +11,14 @@ export const pricingRequestsApi = {
     client.get<{ data: PriceRequest }>(`/crm/price-requests/${id}`).then((r) => r.data.data),
   create: (data: PriceOffer & { product_id: string; customer_id: string }) =>
     client.post<{ data: PriceRequest }>('/crm/price-requests', data).then((r) => r.data.data),
+  createReplacement: (agreementId: string, data: PriceOffer) =>
+    client.post<{ data: PriceRequest }>(`/crm/price-agreements/${agreementId}/replacement-proposals`, data).then((r) => r.data.data),
   offer: (id: string, data: PriceOffer & { version: number }) =>
     client.put<{ data: PriceRequest }>(`/crm/price-requests/${id}/offer`, data).then((r) => r.data.data),
   approve: (id: string, notes: string, version: number, cost_signature: string) =>
     client.post<{ data: PriceRequest }>(`/crm/price-requests/${id}/approve`, { notes, version, cost_signature }).then((r) => r.data.data),
+  reject: (id: string, notes: string, version: number) =>
+    client.post<{ data: PriceRequest }>(`/crm/price-requests/${id}/reject`, { notes, version }).then((r) => r.data.data),
   withdraw: (id: string, notes: string, version?: number) =>
     client.post<{ data: PriceRequest }>(`/crm/price-requests/${id}/withdraw`, { notes, version }).then((r) => r.data.data),
   costs: (page = 1, review?: string) =>

@@ -157,6 +157,29 @@ const statusLabel: Record<SupplierListingStatus, string> = {
 
 type ReviewFilters = { id: string; search: string; status: SupplierListingStatus | ''; page: number; per_page: number };
 
+function SupplierListingPhoto({ listing }: { listing: SupplierItemListing }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const image = listing.image;
+  const photoClass = 'flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-default bg-elevated';
+
+  if (!image?.url || failedUrl === image.url) {
+    return <div className={`${photoClass} text-[10px] text-muted`} role="img" aria-label="No supplier photo">No photo</div>;
+  }
+
+  return (
+    <div className={photoClass}>
+      <img
+        src={image.url}
+        alt={`${listing.item?.name ?? 'Item'} supplier listing photo`}
+        className="h-full w-full object-contain"
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailedUrl(image.url)}
+      />
+    </div>
+  );
+}
+
 export default function SupplierListingsReviewPage() {
   const qc = useQueryClient();
   const { canApprove } = usePermission();
@@ -303,9 +326,12 @@ export default function SupplierListingsReviewPage() {
 
   const columns: Column<SupplierItemListing>[] = [
     { key: 'item', header: 'Item', cell: (r) => (
-      <div>
-        <span className="font-mono">{r.item?.code ?? '—'}</span>
-        <div className="text-xs text-muted">{r.item?.name}</div>
+      <div className="flex items-center gap-3">
+        <SupplierListingPhoto listing={r} />
+        <div className="min-w-0">
+          <span className="font-mono">{r.item?.code ?? '—'}</span>
+          <div className="text-xs text-muted">{r.item?.name}</div>
+        </div>
       </div>
     ) },
     { key: 'vendor', header: 'Supplier', cell: (r) => r.vendor?.name ?? '—' },

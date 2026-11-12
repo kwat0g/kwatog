@@ -46,6 +46,7 @@ class AssignDeliveryRequest extends FormRequest
                     }
                 },
             ],
+            'shipment_weight_kg' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999.99'],
             'reason' => ['required', 'string', 'min:5', 'max:500'],
         ];
     }

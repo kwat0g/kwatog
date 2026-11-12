@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SupplierInvoicesPage from './index';
@@ -46,19 +46,11 @@ describe('supplier invoice status filter', () => {
     renderPage();
 
     const statusFilter = await screen.findByRole('combobox', { name: 'Status' });
-    const options = within(statusFilter).getAllByRole('option');
+    fireEvent.click(statusFilter);
+    const options = await screen.findAllByRole('option');
 
-    expect(options.map((option) => ({
-      value: option.getAttribute('value'),
-      label: option.textContent,
-    }))).toEqual([
-      { value: '', label: 'Status: All' },
-      { value: 'submitted', label: 'Submitted' },
-      { value: 'unpaid', label: 'Unpaid' },
-      { value: 'partial', label: 'Partially paid' },
-      { value: 'paid', label: 'Paid' },
-      { value: 'requires_correction', label: 'Requires correction' },
-      { value: 'voided', label: 'Voided' },
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Status: All', 'Submitted', 'Unpaid', 'Partially paid', 'Paid', 'Requires correction', 'Voided',
     ]);
     expect(screen.queryByRole('option', { name: 'Draft' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Cancelled' })).not.toBeInTheDocument();
@@ -81,8 +73,8 @@ describe('supplier invoice status filter', () => {
     });
     renderPage();
 
-    expect(await screen.findByText('SUP-100')).toBeInTheDocument();
-    expect(screen.getByText('2 AP bills')).toBeInTheDocument();
+    expect(await screen.findAllByText('SUP-100')).toHaveLength(2);
+    expect(screen.getAllByText('2 AP bills')).toHaveLength(2);
     expect(screen.getByText(/1 invoices you have submitted/)).toBeInTheDocument();
   });
 });

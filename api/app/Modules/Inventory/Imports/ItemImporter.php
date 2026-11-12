@@ -16,9 +16,10 @@ use RuntimeException;
 /**
  * REC-03 — raw-material / finished-good item importer.
  * CSV columns: code, name, item_type, unit_of_measure, category,
- *   standard_cost, reorder_method, reorder_point, safety_stock,
- *   minimum_order_quantity, lead_time_days, [description], [is_active].
- * The category is resolved (or created) by name.
+ *   standard_cost, reorder_point, safety_stock, lead_time_days,
+ *   [reorder_method, minimum_order_quantity for purchased item types],
+ *   [description], [is_active]. The category is resolved by name and must
+ *   carry the same item type as the imported row.
  */
 class ItemImporter implements EntityImporter
 {
@@ -31,14 +32,13 @@ class ItemImporter implements EntityImporter
     {
         return [
             'code', 'name', 'item_type', 'unit_of_measure', 'category',
-            'standard_cost', 'reorder_method', 'reorder_point', 'safety_stock',
-            'minimum_order_quantity', 'lead_time_days',
+            'standard_cost', 'reorder_point', 'safety_stock', 'lead_time_days',
         ];
     }
 
     public function importRow(array $row): Model
     {
-        $code = trim($row['code'] ?? '');
+        $code = mb_strtoupper(trim($row['code'] ?? ''));
         $name = trim($row['name'] ?? '');
         $type = strtolower(trim($row['item_type'] ?? ''));
         $uom  = trim($row['unit_of_measure'] ?? '');
@@ -63,6 +63,50 @@ class ItemImporter implements EntityImporter
             throw new RuntimeException("Item code '{$code}' already exists.");
         }
 
+        $stdCost = trim($row['standard_cost'] ?? '');
+        $reorderMethod = strtolower(trim($row['reorder_method'] ?? ''));
+        $reorderPoint = trim($row['reorder_point'] ?? '');
+        $safetyStock = trim($row['safety_stock'] ?? '');
+        $minimumOrderQuantity = trim($row['minimum_order_quantity'] ?? '');
+        $leadTimeDays = trim($row['lead_time_days'] ?? '');
+        $isFinishedGood = $type === ItemType::FinishedGood->value;
+
+        if ($stdCost === '' || ! is_numeric($stdCost) || (float) $stdCost < 0) {
+            throw new RuntimeException('standard_cost is required and must be non-negative.');
+        }
+        if ($isFinishedGood) {
+            $reorderMethod = ReorderMethod::FixedQuantity->value;
+        } elseif (! in_array($reorderMethod, ReorderMethod::values(), true)) {
+            throw new RuntimeException("Invalid reorder_method '{$reorderMethod}'. Expected one of: ".implode(', ', ReorderMethod::values()));
+        }
+        foreach (['reorder_point' => $reorderPoint, 'safety_stock' => $safetyStock] as $field => $value) {
+            if ($value === '' || ! is_numeric($value) || (float) $value < 0) {
+                throw new RuntimeException("{$field} is required and must be a valid non-negative quantity.");
+            }
+        }
+        if (! $isFinishedGood && ($minimumOrderQuantity === '' || ! is_numeric($minimumOrderQuantity) || (float) $minimumOrderQuantity <= 0)) {
+            throw new RuntimeException('minimum_order_quantity is required for purchased items and must be greater than zero.');
+        }
+        if ($leadTimeDays === '' || filter_var($leadTimeDays, FILTER_VALIDATE_INT) === false || (int) $leadTimeDays < 0 || (int) $leadTimeDays > 365) {
+            throw new RuntimeException('lead_time_days is required and must be a whole number from 0 to 365.');
+        }
+
+        $active = trim($row['is_active'] ?? '');
+        $isActive = null;
+        if ($active !== '') {
+            $isActive = filter_var($active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($isActive === null) throw new RuntimeException('is_active must be true or false.');
+        }
+
+        $category = ItemCategory::firstOrCreate(
+            ['name' => $categoryName],
+            ['item_type' => $type],
+        );
+        if ($category->item_type !== $type) {
+            $configuredType = $category->item_type ?: 'unconfigured';
+            throw new RuntimeException("Category '{$categoryName}' is configured as {$configuredType}; choose a category configured as {$type}.");
+        }
+
         // Resolve the unit of measure against the canonical `uoms` catalog.
         // Case is normalized so `kg`/`Kg` map to `KG`; unknown units are
         // created (uppercased) so conversions can reference them later.
@@ -71,29 +115,6 @@ class ItemImporter implements EntityImporter
             ['name' => mb_strtoupper($uom)],
         );
         $uom = $uomRow->code;
-
-        $category = ItemCategory::firstOrCreate(['name' => $categoryName]);
-
-        $stdCost = trim($row['standard_cost'] ?? '');
-        $reorderMethod = strtolower(trim($row['reorder_method'] ?? ''));
-        $reorderPoint = trim($row['reorder_point'] ?? '');
-        $safetyStock = trim($row['safety_stock'] ?? '');
-        $minimumOrderQuantity = trim($row['minimum_order_quantity'] ?? '');
-        $leadTimeDays = trim($row['lead_time_days'] ?? '');
-        if ($stdCost === '' || ! is_numeric($stdCost) || (float) $stdCost < 0) {
-            throw new RuntimeException('standard_cost is required and must be non-negative.');
-        }
-        if (! in_array($reorderMethod, ReorderMethod::values(), true)) {
-            throw new RuntimeException("Invalid reorder_method '{$reorderMethod}'. Expected one of: ".implode(', ', ReorderMethod::values()));
-        }
-        foreach (['reorder_point' => $reorderPoint, 'safety_stock' => $safetyStock, 'minimum_order_quantity' => $minimumOrderQuantity] as $field => $value) {
-            if ($value === '' || ! is_numeric($value) || (float) $value < 0 || ($field === 'minimum_order_quantity' && (float) $value <= 0)) {
-                throw new RuntimeException("{$field} is required and must be a valid non-negative quantity.");
-            }
-        }
-        if ($leadTimeDays === '' || filter_var($leadTimeDays, FILTER_VALIDATE_INT) === false || (int) $leadTimeDays < 0) {
-            throw new RuntimeException('lead_time_days is required and must be a non-negative integer.');
-        }
 
         $payload = [
             'code'            => $code,
@@ -106,13 +127,13 @@ class ItemImporter implements EntityImporter
             'reorder_method'  => $reorderMethod,
             'reorder_point'   => $reorderPoint,
             'safety_stock'    => $safetyStock,
-            'minimum_order_quantity' => $minimumOrderQuantity,
             'lead_time_days'  => (int) $leadTimeDays,
         ];
-        $active = trim($row['is_active'] ?? '');
-        if ($active !== '') {
-            $payload['is_active'] = filter_var($active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-            if ($payload['is_active'] === null) throw new RuntimeException('is_active must be true or false.');
+        if (! $isFinishedGood) {
+            $payload['minimum_order_quantity'] = $minimumOrderQuantity;
+        }
+        if ($isActive !== null) {
+            $payload['is_active'] = $isActive;
         }
 
         return Item::create($payload);

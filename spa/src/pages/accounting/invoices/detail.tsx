@@ -357,6 +357,17 @@ export default function InvoiceDetailPage() {
             <Button variant="secondary" size="sm" onClick={() => downloadAuthenticatedFile(`/invoices/${invoice.id}/payment-submissions/${payment.id}/proof`, { filename: payment.proof_file_name })}>Download proof</Button>
           </div>)}
         </Panel>}
+        {!!invoice.advance_applications?.length && <Panel title="Applied order deposits">
+          {invoice.advance_applications.map((application) => (
+            <div key={application.id} className="flex flex-wrap items-start justify-between gap-2 border-b border-default py-3 last:border-0">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Attempt {application.advance_attempt ?? '—'}</p>
+                <p className="mt-1 text-xs text-muted">Applied on {formatDateTime(application.applied_at, 'Date not recorded')}</p>
+              </div>
+              <span className="shrink-0 text-sm font-medium tabular-nums">{formatPeso(application.amount)}</span>
+            </div>
+          ))}
+        </Panel>}
         {standardDeliveryBlocked && (
           <p role="status" className="text-sm text-warning-fg mb-3">
             {standardDeliveryGateMessage}

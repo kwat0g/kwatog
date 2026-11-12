@@ -5,20 +5,26 @@ declare(strict_types=1);
 use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerInvoicePaymentController;
+use App\Modules\B2B\Controllers\CustomerOrderAdvanceController;
+use App\Modules\B2B\Controllers\CustomerOrderFeedbackController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\InternalSupplierActivityController;
 use App\Modules\B2B\Controllers\PortalAccessController;
+use App\Modules\B2B\Controllers\PortalContractTemplateController;
 use App\Modules\B2B\Controllers\PortalNotificationController;
+use App\Modules\B2B\Controllers\SupplierAgreementDocumentController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierDeliveryScheduleController;
 use App\Modules\B2B\Controllers\SupplierInvoiceController;
+use App\Modules\B2B\Controllers\SupplierListingImageController;
 use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
 use App\Modules\B2B\Controllers\SupplierRfqController;
 use App\Modules\B2B\Controllers\SupplierShipmentController;
 use App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware;
 use App\Modules\B2B\Middleware\CheckPortalPasswordExpiry;
+use App\Modules\CRM\Controllers\CustomerAgreementDocumentController;
 use App\Modules\CRM\Controllers\PriceNegotiationController;
 use App\Modules\CRM\Controllers\ProductImageController;
 use App\Modules\CRM\Controllers\SalesOrderAgreementController;
@@ -59,6 +65,9 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::delete('notifications/clear-read', [PortalNotificationController::class, 'clearRead']);
             Route::delete('notifications/{id}', [PortalNotificationController::class, 'destroy'])->whereUuid('id');
             Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
+            Route::get('agreement-documents', [SupplierAgreementDocumentController::class, 'portalIndex']);
+            Route::get('agreement-documents/{document}/download', [SupplierAgreementDocumentController::class, 'portalDownload']);
+            Route::post('agreement-documents/{document}/sign', [SupplierAgreementDocumentController::class, 'sign'])->middleware('throttle:sensitive');
             Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
             Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
             Route::get('purchase-orders/{purchaseOrder}/returns/{returnRequest}/defect-photo', [SupplierPortalController::class, 'returnDefectPhoto']);
@@ -89,6 +98,8 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::post('item-listings', [SupplierListingPortalController::class, 'store'])->middleware('throttle:sensitive');
             Route::post('item-listings/bulk', [SupplierListingPortalController::class, 'storeBulk'])->middleware('throttle:sensitive');
             Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update'])->middleware('throttle:sensitive');
+            Route::post('item-listings/{supplierItemListing}/image', [SupplierListingImageController::class, 'upload'])->middleware('throttle:sensitive');
+            Route::get('item-listings/{supplierItemListing}/image', [SupplierListingImageController::class, 'portalImage']);
             // PPAP submissions (read-only, scoped to this supplier).
             Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
             // Invite-only sealed RFQs: one quotation per supplier. The service
@@ -108,11 +119,14 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
     ->prefix('b2b/portal-access')
     ->group(function (): void {
         Route::get('customers', [PortalAccessController::class, 'customers'])
-            ->middleware('permission:b2b.portal_access.view');
+            ->middleware('permission_any:b2b.portal_access.view,accounting.customers.manage');
         Route::post('customers/{customer}/invite', [PortalAccessController::class, 'inviteCustomer'])
-            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+            // Customer managers can invite the contact while creating or
+            // maintaining that customer's CRM record. Supplier access remains
+            // gated by the separate portal-access permission below.
+            ->middleware(['permission_any:b2b.portal_access.manage,accounting.customers.manage', 'throttle:sensitive']);
         Route::post('customers/{customerPortalUser}/resend', [PortalAccessController::class, 'resendCustomer'])
-            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive'])
+            ->middleware(['permission_any:b2b.portal_access.manage,accounting.customers.manage', 'throttle:sensitive'])
             ->withTrashed();
         Route::patch('customers/{customerPortalUser}/deactivate', [PortalAccessController::class, 'deactivateCustomer'])
             ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive'])
@@ -125,6 +139,22 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
             ->withTrashed();
         Route::get('suppliers', [PortalAccessController::class, 'suppliers'])
             ->middleware('permission:b2b.portal_access.view');
+        Route::get('contract-templates', [PortalContractTemplateController::class, 'index'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::post('contract-templates', [PortalContractTemplateController::class, 'store'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::post('contract-templates/inspect', [PortalContractTemplateController::class, 'inspect'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::put('contract-templates/{template}', [PortalContractTemplateController::class, 'update'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::get('suppliers/{vendor}/agreement-documents', [SupplierAgreementDocumentController::class, 'internalIndex'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::get('suppliers/{vendor}/agreement-documents/{document}/download', [SupplierAgreementDocumentController::class, 'internalDownload'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::post('suppliers/{vendor}/agreement-documents/{document}/issue', [SupplierAgreementDocumentController::class, 'issue'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+        Route::post('suppliers/{vendor}/agreement-documents', [SupplierAgreementDocumentController::class, 'storeForVendor'])
+            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
         Route::post('suppliers/{vendor}/invite', [PortalAccessController::class, 'inviteSupplier'])
             ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
         Route::post('suppliers/{supplierPortalUser}/resend', [PortalAccessController::class, 'resendSupplier'])
@@ -186,6 +216,9 @@ Route::prefix('b2b/customer')->group(function () {
         Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
+            Route::get('agreement-documents', [CustomerAgreementDocumentController::class, 'portalIndex']);
+            Route::get('agreement-documents/{document}/download', [CustomerAgreementDocumentController::class, 'portalDownload']);
+            Route::post('agreement-documents/{document}/sign', [CustomerAgreementDocumentController::class, 'sign'])->middleware('throttle:sensitive');
             Route::get('notifications', [PortalNotificationController::class, 'index']);
             Route::patch('notifications/read-all', [PortalNotificationController::class, 'markAllRead']);
             Route::patch('notifications/{id}/read', [PortalNotificationController::class, 'markRead'])->whereUuid('id');
@@ -194,13 +227,18 @@ Route::prefix('b2b/customer')->group(function () {
             Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
             Route::get('catalog', [CustomerPortalController::class, 'catalog']);
             Route::get('catalog/{product}/image', [ProductImageController::class, 'showForCustomer']);
+            Route::get('catalog/{product}/images/{image}', [ProductImageController::class, 'showForCustomerGallery']);
+            Route::get('price-requests/open', [PriceNegotiationController::class, 'portalOpenIndex']);
             Route::get('price-requests', [PriceNegotiationController::class, 'portalIndex']);
             Route::post('price-requests', [PriceNegotiationController::class, 'portalStore'])->middleware('throttle:sensitive');
             Route::post('price-requests/{priceRequest}/respond', [PriceNegotiationController::class, 'respond'])->middleware('throttle:sensitive');
+            Route::post('price-requests/{priceRequest}/cancel', [PriceNegotiationController::class, 'portalCancel'])->middleware('throttle:sensitive');
             Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
             Route::post('orders/quote', [CustomerPortalController::class, 'quoteOrder']);
             Route::post('orders', [CustomerPortalController::class, 'storeOrder'])->middleware('throttle:sensitive');
             Route::put('orders/{salesOrder}', [CustomerPortalController::class, 'updateOrder'])->middleware('throttle:sensitive');
+            Route::post('orders/{salesOrder}/advance-evidence', [CustomerOrderAdvanceController::class, 'submit'])->middleware('throttle:sensitive');
+            Route::post('orders/{salesOrder}/feedback', [CustomerOrderFeedbackController::class, 'store'])->middleware('throttle:sensitive');
             Route::post('orders/{salesOrder}/delivery-proposals/{response}/respond', [CustomerPortalController::class, 'respondToDeliveryProposal'])->middleware('throttle:sensitive');
             Route::post('orders/{salesOrder}/cancel', [CustomerPortalController::class, 'cancelOrder'])->middleware('throttle:sensitive');
             Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);

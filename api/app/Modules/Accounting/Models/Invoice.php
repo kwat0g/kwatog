@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Models;
 
+use App\Common\Models\AuditLog;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
-use App\Common\Models\AuditLog;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderAdvanceApplication;
+use App\Modules\SupplyChain\Models\Delivery;
+use Database\Factories\InvoiceFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,11 +24,11 @@ use Illuminate\Support\Carbon;
 
 class Invoice extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
-    protected static function newFactory(): \Database\Factories\InvoiceFactory
+    protected static function newFactory(): InvoiceFactory
     {
-        return \Database\Factories\InvoiceFactory::new();
+        return InvoiceFactory::new();
     }
 
     protected $fillable = [
@@ -37,21 +41,21 @@ class Invoice extends Model
     ];
 
     protected $casts = [
-        'date'         => 'date',
-        'due_date'     => 'date',
-        'is_vatable'   => 'boolean',
-        'vat_classification'  => VatClassification::class,
-        'is_original'  => 'boolean',
-        'subtotal'     => 'decimal:2',
-        'vat_amount'   => 'decimal:2',
+        'date' => 'date',
+        'due_date' => 'date',
+        'is_vatable' => 'boolean',
+        'vat_classification' => VatClassification::class,
+        'is_original' => 'boolean',
+        'subtotal' => 'decimal:2',
+        'vat_amount' => 'decimal:2',
         'senior_pwd_discount' => 'decimal:2',
         'total_amount' => 'decimal:2',
-        'amount_paid'  => 'decimal:2',
-        'balance'      => 'decimal:2',
-        'status'       => InvoiceStatus::class,
+        'amount_paid' => 'decimal:2',
+        'balance' => 'decimal:2',
+        'status' => InvoiceStatus::class,
         'last_dunning_tier' => 'integer',
-        'last_dunning_at'   => 'datetime', 'prebill_approved_at' => 'datetime',
-        'cancelled_at'      => 'datetime',
+        'last_dunning_at' => 'datetime', 'prebill_approved_at' => 'datetime',
+        'cancelled_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -61,12 +65,12 @@ class Invoice extends Model
 
     public function salesOrder(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\CRM\Models\SalesOrder::class);
+        return $this->belongsTo(SalesOrder::class);
     }
 
     public function delivery(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\SupplyChain\Models\Delivery::class);
+        return $this->belongsTo(Delivery::class);
     }
 
     public function items(): HasMany
@@ -82,6 +86,11 @@ class Invoice extends Model
     public function paymentSubmissions(): HasMany
     {
         return $this->hasMany(InvoicePaymentSubmission::class)->orderByDesc('id');
+    }
+
+    public function advanceApplications(): HasMany
+    {
+        return $this->hasMany(SalesOrderAdvanceApplication::class)->orderBy('applied_at');
     }
 
     public function journalEntry(): BelongsTo
@@ -129,7 +138,10 @@ class Invoice extends Model
         return $q->where('status', InvoiceStatus::Draft)->where('created_by', $user->id);
     }
 
-    public function isDraft(): bool { return $this->status === InvoiceStatus::Draft; }
+    public function isDraft(): bool
+    {
+        return $this->status === InvoiceStatus::Draft;
+    }
 
     public function revisionToken(): string
     {
@@ -150,7 +162,10 @@ class Invoice extends Model
 
     public function isOverdue(): bool
     {
-        if (in_array($this->status, [InvoiceStatus::Paid, InvoiceStatus::Cancelled, InvoiceStatus::Draft], true)) return false;
+        if (in_array($this->status, [InvoiceStatus::Paid, InvoiceStatus::Cancelled, InvoiceStatus::Draft], true)) {
+            return false;
+        }
+
         return $this->due_date !== null
             && $this->due_date->toDateString() < today('Asia/Manila')->toDateString();
     }
@@ -162,13 +177,16 @@ class Invoice extends Model
             return $this->status->value;
         }
         $dueDate = $this->due_date?->toDateString();
-        if ($dueDate === null || $dueDate >= $asOfDate) return 'current';
+        if ($dueDate === null || $dueDate >= $asOfDate) {
+            return 'current';
+        }
         $days = Carbon::parse($dueDate, 'Asia/Manila')->diffInDays(Carbon::parse($asOfDate, 'Asia/Manila'), true);
+
         return match (true) {
-            $days <= 30  => 'd1_30',
-            $days <= 60  => 'd31_60',
-            $days <= 90  => 'd61_90',
-            default      => 'd91_plus',
+            $days <= 30 => 'd1_30',
+            $days <= 60 => 'd31_60',
+            $days <= 90 => 'd61_90',
+            default => 'd91_plus',
         };
     }
 }

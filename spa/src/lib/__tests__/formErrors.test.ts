@@ -79,8 +79,30 @@ describe('applyServerValidationErrors', () => {
  });
  expect(setError).toHaveBeenCalledWith('name', {
  type: 'server',
- message: 'The name field is required.',
+ message: 'Name is required.',
  });
+ });
+
+ it('summarizes nested product warranty errors in short, actionable language', () => {
+  const setError = vi.fn() as unknown as UseFormSetError<Record<string, string>>;
+  const error = makeAxiosError(422, {
+   message: 'Validation failed.',
+   errors: {
+    'product_warranties.0.warranty_remedies.1': ['The product_warranties.0.warranty_remedies.1 field has a duplicate value.'],
+    'product_warranties.1.warranty_remedies.0': ['The product_warranties.1.warranty_remedies.0 field has a duplicate value.'],
+   },
+  });
+
+  applyServerValidationErrors(error, setError);
+
+  expect(toast.error).toHaveBeenCalledWith(
+   'Fix 2 fields. Agreement & products: remove the repeated remedy.',
+   { duration: 6000 },
+  );
+  expect(setError).toHaveBeenCalledWith('product_warranties.0.warranty_remedies.1', {
+   type: 'server',
+   message: 'Agreement & products: remove the repeated remedy.',
+  });
  });
 
  it('handles 422 with only a message (no errors object)', () => {

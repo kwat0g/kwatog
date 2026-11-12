@@ -80,6 +80,24 @@ class AutoReplenishmentAttributionTest extends TestCase
         $this->assertSame('created', json_decode((string) $payload, true, flags: JSON_THROW_ON_ERROR)['action']);
     }
 
+    public function test_finished_good_stockout_does_not_create_supplier_purchase_request(): void
+    {
+        $role = Role::query()->create(['name' => 'System Admin', 'slug' => 'system_admin']);
+        User::factory()->create(['role_id' => $role->id]);
+        $item = Item::factory()->create([
+            'item_type' => 'finished_good',
+            'is_active' => true,
+            'reorder_point' => 100,
+            'safety_stock' => 10,
+            'standard_cost' => '25.00',
+        ]);
+
+        $request = app(AutoReplenishmentService::class)->checkAndReplenish($item->id);
+
+        $this->assertNull($request, 'Finished goods must be replenished through production planning, not supplier purchasing.');
+        $this->assertSame(0, PurchaseRequest::query()->count());
+    }
+
     public function test_no_pr_created_when_no_users_exist(): void
     {
         $item = Item::factory()->create(['is_active' => true, 'reorder_point' => 100, 'safety_stock' => 10]);

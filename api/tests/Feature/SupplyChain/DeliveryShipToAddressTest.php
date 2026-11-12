@@ -50,6 +50,13 @@ class DeliveryShipToAddressTest extends TestCase
 
     private function customer(array $attributes = []): Customer
     {
+        if (isset($attributes['delivery_address']) && trim((string) $attributes['delivery_address']) !== '') {
+            $attributes += [
+                'delivery_latitude' => 14.2695,
+                'delivery_longitude' => 121.0421,
+            ];
+        }
+
         return Customer::factory()->create($attributes);
     }
 
@@ -67,6 +74,7 @@ class DeliveryShipToAddressTest extends TestCase
         return app(DeliveryService::class)->assign($delivery, [
             'vehicle_id' => $vehicle->id,
             'driver_id' => $this->driver()->id,
+            'shipment_weight_kg' => '100.00',
             'reason' => 'Ship-to test assignment.',
         ], $actor);
     }
@@ -88,11 +96,13 @@ class DeliveryShipToAddressTest extends TestCase
         app(DeliveryService::class)->assign($delivery, [
             'vehicle_id' => $vehicle->id,
             'driver_id' => $driver->id,
+            'shipment_weight_kg' => '100.00',
             'reason' => 'Realtime driver assignment test.',
         ], $actor);
 
         $outbox = DB::table('event_outbox')
             ->where('event_type', ChainStepAdvanced::class)
+            ->whereJsonContains('payload->driverHashIds', $driver->hash_id)
             ->firstOrFail();
         $event = app(OutboxEventCodec::class)->decode(
             ChainStepAdvanced::class,
@@ -107,21 +117,31 @@ class DeliveryShipToAddressTest extends TestCase
     {
         // Customer master-data creation is the sales side's job; Finance only
         // reads customers (see RolePermissionSeeder's accounting module except-list).
-        $actor = $this->staff('customer_service_officer');
+        $actor = $this->staff('sales_officer');
 
         $created = $this->actingAs($actor)->postJson('/api/v1/crm/customers', [
             'name' => 'Toyota Motor Philippines',
             'delivery_address' => 'Toyota Plant, Block 17, SEPZ, Santa Rosa, Laguna',
+            'delivery_latitude' => 14.2695,
+            'delivery_longitude' => 121.0421,
+            'warranty_duration_days' => 365,
+            'warranty_report_window_days' => 30,
             'delivery_contact_person' => 'Ana Reyes',
             'delivery_contact_phone' => '049-500-1234',
         ])->assertCreated()
             ->assertJsonPath('data.delivery_address', 'Toyota Plant, Block 17, SEPZ, Santa Rosa, Laguna')
+            ->assertJsonPath('data.delivery_latitude', 14.2695)
+            ->assertJsonPath('data.delivery_longitude', 121.0421)
             ->assertJsonPath('data.delivery_contact_person', 'Ana Reyes')
             ->assertJsonPath('data.delivery_contact_phone', '049-500-1234')
             ->json('data');
 
         $this->actingAs($actor)
-            ->putJson("/api/v1/crm/customers/{$created['id']}", ['delivery_address' => 'Gate 3, Santa Rosa'])
+            ->putJson("/api/v1/crm/customers/{$created['id']}", [
+                'delivery_address' => 'Gate 3, Santa Rosa',
+                'delivery_latitude' => 14.2702,
+                'delivery_longitude' => 121.0417,
+            ])
             ->assertOk()
             ->assertJsonPath('data.delivery_address', 'Gate 3, Santa Rosa');
 

@@ -80,7 +80,12 @@ class ShipmentController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return ShipmentResource::collection($this->service->list($request->query()));
+        $dateFilters = $request->validate([
+            'from_date' => ['nullable', 'date_format:Y-m-d'],
+            'to_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from_date'],
+        ]);
+
+        return ShipmentResource::collection($this->service->list(array_merge($request->query(), $dateFilters)));
     }
 
     public function purchaseOrderOptions(Request $request): AnonymousResourceCollection

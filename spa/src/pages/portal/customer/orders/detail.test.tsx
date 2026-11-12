@@ -17,6 +17,7 @@ vi.mock('@/api/b2b/customer', () => ({
     cancelOrder: vi.fn(),
     respondToOrder: vi.fn(),
     respondToDeliveryProposal: vi.fn(),
+    submitOrderFeedback: vi.fn(),
   },
 }));
 afterEach(() => {
@@ -82,6 +83,29 @@ it('renders part numbers and descriptions from the sales order product relation'
   expect(screen.getByText(/Includes .*270.00 VAT/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Edit order' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Cancel order' })).toBeVisible();
+});
+
+it('lets a customer rate and comment on an order after delivery, then locks the form', async () => {
+  vi.mocked(customerPortalApi.getOrderChain).mockResolvedValue([]);
+  vi.mocked(customerPortalApi.getOrder).mockResolvedValue({
+    id: 'so-1', so_number: 'SO-1', date: '2026-10-04', status: 'delivered',
+    total_amount: '112.00', created_at: '2026-10-04',
+    customer_feedback: { can_submit: true, submitted: false },
+  });
+  vi.mocked(customerPortalApi.submitOrderFeedback).mockResolvedValue({ can_submit: false, submitted: true });
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <MemoryRouter><CustomerOrderDetailPage /></MemoryRouter>
+  </QueryClientProvider>);
+
+  fireEvent.change(await screen.findByLabelText('Rating'), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText('Comment (optional)'), { target: { value: 'On-time delivery.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
+
+  await waitFor(() => expect(customerPortalApi.submitOrderFeedback).toHaveBeenCalledWith('so-1', {
+    rating: 5, comment: 'On-time delivery.',
+  }));
+  expect(await screen.findByText('Thank you for sharing feedback.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Send feedback' })).not.toBeInTheDocument();
 });
 
 it('shows requested and proposed dates and asks the customer to accept or decline', async () => {

@@ -186,6 +186,10 @@ export default function WarehousePage() {
  }
  />
 
+ <p role="note" aria-label="Warehouse storage terms" className="border-b border-default px-5 py-3 text-sm text-secondary">
+  Warehouse contains zones; zones contain storage locations; rack and bin values identify a location. Available stock can be picked. Reserved stock is committed to an order. QC-held stock is unavailable until inspection is resolved. Damaged stock is recorded through a stock adjustment. Blocked locations cannot receive stock.
+ </p>
+
  <div className="min-h-0 flex-1 flex flex-col gap-3">
  <div className="flex justify-end">
  <ArchiveFilter value={scope} onChange={setScope} />

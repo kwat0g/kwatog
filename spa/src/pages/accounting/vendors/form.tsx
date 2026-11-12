@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,11 +6,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { vendorsApi } from '@/api/accounting/vendors';
+import { portalAccessApi } from '@/api/b2b/portal-access';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -39,6 +41,8 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { id = '' } = useParams<{ id: string }>();
+  const [inviteToPortal, setInviteToPortal] = useState(false);
+  const [authorizedSignatory, setAuthorizedSignatory] = useState(false);
 
   const { data: existing } = useQuery({
     queryKey: ['accounting', 'vendors', id],
@@ -86,6 +90,10 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
     setValue,
     formState: { errors, isSubmitting },
   } = form;
+  const vendorActive = form.watch('is_active');
+  const contactPerson = form.watch('contact_person');
+  const email = form.watch('email');
+  const portalInviteReady = Boolean(vendorActive && contactPerson?.trim() && email?.trim());
 
   useEffect(() => {
     if (mode === 'create' && policies) {
@@ -94,19 +102,69 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
   }, [mode, policies, setValue]);
 
   const mutation = useMutation({
-    mutationFn: (d: FormValues) =>
-      mode === 'create' ? vendorsApi.create(d) : vendorsApi.update(id, d),
-    onSuccess: (v) => {
+    mutationFn: async ({ values, sendPortalInvitation, isAuthorizedSignatory }: {
+      values: FormValues;
+      sendPortalInvitation: boolean;
+      isAuthorizedSignatory: boolean;
+    }) => {
+      const vendor = mode === 'create' ? await vendorsApi.create(values) : await vendorsApi.update(id, values);
+      if (mode !== 'create' || !sendPortalInvitation) return { vendor, invitation: 'not_requested' as const };
+      const name = vendor.contact_person?.trim();
+      const vendorEmail = vendor.email?.trim();
+      if (!vendor.is_active || !name || !vendorEmail) return { vendor, invitation: 'failed' as const };
+      try {
+        await portalAccessApi.inviteSupplier(vendor.id, {
+          name,
+          email: vendorEmail,
+          is_authorized_signatory: isAuthorizedSignatory,
+        });
+        return { vendor, invitation: 'queued' as const };
+      } catch {
+        return { vendor, invitation: 'failed' as const };
+      }
+    },
+    onSuccess: ({ vendor, invitation }) => {
       qc.invalidateQueries({ queryKey: ['accounting', 'vendors'] });
-      toast.success(mode === 'create' ? 'Vendor created.' : 'Vendor updated.');
+      if (invitation === 'queued') void qc.invalidateQueries({ queryKey: ['b2b', 'portal-access'] });
+      if (invitation === 'failed') {
+        toast.error('Vendor created, but the invitation failed. Retry from Portal Access.');
+      } else if (invitation === 'queued') {
+        toast.success('Vendor created. Portal invitation queued.');
+      } else {
+        toast.success(mode === 'create' ? 'Vendor created.' : 'Vendor updated.');
+      }
             safety.allowNavigationAfterSave();
-navigate(`/accounting/vendors/${v.id}`);
+      navigate(`/accounting/vendors/${vendor.id}`);
     },
     onError: (e) => {
       applyServerValidationErrors(e, setError, 'Failed to save the vendor.');
     },
   });
   const safety = useFormSafety({ form, saved: mutation.isSuccess });
+  const submit = handleSubmit((values) => {
+    const sendPortalInvitation = mode === 'create'
+      && inviteToPortal
+      && values.is_active
+      && Boolean(values.contact_person?.trim())
+      && Boolean(values.email?.trim());
+    if (sendPortalInvitation) {
+      if (!values.contact_person?.trim()) {
+        setError('contact_person', { type: 'manual', message: 'Enter the contact person before inviting.' });
+      }
+      if (!values.email?.trim()) {
+        setError('email', { type: 'manual', message: 'Enter an email address before inviting.' });
+      }
+      if (!values.is_active) {
+        toast.error('Activate the vendor before sending a portal invitation.');
+        return;
+      }
+      if (!values.contact_person?.trim() || !values.email?.trim()) {
+        toast.error('Add a contact name and email before sending a portal invitation.');
+        return;
+      }
+    }
+    mutation.mutate({ values, sendPortalInvitation, isAuthorizedSignatory: authorizedSignatory });
+  }, onFormInvalid<FormValues>());
 
   return (
     <div>
@@ -117,7 +175,7 @@ navigate(`/accounting/vendors/${v.id}`);
       />
       <FormDraftBanner safety={safety} />
       <form
-        onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
+        onSubmit={submit}
         className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Identity">
@@ -174,6 +232,31 @@ navigate(`/accounting/vendors/${v.id}`);
             <Switch label="Active" {...register('is_active')} />
           </div>
         </Panel>
+        {mode === 'create' && (
+          <Panel title="Portal access">
+            <div className="space-y-3">
+              <Switch
+                label="Send portal invitation after vendor creation"
+                description="Optional. The invitation goes to the contact email entered above."
+                checked={inviteToPortal && portalInviteReady}
+                disabled={!portalInviteReady}
+                onChange={(event) => setInviteToPortal(event.target.checked)}
+              />
+              {!portalInviteReady && (
+                <p className="text-xs text-muted">{!vendorActive
+                  ? 'Activate the vendor to enable portal invitations.'
+                  : 'Add a contact name and email to enable portal invitations.'}</p>
+              )}
+              {inviteToPortal && (
+                <Checkbox
+                  checked={authorizedSignatory}
+                  onChange={(event) => setAuthorizedSignatory(event.target.checked)}
+                  label={<span><span className="font-medium text-primary">Authorized signatory</span><span className="block text-xs text-muted">Allows this contact to sign supplier agreements.</span></span>}
+                />
+              )}
+            </div>
+          </Panel>
+        )}
         <FormActions>
           <Button type="button" variant="secondary" onClick={() => navigate('/accounting/vendors')}>
             Cancel

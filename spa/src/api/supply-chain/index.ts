@@ -6,6 +6,8 @@ import type { ContainerSize, ContainerType, Shipment, ShipmentContainer, Shipmen
 export interface ShipmentListParams extends ListParams {
  status?: ShipmentStatus | 'mid_pipe';
  purchase_order_id?: string;
+ from_date?: string;
+ to_date?: string;
 }
 
 export interface ShipmentStatusOption {
@@ -114,6 +116,7 @@ export interface CreateDeliveryData {
  sales_order_id: string;
  vehicle_id?: string;
  driver_id?: string;
+ shipment_weight_kg?: string;
  scheduled_date: string;
  notes?: string;
  items: CreateDeliveryItemData[];
@@ -151,6 +154,8 @@ export interface DeliveryFormOptions {
 export interface DeliveryDriverOption {
  id: string;
  name: string;
+ credential_status?: 'valid' | 'expired' | 'missing';
+ credential_expires_at?: string | null;
 }
 
 export interface DeliveryAssignmentData {
@@ -160,6 +165,7 @@ export interface DeliveryAssignmentData {
 }
 
 export interface DeliveryShipmentPlanData extends DeliveryAssignmentData {
+ shipment_weight_kg: string;
  scheduled_date: string;
  expected_delivery_date: string;
  carrier: string;
@@ -200,6 +206,7 @@ export const deliveriesApi = {
   form.append('scheduled_date', data.scheduled_date);
   form.append('expected_delivery_date', data.expected_delivery_date);
   form.append('carrier', data.carrier);
+  form.append('shipment_weight_kg', data.shipment_weight_kg);
   form.append('vehicle_id', data.vehicle_id);
   form.append('driver_id', data.driver_id);
   form.append('reason', data.reason);
@@ -271,4 +278,36 @@ export const vehiclesApi = {
  restore: (id: string, expectedVersion?: string | null) => client.patch(`/supply-chain/vehicles/${id}/restore`,
   expectedVersion ? { expected_version: expectedVersion } : {},
  ),
+};
+
+export interface DriverCredential {
+ id: string;
+ license_number: string;
+ expires_at: string;
+ status: 'valid' | 'expired';
+ document_url: string | null;
+}
+
+export interface DriverCredentialRow {
+ id: string;
+ name: string;
+ is_active: boolean;
+ credential: DriverCredential | null;
+}
+
+export interface DriverCredentialData {
+ license_number: string;
+ expires_at: string;
+ credential_document?: File;
+}
+
+export const driverCredentialsApi = {
+ list: () => client.get<{ data: DriverCredentialRow[] }>('/supply-chain/drivers/credentials').then((r) => r.data.data),
+ update: (driverId: string, data: DriverCredentialData) => {
+  const form = new FormData();
+  form.append('license_number', data.license_number);
+  form.append('expires_at', data.expires_at);
+  if (data.credential_document) form.append('credential_document', data.credential_document);
+  return client.put<ApiSuccess<DriverCredential>>(`/supply-chain/drivers/${driverId}/credential`, form).then((r) => r.data.data);
+ },
 };

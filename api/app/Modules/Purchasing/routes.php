@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\B2B\Controllers\SupplierListingImageController;
 use App\Modules\Purchasing\Controllers\ApprovedSupplierController;
 use App\Modules\Purchasing\Controllers\ProcurementChainController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderController;
@@ -41,7 +42,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     // Sourcing suggestions for the convert modal. Declared before the wildcard
     // {purchaseRequest} show/update routes is not required (extra segment), but
     // keep it grouped with convert so the PO-creation surface is in one place.
-     Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.manage');
+    Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.manage');
     Route::post('/purchase-requests/{purchaseRequest}/convert', [PurchaseRequestController::class, 'convert'])->middleware('permission:purchasing.po.create');
     Route::get('/purchase-requests/{purchaseRequest}/rfq-setup', [RequestForQuoteController::class, 'setup'])->middleware('permission:purchasing.rfq.manage');
     Route::post('/purchase-requests/{purchaseRequest}/rfqs', [RequestForQuoteController::class, 'store'])->middleware('permission:purchasing.rfq.manage');
@@ -114,6 +115,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── Supplier Item Listings (supplier-submitted offers, reviewed here) ─── */
     Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.supplier_listings.view');
+    Route::get('/supplier-listings/{supplierItemListing}/image', [SupplierListingImageController::class, 'internalImage'])->middleware('permission:purchasing.supplier_listings.view');
     // Literal bulk segments BEFORE the {supplierItemListing} binding routes.
     Route::patch('/supplier-listings/bulk-approve', [SupplierListingController::class, 'bulkApprove'])->middleware('approval_permission:purchasing.supplier_listings.review');
     Route::patch('/supplier-listings/bulk-reject', [SupplierListingController::class, 'bulkReject'])->middleware('approval_permission:purchasing.supplier_listings.review');

@@ -15,34 +15,54 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { productsApi } from '@/api/crm/products';
 import { crmCustomersApi } from '@/api/crm/customers';
-import type { PriceAgreement, CreatePriceAgreementData } from '@/types/crm';
+import type { PriceAgreement } from '@/types/crm';
+import type { PriceOffer, PriceRequest } from '@/types/pricing';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
-import type { PriceRequest } from '@/types/pricing';
+import { nextReplacementStartDate, replacementEndDate } from './replacementAgreementDates';
+
+function localDateInputValue(): string {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 
 const amount = z
   .string()
+  .trim()
   .regex(/^\d+(\.\d{1,2})?$/, 'Use an amount with up to 2 decimals')
-  .refine((value) => Number(value) > 0, 'Selling price must be positive');
+  .refine((value) => Number(value) > 0 && Number(value) <= 9999999999999.99, 'Enter a positive amount within the allowed limit');
 const tierSchema = z.object({
-  min_qty: z.string().regex(/^[1-9]\d*$/, 'Use a positive whole number'),
+  min_qty: z
+    .string()
+    .trim()
+    .regex(/^[1-9]\d*$/, 'Use a positive whole number')
+    .refine((value) => Number(value) <= 2147483647, 'Quantity exceeds the allowed limit'),
   unit_price: amount,
 });
+const agreementDate = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a valid date')
+  .refine((value) => {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  }, 'Use a valid calendar date');
 
 const schema = z
   .object({
     product_id: z.string().min(1, 'Select a product'),
     customer_id: z.string().min(1, 'Select a customer'),
     price: amount,
-    effective_from: z.string().min(1, 'Effective from date is required'),
-    effective_to: z.string().min(1, 'Expiry date is required'),
+    effective_from: agreementDate,
+    effective_to: agreementDate,
     pricing_method: z.enum(['flat', 'tiered']),
-    tiers: z.array(tierSchema).optional(),
-    notes: z.string().min(1, 'Explain proposed terms').max(1000),
+    tiers: z.array(tierSchema).max(20, 'Add no more than 20 price tiers').optional(),
+    notes: z.string().trim().min(1, 'Explain proposed terms').max(1000),
   })
   .superRefine((values, ctx) => {
     const tiers = values.tiers ?? [];
@@ -99,6 +119,17 @@ export function PriceAgreementForm({ initial, negotiationId, expectedVersion, mo
   const qc = useQueryClient();
   const [productSearch, setProductSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
+  const referenceFieldsLocked = mode === 'edit' || Boolean(negotiationId);
+  const today = localDateInputValue();
+  const minimumEffectiveFrom = mode === 'edit'
+    ? nextReplacementStartDate(initial?.effective_from, today)
+    : today;
+  const defaultEffectiveFrom = mode === 'edit'
+    ? minimumEffectiveFrom
+    : initial?.effective_from ?? '';
+  const defaultEffectiveTo = mode === 'edit'
+    ? replacementEndDate(initial?.effective_to, defaultEffectiveFrom)
+    : initial?.effective_to ?? '';
   const originalVersion = useRef(expectedVersion);
   const [recordChanged, setRecordChanged] = useState(false);
   useEffect(() => {
@@ -114,6 +145,7 @@ export function PriceAgreementForm({ initial, negotiationId, expectedVersion, mo
     queryKey: ['crm', 'products', 'price-agreement-lookup', productSearch],
     queryFn: () =>
       productsApi.list({ per_page: 100, is_active: true, search: productSearch || undefined }),
+    enabled: !referenceFieldsLocked,
   });
 
   const {
@@ -125,6 +157,7 @@ export function PriceAgreementForm({ initial, negotiationId, expectedVersion, mo
     queryKey: ['crm', 'customers', 'price-agreement-lookup', customerSearch],
     queryFn: () =>
       crmCustomersApi.list({ per_page: 100, is_active: true, search: customerSearch || undefined }),
+    enabled: !referenceFieldsLocked,
   });
 
   const form = useForm<FormValues>({
@@ -135,8 +168,8 @@ export function PriceAgreementForm({ initial, negotiationId, expectedVersion, mo
       customer_id: initial?.customer?.id ?? '',
       price: initial?.price ?? '',
       notes: '',
-      effective_from: initial?.effective_from ?? '',
-      effective_to: initial?.effective_to ?? '',
+      effective_from: defaultEffectiveFrom,
+      effective_to: defaultEffectiveTo,
       pricing_method: initial?.pricing_method ?? 'flat',
       tiers:
         initial?.tiers?.map((tier) => ({
@@ -221,9 +254,7 @@ export function PriceAgreementForm({ initial, negotiationId, expectedVersion, mo
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
-      const payload: CreatePriceAgreementData = {
-        product_id: values.product_id,
-        customer_id: values.customer_id,
+      const offer: PriceOffer = {
         price: values.price,
         effective_from: values.effective_from,
         effective_to: values.effective_to,
@@ -235,21 +266,23 @@ export function PriceAgreementForm({ initial, negotiationId, expectedVersion, mo
                 unit_price: tier.unit_price,
               }))
             : null,
+        notes: values.notes,
       };
-      return negotiationId
-        ? pricingRequestsApi.offer(negotiationId, {
-            ...payload,
-            notes: values.notes,
-            pricing_method: values.pricing_method,
-            tiers: payload.tiers ?? null,
-            version: expectedVersion ?? 0,
-          })
-        : pricingRequestsApi.create({
-            ...payload,
-            notes: values.notes,
-            pricing_method: values.pricing_method,
-            tiers: payload.tiers ?? null,
-          });
+      if (negotiationId) {
+        return pricingRequestsApi.offer(negotiationId, {
+          ...offer,
+          version: expectedVersion ?? 0,
+        });
+      }
+      if (mode === 'edit') {
+        if (!initial?.id) throw new Error('The source agreement is missing. Refresh and try again.');
+        return pricingRequestsApi.createReplacement(initial.id, offer);
+      }
+      return pricingRequestsApi.create({
+        ...offer,
+        product_id: values.product_id,
+        customer_id: values.customer_id,
+      });
     },
     onSuccess: (updated: PriceRequest) => {
       qc.invalidateQueries({ queryKey: ['crm', 'price-agreements'] });
@@ -276,6 +309,14 @@ navigate('/crm/price-agreements');
   return (
     <form
       onSubmit={handleSubmit((v) => {
+        if (v.effective_from < minimumEffectiveFrom) {
+          setError('effective_from', {
+            message: mode === 'edit'
+              ? 'A replacement must start after the existing agreement starts.'
+              : 'The effective date cannot be in the past.',
+          });
+          return;
+        }
         const floor = selectedProduct?.minimum_selling_price;
         if (floor && Number(v.price) < Number(floor)) {
           setError('price', { message: `Price must be at least ${formatPeso(floor)}.` });
@@ -311,6 +352,7 @@ navigate('/crm/price-agreements');
       <Textarea
         label="Proposal reason"
         required
+        maxLength={1000}
         {...register('notes')}
         error={errors.notes?.message}
         helper="Explain the price and quantity terms to the customer."
@@ -328,10 +370,34 @@ navigate('/crm/price-agreements');
               Product and customer
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Set a customer-specific price for one product. Standard products can use their base
-              price without an agreement.
+              {referenceFieldsLocked
+                ? 'Replacement proposals keep the customer and product from the existing agreement.'
+                : 'Set a customer-specific price for one product. Standard products can use their base price without an agreement.'}
             </p>
             <div className="mt-5 grid min-w-0 gap-5 sm:grid-cols-2">
+              {referenceFieldsLocked ? (
+                <>
+                  <input type="hidden" {...register('customer_id')} />
+                  <input type="hidden" {...register('product_id')} />
+                  <Input
+                    label="Customer"
+                    fieldSize="lg"
+                    readOnly
+                    value={selectedCustomer?.name ?? initial?.customer?.name ?? 'Customer unavailable'}
+                  />
+                  <Input
+                    label="Product"
+                    fieldSize="lg"
+                    readOnly
+                    value={selectedProduct
+                      ? `${selectedProduct.part_number} · ${selectedProduct.name}`
+                      : initial?.product
+                        ? `${initial.product.part_number} · ${initial.product.name}`
+                        : 'Product unavailable'}
+                  />
+                </>
+              ) : (
+                <>
               <div className="min-w-0 space-y-3">
                 <Select
                   searchable
@@ -339,14 +405,11 @@ navigate('/crm/price-agreements');
                   title="Customer name or code"
                   fieldSize="lg"
                   label="Customer"
-                  disabled={!!negotiationId}
                   required
                   {...customerField}
                   onChange={(event) => {
                     void customerField.onChange(event);
-                    if (!negotiationId) {
-                      setValue('product_id', '', { shouldDirty: true });
-                    }
+                    setValue('product_id', '', { shouldDirty: true });
                   }}
                   value={customerId}
                   error={errors.customer_id?.message}
@@ -388,12 +451,7 @@ navigate('/crm/price-agreements');
                   title="Part number or product name"
                   fieldSize="lg"
                   label="Product"
-                  disabled={
-                    !!negotiationId ||
-                    !customerId ||
-                    activeAgreementsPending ||
-                    activeAgreementsError
-                  }
+                  disabled={!customerId || activeAgreementsPending || activeAgreementsError}
                   loading={productsLoading || activeAgreementsPending}
                   required
                   {...register('product_id')}
@@ -463,6 +521,8 @@ navigate('/crm/price-agreements');
                     </p>
                   )}
               </div>
+                </>
+              )}
             </div>
           </section>
           <section
@@ -522,6 +582,7 @@ navigate('/crm/price-agreements');
                 required
                 prefix="₱"
                 inputMode="decimal"
+                maxLength={16}
                 {...register('price')}
                 error={errors.price?.message}
                 placeholder="0.00"
@@ -537,6 +598,7 @@ navigate('/crm/price-agreements');
                 label="Effective from"
                 required
                 type="date"
+                min={minimumEffectiveFrom}
                 {...register('effective_from')}
                 error={errors.effective_from?.message}
               />
@@ -545,7 +607,7 @@ navigate('/crm/price-agreements');
                 label="Effective to"
                 required
                 type="date"
-                min={effectiveFrom || undefined}
+                min={effectiveFrom || minimumEffectiveFrom}
                 {...register('effective_to')}
                 error={errors.effective_to?.message}
                 helper="Both dates are included."
@@ -569,6 +631,7 @@ navigate('/crm/price-agreements');
                 <Button
                   type="button"
                   className="min-h-11 shrink-0"
+                  disabled={fields.length >= 20}
                   icon={<LuPlus size={16} />}
                   onClick={() => append({ min_qty: '', unit_price: '' })}
                 >
@@ -600,6 +663,7 @@ navigate('/crm/price-agreements');
                             aria-label={`Minimum quantity for tier ${index + 1}`}
                             type="number"
                             min={1}
+                            max={2147483647}
                             step={1}
                             {...register(`tiers.${index}.min_qty`)}
                             error={errors.tiers?.[index]?.min_qty?.message}
@@ -613,6 +677,7 @@ navigate('/crm/price-agreements');
                             aria-label={`Unit price for tier ${index + 1}`}
                             prefix="₱"
                             inputMode="decimal"
+                            maxLength={16}
                             {...register(`tiers.${index}.unit_price`)}
                             error={errors.tiers?.[index]?.unit_price?.message}
                             placeholder="0.00"

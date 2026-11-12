@@ -9,6 +9,8 @@ export interface SupplierPortalUser {
   name: string;
   email: string;
   must_change_password: boolean;
+  resends_remaining_today: number;
+  is_authorized_signatory: boolean;
   is_active: boolean;
   status: 'active' | 'inactive' | 'locked' | 'pending';
   deleted_at: string | null;
@@ -24,6 +26,8 @@ export interface CustomerPortalUser {
   customer_id: string;
   customer_name: string | null;
   must_change_password: boolean;
+  resends_remaining_today: number;
+  is_authorized_signatory: boolean;
   is_active: boolean;
   status: 'active' | 'inactive' | 'locked' | 'pending';
   deleted_at: string | null;
@@ -196,6 +200,21 @@ export interface PortalSoSummary {
   created_at: string;
   customer_terms_snapshot?: CustomerTermsSnapshot | null;
   payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
+  advance_requirement?: CustomerOrderAdvance | null;
+}
+
+export interface CustomerOrderAdvance {
+  id: string;
+  attempt_number?: number;
+  required_amount: string;
+  percentage?: string | null;
+  submitted_amount?: string | null;
+  refunded_amount?: string;
+  status: 'configured' | 'pending' | 'verified' | 'rejected' | 'waived' | 'refunded' | string;
+  payment_date?: string | null;
+  proof_file_name?: string | null;
+  review_reason?: string | null;
+  can_submit?: boolean;
 }
 
 export interface PortalSoItem {
@@ -241,6 +260,30 @@ export interface PortalCatalogItem {
   unit_of_measure: string;
   unit_price: string | null;
   pricing_method: string | null;
+  description?: string | null;
+  specifications?: {
+    dimensions?: { length?: string; width?: string; height?: string; unit?: string } | null;
+    material?: string | null;
+    finish?: string | null;
+    tolerance?: string | null;
+    technical_notes?: string | null;
+  } | null;
+  is_customizable?: boolean;
+  images?: Array<{ id: string; url: string; position: number; alt_text: string | null; is_primary: boolean }>;
+  available_quantity?: string | null;
+  minimum_order_quantity?: string;
+  maximum_order_quantity?: string | null;
+  availability_mode?: 'stock_limited' | 'make_to_order';
+  warranty_options?: Array<{
+    id: string;
+    label: string;
+    warranty_duration_days: number | null;
+    warranty_report_window_days: number | null;
+    warranty_start_basis: 'delivery' | 'invoice' | null;
+    warranty_covered_issues: string[] | null;
+    warranty_remedies: string[] | null;
+    additional_terms?: string | null;
+  }>;
 }
 
 export interface PortalSoDetail extends PortalSoSummary {
@@ -273,6 +316,11 @@ export interface PortalSoDetail extends PortalSoSummary {
     awaiting_delivery_response?: boolean;
   };
   delivery_negotiations?: DeliveryNegotiation[];
+  customer_feedback?: {
+    can_submit: boolean;
+    submitted: boolean;
+    submitted_at?: string | null;
+  } | null;
   latest_response?: {
     id: string;
     type: 'accept' | 'propose' | 'decline' | 'delivery_date' | 'cancellation_request' | string;
@@ -633,6 +681,7 @@ export type PortalListingStatus = 'pending' | 'approved' | 'rejected' | 'superse
 export interface PortalSupplierListing {
   id: string;
   item?: { id: string; code: string; name: string; unit_of_measure: string };
+  image?: { original_filename: string; mime_type: string; size_bytes: number; url: string } | null;
   supplier_item_code: string | null;
   supplier_item_name: string | null;
   price: string;
@@ -771,8 +820,28 @@ export interface CustomerDashboardData {
   pending_delivery_count: number;
   open_invoice_count: number;
   total_outstanding: string;
+  product_terms?: CustomerAgreementProductTerms[];
   recent_orders: PortalSoSummary[];
   recent_invoices: PortalInvoiceSummary[];
   recent_deliveries: PortalDeliverySummary[];
   recent_complaints: PortalComplaint[];
+}
+
+export interface CustomerAgreementProductTerms {
+  id: string;
+  part_number: string;
+  name: string;
+  unit_of_measure: string | null;
+  minimum_order_quantity: string;
+  maximum_order_quantity: string | null;
+  warranty_options: Array<{
+    id: string;
+    label: string;
+    warranty_duration_days: number | null;
+    warranty_report_window_days: number | null;
+    warranty_start_basis: 'delivery' | 'invoice' | null;
+    warranty_covered_issues: string[] | null;
+    warranty_remedies: string[] | null;
+    additional_terms: string | null;
+  }>;
 }

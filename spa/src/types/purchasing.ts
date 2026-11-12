@@ -646,6 +646,12 @@ export interface SupplierItemListing {
   submitted_at: string | null;
   reviewed_at: string | null;
   reviewer?: { id: string; name: string } | null;
+  image?: {
+    original_filename: string | null;
+    mime_type: string | null;
+    size_bytes: number | null;
+    url: string;
+  } | null;
   permissions?: { view: boolean; review: boolean };
   available_actions?: { approve: boolean; reject: boolean };
 }

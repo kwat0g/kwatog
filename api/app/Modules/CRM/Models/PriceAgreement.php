@@ -8,6 +8,7 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Enums\PricingMethod;
+use App\Modules\CRM\Support\PriceAgreementAuditContext;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -51,6 +52,12 @@ class PriceAgreement extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /** @return array{user_id:?int, actor_type:string, reason:?string}|null */
+    public function auditContextOverride(): ?array
+    {
+        return PriceAgreementAuditContext::current();
     }
 
     public function scopeActiveOn(Builder $q, CarbonInterface $date): Builder

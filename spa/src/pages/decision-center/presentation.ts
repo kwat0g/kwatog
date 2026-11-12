@@ -24,6 +24,7 @@ const detectorLabels: Record<string, string> = {
   'dss.payroll_anomaly_summary': 'Payroll anomaly review',
   'dss.training_expiry_summary': 'Training expiry',
   'dss.master_hygiene': 'Master data completeness',
+  'dss.inventory_stockout': 'Inventory availability',
   'dss.three_way_match_review': 'Bill match review',
   'dss.quality_suspect_material_lot': 'Suspect material lot trace',
 };
@@ -506,6 +507,41 @@ const specs: Record<string, (data: Record<string, unknown>) => DecisionView> = {
       ['affected_count'],
       d,
       tables,
+    );
+  },
+  inventory_stockout: (d) => {
+    const code = item(d.item_code);
+    const finishedGood = d.replenishment_path === 'production';
+    const zeroStock = d.rule === 'zero_usable_stock';
+    const title = `${finishedGood ? 'Finished good' : 'Inventory item'} ${zeroStock ? 'out of stock' : 'below threshold'}${code === unavailable ? '' : ` · ${code}`}`;
+    const trigger = zeroStock ? 'No usable stock' : 'At or below configured threshold';
+    const threshold = d.threshold_source === 'finished_good_stockout'
+      ? fact('Planning threshold', 'Not configured')
+      : field(
+          d,
+          'active_threshold',
+          d.threshold_source === 'safety_stock' ? 'Safety stock threshold' : 'Reorder threshold',
+          numeric,
+        );
+
+    return family(
+      'Inventory',
+      title,
+      finishedGood ? 'Review production planning' : 'Review purchasing',
+      finishedGood
+        ? 'No usable finished-goods stock remains. Review production planning or internal stock availability; this advisory does not create a supplier purchase request.'
+        : zeroStock
+          ? 'This item has no usable stock. Review open purchase requests and incoming supply before creating another request.'
+          : 'Usable stock is at or below its replenishment threshold. Review incoming supply before creating another purchase request.',
+      [
+        field(d, 'item_code', 'Item'),
+        field(d, 'item_name', 'Name'),
+        field(d, 'usable_quantity', 'Usable stock', numeric),
+        fact('Trigger', trigger),
+        threshold,
+      ],
+      ['item_code', 'item_name', 'usable_quantity', 'rule', 'replenishment_path'],
+      d,
     );
   },
 };

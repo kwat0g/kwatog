@@ -10,6 +10,7 @@
     "GET http://nginx/api/v1/purchasing/purchase-requests: net::ERR_ABORTED",
     "GET http://nginx/api/v1/purchasing/purchase-requests/: net::ERR_ABORTED",
     "GET https://nginx/api/v1/realtime/health: net::ERR_ABORTED",
+    "GET https://nginx/api/v1/crm/products/options: net::ERR_ABORTED",
     "GET https://a.tile.openstreetmap.org/16/",
     "GET https://b.tile.openstreetmap.org/16/",
     "GET https://c.tile.openstreetmap.org/16/"

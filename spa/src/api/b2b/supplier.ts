@@ -325,4 +325,13 @@ export const supplierPortalApi = {
     );
     return data.data;
   },
+
+  uploadItemListingImage: async (id: string, image: File) => {
+    const form = new FormData();
+    form.append('image', image);
+    const { data } = await portalClient.post<{ data: PortalSupplierListing }>(
+      `/b2b/supplier/item-listings/${id}/image`, form,
+    );
+    return data.data;
+  },
 };

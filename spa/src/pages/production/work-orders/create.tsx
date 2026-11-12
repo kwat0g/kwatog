@@ -17,6 +17,8 @@ import {
   scheduleDateKey,
 } from '@/components/production/scheduleDates';
 
+const MAX_STOCK_PRODUCTION_QUANTITY = 5000;
+
 export default function CreateWorkOrderPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -37,8 +39,10 @@ export default function CreateWorkOrderPage() {
     quantity &&
     (!/^[1-9]\d*$/.test(quantity) ||
       !Number.isSafeInteger(Number(quantity)) ||
-      Number(quantity) > 2147483647)
-      ? 'Enter a positive whole-piece quantity.'
+      Number(quantity) > MAX_STOCK_PRODUCTION_QUANTITY)
+      ? Number(quantity) > MAX_STOCK_PRODUCTION_QUANTITY
+        ? `Maximum ${MAX_STOCK_PRODUCTION_QUANTITY.toLocaleString()} pieces per work order.`
+        : 'Enter a positive whole-piece quantity.'
       : undefined;
   const target = deadline || automaticTarget;
   const targetEnd = `${target}T23:59:59+08:00`;
@@ -94,7 +98,7 @@ export default function CreateWorkOrderPage() {
       ? create.error.response?.data?.message
       : create.error?.message;
   return (
-    <PageShell variant="narrow" className="flex flex-col gap-6">
+    <PageShell className="flex flex-col gap-6">
       <PageHeader
         inset={false}
         title="Produce for stock"
@@ -122,11 +126,11 @@ export default function CreateWorkOrderPage() {
           className="space-y-6"
         >
           <legend className="mb-3 font-medium text-primary">What to produce</legend>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Select
               label="Product"
               fieldSize="lg"
-              containerClassName="sm:col-span-2"
+              containerClassName="lg:col-span-2"
               required
               value={product}
               onChange={(event) => setProduct(event.target.value)}
@@ -148,16 +152,17 @@ export default function CreateWorkOrderPage() {
             <Input
               label="Quantity"
               fieldSize="lg"
+              containerClassName="max-w-md"
               required
               type="number"
               min="1"
-              max="2147483647"
+              max={MAX_STOCK_PRODUCTION_QUANTITY}
               step="1"
               suffix="pcs"
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
               error={quantityError}
-              helper="Whole pieces only."
+              helper={`Whole pieces only. Maximum ${MAX_STOCK_PRODUCTION_QUANTITY.toLocaleString()} per work order.`}
             />
           </div>
           <div className="space-y-3 border-y border-default py-4">
@@ -206,7 +211,7 @@ export default function CreateWorkOrderPage() {
             {selectedProduct.stock_production?.blockers.join(' ')}
           </p>
         )}
-        <p className="text-sm text-muted">
+        <p className="max-w-prose text-sm text-muted">
           Plan production saves your work order. On its record page, use Confirm to review the
           machine, mold, workers and schedule.
         </p>

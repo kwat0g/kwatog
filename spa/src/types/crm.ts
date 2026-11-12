@@ -4,6 +4,12 @@ import type { Incoterm } from '@/types/supplyChain';
 import type { CustomerTermsSnapshot, WarrantyTermsSnapshot } from '@/types/orderAgreements';
 
 export interface Product {
+  specifications?: ProductSpecifications | null;
+  is_customizable?: boolean;
+  images?: ProductImage[];
+  blueprints?: ProductBlueprint[];
+  expected_margin_amount?: string | null;
+  expected_margin_percent?: string | null;
   financial_change_request?: {
     id: string;
     notes: string;
@@ -24,6 +30,7 @@ export interface Product {
   name: string;
   description: string | null;
   image_url?: string | null;
+  primary_image_url?: string | null;
   unit_of_measure: string;
   standard_cost: string | null;
   base_selling_price?: string | null;
@@ -37,6 +44,37 @@ export interface Product {
   inspection_spec?: { id: string; version: number; updated_at: string | null } | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProductSpecifications {
+  dimensions?: { length: string; width: string; height: string; unit: 'mm' | 'cm' | 'in' } | null;
+  material?: string | null;
+  finish?: string | null;
+  tolerances?: string | null;
+  notes?: string | null;
+}
+
+export interface ProductImage {
+  id: string;
+  url: string;
+  filename?: string;
+  mime?: string;
+  size?: number;
+  position: number;
+  alt_text: string | null;
+  is_primary: boolean;
+}
+
+export interface ProductBlueprint {
+  id: string;
+  title: string;
+  revision: string;
+  notes: string | null;
+  filename: string;
+  mime: string;
+  size: number;
+  download_url?: string;
+  created_at?: string;
 }
 
 export interface PriceAgreement {
@@ -58,6 +96,12 @@ export interface PriceAgreement {
   pricing_method_label: string;
   tiers: PriceTier[] | null;
   is_currently_active: boolean;
+  termination_status?: 'awaiting_customer_signature' | 'request_cancelled' | 'ended_early' | 'cancelled_before_start' | null;
+  termination_reason?: string | null;
+  termination_last_valid_date?: string | null;
+  termination_document_id?: string | null;
+  termination_kind?: 'early_termination' | 'scheduled_cancellation' | null;
+  termination_history_count?: number;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -76,6 +120,8 @@ export interface CreateProductData {
   standard_cost: string;
   revenue_account_id?: string | null;
   is_active?: boolean;
+  specifications?: ProductSpecifications | null;
+  is_customizable?: boolean;
 }
 
 export type UpdateProductData = Partial<CreateProductData>;
@@ -158,6 +204,19 @@ export interface SalesOrder {
   next_statuses?: Array<{ value: string; label: string }>;
   payment_terms_days: number;
   payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
+  advance_requirement?: {
+    id: string;
+    attempt_number: number;
+    required_amount: string;
+    percentage: string | null;
+    submitted_amount: string | null;
+    refunded_amount: string;
+    status: string;
+    payment_date: string | null;
+    proof_file_name: string | null;
+    review_reason: string | null;
+    can_submit: boolean;
+  } | null;
   customer_terms_snapshot?: CustomerTermsSnapshot | null;
   // Sprint 6 audit §3.2: linked chain context populated on the detail
   // payload only (whenLoaded on the resource).
@@ -230,6 +289,12 @@ export interface SalesOrder {
   is_cancellable: boolean;
   item_count: number;
   customer?: { id: string; name: string };
+  customer_feedback?: {
+    rating: number;
+    comment: string | null;
+    submitted_at: string | null;
+    customer_name: string | null;
+  } | null;
   creator?: { id: string; name: string };
   items?: SalesOrderItem[];
   status_history?: SalesOrderStatusHistoryEvent[];

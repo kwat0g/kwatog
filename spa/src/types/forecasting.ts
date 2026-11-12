@@ -2,6 +2,8 @@
  * ADV11 — Demand & Sales Forecasting types.
  */
 
+import type { ItemType } from './inventory';
+
 export type ForecastMethod = 'moving_avg' | 'weighted_avg' | 'manual';
 export type ComputedForecastMethod = Exclude<ForecastMethod, 'manual'>;
 
@@ -43,6 +45,7 @@ export type DemandSource = 'forecast' | 'historical' | 'none';
 
 export interface StockOutRow {
  item_id: string;
+ item_type: ItemType;
  code: string;
  name: string;
  unit_of_measure: string;

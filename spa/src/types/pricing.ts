@@ -15,6 +15,10 @@ export interface PriceRequest {
   customer: { id: string; name: string };
   quantity: number | null;
   requested_price: string | null;
+  order_limit_increase_request?: {
+    current_maximum_quantity: string;
+    requested_quantity: string;
+  } | null;
   notes: string;
   status:
     | 'requested'
@@ -22,6 +26,8 @@ export interface PriceRequest {
     | 'offered'
     | 'accepted'
     | 'rejected'
+    | 'sales_rejected'
+    | 'customer_cancelled'
     | 'withdrawn'
     | 'expired';
   version: number;
@@ -31,6 +37,7 @@ export interface PriceRequest {
     can_withdraw: boolean;
     can_accept: boolean;
     can_reject: boolean;
+    can_cancel?: boolean;
   };
   permissions?: { view: boolean; propose: boolean; approve: boolean; withdraw: boolean };
   decision_reason?: string | null;

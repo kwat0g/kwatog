@@ -34,6 +34,7 @@
 17. [Notifications & Search](#17-notifications--search)
 18. [Admin: users, roles, settings, audit log](#18-admin)
 19. [Troubleshooting](#19-troubleshooting)
+20. [Customer and supplier portals](#20-customer-and-supplier-portals)
 
 ---
 
@@ -395,6 +396,106 @@ You only ever see your own data — the server scopes by `auth.user.employee_id`
 | PDF blank in DomPDF                      | Missing `_layout.blade.php` partial. |
 | Maintenance WO not auto-created          | `php artisan schedule:run` — confirm cron is wired. |
 | Depreciation didn't post                 | Run `Admin → Depreciation Runs` for the month. |
+
+## 20. Customer and supplier portals
+
+### 20.1 Prepare a customer account
+
+Open the customer record from *CRM → Customers* or *Accounting → Customers*.
+Record the contact person's name, email, and role (for example, Sales Officer).
+For delivery, enter the ship-to address and place its map pin. The map pin is
+required for dispatching to that location.
+
+Set the customer's agreement dates, default payment terms, and allowed products.
+For each product, configure one or more warranty choices. These choices appear
+only for that customer and product. The default payment terms apply to an entire
+order; an authorized Sales user can override terms on a specific order.
+
+### 20.2 Attach, fill, and sign an agreement
+
+Upload a customer agreement PDF to the agreement area. If it has fillable PDF
+fields, staff can map those fields once to approved customer and agreement
+values. Review the filled copy, then issue it to the portal. A scanned or
+non-fillable PDF remains attachable but needs manual completion; the system
+does not infer legal terms or use OCR. Supplier agreements follow the same
+steps from the supplier record.
+
+Only contacts marked as **Authorized signatory** can sign an issued agreement.
+The system stores the signer's portal identity, typed name, signing time, and
+the exact signed document hash. A contact's title by itself does not grant
+signing authority.
+
+For automatic filling, the API image must include PDFtk at the configured
+`PDFTK_BINARY` path. A form template with unmapped required fields must be
+completed in the staff mapping/review step before it can auto-fill.
+
+### 20.3 Invite a customer or supplier
+
+Open *Accounting → Portal Access*. Select the customer or supplier account that
+the new portal user belongs to, then manually enter the invitee's name and
+email. The form does not copy either value from the account record. On first
+login, the invited user sets a new password and confirms it.
+
+The customer and supplier portals show a short, role-specific guide on the
+first visit. Users can skip or close it and replay it later from **Help**.
+
+### 20.4 Place an order as a customer
+
+1. Open *Orders → New Order*. The catalog contains products authorized for your
+   customer account. Review specifications and the available product images.
+2. Choose a warranty option for each product line. The option is saved on the
+   order and remains its warranty record even if the customer agreement changes
+   later.
+3. Enter a quantity within the displayed eligible stock for stock-limited
+   products. If you need more, contact Sales through the existing price-request
+   action. Make-to-order products follow their normal order review.
+4. Review the payment terms shown on the order and submit it for Sales review.
+   Customer credit limits are optional master data and do not block ordering.
+5. If the order requires a down payment, open its payment section and submit the
+   exact required amount with bank, reference, date, and a PDF/JPEG/PNG proof.
+   Finance reviews the evidence; a pending payment keeps the order from release
+   to production. You can see the payment status in the order.
+6. After delivery is recorded, use the feedback section on the order to submit
+   one 1–5 rating and an optional comment.
+
+### 20.5 Product setup for Sales and Product staff
+
+In *CRM → Products*, include the physical specifications needed to quote and
+manufacture the item: dimensions with units, material, and finish. Upload
+multiple product images and set a primary image. If the item is customizable,
+attach an approved blueprint before making it available in the customer
+catalog. Use its BOM for production material quantities. Cost and margin are
+available only to authorized internal roles.
+
+### 20.6 Supplier portal and invoice evidence
+
+Suppliers can view images attached to their item listings and can upload or
+replace a listing image where permitted. When submitting a supplier invoice,
+attach its PDF or image along with the invoice number, amount, date, and
+purchase-order/receipt details. The attachment is evidence for the existing
+invoice review and three-way match; it does not replace those checks.
+
+### 20.7 Dispatch, shipments, and quality evidence
+
+Fleet staff record the driver's license identifier and expiry and the vehicle
+type, plate, and weight capacity. Dispatch records the total shipment weight
+and chooses a driver available for the date and an active vehicle whose
+capacity covers that shipment. Confirm the customer delivery address has a
+map pin before dispatch. Shipment history can be filtered to the last 7, 30,
+or 90 days, or a custom date range.
+
+Warehouse stock is organized as *warehouse → zone → location/bin*. The stock
+labels are *available*, *reserved*, *held/QC*, and *damaged*. For incoming
+inspection defects, choose a severity (Minor, Major, or Critical), record the
+affected quantity and notes, and attach a photo when available.
+
+Finance verifies submitted online bank-payment proof before recording a
+customer down payment as received. Verified advances are applied to the related
+order invoice once; they are not treated as sales revenue when received.
+Before accepting deposits, Finance should confirm that the seeded
+`accounting.accounts.customer_advances_code` setting (default `2090`) names an
+active, postable liability account. Complete map pins for existing delivery
+addresses before dispatching to those customers.
 
 ---
 

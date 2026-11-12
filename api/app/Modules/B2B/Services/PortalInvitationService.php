@@ -19,7 +19,7 @@ class PortalInvitationService
     public function __construct(private readonly PortalAccessRealtimeService $realtime) {}
 
     /** @return array{user: CustomerPortalUser} */
-    public function inviteCustomer(Customer $customer, string $name, string $email): array
+    public function inviteCustomer(Customer $customer, string $name, string $email, ?bool $isAuthorizedSignatory = null): array
     {
         if (! $customer->is_active || $customer->trashed()) {
             throw new BusinessRuleException('Customer portal access cannot be invited for an inactive customer.');
@@ -28,7 +28,7 @@ class PortalInvitationService
         $name = trim($name);
         $email = strtolower(trim($email));
         $unknownPassword = bin2hex(random_bytes(32));
-        $user = DB::transaction(function () use ($customer, $name, $email, $unknownPassword): CustomerPortalUser {
+        $user = DB::transaction(function () use ($customer, $name, $email, $unknownPassword, $isAuthorizedSignatory): CustomerPortalUser {
             // customer_portal_users.email is globally UNIQUE while the row holds
             // a single customer_id, so this lookup IS the tenant boundary. The
             // match must normalise case the same way the write does, or the
@@ -48,6 +48,7 @@ class PortalInvitationService
                 throw new BusinessRuleException('This email is already assigned to a different customer. Remove the existing portal account before assigning it elsewhere.');
             }
 
+            $currentSignatory = (bool) ($user?->is_authorized_signatory ?? false);
             $user ??= new CustomerPortalUser;
             $user->forceFill([
                 'customer_id' => $customer->id,
@@ -55,6 +56,7 @@ class PortalInvitationService
                 'email' => $email,
                 'password' => $unknownPassword,
                 'is_active' => true,
+                'is_authorized_signatory' => $isAuthorizedSignatory ?? $currentSignatory,
                 'must_change_password' => true,
                 'failed_login_attempts' => 0,
                 'locked_until' => null,
@@ -86,7 +88,7 @@ class PortalInvitationService
     }
 
     /** @return array{user: SupplierPortalUser} */
-    public function inviteSupplier(Vendor $vendor, string $name, string $email): array
+    public function inviteSupplier(Vendor $vendor, string $name, string $email, ?bool $isAuthorizedSignatory = null): array
     {
         if (! $vendor->is_active || $vendor->trashed()) {
             throw new BusinessRuleException('Supplier portal access cannot be invited for an inactive supplier.');
@@ -95,7 +97,7 @@ class PortalInvitationService
         $name = trim($name);
         $email = strtolower(trim($email));
         $unknownPassword = bin2hex(random_bytes(32));
-        $user = DB::transaction(function () use ($vendor, $name, $email, $unknownPassword): SupplierPortalUser {
+        $user = DB::transaction(function () use ($vendor, $name, $email, $unknownPassword, $isAuthorizedSignatory): SupplierPortalUser {
             $user = SupplierPortalUser::withTrashed()
                 ->whereRaw('LOWER(email) = ?', [$email])
                 ->lockForUpdate()
@@ -109,6 +111,7 @@ class PortalInvitationService
                 throw new BusinessRuleException('This supplier account is inactive. Reactivate it before sending a new invitation.');
             }
 
+            $currentSignatory = (bool) ($user?->is_authorized_signatory ?? false);
             $user ??= new SupplierPortalUser;
             $user->forceFill([
                 'vendor_id' => $vendor->id,
@@ -116,6 +119,7 @@ class PortalInvitationService
                 'email' => $email,
                 'password' => $unknownPassword,
                 'is_active' => true,
+                'is_authorized_signatory' => $isAuthorizedSignatory ?? $currentSignatory,
                 'must_change_password' => true,
                 'failed_login_attempts' => 0,
                 'locked_until' => null,

@@ -7,7 +7,6 @@ namespace App\Modules\CRM\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\ChainBroadcaster;
-use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
@@ -24,11 +23,12 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderStatus;
-use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
-use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
+use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
@@ -48,7 +48,9 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Models\ReturnCase;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Services\DeliveryService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -126,76 +128,6 @@ class SalesOrderService
         private readonly PriceAgreementService $prices,
         private readonly TaxPolicyService $taxPolicy,
     ) {}
-
-    /**
-     * Enforce customer credit limit before confirming a sales order.
-     *
-     * Total exposure = AR balance on open invoices (finalized/partial)
-     *                + total_amount of open SOs (confirmed/in_production)
-     *                + this SO's total_amount
-     *
-     * If exposure > credit_limit a ValidationException is thrown (422).
-     * A null or zero credit_limit means no limit is enforced.
-     */
-    private function checkCreditLimit(SalesOrder $so): void
-    {
-        $customer = $so->customer ?? $so->load('customer')->customer;
-        $limit = (string) ($customer->credit_limit ?? '0');
-        if (bccomp($limit, '0', 2) <= 0) {
-            return; // null or 0 = no limit enforced
-        }
-
-        $arBalance = (string) (Invoice::query()
-            ->where('customer_id', $customer->id)
-            ->whereIn('status', ['finalized', 'partial'])
-            ->sum('balance') ?? '0');
-
-        $openSoExposure = (string) (SalesOrder::query()
-            ->where('customer_id', $customer->id)
-            ->whereIn('status', [
-                SalesOrderStatus::Confirmed->value,
-                SalesOrderStatus::InProduction->value,
-            ])
-            ->where('id', '!=', $so->id)
-            ->sum('total_amount') ?? '0');
-
-        $totalExposure = bcadd(
-            bcadd($arBalance, $openSoExposure, 2),
-            (string) $so->total_amount,
-            2
-        );
-
-        if (bccomp($totalExposure, $limit, 2) > 0) {
-            $msg = sprintf(
-                'Credit limit exceeded. Limit: %s, Current exposure: %s (AR %s + open SOs %s + this SO %s).',
-                app(CurrencyDisplayService::class)->format($limit),
-                app(CurrencyDisplayService::class)->format($totalExposure),
-                app(CurrencyDisplayService::class)->format($arBalance),
-                app(CurrencyDisplayService::class)->format($openSoExposure),
-                app(CurrencyDisplayService::class)->format($so->total_amount),
-            );
-            throw ValidationException::withMessages([
-                'credit_limit' => [$msg],
-            ]);
-        }
-    }
-
-    /**
-     * Re-run the confirmation credit gate against an order whose lines and
-     * totals are about to change (a customer counter-offer accepted by sales).
-     *
-     * `checkCreditLimit` reads `$so->total_amount` and open AR/SO exposure, so
-     * the caller MUST have applied the proposed values first and hold the SO
-     * row lock. Locks the customer row in the same order as `confirm()` so two
-     * concurrent confirmations/acceptances cannot both pass against the same
-     * open exposure.
-     */
-    public function assertCreditWithinLimit(SalesOrder $so): void
-    {
-        $customer = Customer::withTrashed()->lockForUpdate()->findOrFail($so->customer_id);
-        $so->setRelation('customer', $customer);
-        $this->checkCreditLimit($so);
-    }
 
     private function assertActiveCustomer(int $customerId): void
     {
@@ -297,7 +229,7 @@ class SalesOrderService
             return 'This sales order cannot be cancelled at its current status.';
         }
 
-        $deliveryService = app(\App\Modules\SupplyChain\Services\DeliveryService::class);
+        $deliveryService = app(DeliveryService::class);
         foreach (Delivery::query()->where('sales_order_id', $so->id)->where('status', '!=', 'cancelled')->get() as $delivery) {
             if (! $deliveryService->isUntouchedAutomaticSupply($delivery)) {
                 return 'This sales order cannot be cancelled while a delivery is active.';
@@ -399,10 +331,11 @@ class SalesOrderService
             });
         }
 
-         $result = $q->orderByDesc('date')
+        $result = $q->orderByDesc('date')
             ->orderByDesc('id')
             ->paginate(min(max((int) ($filters['per_page'] ?? 25), 1), 100));
         app(SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+
         return $result;
     }
 
@@ -424,6 +357,7 @@ class SalesOrderService
             'workOrders.inspections:id,inspection_number,stage,status,entity_type,entity_id,completed_at',
             'deliveries:id,delivery_number,sales_order_id,status,scheduled_date',
             'invoices:id,invoice_number,sales_order_id,status,total_amount,balance',
+            'advances',
         ]);
 
         $so->setAttribute('status_history', AuditLog::query()
@@ -579,6 +513,17 @@ class SalesOrderService
             $vat = $quote['vat_amount'];
             $total = $quote['total_amount'];
 
+            $customerTermsSnapshot = $this->customerTermsSnapshot(
+                $customer,
+                $orderDate->toDateString(),
+                $paymentTermsDays,
+                $data['delivery_terms'] ?? null,
+                $data['incoterm'] ?? null,
+            );
+            if (($data['submission_source'] ?? 'internal') === 'customer_portal') {
+                $customerTermsSnapshot['requested_payment_terms_days'] = $paymentTermsDays;
+            }
+
             $so = SalesOrder::create([
                 'so_number' => $this->sequences->generate('sales_order'),
                 'customer_id' => $customerId,
@@ -590,13 +535,7 @@ class SalesOrderService
                     ? SalesOrderStatus::AwaitingConfirmation->value : SalesOrderStatus::Draft->value,
                 'payment_terms_days' => $paymentTermsDays,
                 'payment_method' => $paymentMethod,
-                'customer_terms_snapshot' => $this->customerTermsSnapshot(
-                    $customer,
-                    $orderDate->toDateString(),
-                    $paymentTermsDays,
-                    $data['delivery_terms'] ?? null,
-                    $data['incoterm'] ?? null,
-                ),
+                'customer_terms_snapshot' => $customerTermsSnapshot,
                 'delivery_terms' => $data['delivery_terms'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'incoterm' => $data['incoterm'] ?? null,
@@ -607,16 +546,16 @@ class SalesOrderService
             ]);
 
             // Persist lines.
-            $overrides = CustomerProductWarrantyOverride::query()
-                ->where('customer_id', $customerId)
-                ->whereIn('product_id', array_column($items, 'product_id'))
-                ->get()->keyBy('product_id');
+            $requestedOptions = collect($items)->keyBy('product_id');
             foreach ($lines as $line) {
-                $line['warranty_terms_snapshot'] = $this->warrantyTermsSnapshot(
+                $requested = $requestedOptions->get((int) $line['product_id'], []);
+                $line['warranty_terms_snapshot'] = $this->warrantyTermsForOrder(
                     $customer,
                     (int) $line['product_id'],
-                    $overrides->get((int) $line['product_id']),
+                    $requested['warranty_option_id'] ?? null,
+                    ($data['submission_source'] ?? 'internal') === 'customer_portal',
                 );
+                unset($line['warranty_option_id']);
                 $so->items()->create($line + ['fulfillment_policy' => 'stock_first']);
             }
 
@@ -765,13 +704,19 @@ class SalesOrderService
                     : $lockedSo->notes,
             ];
             if ($customerSnapshotChanged) {
-                $updates['customer_terms_snapshot'] = $this->customerTermsSnapshot(
+                $customerTermsSnapshot = $this->customerTermsSnapshot(
                     $customer,
                     $orderDate->toDateString(),
                     (int) ($data['payment_terms_days'] ?? $lockedSo->payment_terms_days),
                     array_key_exists('delivery_terms', $data) ? $data['delivery_terms'] : $lockedSo->delivery_terms,
                     array_key_exists('incoterm', $data) ? $data['incoterm'] : $lockedSo->incoterm?->value,
                 );
+                if ($customerActor !== null) {
+                    $customerTermsSnapshot['requested_payment_terms_days'] = (int) ($data['payment_terms_days'] ?? $lockedSo->payment_terms_days);
+                } elseif (isset($lockedSo->customer_terms_snapshot['requested_payment_terms_days'])) {
+                    $customerTermsSnapshot['requested_payment_terms_days'] = (int) $lockedSo->customer_terms_snapshot['requested_payment_terms_days'];
+                }
+                $updates['customer_terms_snapshot'] = $customerTermsSnapshot;
             }
             $lockedSo->update($updates);
 
@@ -781,34 +726,36 @@ class SalesOrderService
             }
             $keepIds = [];
             $existingItems = $lockedSo->items()->get()->keyBy('id');
-            $overrides = CustomerProductWarrantyOverride::query()
-                ->where('customer_id', $customerId)
-                ->whereIn('product_id', array_column($newLines, 'product_id'))
-                ->get()->keyBy('product_id');
+            $requestedOptions = collect($items)->keyBy('product_id');
             foreach ($newLines as $line) {
                 $existingId = $line['existing_id'] ?? null;
                 unset($line['existing_id']);
+                $requested = $requestedOptions->get((int) $line['product_id'], []);
                 if ($existingId !== null) {
                     if ($termsChanged) {
                         $existingItems->get($existingId)?->update([
-                            'warranty_terms_snapshot' => $this->warrantyTermsSnapshot(
+                            'warranty_terms_snapshot' => $this->warrantyTermsForOrder(
                                 $customer,
                                 (int) $line['product_id'],
-                                $overrides->get((int) $line['product_id']),
+                                $requested['warranty_option_id'] ?? null,
+                                $customerActor !== null,
                             ),
                         ]);
                     }
                     $keepIds[] = $existingId;
                 } else {
-                    $line['warranty_terms_snapshot'] = $this->warrantyTermsSnapshot(
+                    $line['warranty_terms_snapshot'] = $this->warrantyTermsForOrder(
                         $customer,
                         (int) $line['product_id'],
-                        $overrides->get((int) $line['product_id']),
+                        $requested['warranty_option_id'] ?? null,
+                        $customerActor !== null,
                     );
+                    unset($line['warranty_option_id']);
                     $keepIds[] = $lockedSo->items()->create($line + ['fulfillment_policy' => 'stock_first'])->id;
                 }
             }
             $lockedSo->items()->whereNotIn('id', $keepIds)->forceDelete();
+            app(SalesOrderAdvanceService::class)->recalculateConfiguredRequirement($lockedSo);
 
             $fresh = $lockedSo->fresh();
             $currentActor = auth()->user();
@@ -820,6 +767,33 @@ class SalesOrderService
             );
 
             return $this->show($fresh);
+        });
+    }
+
+    public function reviewCustomerPaymentTerms(SalesOrder $so, int $paymentTermsDays): SalesOrder
+    {
+        if ($paymentTermsDays < 0 || $paymentTermsDays > 365) {
+            throw ValidationException::withMessages(['payment_terms_days' => ['Use a whole number from 0 to 365 days.']]);
+        }
+
+        return DB::transaction(function () use ($so, $paymentTermsDays): SalesOrder {
+            $lockedSo = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
+            if ($lockedSo->submission_source !== SalesOrderSubmissionSource::CustomerPortal) {
+                throw new BusinessRuleException('Only customer portal orders have requested payment terms to review.');
+            }
+            if (! $lockedSo->status->isBeforeConfirmation()) {
+                throw new BusinessRuleException('Payment terms can only be reviewed before confirming the order.');
+            }
+
+            $snapshot = is_array($lockedSo->customer_terms_snapshot) ? $lockedSo->customer_terms_snapshot : [];
+            $snapshot['requested_payment_terms_days'] ??= (int) $lockedSo->payment_terms_days;
+            $snapshot['payment_terms_days'] = $paymentTermsDays;
+            $lockedSo->update([
+                'payment_terms_days' => $paymentTermsDays,
+                'customer_terms_snapshot' => $snapshot,
+            ]);
+
+            return $this->show($lockedSo->fresh());
         });
     }
 
@@ -880,6 +854,30 @@ class SalesOrderService
         return count(array_filter($terms, static fn (mixed $value): bool => $value !== null)) > 0 ? $terms : null;
     }
 
+    private function warrantyTermsForOrder(Customer $customer, int $productId, mixed $optionId, bool $portal): ?array
+    {
+        $options = CustomerProductWarrantyOption::query()
+            ->where('customer_id', $customer->id)->where('product_id', $productId)
+            ->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+        $selected = null;
+        if ($optionId !== null && $optionId !== '') {
+            $selected = $options->firstWhere('id', (int) $optionId);
+            if ($selected === null) {
+                throw ValidationException::withMessages(['items.warranty_option_id' => ['Choose a warranty option from this customer and product agreement.']]);
+            }
+        } elseif ($options->count() === 1) {
+            $selected = $options->first();
+        } elseif ($portal && $options->count() > 1) {
+            throw ValidationException::withMessages(['items.warranty_option_id' => ['Choose a warranty option for each product.']]);
+        }
+
+        if ($selected !== null) {
+            return $selected->termsSnapshot();
+        }
+
+        return $this->warrantyTermsSnapshot($customer, $productId);
+    }
+
     /**
      * Confirm a draft → 'confirmed'. Sprint 6 Task 52 will hook MRP run here.
      * For now we simply flip the status and invariant-check that the SO has lines.
@@ -914,12 +912,9 @@ class SalesOrderService
 
             // Serialize same-customer confirmations so two draft SOs cannot
             // both pass the credit check against the same open exposure.
-            $customer = Customer::withTrashed()
-                ->lockForUpdate()
-                ->findOrFail($lockedSo->customer_id);
+            $customer = Customer::withTrashed()->lockForUpdate()->findOrFail($lockedSo->customer_id);
             $this->assertActiveOrderReferences((int) $customer->id, $items);
             $lockedSo->setRelation('customer', $customer);
-            $this->checkCreditLimit($lockedSo);
 
             $lockedSo->update([
                 'status' => SalesOrderStatus::Confirmed->value,
@@ -1095,8 +1090,7 @@ class SalesOrderService
         ?string $reason = null,
         ?CustomerPortalUser $customerActor = null,
         ?User $internalActor = null,
-    ): SalesOrder
-    {
+    ): SalesOrder {
         return DB::transaction(function () use ($so, $reason, $customerActor, $internalActor) {
             DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             // A stale route-bound SO must not overwrite a delivered/invoiced
@@ -1105,14 +1099,15 @@ class SalesOrderService
                 ->lockForUpdate()
                 ->findOrFail($so->id);
             $this->assertCancellationActor($lockedSo, $customerActor, $internalActor);
+            app(SalesOrderAdvanceService::class)->assertCancellable($lockedSo);
             $this->assertCancellableDownstreamState($lockedSo);
             foreach (Delivery::where('sales_order_id', $lockedSo->id)->where('status', '!=', 'cancelled')->lockForUpdate()->get() as $delivery) {
-                if (app(\App\Modules\SupplyChain\Services\DeliveryService::class)->isUntouchedAutomaticSupply($delivery)) {
-                    app(\App\Modules\SupplyChain\Services\DeliveryService::class)->updateStatus($delivery, \App\Modules\SupplyChain\Enums\DeliveryStatus::Cancelled);
+                if (app(DeliveryService::class)->isUntouchedAutomaticSupply($delivery)) {
+                    app(DeliveryService::class)->updateStatus($delivery, DeliveryStatus::Cancelled);
                 }
             }
             $this->assertCancellableDownstreamState($lockedSo);
-            app(SalesOrderSupplyService::class)->releaseUnshipped($lockedSo, \App\Modules\Auth\Models\User::findOrFail($lockedSo->created_by), $reason ?? 'Order cancelled');
+            app(SalesOrderSupplyService::class)->releaseUnshipped($lockedSo, User::findOrFail($lockedSo->created_by), $reason ?? 'Order cancelled');
 
             $lockedSo->update([
                 'status' => SalesOrderStatus::Cancelled->value,
@@ -1296,6 +1291,7 @@ class SalesOrderService
             if ($lockedSo->status !== SalesOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft sales orders can be deleted.');
             }
+            app(SalesOrderAdvanceService::class)->assertCancellable($lockedSo);
             if ($lockedSo->agreements()->exists()) {
                 throw new BusinessRuleException('Sales orders with published terms cannot be deleted.');
             }
@@ -1640,7 +1636,9 @@ class SalesOrderService
         if ($stockLines->isNotEmpty()) {
             $stockOnly = ! WorkOrder::where('sales_order_id', $so->id)->where('status', '!=', 'cancelled')->exists();
             $supplyLabel = $stockOnly ? 'Ready from stock' : 'Stock + production';
-            if (! $isCancelled && $productionCovered === true) $qc = ['state' => 'done', 'date' => null];
+            if (! $isCancelled && $productionCovered === true) {
+                $qc = ['state' => 'done', 'date' => null];
+            }
         }
         if ($qc['state'] === 'done' && $status === SalesOrderStatus::InProduction && $productionCovered === false) {
             $qc['state'] = 'active';
@@ -1747,6 +1745,7 @@ class SalesOrderService
         if ($so->items()->where('fulfillment_policy', 'stock_first')->exists()) {
             return $so->items()->get()->every(function ($line) {
                 $coverage = app(SalesOrderSupplyService::class)->lineCoverage($line);
+
                 return bccomp($coverage['ready_quantity'], $coverage['demand'], 3) >= 0;
             });
         }
@@ -1798,6 +1797,7 @@ class SalesOrderService
                     return ['state' => 'active', 'date' => null];
                 }
             }
+
             return ['state' => 'done', 'date' => optional(Carbon::parse($row->completed_at))->toDateString()];
         }
         if ($status === 'failed') {

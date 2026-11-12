@@ -538,18 +538,19 @@ export default function SupplierPurchaseOrderDetailPage() {
                 label="Required Delivery"
                 value={po.expected_delivery_date ? formatDate(po.expected_delivery_date) : '—'}
               />
-              <StatCard
+                <StatCard
                 label="Confirmed Delivery"
                 value={po.confirmed_delivery_date ? formatDate(po.confirmed_delivery_date) : '—'}
                 helper={po.confirmed_delivery_date ? undefined : 'Not yet confirmed'}
               />
-              <StatCard label="Incoterm" value={po.incoterm ?? '—'} />
-              <StatCard
+                <StatCard label="Incoterm" value={po.incoterm ?? '—'} />
+                <StatCard
                 label="Received GRNs"
                 value={po.goods_receipt_notes.length - draftGrnCount}
                 helper={`${draftGrnCount} expected GRN${draftGrnCount === 1 ? '' : 's'}`}
               />
-            </KpiGrid>
+              </KpiGrid>
+            </div>
 
             {po.latest_response && (
               <Panel
@@ -758,7 +759,8 @@ export default function SupplierPurchaseOrderDetailPage() {
                 ) : (
                   <p className="text-sm text-muted px-4 py-2">No shipments yet.</p>
                 )}
-              </Panel>
+                </Panel>
+              </div>
 
               {shippingDocsFailed && <div role="alert" className="text-sm text-danger-fg">
                 Shipping documents could not be loaded. <Button variant="secondary" size="sm" onClick={() => void refetchDocs()}>Retry documents</Button>
@@ -1003,7 +1005,8 @@ export default function SupplierPurchaseOrderDetailPage() {
               ) : (
                 <EmptyState icon="package" title="No items" />
               )}
-            </Panel>
+              </Panel>
+            </div>
 
             {po.goods_receipt_notes.length > 0 && (
               <Panel

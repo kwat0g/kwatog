@@ -12,6 +12,8 @@ use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\CRM\Models\SalesOrderAdvance;
+use App\Modules\CRM\Models\SalesOrderAdvanceApplication;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
@@ -20,16 +22,16 @@ use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\TransferOrder;
-use App\Modules\SupplyChain\Models\DeliveryItem;
-use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Models\LoanPayment;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
-use App\Modules\Loans\Models\EmployeeLoan;
-use App\Modules\Loans\Models\LoanPayment;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -47,6 +49,8 @@ final class SourceReferenceRegistry
         'collection' => ['model' => Collection::class],
         'credit_note' => ['model' => CreditNote::class],
         'invoice' => ['model' => Invoice::class],
+        'sales_order_advance' => ['model' => SalesOrderAdvance::class],
+        'sales_order_advance_application' => ['model' => SalesOrderAdvanceApplication::class],
         'payroll_period' => ['model' => PayrollPeriod::class],
         'journal_entry_reversal' => ['model' => JournalEntry::class],
         'asset_depreciation' => ['model' => null, 'nullable_id' => true],
@@ -66,10 +70,10 @@ final class SourceReferenceRegistry
         'work_order_output' => ['model' => WorkOrderOutput::class],
         'return_request' => ['model' => ReturnRequest::class],
         'return_request_item' => ['model' => ReturnRequestItem::class],
-         'maintenance_work_order' => ['model' => MaintenanceWorkOrder::class],
-         'loan_disbursement' => ['model' => EmployeeLoan::class],
-         'loan_write_off' => ['model' => EmployeeLoan::class],
-         'loan_manual_repayment' => ['model' => LoanPayment::class],
+        'maintenance_work_order' => ['model' => MaintenanceWorkOrder::class],
+        'loan_disbursement' => ['model' => EmployeeLoan::class],
+        'loan_write_off' => ['model' => EmployeeLoan::class],
+        'loan_manual_repayment' => ['model' => LoanPayment::class],
         // Existing writers use these model class names as their type.
         Asset::class => ['model' => Asset::class],
         Clearance::class => ['model' => Clearance::class],
@@ -130,6 +134,7 @@ final class SourceReferenceRegistry
                 }
             }, $key);
         }
+
         return $orphans;
     }
 }

@@ -16,11 +16,14 @@ use App\Modules\CRM\Exceptions\PriceRequestStateConflictException;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\PriceRequest;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Support\CustomerOrderQuantityLimit;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Services\BomCostingService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class PriceNegotiationService
@@ -33,6 +36,23 @@ class PriceNegotiationService
             ->latest('id')->paginate(25);
     }
 
+    /** @return Collection<int, array{id: string, product_id: string, quantity: int|null, status: string}> */
+    public function openForCustomer(int $customerId): Collection
+    {
+        return PriceRequest::query()
+            ->with('product')
+            ->where('customer_id', $customerId)
+            ->whereIn('status', [Status::Requested->value, Status::PendingFinance->value, Status::Offered->value])
+            ->latest('id')
+            ->get()
+            ->map(fn (PriceRequest $request): array => [
+                'id' => $request->hash_id,
+                'product_id' => $request->product->hash_id,
+                'quantity' => $request->quantity,
+                'status' => $request->status->value,
+            ]);
+    }
+
     public function request(CustomerPortalUser $by, array $data): PriceRequest
     {
         return app(SystemUserResolver::class)->impersonate(fn () => DB::transaction(function () use ($by, $data): PriceRequest {
@@ -41,10 +61,46 @@ class PriceNegotiationService
             if (! $by->customer->is_active || ! $product->isAvailableToCustomer($by->customer_id)) {
                 abort(404);
             }
+            $requestLimitIncrease = (bool) ($data['request_order_limit_increase'] ?? false);
+            $maximum = null;
+            if (Schema::hasColumns('customer_product_access', ['minimum_order_quantity', 'maximum_order_quantity'])) {
+                $limits = DB::table('customer_product_access')
+                    ->where('customer_id', $by->customer_id)
+                    ->where('product_id', $product->id)
+                    ->first(['minimum_order_quantity', 'maximum_order_quantity']);
+                $quantityError = CustomerOrderQuantityLimit::error(
+                    (string) $data['quantity'],
+                    (string) ($limits?->minimum_order_quantity ?? '1.000'),
+                    $limits?->maximum_order_quantity === null ? null : (string) $limits->maximum_order_quantity,
+                    (string) $product->unit_of_measure,
+                    allowAboveMaximum: $requestLimitIncrease,
+                );
+                $maximum = $limits?->maximum_order_quantity === null ? null : (string) $limits->maximum_order_quantity;
+                if ($quantityError !== null) {
+                    throw ValidationException::withMessages(['quantity' => [$quantityError]]);
+                }
+            }
+            $limitIncreaseRequested = $requestLimitIncrease
+                && $maximum !== null
+                && bccomp((string) $data['quantity'], $maximum, 3) > 0;
             $this->assertNoOpen($by->customer_id, $product->id);
             $row = PriceRequest::create(['customer_id' => $by->customer_id, 'product_id' => $product->id, 'requested_by' => $by->id,
                 'quantity' => $data['quantity'], 'requested_price' => $data['requested_price'] ?? null, 'notes' => $data['notes'], 'status' => Status::Requested]);
-            $this->notice($row, 'Customer requested discount pricing.', ['sales_officer', 'customer_service_officer'], portalActor: $by);
+            if ($limitIncreaseRequested) {
+                $this->history($row, 'order_limit_increase_requested', [
+                    'current_maximum_quantity' => $maximum,
+                    'requested_quantity' => (string) $data['quantity'],
+                ], $by->hash_id);
+                $row->save();
+            }
+            $this->notice(
+                $row,
+                $limitIncreaseRequested
+                    ? 'Customer requested discount pricing and review of a higher per-order limit.'
+                    : 'Customer requested discount pricing.',
+                ['sales_officer', 'customer_service_officer'],
+                portalActor: $by,
+            );
 
             return $row->load(['product', 'customer']);
         }));
@@ -193,6 +249,56 @@ class PriceNegotiationService
         }, 3));
     }
 
+    public function cancelByCustomer(PriceRequest $request, CustomerPortalUser $by, int $version): PriceRequest
+    {
+        abort_unless((int) $request->customer_id === (int) $by->customer_id, 404);
+
+        return app(SystemUserResolver::class)->impersonate(fn () => DB::transaction(function () use ($request, $by, $version): PriceRequest {
+            $row = PriceRequest::lockForUpdate()->findOrFail($request->id);
+            abort_unless((int) $row->customer_id === (int) $by->customer_id, 404);
+            if ($row->version !== $version) {
+                throw new PriceRequestStateConflictException('Request changed. Refresh and try again.');
+            }
+            if ($row->requested_by === null || ! in_array($row->status, [Status::Requested, Status::PendingFinance], true)) {
+                throw new PriceRequestStateConflictException('Only a customer request that has not been offered can be cancelled.');
+            }
+
+            $row->status = Status::CustomerCancelled;
+            $row->version++;
+            $row->responded_at = now();
+            $this->history($row, 'customer_cancelled', [], $by->hash_id);
+            $row->save();
+            $this->notice($row, 'Customer cancelled their pricing request.', ['sales_officer', 'customer_service_officer', 'finance_officer'], portalActor: $by);
+
+            return $row->load(['product', 'customer']);
+        }));
+    }
+
+    public function rejectBySales(PriceRequest $request, User $by, string $notes, int $version): PriceRequest
+    {
+        abort_unless($by->hasPermission('crm.price_agreements.propose'), 403);
+
+        return DB::transaction(function () use ($request, $by, $notes, $version): PriceRequest {
+            $row = PriceRequest::lockForUpdate()->findOrFail($request->id);
+            if ($row->version !== $version) {
+                throw new PriceRequestStateConflictException('Request changed. Refresh and review the latest version before rejecting.');
+            }
+            abort_unless($row->requested_by !== null, 403, 'CRM can only reject a customer-submitted pricing request.');
+            if ($row->status !== Status::Requested) {
+                throw new PriceRequestStateConflictException('Only a customer request awaiting a Sales proposal can be rejected.');
+            }
+
+            $row->status = Status::SalesRejected;
+            $row->version++;
+            $row->responded_at = now();
+            $this->history($row, 'sales_rejected', ['notes' => $notes], $by->hash_id);
+            $row->save();
+            $this->notice($row, 'Sales declined the customer pricing request: '.$notes, ['sales_officer', 'customer_service_officer', 'finance_officer'], actor: $by);
+
+            return $row->load(['product', 'customer']);
+        });
+    }
+
     public function withdraw(PriceRequest $request, User $by, string $notes, ?int $expectedVersion = null): PriceRequest
     {
         abort_unless($by->hasPermission('crm.price_agreements.propose') || $by->hasPermission('crm.price_agreements.approve'), 403);
@@ -202,6 +308,7 @@ class PriceNegotiationService
             if ($expectedVersion !== null && $row->version !== $expectedVersion) {
                 throw new PriceRequestStateConflictException('Proposal changed. Refresh and review the latest version before withdrawing.');
             }
+            abort_unless($row->requested_by === null, 403, 'CRM may withdraw only a CRM-created pricing proposal. Customer requests must be cancelled by the customer or rejected by Sales.');
             if (! in_array($row->status, [Status::Requested, Status::PendingFinance, Status::Offered], true)) {
                 throw new PriceRequestStateConflictException('This negotiation is already closed. Refresh and review the latest status.');
             }
@@ -299,7 +406,7 @@ class PriceNegotiationService
         $permissions = array_map(fn ($role) => $role === 'finance_officer' ? 'crm.price_agreements.approve' : 'crm.price_agreements.propose', $roles);
         $users = User::where('is_active', true)->get()->filter(fn ($user) => $user->id !== $actor?->id && collect($permissions)->contains(fn ($permission) => $user->hasPermission($permission)));
         app(NotificationService::class)->sendForSubject($row, $users, 'pricing.negotiation', ['title' => 'Pricing request: '.Product::findOrFail($row->product_id)->part_number, 'message' => $message, 'link_to' => '/crm/price-agreements/requests?request='.$row->hash_id], 'pricing:negotiation:'.$row->id.':'.$row->version.':'.$row->status->value, emailEnabled: false);
-        if (in_array($row->status, [Status::Offered, Status::Accepted, Status::Rejected, Status::Withdrawn, Status::Expired], true)) {
+        if (in_array($row->status, [Status::Offered, Status::Accepted, Status::Rejected, Status::SalesRejected, Status::CustomerCancelled, Status::Withdrawn, Status::Expired], true)) {
             $portalRecipients = CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)
                 ->when($portalActor, fn ($query) => $query->whereKeyNot($portalActor->id))
                 ->get();

@@ -279,6 +279,7 @@ export interface Customer {
   name: string;
   code: string | null;
   contact_person: string | null;
+  contact_person_role?: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -286,6 +287,8 @@ export interface Customer {
   delivery_address: string | null;
   delivery_contact_person: string | null;
   delivery_contact_phone: string | null;
+  delivery_latitude?: number | string | null;
+  delivery_longitude?: number | string | null;
   tin: string | null;
   credit_limit: string | null;
   credit_used: string | null;
@@ -293,6 +296,7 @@ export interface Customer {
   credit_warning_ratio?: number;
   credit_warning?: boolean;
   payment_terms_days: number;
+  portal_catalog_mode?: 'standard' | 'restricted';
   allowed_payment_methods: ('cash' | 'check' | 'bank_transfer')[] | null;
   shipping_payer: 'customer' | 'company' | null;
   agreement_starts_on: string | null;
@@ -310,15 +314,35 @@ export interface Customer {
 export interface CreateCustomerData {
   name: string;
   contact_person?: string;
+  contact_person_role?: string;
   email?: string;
   phone?: string;
   address?: string;
   delivery_address?: string;
   delivery_contact_person?: string;
   delivery_contact_phone?: string;
+  delivery_latitude?: number | string | null;
+  delivery_longitude?: number | string | null;
   tin?: string;
   credit_limit?: string | null;
   payment_terms_days?: number;
+  portal_catalog_mode?: 'standard' | 'restricted';
+  portal_product_ids?: string[];
+  product_order_limits?: Array<{
+    product_id: string;
+    minimum_order_quantity: number;
+    maximum_order_quantity: number | null;
+  }>;
+  product_warranties?: Array<{
+    product_id: string;
+    label: string;
+    warranty_duration_days: number | null;
+    warranty_report_window_days: number | null;
+    warranty_start_basis: 'delivery' | 'invoice' | null;
+    warranty_covered_issues: ('manufacturing_defect' | 'shipping_damage' | 'customer_caused_damage')[];
+    warranty_remedies: ('repair' | 'replace' | 'credit' | 'refund')[];
+    additional_terms: string | null;
+  }>;
   allowed_payment_methods?: Customer['allowed_payment_methods'];
   shipping_payer?: Customer['shipping_payer'];
   agreement_starts_on?: string | null;
@@ -355,6 +379,12 @@ export interface Collection {
   created_at?: string;
 }
 export interface Invoice {
+  advance_applications?: Array<{
+    id: string;
+    amount: string;
+    applied_at: string | null;
+    advance_attempt: number | null;
+  }>;
   payment_submissions?: import('./invoice-payments').InvoicePaymentSubmission[];
   can_submit_payment?: boolean;
   payment_submission_blocked_reason?: string | null;

@@ -62,6 +62,22 @@ class ShipmentService
             // on a hash yields 0, so the list came back empty instead of filtered.
             $q->where('purchase_order_id', HashIdFilter::decode($filters['purchase_order_id'], PurchaseOrder::class) ?? 0);
         }
+        if (! empty($filters['from_date']) || ! empty($filters['to_date'])) {
+            $from = $filters['from_date'] ?? null;
+            $to = $filters['to_date'] ?? null;
+            $q->where(function (Builder $dates) use ($from, $to): void {
+                foreach (['ata', 'eta'] as $column) {
+                    $dates->orWhere(function (Builder $date) use ($column, $from, $to): void {
+                        if ($from) {
+                            $date->whereDate($column, '>=', $from);
+                        }
+                        if ($to) {
+                            $date->whereDate($column, '<=', $to);
+                        }
+                    });
+                }
+            });
+        }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b

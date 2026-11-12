@@ -11,6 +11,7 @@ use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -102,6 +103,52 @@ class CustomerPortalServiceTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(2, $response->json('data.open_so_count'));
+    }
+
+    public function test_dashboard_returns_only_this_customers_product_order_and_warranty_terms(): void
+    {
+        $customer = Customer::factory()->create(['portal_catalog_mode' => 'restricted']);
+        $portalUser = $this->makePortalUser($customer);
+        $product = Product::factory()->create([
+            'part_number' => 'PC-001',
+            'name' => 'Pivot Cap Cover Type A',
+            'unit_of_measure' => 'pcs',
+        ]);
+        $customer->portalProducts()->attach($product->id, [
+            'minimum_order_quantity' => 5,
+            'maximum_order_quantity' => 250,
+        ]);
+        CustomerProductWarrantyOption::query()->create([
+            'customer_id' => $customer->id,
+            'product_id' => $product->id,
+            'label' => '12-month standard',
+            'warranty_duration_days' => 365,
+            'warranty_report_window_days' => 30,
+            'warranty_start_basis' => 'delivery',
+            'warranty_covered_issues' => ['manufacturing_defect', 'shipping_damage'],
+            'warranty_remedies' => ['repair', 'replace'],
+            'additional_terms' => 'Covers listed factory defects.',
+            'position' => 1,
+        ]);
+        CustomerProductWarrantyOption::query()->create([
+            'customer_id' => Customer::factory()->create()->id,
+            'product_id' => $product->id,
+            'label' => 'Other customer warranty',
+            'warranty_duration_days' => 30,
+            'position' => 1,
+        ]);
+
+        $this->actAs($portalUser)
+            ->getJson('/api/v1/b2b/customer/dashboard')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.product_terms')
+            ->assertJsonPath('data.product_terms.0.part_number', 'PC-001')
+            ->assertJsonPath('data.product_terms.0.minimum_order_quantity', '5.000')
+            ->assertJsonPath('data.product_terms.0.maximum_order_quantity', '250.000')
+            ->assertJsonCount(1, 'data.product_terms.0.warranty_options')
+            ->assertJsonPath('data.product_terms.0.warranty_options.0.label', '12-month standard')
+            ->assertJsonPath('data.product_terms.0.warranty_options.0.warranty_duration_days', 365)
+            ->assertJsonPath('data.product_terms.0.warranty_options.0.additional_terms', 'Covers listed factory defects.');
     }
 
     public function test_dashboard_outstanding_balance_keeps_decimal_precision(): void

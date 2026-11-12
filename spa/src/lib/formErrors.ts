@@ -53,14 +53,24 @@ function formatValidationMessage(
   message: string,
   labels?: Record<string, string>,
 ): string {
-  const label = labels?.[path] ?? humanizePath(path);
+  const warrantyField = path.match(/^product_warranties\.\d+\.(warranty_remedies|warranty_covered_issues)(?:\.\d+)?$/);
+  const warrantyFieldLabel = warrantyField?.[1] === 'warranty_remedies'
+    ? 'remedy'
+    : warrantyField?.[1] === 'warranty_covered_issues' ? 'covered issue' : undefined;
+  const label = labels?.[path] ?? (warrantyFieldLabel ? `Agreement & products ${warrantyFieldLabel}` : humanizePath(path));
+  const messageBody = message.replace(/^The\s+.+?\s+field\s+/i, '').trim();
+
+  if (warrantyFieldLabel && /duplicate value|must not repeat/i.test(messageBody)) {
+    return `Agreement & products: remove the repeated ${warrantyFieldLabel}.`;
+  }
   // Laravel's "The bank name field is prohibited." means the API refuses this field on this
   // endpoint; say what that means for the person, not the validator's word for it.
-  if (/\bis prohibited\b/i.test(message)) return `${label} can't be changed here.`;
-  if (/^(required|is required|this field is required)\.?$/i.test(message.trim()))
+  if (/\bis prohibited\b/i.test(messageBody)) return `${label} can't be changed here.`;
+  if (/^(required|is required|this field is required)\.?$/i.test(messageBody))
     return `${label} is required.`;
+  if (/has a duplicate value/i.test(messageBody)) return `${label} must not contain duplicates.`;
   if (message.toLowerCase().includes(label.toLowerCase())) return message;
-  return `${label}: ${message}`;
+  return `${label}: ${messageBody}`;
 }
 
 export function focusFirstInvalidField(): void {
@@ -136,12 +146,14 @@ export function applyServerValidationErrors<T extends FieldValues>(
     const data = err.response.data as ApiValidationError;
     if (data.errors) {
       Object.entries(data.errors).forEach(([field, msgs]) => {
-        setError(field as Path<T>, { type: 'server', message: msgs[0] });
+        setError(field as Path<T>, { type: 'server', message: formatValidationMessage(field, msgs[0] ?? 'Enter a valid value.') });
       });
-      const first = Object.entries(data.errors)[0];
-      if (first) {
-        const [field, messages] = first;
-        toast.error(formatValidationMessage(field, messages[0] ?? 'Enter a valid value.'));
+      const fields = Object.entries(data.errors);
+      if (fields.length > 0) {
+        const [field, messages] = fields[0];
+        const firstMessage = formatValidationMessage(field, messages[0] ?? 'Enter a valid value.');
+        if (fields.length > 1) toast.error(`Fix ${fields.length} fields. ${firstMessage}`, { duration: 6000 });
+        else toast.error(firstMessage);
       }
       // The fields are now marked aria-invalid; send the keyboard there rather
       // than leaving focus on a submit button the user just bounced off.

@@ -28,12 +28,15 @@ const statuses: Record<PriceRequest['status'], { label: string; variant: ChipVar
   offered: { label: 'Awaiting customer', variant: 'info' },
   accepted: { label: 'Accepted', variant: 'success' },
   rejected: { label: 'Rejected by customer', variant: 'danger' },
+  sales_rejected: { label: 'Rejected by Sales', variant: 'danger' },
+  customer_cancelled: { label: 'Cancelled by customer', variant: 'neutral' },
   withdrawn: { label: 'Withdrawn', variant: 'neutral' },
   expired: { label: 'Expired', variant: 'neutral' },
 };
 
 export default function PricingRequestsPage() {
   const { can } = usePermission();
+  const isFinanceReviewer = can('crm.price_agreements.approve') && !can('crm.price_agreements.propose');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestId = searchParams.get('request') ?? undefined;
@@ -41,7 +44,7 @@ export default function PricingRequestsPage() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<'view' | 'review' | 'withdraw'>('view');
+  const [mode, setMode] = useState<'view' | 'review' | 'withdraw' | 'reject'>('view');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const query = useQuery({
@@ -55,6 +58,7 @@ export default function PricingRequestsPage() {
     : query.data?.data.find((row) => row.id === selectedId) ?? null;
   const selectedIsFresh = !!selected && !query.isFetching && !query.isError;
   const canWithdraw = selectedIsFresh && selected?.available_actions?.can_withdraw === true;
+  const canReject = selectedIsFresh && selected?.available_actions?.can_reject === true;
   const canApprove = selectedIsFresh && selected?.available_actions?.can_approve === true;
   const costReview = useQuery({
     queryKey: ['pricing-request-review', selectedId],
@@ -64,7 +68,7 @@ export default function PricingRequestsPage() {
   });
   useRealtimeRecord('price_request', selectedId ?? undefined);
   const action = useMutation({
-    mutationFn: async (decision: 'approve' | 'withdraw') => {
+    mutationFn: async (decision: 'approve' | 'withdraw' | 'reject') => {
       if (!selectedIsFresh || !selected) throw new Error('This pricing request is no longer available. Refresh and try again.');
       if (decision === 'approve') {
         if (!canApprove) throw new Error('This pricing request is no longer available for approval. Refresh and try again.');
@@ -74,6 +78,10 @@ export default function PricingRequestsPage() {
           costReview.data!.version,
           costReview.data!.cost_review!.signature,
         );
+      }
+      if (decision === 'reject') {
+        if (!canReject) throw new Error('Only an open customer-submitted request can be rejected. Refresh and try again.');
+        return pricingRequestsApi.reject(selected.id, notes, selected.version);
       }
       if (!canWithdraw) throw new Error('This pricing request is no longer available for withdrawal. Refresh and try again.');
       return pricingRequestsApi.withdraw(selected.id, notes, selected.version);
@@ -87,7 +95,9 @@ export default function PricingRequestsPage() {
       toast.success(
         decision === 'approve'
           ? 'Proposal sent for customer acceptance.'
-          : 'Pricing request withdrawn.',
+          : decision === 'reject'
+            ? 'Customer request rejected.'
+            : 'Pricing proposal withdrawn.',
       );
       setSelectedId(null);
       setNotes('');
@@ -195,37 +205,59 @@ export default function PricingRequestsPage() {
       key: 'actions',
       header: 'Actions',
       align: 'right',
-      className: 'min-w-40',
+      className: 'min-w-44',
       cell: (r) => (
-        <div className="flex flex-wrap justify-end gap-1.5">
-          {r.available_actions?.can_propose && (
+        <div
+          role="group"
+          aria-label={`Actions for ${r.product.part_number} pricing request`}
+          className="flex min-w-40 flex-col items-stretch gap-2"
+        >
+          {(r.available_actions?.can_propose || r.available_actions?.can_approve) && (
+            <div className="grid gap-2">
+              {r.available_actions?.can_propose && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="min-h-9 w-full"
+                  onClick={() => navigate(`/crm/price-agreements/requests/${r.id}/offer`)}
+                >
+                  Propose terms
+                </Button>
+              )}
+              {r.available_actions?.can_approve && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="min-h-9 w-full"
+                  onClick={() => open(r, 'review')}
+                >
+                  Review
+                </Button>
+              )}
+            </div>
+          )}
+          <div className="grid gap-2">
+            {r.available_actions?.can_reject && (
               <Button
-                variant="primary"
+                variant="danger"
                 size="sm"
-                onClick={() => navigate(`/crm/price-agreements/requests/${r.id}/offer`)}
+                className="min-h-9 w-full"
+                onClick={() => open(r, 'reject')}
               >
-                Propose terms
+                Reject request
               </Button>
             )}
-          {r.available_actions?.can_approve ? (
-            <Button size="sm" onClick={() => open(r, 'review')}>
-              Review
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={() => open(r, 'view')}>
-              Details
-            </Button>
-          )}
-          {r.available_actions?.can_withdraw && (
+            {r.available_actions?.can_withdraw && (
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
-                className="text-danger-fg"
+                className="min-h-9 w-full border border-danger/30 text-danger-fg hover:border-danger/50 hover:bg-danger/10"
                 onClick={() => open(r, 'withdraw')}
               >
-                Withdraw
+                Withdraw proposal
               </Button>
             )}
+          </div>
         </div>
       ),
     },
@@ -236,9 +268,11 @@ export default function PricingRequestsPage() {
   return (
     <div className="min-w-0 w-full">
       <PageHeader
-        title="Pricing requests"
+        title={isFinanceReviewer ? 'Pricing approvals' : 'Pricing requests'}
         subtitle={
-          query.data
+          isFinanceReviewer
+            ? 'Review Sales proposals awaiting Finance approval · Prices exclude VAT'
+            : query.data
             ? `${query.data.meta.total} ${query.data.meta.total === 1 ? 'request' : 'requests'} · Prices exclude VAT`
             : 'Customer pricing proposals and approvals · Prices exclude VAT'
         }
@@ -274,8 +308,10 @@ export default function PricingRequestsPage() {
             emptyState={
               <EmptyState
                 icon="dollar-sign"
-                title="No pricing requests"
-                description="Customer pricing requests appear here for sales proposals and Finance review."
+                title={isFinanceReviewer ? 'No pricing approvals' : 'No pricing requests'}
+                description={isFinanceReviewer
+                  ? 'Sales proposals awaiting Finance review will appear here.'
+                  : 'Customer pricing requests appear here for sales proposals and Finance review.'}
               />
             }
           />
@@ -289,7 +325,9 @@ export default function PricingRequestsPage() {
         closeOnOverlayClick={!action.isPending}
         title={
           mode === 'withdraw'
-            ? 'Withdraw pricing request'
+            ? 'Withdraw pricing proposal'
+            : mode === 'reject'
+              ? 'Reject customer pricing request'
             : mode === 'review'
               ? 'Review pricing proposal'
               : 'Pricing request details'
@@ -338,6 +376,14 @@ export default function PricingRequestsPage() {
                 <p className="mt-3 whitespace-pre-wrap break-words text-sm text-secondary">
                   {selected.notes}
                 </p>
+              )}
+              {selected.order_limit_increase_request && (
+                <div className="mt-3 rounded-md border border-warning/40 bg-warning/5 p-3 text-sm">
+                  <p className="font-medium text-warning-fg">Customer requested a higher per-order limit</p>
+                  <p className="mt-1 text-secondary">
+                    Current maximum: {formatQuantity(selected.order_limit_increase_request.current_maximum_quantity)} {selected.product.unit_of_measure}. Requested quantity: {formatQuantity(selected.order_limit_increase_request.requested_quantity)} {selected.product.unit_of_measure}. The account limit stays unchanged until Customer Product Access is updated.
+                  </p>
+                </div>
               )}
             </Panel>
             {mode === 'review' && costReview.isFetching && (
@@ -441,11 +487,13 @@ export default function PricingRequestsPage() {
               <>
                 <p className="text-sm text-muted">
                   {mode === 'withdraw'
-                    ? 'Withdraw this request from negotiation. A reason is required.'
-                    : 'Approval sends these terms to the customer. Prices change only after customer acceptance.'}
+                    ? 'Withdraw the proposal your team created. A reason is required.'
+                    : mode === 'reject'
+                      ? 'Reject this customer-submitted request. The customer will be notified. A reason is required.'
+                      : 'Approval sends these terms to the customer. Prices change only after customer acceptance.'}
                 </p>
                 <Textarea
-                  label={mode === 'withdraw' ? 'Withdrawal reason' : 'Review notes'}
+                  label={mode === 'withdraw' ? 'Withdrawal reason' : mode === 'reject' ? 'Reason for rejection' : 'Review notes'}
                   required
                   rows={3}
                   value={notes}
@@ -475,7 +523,21 @@ export default function PricingRequestsPage() {
                     action.mutate('withdraw');
                   }}
                 >
-                  Withdraw request
+                  Withdraw proposal
+                </Button>
+              )}
+              {mode === 'reject' && (
+                <Button
+                  variant="danger"
+                  loading={action.isPending}
+                  disabled={!notes.trim() || action.isPending || !canReject}
+                  onClick={() => {
+                    if (!canReject) return;
+                    setError('');
+                    action.mutate('reject');
+                  }}
+                >
+                  Reject request
                 </Button>
               )}
               {mode === 'review' && can('crm.price_agreements.approve') && (

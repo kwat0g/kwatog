@@ -9,10 +9,12 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
-use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\ReturnManagement\Enums\ReturnCaseIntakeKind;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,13 +25,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Delivery extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'automatic_supply_key',
         'delivery_number', 'sales_order_id', 'vehicle_id', 'driver_id',
         'status', 'scheduled_date', 'original_scheduled_date', 'reschedule_count',
-        'expected_delivery_date', 'carrier',
+        'expected_delivery_date', 'carrier', 'shipment_weight_kg',
         'departed_at', 'delivered_at',
         'confirmed_at', 'confirmed_by', 'receipt_photo_path',
         'invoice_id', 'notes', 'created_by',
@@ -40,23 +42,26 @@ class Delivery extends Model
         'receiver_name', 'receiver_position', 'received_at', 'delivery_remarks',
         'cost_recognition_mode',
         // Chain 1 — ship-to snapshot taken while the run sheet was prepared.
-        'delivery_address', 'delivery_contact_person', 'delivery_contact_phone',
+        'delivery_address', 'delivery_latitude', 'delivery_longitude', 'delivery_contact_person', 'delivery_contact_phone',
     ];
 
     protected $casts = [
-        'status'         => DeliveryStatus::class,
+        'status' => DeliveryStatus::class,
         'scheduled_date' => 'date',
         'expected_delivery_date' => 'date',
         'original_scheduled_date' => 'date',
         'reschedule_count' => 'integer',
-        'departed_at'    => 'datetime',
-        'delivered_at'   => 'datetime',
-        'confirmed_at'   => 'datetime',
+        'shipment_weight_kg' => 'decimal:2',
+        'delivery_latitude' => 'decimal:7',
+        'delivery_longitude' => 'decimal:7',
+        'departed_at' => 'datetime',
+        'delivered_at' => 'datetime',
+        'confirmed_at' => 'datetime',
         'invoice_handoff_status' => DeliveryInvoiceHandoffStatus::class,
         'invoice_handoff_at' => 'datetime',
         'coc_handoff_status' => DeliveryCocHandoffStatus::class,
         'coc_handoff_at' => 'datetime',
-        'received_at'    => 'datetime',
+        'received_at' => 'datetime',
         'cost_recognition_mode' => DeliveryCostingMode::class,
     ];
 
@@ -111,10 +116,10 @@ class Delivery extends Model
      */
     public function blockingReturnCase(): HasOne
     {
-        return $this->hasOne(\App\Modules\ReturnManagement\Models\ReturnCase::class)
+        return $this->hasOne(ReturnCase::class)
             ->whereNotIn('status', ['resolved', 'withdrawn', 'rejected'])
             ->where(fn ($query) => $query
-                ->where('intake_kind', \App\Modules\ReturnManagement\Enums\ReturnCaseIntakeKind::DeliveryTrace->value)
+                ->where('intake_kind', ReturnCaseIntakeKind::DeliveryTrace->value)
                 ->orWhereHas('lines', fn ($q) => $q->where('missing_quantity', '>', 0)->orWhere('defective_quantity', '>', 0)))
             ->orderBy('id');
     }

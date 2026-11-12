@@ -956,6 +956,7 @@ it('expands every visible module without peek expiry and keeps the active module
 it('focuses Finance navigation on accounting and approval work with one active Dashboard link', () => {
   const permissions = new Set([
     'dashboard.accounting.view', 'dashboard.action_center.view', 'approvals.board.view',
+    'crm.price_agreements.approve',
     'budgeting.view', 'accounting.invoices.view', 'accounting.bills.view',
     'accounting.vendors.view', 'accounting.statements.view', 'payroll.periods.view', 'payroll.periods.approve', 'assets.view',
     'purchasing.view', 'purchasing.pr.approve', 'purchasing.po.approve', 'purchasing.rfq.view', 'hr.profile_updates.finance_review',
@@ -976,6 +977,7 @@ it('focuses Finance navigation on accounting and approval work with one active D
   expect(Array.from(sidebar.querySelectorAll('[data-module]'), (module) => module.getAttribute('data-module'))).toEqual(['Finance', 'Procurement', 'Payroll', 'Assets']);
   expect(within(sidebar).getByRole('link', { name: 'Approval Queue' })).toBeVisible();
   fireEvent.click(within(sidebar).getByRole('button', { name: 'Expand all' }));
+  expect(within(sidebar).getByRole('link', { name: 'Pricing approvals' })).toBeVisible();
   expect(within(sidebar).getByRole('link', { name: 'Payroll Processing' })).toBeVisible();
   expect(within(sidebar).getByRole('link', { name: 'Bank Account Changes' })).toBeVisible();
   expect(within(sidebar).getByRole('link', { name: 'Accounts Receivable Invoices' })).toBeVisible();

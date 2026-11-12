@@ -7,32 +7,37 @@ namespace App\Modules\B2B\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\NotificationService;
+use App\Common\Services\SystemUserResolver;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Services\StatementOfAccountService;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerOrderFeedback;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
-use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
+use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderResponse;
-use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Services\ComplaintService;
+use App\Modules\CRM\Services\CustomerPortalOrderAvailabilityService;
 use App\Modules\CRM\Services\PriceAgreementService;
 use App\Modules\CRM\Services\SalesOrderResponseService;
 use App\Modules\CRM\Services\SalesOrderService;
+use App\Modules\CRM\Services\SalesOrderSupplyService;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Quality\Enums\NcrStatus;
-use App\Common\Services\SystemUserResolver;
-use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnCase;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Services\ReturnCaseService;
 use App\Modules\ReturnManagement\Services\ReturnCaseSettlementService;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
@@ -40,12 +45,12 @@ use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Services\DeliveryService;
-use App\Modules\Production\Enums\WorkOrderStatus;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -64,6 +69,7 @@ class CustomerPortalService
         private readonly SalesOrderService $salesOrderService,
         private readonly SalesOrderResponseService $salesOrderResponses,
         private readonly PriceAgreementService $prices,
+        private readonly CustomerPortalOrderAvailabilityService $orderAvailability,
         private readonly ComplaintService $complaintService,
         private readonly StatementOfAccountService $soa,
         private readonly SystemUserResolver $systemUser,
@@ -120,11 +126,70 @@ class CustomerPortalService
             'pending_delivery_count' => $pendingDeliveryCount,
             'open_invoice_count' => $openInvoiceCount,
             'total_outstanding' => Money::add((string) $totalOutstanding),
+            'product_terms' => $this->agreementProductTerms($customerId),
             'recent_orders' => $recentOrders,
             'recent_invoices' => $recentInvoices,
             'recent_deliveries' => $recentDeliveries,
             'recent_complaints' => $recentComplaints,
         ];
+    }
+
+    /**
+     * Customer-visible catalog terms without running the stock availability
+     * calculation used by order entry. Warranty and order limits are scoped to
+     * the authenticated customer's saved agreement.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function agreementProductTerms(int $customerId): array
+    {
+        $customer = Customer::query()->findOrFail($customerId);
+        $products = Product::query()->active()
+            ->where(function ($query) use ($customer): void {
+                $query->whereHas('portalCustomers', fn ($customers) => $customers->whereKey($customer->id));
+                if ($customer->portal_catalog_mode === 'standard') {
+                    $query->orWhere('portal_visibility', 'standard');
+                }
+            })
+            ->with(['customerWarrantyOptions' => fn ($options) => $options
+                ->where('customer_id', $customer->id)
+                ->orderBy('position')->orderBy('id')])
+            ->orderBy('part_number')
+            ->get(['id', 'part_number', 'name', 'unit_of_measure']);
+
+        $limitsSupported = Schema::hasColumns('customer_product_access', [
+            'minimum_order_quantity', 'maximum_order_quantity',
+        ]);
+        $limits = $limitsSupported
+            ? DB::table('customer_product_access')->where('customer_id', $customer->id)->get([
+                'product_id', 'minimum_order_quantity', 'maximum_order_quantity',
+            ])->keyBy('product_id')
+            : collect();
+
+        return $products->map(function (Product $product) use ($limits): array {
+            $limit = $limits->get($product->id);
+
+            return [
+                'id' => $product->hash_id,
+                'part_number' => $product->part_number,
+                'name' => $product->name,
+                'unit_of_measure' => $product->unit_of_measure,
+                'minimum_order_quantity' => (string) ($limit?->minimum_order_quantity ?? '1.000'),
+                'maximum_order_quantity' => $limit?->maximum_order_quantity === null
+                    ? null
+                    : (string) $limit->maximum_order_quantity,
+                'warranty_options' => $product->customerWarrantyOptions->map(fn ($option): array => [
+                    'id' => $option->hash_id,
+                    'label' => $option->label,
+                    'warranty_duration_days' => $option->warranty_duration_days,
+                    'warranty_report_window_days' => $option->warranty_report_window_days,
+                    'warranty_start_basis' => $option->warranty_start_basis,
+                    'warranty_covered_issues' => $option->warranty_covered_issues,
+                    'warranty_remedies' => $option->warranty_remedies,
+                    'additional_terms' => $option->additional_terms,
+                ])->values()->all(),
+            ];
+        })->values()->all();
     }
 
     /* ─── Sales Orders ───────────────────────────────────────────── */
@@ -141,20 +206,15 @@ class CustomerPortalService
             ? Carbon::parse($asOf)->toDateString()
             : now()->toDateString();
 
-        $query = Product::query()->active()->where(function ($query) use ($customerId): void {
-            $query->where('portal_visibility', 'standard')
-                ->orWhereHas('portalCustomers', fn ($customers) => $customers->whereKey($customerId));
-        });
-        if ($search !== null && trim($search) !== '') {
-            $term = '%'.trim($search).'%';
-            $query->where(fn ($q) => $q->where('part_number', 'ilike', $term)->orWhere('name', 'ilike', $term));
-        }
+        $customer = Customer::query()->findOrFail($customerId);
         $catalog = [];
-        foreach ($query->orderBy('part_number')->get() as $product) {
+        foreach ($this->orderAvailability->forCustomer($customer, $search) as $entry) {
+            /** @var Product $product */
+            $product = $entry['product'];
             try {
                 $quote = $this->prices->quote($customerId, $product->id, Carbon::parse($date), '1');
                 $pricingIssue = null;
-            } catch (\Illuminate\Validation\ValidationException $exception) {
+            } catch (ValidationException $exception) {
                 $message = collect($exception->errors())->flatten()->implode(' ');
                 $pricingIssue = match (true) {
                     str_contains($message, 'No base selling price or applicable customer agreement') => 'No price is available for this delivery date. Contact Sales.',
@@ -168,8 +228,34 @@ class CustomerPortalService
             }
             $catalog[] = [
                 'id' => $product->hash_id, 'part_number' => $product->part_number, 'name' => $product->name,
+                'description' => $product->description,
                 'unit_of_measure' => $product->unit_of_measure, 'unit_price' => $quote['unit_price'] ?? null,
                 'image_url' => $product->image_path ? "/api/v1/b2b/customer/catalog/{$product->hash_id}/image" : null,
+                'primary_image_url' => $product->image_path ? "/api/v1/b2b/customer/catalog/{$product->hash_id}/image" : null,
+                'images' => $product->images->map(fn ($image) => [
+                    'id' => $image->hash_id,
+                    'url' => "/api/v1/b2b/customer/catalog/{$product->hash_id}/images/{$image->hash_id}",
+                    'position' => (int) $image->position,
+                    'alt_text' => $image->alt_text,
+                    'is_primary' => (bool) $image->is_primary,
+                ])->values(),
+                'specifications' => $product->specifications,
+                'is_customizable' => (bool) $product->is_customizable,
+                'available_quantity' => $entry['available_quantity'],
+                'availability_mode' => $entry['availability_mode'],
+                'minimum_order_quantity' => $entry['minimum_order_quantity'],
+                'maximum_order_quantity' => $entry['maximum_order_quantity'],
+                'order_limits_supported' => $entry['order_limits_supported'],
+                'warranty_options' => $entry['warranty_options']->map(fn ($option): array => [
+                    'id' => $option->hash_id,
+                    'label' => $option->label,
+                    'warranty_duration_days' => $option->warranty_duration_days,
+                    'warranty_report_window_days' => $option->warranty_report_window_days,
+                    'warranty_start_basis' => $option->warranty_start_basis,
+                    'warranty_covered_issues' => $option->warranty_covered_issues,
+                    'warranty_remedies' => $option->warranty_remedies,
+                    'additional_terms' => $option->additional_terms,
+                ])->values(),
                 'price_source' => $quote['price_source'] ?? null, 'pricing_method' => isset($quote['price_tier_min_qty']) ? 'tiered' : ($quote ? 'flat' : null),
                 'pricing_issue' => $pricingIssue,
             ];
@@ -201,10 +287,17 @@ class CustomerPortalService
             }
 
             $deliveryDate = Carbon::parse($item['delivery_date']);
+            $warrantyOptionId = isset($item['warranty_option_id'])
+                ? HashIdFilter::decode((string) $item['warranty_option_id'], CustomerProductWarrantyOption::class)
+                : null;
+            if (isset($item['warranty_option_id']) && $warrantyOptionId === null) {
+                throw new BusinessRuleException("items.{$idx}.warranty_option_id is not a valid option.");
+            }
             $items[] = [
-                'product_id'    => $productId,
-                'quantity'      => bcadd((string) $item['quantity'], '0', 2),
+                'product_id' => $productId,
+                'quantity' => bcadd((string) $item['quantity'], '0', 2),
                 'delivery_date' => $deliveryDate->toDateString(),
+                'warranty_option_id' => $warrantyOptionId,
             ];
         }
 
@@ -213,6 +306,7 @@ class CustomerPortalService
             'date' => $orderDateString,
             'notes' => $data['notes'] ?? null,
             'payment_method' => $data['payment_method'] ?? null,
+            'payment_terms_days' => (int) $data['payment_terms_days'],
             'items' => $items,
         ];
 
@@ -229,6 +323,7 @@ class CustomerPortalService
             $fingerprintData,
             $portalUser,
         ): array {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             // Serialise first-order submissions per customer. The unique index
             // below is still the final arbiter; this lock also makes retries
             // return the original order rather than surfacing a unique-key 500.
@@ -257,8 +352,8 @@ class CustomerPortalService
 
             foreach ($items as $idx => $item) {
                 $this->assertRequestedDeliveryDate($item['delivery_date'], $idx);
-
             }
+            $this->orderAvailability->assertOrderAvailability($customer, $items);
 
             $so = $this->systemUser->impersonate(function () use ($customerId, $orderDateString, $items, $data, $idempotencyKey, $fingerprint): SalesOrder {
                 return $this->salesOrderService->create([
@@ -267,6 +362,7 @@ class CustomerPortalService
                     'items' => $items,
                     'notes' => $data['notes'] ?? null,
                     'payment_method' => $data['payment_method'] ?? null,
+                    'payment_terms_days' => (int) $data['payment_terms_days'],
                     'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
                     'quote_signature' => $data['quote_signature'] ?? null,
                     'portal_idempotency_key' => $idempotencyKey,
@@ -325,11 +421,11 @@ class CustomerPortalService
             }
 
             $this->notifications->sendForSubject($so, $audience, 'portal.order_awaiting_review', [
-                'title'       => "Portal order {$so->so_number} awaits review",
-                'message'     => "{$portalUser->name} placed a sales order for {$so->customer?->name} via the customer portal. Review and confirm it to start MRP planning.",
-                'link_to'     => "/crm/sales-orders/{$so->hash_id}",
+                'title' => "Portal order {$so->so_number} awaits review",
+                'message' => "{$portalUser->name} placed a sales order for {$so->customer?->name} via the customer portal. Review and confirm it to start MRP planning.",
+                'link_to' => "/crm/sales-orders/{$so->hash_id}",
                 'entity_type' => 'sales_order',
-                'entity_id'   => $so->hash_id,
+                'entity_id' => $so->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('Portal order review notification failed', [
@@ -355,7 +451,8 @@ class CustomerPortalService
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
 
         $result = $query->paginate($perPage);
-        app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+        app(SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+
         return $result;
     }
 
@@ -368,8 +465,10 @@ class CustomerPortalService
             'latestResponse.items',
             'deliveryNegotiations',
             'deliveries:id,sales_order_id,delivery_number,status,delivered_at,confirmed_at',
+            'customerFeedback',
             'invoices:id,sales_order_id,invoice_number,total_amount,status,created_at',
             'workOrders:id,sales_order_id,wo_number,status,quantity_target,quantity_produced,planned_start',
+            'advances',
         ]);
 
         $salesOrder->workOrders->each(function ($workOrder): void {
@@ -390,6 +489,31 @@ class CustomerPortalService
         return $salesOrder;
     }
 
+    public function submitOrderFeedback(SalesOrder $salesOrder, CustomerPortalUser $portalUser, array $data): CustomerOrderFeedback
+    {
+        return DB::transaction(function () use ($salesOrder, $portalUser, $data): CustomerOrderFeedback {
+            $order = SalesOrder::query()->lockForUpdate()->findOrFail($salesOrder->id);
+            abort_if((int) $order->customer_id !== (int) $portalUser->customer_id, 403);
+
+            if (! $order->deliveries()->whereIn('status', [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value])->exists()) {
+                throw ValidationException::withMessages([
+                    'order' => ['Feedback is available after a delivery is marked delivered or confirmed.'],
+                ]);
+            }
+
+            if ($order->customerFeedback()->exists()) {
+                abort(409, 'Feedback has already been submitted for this order.');
+            }
+
+            return $order->customerFeedback()->create([
+                'customer_id' => $portalUser->customer_id,
+                'customer_portal_user_id' => $portalUser->id,
+                'rating' => $data['rating'],
+                'comment' => $data['comment'] ?? null,
+            ]);
+        });
+    }
+
     public function quoteOrder(CustomerPortalUser $user, array $data): array
     {
         $existing = null;
@@ -404,16 +528,27 @@ class CustomerPortalService
         foreach ($data['items'] as $index => $item) {
             $this->assertRequestedDeliveryDate($item['delivery_date'], $index);
             $productId = Product::tryDecodeHash($item['product_id']);
-            if ($productId === null) { throw new BusinessRuleException('Invalid product in quote.'); }
-            $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date']];
+            if ($productId === null) {
+                throw new BusinessRuleException('Invalid product in quote.');
+            }
+            $optionId = isset($item['warranty_option_id'])
+                ? HashIdFilter::decode((string) $item['warranty_option_id'], CustomerProductWarrantyOption::class)
+                : null;
+            if (isset($item['warranty_option_id']) && $optionId === null) {
+                throw new BusinessRuleException("items.{$index}.warranty_option_id is not a valid option.");
+            }
+            $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date'], 'warranty_option_id' => $optionId];
         }
+        $this->orderAvailability->assertOrderAvailability(Customer::query()->findOrFail($user->customer_id), $items, $existing?->id);
         $quote = $this->salesOrderService->quoteOrder($user->customer_id, $items, $existing, true);
         $quote['items'] = array_map(function ($line): array {
             $line['product_id'] = app('hashids')->encode($line['product_id']);
             $line['price_agreement_id'] = $line['price_agreement_id'] ? app('hashids')->encode($line['price_agreement_id']) : null;
             unset($line['existing_id']);
+
             return $line;
         }, $quote['items']);
+
         return $quote;
     }
 
@@ -428,6 +563,7 @@ class CustomerPortalService
     public function updateOrder(SalesOrder $salesOrder, CustomerPortalUser $user, array $data): SalesOrder
     {
         return DB::transaction(function () use ($salesOrder, $user, $data): SalesOrder {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             $row = SalesOrder::query()->lockForUpdate()->findOrFail($salesOrder->id);
             abort_if($row->customer_id !== $user->customer_id, 403);
             $before = $this->salesOrderDetail($user->customer_id, $row)->toArray();
@@ -438,15 +574,30 @@ class CustomerPortalService
                     throw new BusinessRuleException("items.{$idx}.product_id is not a valid product.");
                 }
                 $this->assertRequestedDeliveryDate($item['delivery_date'], $idx);
-                $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date']];
+                $optionId = isset($item['warranty_option_id'])
+                    ? HashIdFilter::decode((string) $item['warranty_option_id'], CustomerProductWarrantyOption::class)
+                    : null;
+                if (isset($item['warranty_option_id']) && $optionId === null) {
+                    throw new BusinessRuleException("items.{$idx}.warranty_option_id is not a valid option.");
+                }
+                $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date'], 'warranty_option_id' => $optionId];
             }
+            $customer = Customer::query()->lockForUpdate()->findOrFail($user->customer_id);
+            $this->orderAvailability->assertOrderAvailability($customer, $items, $row->id);
             $updated = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->update(
-                $row, ['items' => $items, 'notes' => $data['notes'] ?? null, 'payment_method' => $data['payment_method'] ?? $row->payment_method, 'quote_signature' => $data['quote_signature'] ?? null], $user,
+                $row, [
+                    'items' => $items,
+                    'notes' => $data['notes'] ?? null,
+                    'payment_method' => $data['payment_method'] ?? $row->payment_method,
+                    'payment_terms_days' => $data['payment_terms_days'] ?? $row->payment_terms_days,
+                    'quote_signature' => $data['quote_signature'] ?? null,
+                ], $user,
             ));
             $this->recordCustomerAudit('customer.order.updated', $updated, $user->id, $user->customer_id, [
                 'before' => $before, 'after' => $updated->toArray(),
             ]);
             $this->notifySalesOrderReview($updated, $user);
+
             return $updated;
         });
     }
@@ -497,9 +648,12 @@ class CustomerPortalService
             if (in_array($step['label'], ['Ready from stock', 'Stock + production'], true)) {
                 $step['label'] = $step['state'] === 'done' ? 'Supply ready' : 'Preparing supply';
             }
-            if ($step['label'] === 'QC approved stock') $step['label'] = 'Quality approved';
+            if ($step['label'] === 'QC approved stock') {
+                $step['label'] = 'Quality approved';
+            }
             $step['description'] = $step['state'] === 'rejected'
                 ? 'Order preparation needs attention. Our team is resolving it; contact sales for an update.' : null;
+
             return $step;
         }, $this->salesOrderService->chain($salesOrder));
     }
@@ -528,7 +682,7 @@ class CustomerPortalService
 
         $this->recordCustomerAudit('customer.order.responded', $response, $portalUserId, $customerId, [
             'sales_order_id' => $salesOrder->hash_id,
-            'response_type'  => $data['type'] ?? null,
+            'response_type' => $data['type'] ?? null,
         ]);
 
         return $response->load('items');
@@ -573,7 +727,7 @@ class CustomerPortalService
     {
         return ReturnRequest::query()
             ->where('customer_id', $customerId)
-            ->where('type', \App\Modules\ReturnManagement\Enums\ReturnRequestType::CustomerReturn->value)
+            ->where('type', ReturnRequestType::CustomerReturn->value)
             ->whereNull('delivery_attempt_outcome_id')
             ->withCount('items')
             ->orderByDesc('created_at')
@@ -885,6 +1039,7 @@ class CustomerPortalService
                 $shipment['delivery']->proofs->sortBy('id')->map(fn ($proof) => [$proof->id, $proof->proof_type])->values()->all(),
             ], $shipments),
         ];
+
         return [
             'case' => $case, 'version' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)),
             'can_confirm' => $reason === null && collect($shipments)->contains(fn ($shipment) => ! $shipment['already_confirmed']),
@@ -895,6 +1050,7 @@ class CustomerPortalService
     public function confirmReceiptGroup(int $customerId, Delivery $anchor, array $data, CustomerPortalUser $portalUser): array
     {
         abort_unless((int) $portalUser->customer_id === $customerId, 403);
+
         return DB::transaction(function () use ($customerId, $anchor, $data, $portalUser): array {
             $initial = $this->receiptGroup($customerId, $anchor);
             if (! $initial) {
@@ -957,6 +1113,7 @@ class CustomerPortalService
             if ($original->status !== DeliveryStatus::Confirmed) {
                 $this->confirmDelivery($customerId, $original, $receiver + ['lines' => $payloads[$original->id]['lines']], $portalUser);
             }
+
             return $this->receiptGroup($customerId, $anchor);
         }, 3);
     }

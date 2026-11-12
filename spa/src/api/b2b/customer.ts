@@ -37,8 +37,10 @@ type CustomerLoginResponse = {
 
 export const customerPortalApi = {
   priceRequests: (page = 1, request?: string) => portalClient.get<PaginatedResponse<PriceRequest>>('/b2b/customer/price-requests', { params: { page, request } }).then(r => r.data),
-  requestPrice: (data: { product_id: string; quantity: number; requested_price?: string; notes: string }) => portalClient.post<{ data: PriceRequest }>('/b2b/customer/price-requests', data).then(r => r.data.data),
+  openPriceRequests: () => portalClient.get<{ data: Array<{ id: string; product_id: string; quantity: number; status: PriceRequest['status'] }> }>('/b2b/customer/price-requests/open').then(r => r.data.data),
+  requestPrice: (data: { product_id: string; quantity: number; requested_price: string; notes: string; request_order_limit_increase: boolean }) => portalClient.post<{ data: PriceRequest }>('/b2b/customer/price-requests', data).then(r => r.data.data),
   respondPrice: (id: string, decision: 'accept' | 'reject', version: number) => portalClient.post<{ data: PriceRequest }>(`/b2b/customer/price-requests/${id}/respond`, { decision, version }).then(r => r.data.data),
+  cancelPriceRequest: (id: string, version: number) => portalClient.post<{ data: PriceRequest }>(`/b2b/customer/price-requests/${id}/cancel`, { version }).then(r => r.data.data),
  // ── Auth ──────────────────────────────────────────
  login: async (email: string, password: string) => {
  await getPortalCsrf();
@@ -113,6 +115,7 @@ export const customerPortalApi = {
   date?: string;
   notes?: string;
   payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
+  payment_terms_days: number;
   items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
   }, idempotencyKey: string) => {
   const { data } = await portalClient.post<{ data: PortalSoDetail; message: string }>('/b2b/customer/orders', form, {
@@ -125,10 +128,18 @@ export const customerPortalApi = {
   quote_signature?: string;
   notes?: string;
   payment_method?: 'cash' | 'check' | 'bank_transfer' | null;
+  payment_terms_days: number;
   items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
  }) => {
   const { data } = await portalClient.put<{ data: PortalSoDetail; message?: string }>(`/b2b/customer/orders/${id}`, form);
   return data;
+ },
+
+ submitOrderAdvance: async (id: string, form: FormData) => {
+  const { data } = await portalClient.post<{ data: import('@/types/b2b').CustomerOrderAdvance }>(
+   `/b2b/customer/orders/${id}/advance-evidence`, form,
+  );
+  return data.data;
  },
 
  cancelOrder: async (id: string, reason?: string) => {
@@ -148,6 +159,14 @@ export const customerPortalApi = {
  getOrder: async (id: string) => {
  const { data } = await portalClient.get<{ data: PortalSoDetail }>(`/b2b/customer/orders/${id}`);
  return data.data;
+ },
+
+ submitOrderFeedback: async (id: string, form: { rating: number; comment?: string }) => {
+  const { data } = await portalClient.post<{
+   data: NonNullable<PortalSoDetail['customer_feedback']>;
+   message: string;
+  }>(`/b2b/customer/orders/${id}/feedback`, form);
+  return data.data;
  },
 
  agreements: async (id: string) => {

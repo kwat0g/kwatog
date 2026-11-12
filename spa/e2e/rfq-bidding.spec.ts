@@ -355,4 +355,17 @@ test.describe('RFQ bidding role workflow', () => {
     expect(quoteWrites[1].items[0]).toMatchObject({ request_for_quote_item_id: 'rfq_line_01', response_status: 'quoted', offered_quantity: '500', unit_price: '60.0000', proposed_delivery_date: '2026-10-15' });
     expect(uploads).toEqual(['quotation_pdf', 'certificate_of_analysis']);
   });
+
+  test('supplier portal shows its first-run guide and keeps Help replay available', async ({ page }) => {
+    await mockSupplierSession(page);
+    await page.goto('/portal/supplier/rfqs');
+
+    const guide = page.getByRole('dialog');
+    await expect(guide.getByRole('heading', { name: 'Welcome to your supplier portal' })).toBeVisible();
+    await expect(guide.getByText(/purchase orders, listings, deliveries, and invoices/i)).toBeVisible();
+    await guide.getByRole('button', { name: 'Skip walkthrough' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Help' }).click();
+    await expect(page.getByRole('dialog').getByRole('heading', { name: 'Welcome to your supplier portal' })).toBeVisible();
+  });
 });

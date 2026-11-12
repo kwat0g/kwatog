@@ -107,6 +107,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
     handleSubmit,
     reset,
     setError,
+    setValue,
     watch,
     formState: { errors },
   } = form;
@@ -140,15 +141,27 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
     options.data?.item_types.find((option) => option.value === selectedCategory?.item_type)?.label;
   const keepsLegacyCategory =
     mode === 'edit' && values.category_id === existingQuery.data?.category?.id;
+  const itemType = keepsLegacyCategory
+    ? existingQuery.data?.item_type
+    : selectedCategory?.item_type;
+  const isFinishedGood = itemType === 'finished_good';
   const classificationUnavailable =
     !!values.category_id && !selectedCategory?.item_type && !keepsLegacyCategory;
+  useEffect(() => {
+    if (isFinishedGood && values.reorder_method !== 'fixed_quantity') {
+      setValue('reorder_method', 'fixed_quantity', { shouldDirty: false, shouldValidate: true });
+    }
+  }, [isFinishedGood, setValue, values.reorder_method]);
   const mutation = useMutation({
     mutationFn: (data: FormValues) => {
+      const { minimum_order_quantity: minimumOrderQuantity, ...itemData } = data;
       const payload: CreateItemData = {
-        ...data,
-        reorder_method: data.reorder_method as ReorderMethod,
+        ...itemData,
+        reorder_method: isFinishedGood ? 'fixed_quantity' : (data.reorder_method as ReorderMethod),
         description: data.description || undefined,
-        minimum_order_quantity: data.minimum_order_quantity || undefined,
+        ...(isFinishedGood
+          ? {}
+          : { minimum_order_quantity: minimumOrderQuantity || undefined }),
       };
       return mode === 'create' ? itemsApi.create(payload) : itemsApi.update(id, payload);
     },
@@ -180,7 +193,11 @@ navigate(`/inventory/items/${item.id}`);
   const header = (
     <PageHeader
       title={mode === 'create' ? 'New item' : `Edit ${existingQuery.data?.code ?? 'item'}`}
-      subtitle="Define the inventory identity, base-unit cost and replenishment rules."
+      subtitle={
+        isFinishedGood
+          ? 'Define the inventory identity, base-unit cost and production planning thresholds.'
+          : 'Define the inventory identity, base-unit cost and replenishment rules.'
+      }
       backTo="/inventory/items"
       backLabel="Items"
     />
@@ -344,7 +361,11 @@ navigate(`/inventory/items/${item.id}`);
                   {...register('unit_of_measure')}
                   value={values.unit_of_measure}
                   disabled={uoms.isPending || uoms.isError}
-                  helper="Stock, BOM costs and purchasing conversions use this unit."
+                  helper={
+                    isFinishedGood
+                      ? 'Stock, production receipts and BOM costs use this unit.'
+                      : 'Stock, BOM costs and purchasing conversions use this unit.'
+                  }
                   error={errors.unit_of_measure?.message}
                 >
                   <option value="">{uoms.isPending ? 'Loading units…' : 'Select base unit'}</option>
@@ -387,9 +408,7 @@ navigate(`/inventory/items/${item.id}`);
                   affected BOM estimates.
                 </p>
               )}
-              {(keepsLegacyCategory
-                ? existingQuery.data?.item_type
-                : selectedCategory?.item_type) === 'finished_good' && (
+              {isFinishedGood && (
                 <p className="mt-4 text-sm text-muted">
                   For production receipts, use the product part number as this code and match its
                   base unit.
@@ -398,27 +417,35 @@ navigate(`/inventory/items/${item.id}`);
             </Panel>
           </div>
           <div className="min-w-0 space-y-5">
-            <Panel title="Replenishment rules">
+            <Panel title={isFinishedGood ? 'Production planning' : 'Replenishment rules'}>
+              {isFinishedGood && (
+                <p className="mb-4 text-sm text-muted">
+                  Set stock thresholds and expected production time. Finished goods use production
+                  planning instead of supplier reorder settings.
+                </p>
+              )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Select
-                  label="Reorder method"
-                  required
-                  fieldSize="lg"
-                  {...register('reorder_method')}
-                  value={values.reorder_method}
-                  disabled={options.isPending || options.isError}
-                  error={errors.reorder_method?.message}
-                  containerClassName="sm:col-span-2"
-                >
-                  <option value="">Select reorder method</option>
-                  {options.data?.reorder_methods.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
+                {!isFinishedGood && (
+                  <Select
+                    label="Reorder method"
+                    required
+                    fieldSize="lg"
+                    {...register('reorder_method')}
+                    value={values.reorder_method}
+                    disabled={options.isPending || options.isError}
+                    error={errors.reorder_method?.message}
+                    containerClassName="sm:col-span-2"
+                  >
+                    <option value="">Select reorder method</option>
+                    {options.data?.reorder_methods.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
                 <Input
-                  label="Reorder point"
+                  label={isFinishedGood ? 'Production planning threshold' : 'Reorder point'}
                   required
                   fieldSize="lg"
                   {...register('reorder_point')}
@@ -426,7 +453,11 @@ navigate(`/inventory/items/${item.id}`);
                   min={0}
                   step="0.001"
                   suffix={values.unit_of_measure || undefined}
-                  helper="Stock threshold that triggers replenishment."
+                  helper={
+                    isFinishedGood
+                      ? 'Low usable stock triggers production review guidance.'
+                      : 'Stock threshold that triggers replenishment.'
+                  }
                   error={errors.reorder_point?.message}
                 />
                 <Input
@@ -441,26 +472,32 @@ navigate(`/inventory/items/${item.id}`);
                   helper="Buffer protected from normal planning demand."
                   error={errors.safety_stock?.message}
                 />
+                {!isFinishedGood && (
+                  <Input
+                    label="Minimum order quantity"
+                    fieldSize="lg"
+                    {...register('minimum_order_quantity')}
+                    {...numberInputProps()}
+                    min={0.001}
+                    step="0.001"
+                    suffix={values.unit_of_measure || undefined}
+                    helper="Purchase requests round up to a multiple of this quantity."
+                    error={errors.minimum_order_quantity?.message}
+                  />
+                )}
                 <Input
-                  label="Minimum order quantity"
-                  fieldSize="lg"
-                  {...register('minimum_order_quantity')}
-                  {...numberInputProps()}
-                  min={0.001}
-                  step="0.001"
-                  suffix={values.unit_of_measure || undefined}
-                  helper="Purchase requests round up to a multiple of this quantity."
-                  error={errors.minimum_order_quantity?.message}
-                />
-                <Input
-                  label="Lead time (days)"
+                  label={isFinishedGood ? 'Production lead time (days)' : 'Lead time (days)'}
                   required
                   fieldSize="lg"
                   {...register('lead_time_days')}
                   {...numberInputProps({ decimal: false })}
                   min={0}
                   max={365}
-                  helper="Expected supply time; 0 means no lead time."
+                  helper={
+                    isFinishedGood
+                      ? 'Enter expected production time; 0 uses the configured default.'
+                      : 'Enter expected supply time; 0 uses the configured default.'
+                  }
                   error={errors.lead_time_days?.message}
                 />
               </div>
@@ -470,7 +507,11 @@ navigate(`/inventory/items/${item.id}`);
                 <Switch
                   label="Active"
                   className="min-h-11 items-center"
-                  description="Available for new purchasing and BOM selection."
+                  description={
+                    isFinishedGood
+                      ? 'Available for production planning and BOM selection.'
+                      : 'Available for new purchasing and BOM selection.'
+                  }
                   {...register('is_active')}
                 />
                 <Switch

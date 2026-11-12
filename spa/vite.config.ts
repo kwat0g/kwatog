@@ -47,8 +47,8 @@ export default defineConfig(({ command }) => {
       strictPort: true,
       // Direct proxy for local dev without docker (kept for convenience).
       proxy: process.env.VITE_DISABLE_API_PROXY === 'true' ? undefined : {
-        '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
-        '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
+        '/api': { target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
+        '/sanctum': { target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
       },
       hmr: {
         // When accessed through the Nginx proxy on port 80, the browser

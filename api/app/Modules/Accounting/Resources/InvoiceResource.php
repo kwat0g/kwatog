@@ -107,6 +107,14 @@ class InvoiceResource extends JsonResource
             'revision' => $this->whenLoaded('items', fn () => $this->revisionToken()),
             'collections' => CollectionResource::collection($this->whenLoaded('collections')),
             'payment_submissions' => InvoicePaymentSubmissionResource::collection($this->whenLoaded('paymentSubmissions')),
+            'advance_applications' => $this->whenLoaded('advanceApplications', fn () => $this->advanceApplications->map(
+                static fn ($application): array => [
+                    'id' => $application->hash_id,
+                    'amount' => (string) $application->amount,
+                    'applied_at' => $application->applied_at?->toIso8601String(),
+                    'advance_attempt' => $application->advance?->attempt_number,
+                ],
+            )->values()->all()),
             'can_submit_payment' => $this->whenLoaded('paymentSubmissions', fn () => app(InvoicePaymentSubmissionService::class)->blockedReason($this->resource) === null),
             'payment_submission_blocked_reason' => $this->whenLoaded('paymentSubmissions', fn () => app(InvoicePaymentSubmissionService::class)->blockedReason($this->resource)),
             'journal_entry' => $this->whenLoaded('journalEntry', fn () => $this->journalEntry ? [

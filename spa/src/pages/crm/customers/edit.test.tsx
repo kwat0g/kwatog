@@ -12,7 +12,7 @@ vi.mock('@/api/crm/customers', () => ({
 
 const customer = (isActive: boolean): Customer => ({
   id: 'customer-1',
-  name: 'Test customer',
+  name: 'Northstar Mobility Ltd.',
   code: 'C-001',
   contact_person: null,
   email: null,
@@ -62,6 +62,7 @@ describe('CrmCustomerEditPage mutation freshness', () => {
     );
 
     await screen.findByRole('textbox', { name: /Customer name/ });
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /Customer name/ })).toHaveValue('Northstar Mobility Ltd.'));
     vi.mocked(crmCustomersApi.show).mockImplementation(() => new Promise(() => undefined));
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 

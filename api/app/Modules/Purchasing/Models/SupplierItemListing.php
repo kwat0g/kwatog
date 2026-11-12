@@ -26,6 +26,7 @@ class SupplierItemListing extends Model
         'lead_time_days', 'valid_until',
         'rejection_reason', 'submitted_at',
         'reviewed_by', 'reviewed_at',
+        'image_path', 'image_original_filename', 'image_mime_type', 'image_size_bytes', 'image_sha256',
     ];
 
     protected $casts = [
@@ -36,6 +37,7 @@ class SupplierItemListing extends Model
         'status' => SupplierListingStatus::class,
         'submitted_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'image_size_bytes' => 'integer',
     ];
 
     public function vendor(): BelongsTo

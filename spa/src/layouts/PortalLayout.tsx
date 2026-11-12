@@ -38,6 +38,8 @@ import {
   LuFileText,
   LuMessageSquare,
   LuPlus,
+  LuChevronDown,
+  LuKeyRound,
   type IconType,
 } from '@/lib/icons';
 
@@ -66,7 +68,7 @@ interface PortalBadgeSignal {
   variant: 'danger' | 'warning';
 }
 
-interface PortalNavSection {
+export interface PortalNavSection {
   label: string;
   items: PortalNavItem[];
 }
@@ -77,6 +79,7 @@ const SUPPLIER_NAV: PortalNavSection[] = [
     items: [
       { to: '/portal/supplier', label: 'Dashboard', icon: DashboardIcon },
       { to: '/portal/supplier/notifications', label: 'Notifications', icon: LuBell },
+      { to: '/portal/supplier/agreements', label: 'Agreements', icon: LuFileText },
     ],
   },
   {
@@ -109,6 +112,7 @@ const CUSTOMER_NAV: PortalNavSection[] = [
     items: [
       { to: '/portal/customer', label: 'Dashboard', icon: DashboardIcon },
       { to: '/portal/customer/notifications', label: 'Notifications', icon: LuBell },
+      { to: '/portal/customer/agreements', label: 'Agreements', icon: LuFileText },
     ],
   },
   {
@@ -483,6 +487,9 @@ export default function PortalLayout({
   const queryClient = useQueryClient();
   const { state: realtimeState } = useRealtimeStatus();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const accountMenuButtonRef = useRef<HTMLButtonElement>(null);
   const revocationHandled = useRef(false);
   const sections = type === 'supplier' ? SUPPLIER_NAV : CUSTOMER_NAV;
   const brand = type === 'supplier' ? 'Supplier Portal' : 'Customer Portal';
@@ -630,7 +637,30 @@ export default function PortalLayout({
 
   useEffect(() => {
     setMobileOpen(false);
+    setAccountMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (event.target instanceof Node && !accountMenuRef.current?.contains(event.target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setAccountMenuOpen(false);
+      accountMenuButtonRef.current?.focus();
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [accountMenuOpen]);
 
   return (
     <div className="flex h-dvh min-h-0 overflow-hidden bg-canvas text-primary">
@@ -691,10 +721,6 @@ export default function PortalLayout({
             <p className="truncate text-2xs text-muted">{subtitle}</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <div className="hidden text-right sm:block">
-              <p className="text-xs font-medium">{user?.name}</p>
-              <p className="text-2xs text-muted">{user?.email}</p>
-            </div>
             {user && (
               <NotificationBell
                 api={portalNotificationsApi[type]}
@@ -705,7 +731,47 @@ export default function PortalLayout({
               />
             )}
             {user && <PortalWalkthrough realm={type} userId={user.id} sections={sections} />}
-            <Avatar size="md" name={user?.name} />
+            {user && (
+              <div ref={accountMenuRef} className="relative">
+                <button
+                  ref={accountMenuButtonRef}
+                  type="button"
+                  aria-label={`Account menu for ${user.name}`}
+                  aria-expanded={accountMenuOpen}
+                  aria-controls="portal-account-menu"
+                  onClick={() => setAccountMenuOpen((open) => !open)}
+                  className={cn('flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-elevated', focusRingInset)}
+                >
+                  <span className="hidden text-right sm:block">
+                    <span className="block max-w-40 truncate text-xs font-medium">{user.name}</span>
+                    <span className="block max-w-40 truncate text-2xs text-muted">{user.email}</span>
+                  </span>
+                  <Avatar size="md" name={user.name} />
+                  <LuChevronDown size={14} className="text-muted" aria-hidden="true" />
+                </button>
+                {accountMenuOpen && (
+                  <div
+                    id="portal-account-menu"
+                    role="group"
+                    aria-label="Account options"
+                    className="absolute right-0 top-full z-50 mt-2 w-64 rounded-md border border-default bg-canvas p-1 shadow-lg"
+                  >
+                    <div className="border-b border-default px-3 py-2">
+                      <p className="truncate text-sm font-medium text-primary">{user.name}</p>
+                      <p className="truncate text-xs text-muted">{user.email}</p>
+                    </div>
+                    <Link
+                      to={`/portal/${type}/change-password`}
+                      onClick={() => setAccountMenuOpen(false)}
+                      className={cn('flex min-h-hit items-center gap-2 rounded-md px-3 text-sm text-primary transition-colors hover:bg-elevated', focusRingInset)}
+                    >
+                      <LuKeyRound size={15} className="text-muted" aria-hidden="true" />
+                      Change password
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </header>
         <OfflineBanner placement="in-header" />

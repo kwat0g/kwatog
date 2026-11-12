@@ -49,6 +49,8 @@ type BulkTerms = {
   valid_until: string;
 };
 
+type ListingSubmit = { payload: PortalSupplierListingInput; image: File | null };
+
 const emptyForm: ListingForm = {
   id: null,
   item_id: '',
@@ -85,6 +87,7 @@ export default function SupplierItemListingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [form, setForm] = useState<ListingForm>(emptyForm);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   // Bulk submit state — shared commercial terms applied to every selected row.
   const [terms, setTerms] = useState<BulkTerms>(emptyTerms);
@@ -118,15 +121,33 @@ export default function SupplierItemListingsPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'item-listings'] });
 
   const submit = useMutation({
-    mutationFn: (payload: PortalSupplierListingInput) =>
-      form.id ? supplierPortalApi.updateItemListing(form.id, payload) : supplierPortalApi.createItemListing(payload),
+    mutationFn: async ({ payload, image }: ListingSubmit) => {
+      const listing = form.id
+        ? await supplierPortalApi.updateItemListing(form.id, payload)
+        : await supplierPortalApi.createItemListing(payload);
+      if (!image) return listing;
+      try {
+        return await supplierPortalApi.uploadItemListingImage(listing.id, image);
+      } catch (error) {
+        Object.assign(error as object, { savedListingId: listing.id });
+        throw error;
+      }
+    },
     onSuccess: () => {
       toast.success(form.id ? 'Listing updated.' : 'Listing submitted for review.');
       setShowForm(false);
       setForm(emptyForm);
+      setImageFile(null);
       invalidate();
     },
     onError: (error: Error & { response?: { data?: { message?: string } } }) => {
+      const savedListingId = (error as Error & { savedListingId?: string }).savedListingId;
+      if (savedListingId) {
+        setForm((current) => ({ ...current, id: savedListingId }));
+        invalidate();
+        toast.error('The listing was saved, but its image was not. Retry the image upload.');
+        return;
+      }
       toast.error(error.response?.data?.message ?? 'Could not save the listing.');
     },
   });
@@ -157,6 +178,7 @@ export default function SupplierItemListingsPage() {
 
   const startCreate = () => {
     setForm(emptyForm);
+    setImageFile(null);
     setShowBulk(false);
     setShowForm(true);
   };
@@ -179,6 +201,7 @@ export default function SupplierItemListingsPage() {
       lead_time_days: String(listing.lead_time_days),
       valid_until: listing.valid_until ?? '',
     });
+    setImageFile(null);
     setShowBulk(false);
     setShowForm(true);
     window.scrollTo({ top: 0 });
@@ -206,7 +229,7 @@ export default function SupplierItemListingsPage() {
       return;
     }
 
-    submit.mutate({
+    submit.mutate({ payload: {
       ...(form.id ? {} : { item_id: form.item_id }),
       supplier_item_code: form.supplier_item_code.trim() || null,
       supplier_item_name: form.supplier_item_name.trim() || null,
@@ -215,7 +238,7 @@ export default function SupplierItemListingsPage() {
       base_qty_per_order_unit: conversion || null,
       lead_time_days: lead,
       valid_until: form.valid_until || null,
-    });
+    }, image: imageFile });
   };
 
   const submitBulk = (rows: PortalItemCatalogEntry[]) => {
@@ -266,10 +289,17 @@ export default function SupplierItemListingsPage() {
       key: 'item',
       header: 'Item',
       cell: (r) => (
-        <StackedCell
-          primary={<span className="font-mono">{r.item?.code ?? '—'}</span>}
-          secondary={r.item?.name}
-        />
+        <div className="flex min-w-0 items-center gap-2">
+          {r.image ? (
+            <img src={r.image.url} alt={r.item?.name ? `${r.item.name} listing` : 'Supplier listing'} className="h-10 w-10 shrink-0 rounded border border-default object-cover" loading="lazy" />
+          ) : (
+            <div aria-label="No listing image" className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-default bg-surface text-xs text-muted">—</div>
+          )}
+          <StackedCell
+            primary={<span className="font-mono">{r.item?.code ?? '—'}</span>}
+            secondary={r.item?.name}
+          />
+        </div>
       ),
     },
     {
@@ -406,6 +436,12 @@ export default function SupplierItemListingsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input label="Lead time (days)" type="number" min="0" max="365" required placeholder="e.g. 12" value={form.lead_time_days} onChange={(event) => setForm((current) => ({ ...current, lead_time_days: event.target.value }))} />
                 <Input label="Price valid until" type="date" helper="Optional — leave empty if the price does not expire" value={form.valid_until} onChange={(event) => setForm((current) => ({ ...current, valid_until: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="supplier-listing-image" className="block text-xs font-medium text-primary">Listing image (optional)</label>
+                <input id="supplier-listing-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} className="block w-full text-sm text-secondary file:mr-3 file:rounded-md file:border file:border-default file:bg-surface file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+                <p className="text-xs text-muted">PNG, JPEG, or WebP up to 5 MiB. The image is visible to your supplier account and authorized purchasing staff.</p>
+                {imageFile && <p className="text-xs text-secondary">Selected: {imageFile.name}</p>}
               </div>
               <div className="flex justify-end gap-2 pt-2 border-t border-default">
                 <Button type="button" variant="secondary" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
