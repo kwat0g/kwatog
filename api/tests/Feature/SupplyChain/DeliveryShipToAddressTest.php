@@ -50,6 +50,13 @@ class DeliveryShipToAddressTest extends TestCase
 
     private function customer(array $attributes = []): Customer
     {
+        if (isset($attributes['delivery_address']) && trim((string) $attributes['delivery_address']) !== '') {
+            $attributes += [
+                'delivery_latitude' => 14.2695,
+                'delivery_longitude' => 121.0421,
+            ];
+        }
+
         return Customer::factory()->create($attributes);
     }
 
@@ -67,6 +74,7 @@ class DeliveryShipToAddressTest extends TestCase
         return app(DeliveryService::class)->assign($delivery, [
             'vehicle_id' => $vehicle->id,
             'driver_id' => $this->driver()->id,
+            'shipment_weight_kg' => '100.00',
             'reason' => 'Ship-to test assignment.',
         ], $actor);
     }
@@ -88,6 +96,7 @@ class DeliveryShipToAddressTest extends TestCase
         app(DeliveryService::class)->assign($delivery, [
             'vehicle_id' => $vehicle->id,
             'driver_id' => $driver->id,
+            'shipment_weight_kg' => '100.00',
             'reason' => 'Realtime driver assignment test.',
         ], $actor);
 

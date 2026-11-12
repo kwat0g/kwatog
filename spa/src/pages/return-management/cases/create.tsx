@@ -402,7 +402,7 @@ export default function ReturnCaseCreatePage() {
         )}
 
         <div className="min-w-0 w-full grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <main className="min-w-0"><fieldset disabled={createMutation.isPending} className="space-y-4 min-w-0">
+          <main className="min-w-0"><fieldset data-portal-guide-target="form" disabled={createMutation.isPending} className="space-y-4 min-w-0">
             {!selectedSource && (
               <Panel title="Choose the source document" meta="Start with the shipment or receipt">
                 {realm === 'internal' && (

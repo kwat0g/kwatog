@@ -25,6 +25,7 @@ class UpdatePortalOrderRequest extends FormRequest
             'quote_signature' => ['sometimes', 'nullable', 'string', 'size:64'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'payment_method' => ['sometimes', 'nullable', 'string', Rule::in(['cash', 'check', 'bank_transfer'])],
+            'payment_terms_days' => ['sometimes', 'required', 'integer', 'between:0,365'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'string', 'distinct'],
             'items.*.quantity' => ['required', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],

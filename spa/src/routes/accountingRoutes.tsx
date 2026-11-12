@@ -69,7 +69,7 @@ export const accountingRoutes = (
  element={<PermissionGuard permission="accounting.vendors.view"><VendorDetailPage /></PermissionGuard>} />
  <Route path="/accounting/vendors/:id/edit"
  element={<PermissionGuard permission="accounting.vendors.manage"><EditVendorPage /></PermissionGuard>} />  <Route path="/accounting/portal-access"
- element={<PermissionGuard permission="b2b.portal_access.view"><PortalAccessPage /></PermissionGuard>} />
+ element={<PermissionGuard anyOf={['b2b.portal_access.view', 'accounting.customers.manage']}><PortalAccessPage /></PermissionGuard>} />
 
  <Route path="/accounting/bills"
  element={<PermissionGuard permission="accounting.bills.view"><BillsPage /></PermissionGuard>} />

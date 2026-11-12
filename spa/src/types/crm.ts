@@ -96,6 +96,12 @@ export interface PriceAgreement {
   pricing_method_label: string;
   tiers: PriceTier[] | null;
   is_currently_active: boolean;
+  termination_status?: 'awaiting_customer_signature' | 'request_cancelled' | 'ended_early' | 'cancelled_before_start' | null;
+  termination_reason?: string | null;
+  termination_last_valid_date?: string | null;
+  termination_document_id?: string | null;
+  termination_kind?: 'early_termination' | 'scheduled_cancellation' | null;
+  termination_history_count?: number;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;

@@ -57,25 +57,25 @@
 - Modify: `spa/src/pages/accounting/portal-access.tsx`
 - Create: `spa/src/components/accounting/CustomerDeliveryLocationPicker.tsx`
 - Test: `api/tests/Feature/Accounting/CustomerContactLocationTest.php`
-- Test: `api/tests/Feature/B2B/PortalInvitationTest.php`
+- Test: `api/tests/Feature/B2B/PortalInvitationPrefillTest.php`
 - Test: `spa/src/pages/crm/customers/location-form.test.tsx`
 - Test: `spa/src/pages/accounting/portal-access.test.tsx`
 
 **Interfaces:**
 - Produces customer fields `contact_person_role: string|null`, `delivery_latitude: decimal|null`, and `delivery_longitude: decimal|null` in Accounting resources and form payloads.
 - Produces `is_authorized_signatory: boolean` on customer and supplier portal users. Only the existing portal-access management permission may set it.
-- Portal invitation selection links the portal user to the selected customer/vendor. Name and email are manually entered for every invitation and are never copied from the account record; the parent association remains server-bound by the route.
+- Portal invitation selection preloads the selected customer's/vendor's contact name and email. If either is absent, keep that field manually editable; the parent customer/vendor association remains server-bound by the route.
 
-- [x] Write API tests for required customer delivery coordinates on create, numeric coordinate bounds, optional contact role, nullable legacy records, and update rejection when only one coordinate is supplied.
-- [x] Run `cd api && php artisan test --filter=CustomerContactLocationTest`; confirm expected failures before implementation.
-- [x] Write SPA tests that select/map a pin, preserve coordinates while editing, display validation, and manually enter the invitee name/email while linking to a selected customer/vendor.
-- [x] Run `cd spa && npm run test:run -- src/pages/crm/customers/location-form.test.tsx src/pages/accounting/portal-access.test.tsx`; confirm expected failures.
-- [x] Add the additive migrations. Keep coordinate columns nullable for existing rows; validate coordinates on new/changed primary delivery addresses and at dispatch when an old row has no pin.
-- [x] Add the contact-role and coordinate fields to both customer form surfaces and the API resource/request contracts. Build the map picker with the installed React Leaflet stack and current OpenStreetMap tile convention; do not add geocoding.
-- [x] Change portal-access forms to select a customer/vendor record while manually entering the invitee name and email for every invitation.
-- [x] Add the signatory flag and require it only when signing; do not infer permission from job title.
-- [x] Run both focused API tests and SPA tests; run `cd spa && npm run build`.
-- [x] Commit only Task 1 files with `feat: add customer location and portal contact setup`.
+- [ ] Write API tests for required customer delivery coordinates on create, numeric coordinate bounds, optional contact role, nullable legacy records, and update rejection when only one coordinate is supplied.
+- [ ] Run `cd api && php artisan test --filter=CustomerContactLocationTest`; confirm expected failures before implementation.
+- [ ] Write SPA tests that select/map a pin, preserve coordinates while editing, display validation, prefill an invitation from the selected customer/vendor, and allow fallback entry when contact details are missing.
+- [ ] Run `cd spa && npm run test:run -- src/pages/crm/customers/location-form.test.tsx src/pages/accounting/portal-access.test.tsx`; confirm expected failures.
+- [ ] Add the additive migrations. Keep coordinate columns nullable for existing rows; validate coordinates on new/changed primary delivery addresses and at dispatch when an old row has no pin.
+- [ ] Add the contact-role and coordinate fields to both customer form surfaces and the API resource/request contracts. Build the map picker with the installed React Leaflet stack and current OpenStreetMap tile convention; do not add geocoding.
+- [ ] Change portal-access forms to select a customer/vendor record and prefill name/email from it. Keep manual fallback only for missing contact fields.
+- [ ] Add the signatory flag and require it only when signing; do not infer permission from job title.
+- [ ] Run both focused API tests and SPA tests; run `cd spa && npm run build`.
+- [ ] Commit only Task 1 files with `feat: add customer location and portal contact setup`.
 
 ### Task 2: Reusable PDF contract templates and authorized signing
 
@@ -112,15 +112,15 @@
 - `PortalContractSignatureService::signCustomerDocument(CustomerAgreementDocument $document, CustomerPortalUser $signer, string $typedName): CustomerAgreementDocument` and the supplier counterpart enforce designated signatory, active portal identity, parent ownership, immutable PDF hash, and audit timestamp.
 - The template maps only approved keys (customer/vendor name, contact, address, payment terms, effective dates, allowed-product/warranty summary). Unknown keys are rejected.
 
-- [x] Write service/API tests for PDF field discovery/mapping, missing required fields, unknown fields, entity-specific auto-fill, private storage, parent ownership, authorized signer success, unauthorized signer denial, and repeat-sign rejection.
-- [x] Run `cd api && php artisan test --filter='CustomerAgreementTemplate|SupplierAgreementSignature|PortalContractPdfService'`; confirm expected failures.
-- [x] Write component tests for template upload, field mapping, previewed auto-filled values, attachment-only PDFs, and signer confirmation state; run the named Vitest files and confirm expected failures.
-- [x] Add a pinned PHP wrapper dependency and the required PDFtk Java executable to both development and production PHP images. Invoke the binary through Symfony Process argument arrays with no shell interpolation; fail closed when unavailable.
-- [x] Implement private PDF template storage, per-template realm, allowed field mapping, version hash, and output fill. Arbitrary PDFs without AcroForm fields remain attachable but are not auto-filled.
-- [x] Extend customer agreement documents with signature status/audit data and add a supplier-owned agreement-document record. Reuse the same PDF/signature services while keeping customer and vendor authorization/records separate.
-- [x] Add staff template management and customer/supplier upload/sign/review UI using existing dialogs and form patterns. Store signer portal-user ID, typed name, UTC timestamp, and the exact document SHA-256.
-- [x] Run the focused PHP and SPA tests, `cd spa && npm run build`, and a PDF fill smoke test inside the production PHP image.
-- [x] Commit only Task 2 files with `feat: add reusable portal contract templates and signing`.
+- [ ] Write service/API tests for PDF field discovery/mapping, missing required fields, unknown fields, entity-specific auto-fill, private storage, parent ownership, authorized signer success, unauthorized signer denial, and repeat-sign rejection.
+- [ ] Run `cd api && php artisan test --filter='CustomerAgreementTemplate|SupplierAgreementSignature|PortalContractPdfService'`; confirm expected failures.
+- [ ] Write component tests for template upload, field mapping, previewed auto-filled values, attachment-only PDFs, and signer confirmation state; run the named Vitest files and confirm expected failures.
+- [ ] Add a pinned PHP wrapper dependency and the required PDFtk Java executable to both development and production PHP images. Invoke the binary through Symfony Process argument arrays with no shell interpolation; fail closed when unavailable.
+- [ ] Implement private PDF template storage, per-template realm, allowed field mapping, version hash, and output fill. Arbitrary PDFs without AcroForm fields remain attachable but are not auto-filled.
+- [ ] Extend customer agreement documents with signature status/audit data and add a supplier-owned agreement-document record. Reuse the same PDF/signature services while keeping customer and vendor authorization/records separate.
+- [ ] Add staff template management and customer/supplier upload/sign/review UI using existing dialogs and form patterns. Store signer portal-user ID, typed name, UTC timestamp, and the exact document SHA-256.
+- [ ] Run the focused PHP and SPA tests, `cd spa && npm run build`, and a PDF fill smoke test inside the production PHP image.
+- [ ] Commit only Task 2 files with `feat: add reusable portal contract templates and signing`.
 
 ### Task 3: Product specifications, image gallery, and custom blueprints
 
@@ -152,14 +152,14 @@
 - `ProductImageController` supports ordered multi-image upload, primary selection, authorized private download, and delete; legacy `image_path` is migrated as the initial primary image.
 - A product marked customizable requires at least one approved blueprint before it can be released to the customer catalog. BOM remains the source of actual production material quantities/cost.
 
-- [x] Write API tests for required specification fields on catalog-visible products, multiple image storage/order, legacy primary-image backfill, private download tenancy/permission, and blueprint-required publish behavior.
-- [x] Run `cd api && php artisan test --filter='ProductSpecificationGallery|ProductBlueprint'`; confirm expected failures.
-- [x] Write form/detail component tests for specification sections, image gallery upload/order/main image, validation errors, and blueprint upload; run the named Vitest files and confirm expected failures.
-- [x] Add additive schema and model relationships. Backfill current `products.image_path` rows into the image-gallery table with a stable primary position; keep the old image resource field as a compatibility alias during migration.
-- [x] Implement uploads with strict MIME/extension/size validation, generated storage names, private disk, cleanup on transaction failure, and authorized download routes.
-- [x] Extend the ProductForm using existing UI tokens. Show standard cost and calculated expected margin only to permitted internal roles; calculate from the approved cost and current applicable selling price.
-- [x] Run focused backend and SPA tests plus `cd spa && npm run build`.
-- [x] Commit only Task 3 files with `feat: add product specifications and image gallery`.
+- [ ] Write API tests for required specification fields on catalog-visible products, multiple image storage/order, legacy primary-image backfill, private download tenancy/permission, and blueprint-required publish behavior.
+- [ ] Run `cd api && php artisan test --filter='ProductSpecificationGallery|ProductBlueprint'`; confirm expected failures.
+- [ ] Write form/detail component tests for specification sections, image gallery upload/order/main image, validation errors, and blueprint upload; run the named Vitest files and confirm expected failures.
+- [ ] Add additive schema and model relationships. Backfill current `products.image_path` rows into the image-gallery table with a stable primary position; keep the old image resource field as a compatibility alias during migration.
+- [ ] Implement uploads with strict MIME/extension/size validation, generated storage names, private disk, cleanup on transaction failure, and authorized download routes.
+- [ ] Extend the ProductForm using existing UI tokens. Show standard cost and calculated expected margin only to permitted internal roles; calculate from the approved cost and current applicable selling price.
+- [ ] Run focused backend and SPA tests plus `cd spa && npm run build`.
+- [ ] Commit only Task 3 files with `feat: add product specifications and image gallery`.
 
 ### Task 4: Customer agreement catalog, warranty choices, and order limits
 
@@ -192,15 +192,15 @@
 - Warranty options are keyed to customer+product and contain the full terms snapshot; a customer order line must select one offered option, and CRM snapshots those exact terms.
 - Payment terms are copied from customer defaults onto the sales order; authorized Sales may override per order. Customer portal sees the saved terms and cannot change them.
 
-- [x] Write API tests for strict customer-product access, multiple per-product warranty durations under one agreement, invalid warranty option rejection, order-line warranty snapshot, payment-term default/override, and no credit-limit gate.
-- [x] Write race-aware order tests for quantity equal to available, one unit over, zero eligible stock, reserved stock, QC-held stock, safety stock, and availability changing between catalog read and submission.
-- [x] Run `cd api && php artisan test --filter='CustomerWarrantyOptions|CustomerPortalOrderAvailability|CustomerPortalOrderSnapshot|CustomerPortalOrderTest'`; confirm expected failures.
-- [x] Write portal-order UI tests for image gallery, specs, allowed catalog, stock indicator, max quantity, warranty selector, price-request route for excess, readonly payment terms, and preserved form data after submission errors.
-- [x] Replace the single customer/product warranty override with additive multiple-option records; migrate each existing override to one equivalent option and preserve old order snapshots.
-- [x] Implement the server availability service by reusing CRM/Inventory eligible stock, lot QC, existing sales-order allocations/reservations, and safety-stock policy; lock/re-read availability inside the order transaction.
-- [x] Restrict the catalog to customer-authorized products. Add a request-price action for quantity above stock using the existing Price Request flow; do not create a new production-request record.
-- [x] Run API tests, portal Vitest, and `cd spa && npm run build`.
-- [x] Commit only Task 4 files with `feat: enforce customer agreement order options`.
+- [ ] Write API tests for strict customer-product access, multiple per-product warranty durations under one agreement, invalid warranty option rejection, order-line warranty snapshot, payment-term default/override, and no credit-limit gate.
+- [ ] Write race-aware order tests for quantity equal to available, one unit over, zero eligible stock, reserved stock, QC-held stock, safety stock, and availability changing between catalog read and submission.
+- [ ] Run `cd api && php artisan test --filter='CustomerWarrantyOptions|CustomerPortalOrderAvailability|CustomerPortalOrderSnapshot|CustomerPortalOrderTest'`; confirm expected failures.
+- [ ] Write portal-order UI tests for image gallery, specs, allowed catalog, stock indicator, max quantity, warranty selector, price-request route for excess, readonly payment terms, and preserved form data after submission errors.
+- [ ] Replace the single customer/product warranty override with additive multiple-option records; migrate each existing override to one equivalent option and preserve old order snapshots.
+- [ ] Implement the server availability service by reusing CRM/Inventory eligible stock, lot QC, existing sales-order allocations/reservations, and safety-stock policy; lock/re-read availability inside the order transaction.
+- [ ] Restrict the catalog to customer-authorized products. Add a request-price action for quantity above stock using the existing Price Request flow; do not create a new production-request record.
+- [ ] Run API tests, portal Vitest, and `cd spa && npm run build`.
+- [ ] Commit only Task 4 files with `feat: enforce customer agreement order options`.
 
 ### Task 5: Order deposits, customer advances, and production release gate
 
@@ -243,15 +243,15 @@
 - `SalesOrderAdvanceService::waive(SalesOrderAdvance $advance, string $reason, User $financeUser): SalesOrderAdvance` records an audited waiver without posting cash.
 - `SalesOrderAdvanceService::applyToInvoice(SalesOrder $order, Invoice $invoice, User $systemActor): list<SalesOrderAdvanceApplication>` applies only the unapplied verified amount, with a balanced liability-to-AR journal and invoice balance update.
 
-- [x] Write failing tests for fixed and percentage deposits, amount cap, proof validation, tenant ownership, repeat submission, Finance verify/reject/waive, correct liability posting, exact invoice application, cancellation/refund guard, and zero duplicate posting under concurrent verification/application.
-- [x] Run `cd api && php artisan test --filter='SalesOrderAdvanceLifecycle|SalesOrderAdvanceAccounting|SalesOrderAdvanceConcurrency'`; confirm expected failures.
-- [x] Write UI tests for optional fixed/percentage deposit setup, customer proof upload, pending/verified/waived states, Finance review, and production hold messaging; confirm failures with the named Vitest tests.
-- [x] Add and validate a postable liability account setting. Reuse existing private proof upload, MIME checks, idempotency, cash/bank account policy, `JournalEntryService`, and notifications where possible; do not reuse invoice balance collection as if the deposit were an invoice payment.
-- [x] Gate MRP/production release after Sales confirmation until the required advance is verified or Finance waives it. Releasing after payment must be idempotent and must not duplicate `SalesOrderConfirmed` events/work orders.
-- [x] When standard sales invoices are finalized, apply verified advances in order, lock both advance and invoice in a consistent order, post liability-to-AR journals, and update balance/amount-paid without recognizing revenue twice. Preserve a full audit trail and show applied amounts in statements/resources.
-- [x] Prevent order cancellation/closure when a verified advance remains unapplied; expose an audited Finance refund/resolution action that reverses the liability posting and retains proof/reference.
-- [x] Run focused CRM/Accounting/B2B tests, existing `InvoicePaymentSubmission*` tests, order-chain tests, and SPA tests; run the full API/SPA suite before this task is committed.
-- [x] Commit only Task 5 files with `feat: add customer advance verification and application`.
+- [ ] Write failing tests for fixed and percentage deposits, amount cap, proof validation, tenant ownership, repeat submission, Finance verify/reject/waive, correct liability posting, exact invoice application, cancellation/refund guard, and zero duplicate posting under concurrent verification/application.
+- [ ] Run `cd api && php artisan test --filter='SalesOrderAdvanceLifecycle|SalesOrderAdvanceAccounting|SalesOrderAdvanceConcurrency'`; confirm expected failures.
+- [ ] Write UI tests for optional fixed/percentage deposit setup, customer proof upload, pending/verified/waived states, Finance review, and production hold messaging; confirm failures with the named Vitest tests.
+- [ ] Add and validate a postable liability account setting. Reuse existing private proof upload, MIME checks, idempotency, cash/bank account policy, `JournalEntryService`, and notifications where possible; do not reuse invoice balance collection as if the deposit were an invoice payment.
+- [ ] Gate MRP/production release after Sales confirmation until the required advance is verified or Finance waives it. Releasing after payment must be idempotent and must not duplicate `SalesOrderConfirmed` events/work orders.
+- [ ] When standard sales invoices are finalized, apply verified advances in order, lock both advance and invoice in a consistent order, post liability-to-AR journals, and update balance/amount-paid without recognizing revenue twice. Preserve a full audit trail and show applied amounts in statements/resources.
+- [ ] Prevent order cancellation/closure when a verified advance remains unapplied; expose an audited Finance refund/resolution action that reverses the liability posting and retains proof/reference.
+- [ ] Run focused CRM/Accounting/B2B tests, existing `InvoicePaymentSubmission*` tests, order-chain tests, and SPA tests; run the full API/SPA suite before this task is committed.
+- [ ] Commit only Task 5 files with `feat: add customer advance verification and application`.
 
 ### Task 6: Supplier agreement access, listing images, and invoice evidence
 
@@ -279,14 +279,14 @@
 - Invoice attachment accepts PDF/JPEG/PNG under the current 10 MiB policy and remains optional; existing bill review and three-way matching behavior is unchanged.
 - Supplier agreements use Task 2's template and signature services with supplier-specific ownership and signatory flags.
 
-- [x] Write backend tests for supplier tenant isolation, image MIME/size enforcement, private download, invoice attachment persistence, and existing supplier invoice lifecycle unchanged.
-- [x] Run `cd api && php artisan test --filter='SupplierListingImage|SupplierInvoiceEvidence|SupplierInvoiceSubmission'`; confirm expected failures.
-- [x] Write supplier listing/invoice UI tests for fallback catalog image, supplier image upload, invoice file selection, and retained error state; run focused Vitest and confirm failures.
-- [x] Implement listing-level image storage and authenticated view/delete routes; preserve existing listing approval transitions.
-- [x] Connect optional invoice image/PDF upload to the current `SupplierInvoiceService`; do not weaken required invoice number, amount, date, and PO/GRN validation.
-- [x] Add the supplier contract panel, mapped-template auto-fill, and authorized signature status from Task 2.
-- [x] Run focused API and SPA tests, `cd spa && npm run build`, and existing supplier cross-tenant/invoice tests.
-- [x] Commit only Task 6 files with `feat: add supplier listing and invoice evidence`.
+- [ ] Write backend tests for supplier tenant isolation, image MIME/size enforcement, private download, invoice attachment persistence, and existing supplier invoice lifecycle unchanged.
+- [ ] Run `cd api && php artisan test --filter='SupplierListingImage|SupplierInvoiceEvidence|SupplierInvoiceSubmission'`; confirm expected failures.
+- [ ] Write supplier listing/invoice UI tests for fallback catalog image, supplier image upload, invoice file selection, and retained error state; run focused Vitest and confirm failures.
+- [ ] Implement listing-level image storage and authenticated view/delete routes; preserve existing listing approval transitions.
+- [ ] Connect optional invoice image/PDF upload to the current `SupplierInvoiceService`; do not weaken required invoice number, amount, date, and PO/GRN validation.
+- [ ] Add the supplier contract panel, mapped-template auto-fill, and authorized signature status from Task 2.
+- [ ] Run focused API and SPA tests, `cd spa && npm run build`, and existing supplier cross-tenant/invoice tests.
+- [ ] Commit only Task 6 files with `feat: add supplier listing and invoice evidence`.
 
 ### Task 7: Driver eligibility, shipment filters, warehouse labels, and defect evidence
 
@@ -325,16 +325,16 @@
 - Dispatch enters total shipment weight on the delivery because product master data has no weight field.
 - Inspection defect evidence records category/Other text, Minor/Major/Critical severity, affected quantity, notes, and private photo references, linked to the inspection and received item.
 
-- [x] Write API tests for expired/inactive driver rejection, overlapping assignment, inactive vehicle, under/over capacity, missing ship-to pin, custom date filters, defect severity/evidence ownership, and file MIME/size limits.
-- [x] Run `cd api && php artisan test --filter='DriverAvailabilityCapacity|ShipmentDateFilter|InspectionDefectPhotoSeverity'`; confirm expected failures.
-- [x] Write UI tests for driver credential status, shipment weight/capacity error, date presets/custom range, warehouse names/status descriptions, and defect image/severity display/upload.
-- [x] Add driver credential and delivery weight persistence. Store only the credential data required by the approved scope; keep the user credential record separate from unrelated HR fields.
-- [x] Enforce availability and capacity in `DeliveryService::assign` under the delivery/driver/vehicle lock, not only in the form options. Reuse existing vehicle status and delivery state definitions.
-- [x] Add shipment filters for 7/30/90-day presets and an inclusive custom range with server-side date validation.
-- [x] Add defect evidence rows and authorized private upload/download endpoints. Link them to existing inspection/NCR records without changing IATF release or acceptance decisions.
-- [x] Clarify warehouse copy with current schema terms (warehouse, zone, location/bin; available, reserved, held/QC, damaged) without changing schema/status semantics.
-- [x] Run focused Supply Chain, Quality, Inventory, and SPA tests, then `cd spa && npm run build`.
-- [x] Commit only Task 7 files with `feat: enforce delivery readiness and capture defect evidence` (`c6b875f4`).
+- [ ] Write API tests for expired/inactive driver rejection, overlapping assignment, inactive vehicle, under/over capacity, missing ship-to pin, custom date filters, defect severity/evidence ownership, and file MIME/size limits.
+- [ ] Run `cd api && php artisan test --filter='DriverAvailabilityCapacity|ShipmentDateFilter|InspectionDefectPhotoSeverity'`; confirm expected failures.
+- [ ] Write UI tests for driver credential status, shipment weight/capacity error, date presets/custom range, warehouse names/status descriptions, and defect image/severity display/upload.
+- [ ] Add driver credential and delivery weight persistence. Store only the credential data required by the approved scope; keep the user credential record separate from unrelated HR fields.
+- [ ] Enforce availability and capacity in `DeliveryService::assign` under the delivery/driver/vehicle lock, not only in the form options. Reuse existing vehicle status and delivery state definitions.
+- [ ] Add shipment filters for 7/30/90-day presets and an inclusive custom range with server-side date validation.
+- [ ] Add defect evidence rows and authorized private upload/download endpoints. Link them to existing inspection/NCR records without changing IATF release or acceptance decisions.
+- [ ] Clarify warehouse copy with current schema terms (warehouse, zone, location/bin; available, reserved, held/QC, damaged) without changing schema/status semantics.
+- [ ] Run focused Supply Chain, Quality, Inventory, and SPA tests, then `cd spa && npm run build`.
+- [ ] Commit only Task 7 files with `feat: enforce delivery readiness and capture defect evidence`.
 
 ### Task 8: Portal walkthroughs and order feedback
 
@@ -358,34 +358,28 @@
 - Walkthroughs are realm-specific, skippable, replayable from a persistent Help control, and keyed by portal-user hash plus guide version. Do not store authentication material in local storage.
 - `CustomerOrderFeedback` is one rating (1–5) plus optional comment per delivered order, scoped to its owning customer and visible only to staff initially.
 
-- [x] Write API tests for customer ownership, delivered-order eligibility, one feedback per order, rating bounds, comment length, and private staff visibility.
-- [x] Write component tests for first-run, skip, completed, replay, route changes, and mobile layout for both portal realms.
-- [x] Implement realm-specific guides for every customer/supplier navigation area and the primary actions on each page. Keep tours skippable and expose replay in the shared portal help control.
-- [x] Add order-linked rating/comment UI after delivery and an internal staff view; do not show feedback to suppliers or other customers.
-- [x] Run focused B2B tests, portal Vitest, keyboard/a11y checks, and `cd spa && npm run build`.
-- [x] Commit only Task 8 files with `feat: add portal onboarding and order feedback` (`6cba3494`).
+- [ ] Write API tests for customer ownership, delivered-order eligibility, one feedback per order, rating bounds, comment length, and private staff visibility.
+- [ ] Write component tests for first-run, skip, completed, replay, route changes, and mobile layout for both portal realms.
+- [ ] Implement realm-specific guides for every customer/supplier navigation area and the primary actions on each page. Keep tours skippable and expose replay in the shared portal help control.
+- [ ] Add order-linked rating/comment UI after delivery and an internal staff view; do not show feedback to suppliers or other customers.
+- [ ] Run focused B2B tests, portal Vitest, keyboard/a11y checks, and `cd spa && npm run build`.
+- [ ] Commit only Task 8 files with `feat: add portal onboarding and order feedback`.
 
 ### Task 9: Integrated regression and documentation
 
 **Files:**
 - Create: `api/tests/Feature/E2E/PortalOrderAgreementDeliveryFlowTest.php`
 - Create: `spa/e2e/portal-customer-order-flow.spec.ts`
-- Modify: `spa/src/pages/accounting/portal-access.tsx` and its invitation tests to honor the user's manual-entry clarification.
-- Modify: `spa/src/lib/echo.ts`, `spa/vitest.config.ts`; create `spa/src/lib/echo.test.ts` for the Pusher module-shape defect found in full-suite verification.
-- Modify: `spa/e2e-real/helpers.ts` and add `spa/e2e-real/portal-walkthrough.spec.ts` for generated role credentials and real customer/supplier first-run walkthroughs.
-- Modify: `api/tests/Support/PreparesDeliveryShipment.php` to provide the required dispatch weight and vehicle capacity to shared dispatch fixtures; add `api/scripts/.gitkeep` so the guarded E2E scripts bind mount has a mount point.
 - Modify: `docs/PROCESS-FLOWS.md`
 - Modify: `docs/USER-MANUAL.md`
 - Modify: `docs/README.md`
 - Modify: this implementation plan to check completed steps and record evidence.
 
-- [x] Add a cross-module API regression connecting customer portal order submission, customer-wide payment terms, selected warranty snapshot, private bank proof and Finance verification, one-time production release, delivered-order feedback, and one-time advance application to a finalized invoice. Keep contract signing and physical dispatch lifecycles in their focused feature suites so those critical workflows retain their own setup and failure diagnostics.
-- [x] Add Chromium coverage for mobile customer feedback and customer/supplier first-run guide skip/replay. Existing customer portal tests cover order entry and supplier workflow tests cover supplier portal interactions; no live payment is submitted by browser tests.
-- [x] Correct portal invitations per the user's clarification: selecting a customer/vendor links the portal user, while the invitee's name and email are manually entered every time.
-- [x] Fix lazy Pusher resolution for both function-default and namespace-object module exports, with a regression test. Exclude `spa/e2e-process` Playwright specs from Vitest discovery.
-- [x] Run focused API groups serially against `ogami_test` with no concurrent PHPUnit process; never share `ogami_test` across simultaneous `RefreshDatabase` suites. Focused groups passed during Tasks 7–9.
-- [x] Run targeted verification for changed workflows only, per the user's final testing scope: focused API groups passed (99 tests, 532 assertions); customer and supplier real-backend headless walkthroughs passed (2/2); E2E TypeScript and targeted ESLint passed; the E2E Docker build also completed its Vite production build. Do not rerun unrelated repository-wide suites; their earlier outcomes remain recorded in the SDD ledger.
-- [x] Rehearse migrations up/down/up on a disposable PostgreSQL database with legacy customer locations, a single-image product, and a one-row warranty override. The address and source image/terms remained intact; coordinates stayed null; one image and one warranty option were backfilled after re-up. Removed the migrated option before rollback, consistent with the migration's fail-closed data-retention guard.
-- [x] Review file privacy, cross-tenant access, role/permission matrices, audit rows, transaction boundaries, race handling, and user-visible loading/error/empty states against the focused API, SPA, and Chromium checks. Full-suite failures remain recorded separately.
-- [x] Update `docs/README.md`, the user manual, and process flow with the shipped behavior and known operational setup (PDFtk binary, liability account configuration, map pin completion).
-- [x] Commit only Task 9 files with `docs: document portal workflow improvements`.
+- [ ] Add one end-to-end backend flow: configure customer and authorized signer; create/fill/sign the PDF agreement; restrict catalog; select warranty; submit an order with terms, deposit, and blueprint; verify deposit; prove MRP release exactly once; fulfill, deliver, apply the advance to invoice, verify bank proof, and collect feedback.
+- [ ] Add a browser flow for customer order/inventory/warranty/deposit/feedback and supplier sign/listing image/invoice evidence. Use isolated test accounts and no live payment submission.
+- [ ] Run focused feature groups serially against an isolated PostgreSQL test database; never share `ogami_test` across simultaneous `RefreshDatabase` suites.
+- [ ] Run `cd spa && npm run test:run`, `cd spa && npm run build`, and `make test`. Run browser tests in Chromium for geometry/screenshots and Lightpanda only for DOM-only audits.
+- [ ] Run migration up/down/up on a disposable database containing legacy customer locations, single-image products, one-row warranty overrides, old invoices/collections, supplier listings, and inspections. Preserve all prior values and verify no guessed location data or duplicate ledger posting.
+- [ ] Review file privacy, cross-tenant access, role/permission matrices, audit rows, transaction boundaries, race handling, and all user-visible loading/error/empty states. Fix failures before completion.
+- [ ] Update `docs/README.md`, the user manual, and process flow with the shipped behavior and known operational setup (PDFtk binary, liability account configuration, map pin completion).
+- [ ] Commit only Task 9 files with `docs: document portal workflow improvements`.

@@ -67,6 +67,7 @@ export interface CustomerTermsSnapshot {
   allowed_payment_methods: Array<'cash' | 'check' | 'bank_transfer'> | null;
   shipping_payer: 'customer' | 'company' | null;
   payment_terms_days: number;
+  requested_payment_terms_days?: number;
   delivery_terms: string | null;
   incoterm: string | null;
   warranty_defaults: WarrantyTermsSnapshot | null;

@@ -15,7 +15,7 @@ vi.mock('react-router-dom', async (original) => ({ ...(await original<typeof imp
 vi.mock('@/api/supply-chain', () => ({
   deliveriesApi: {
     show: vi.fn(), updateStatus: vi.fn(), shipmentPlan: vi.fn(), confirm: vi.fn(),
-    driverOptions: vi.fn().mockResolvedValue([{ id: 'driver-1', name: 'Nestor Flores' }]),
+    driverOptions: vi.fn().mockResolvedValue([{ id: 'driver-1', name: 'Nestor Flores', credential_status: 'valid' }]),
     options: vi.fn().mockResolvedValue({ statuses: [
       { value: 'scheduled', label: 'Scheduled', next_status: 'loading' },
       { value: 'loading', label: 'Loading', next_status: 'in_transit' },
@@ -57,6 +57,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 beforeEach(() => {
+  vi.mocked(deliveriesApi.driverOptions).mockResolvedValue([{ id: 'driver-1', name: 'Nestor Flores', credential_status: 'valid' }]);
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:loading-preview');
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 });
@@ -121,6 +122,17 @@ it('requires complete shipment details and loading photo before dispatch', async
     shipment_weight_kg: '500.00', vehicle_id: 'truck-1', driver_id: 'driver-1', reason: 'Initial shipment arrangement.', dispatch: true, loading_photo: photo,
   }));
   expect(deliveriesApi.updateStatus).not.toHaveBeenCalled();
+});
+it('blocks drivers whose license credential is missing', async () => {
+  vi.mocked(deliveriesApi.driverOptions).mockResolvedValue([
+    { id: 'driver-1', name: 'Nestor Flores', credential_status: 'missing' },
+  ]);
+  show(delivery);
+  fireEvent.click(await screen.findByRole('button', { name: 'Arrange shipment' }));
+
+  expect(await screen.findByRole('option', { name: /Nestor Flores · license credential required/ })).toBeDisabled();
+  expect(screen.getByText(/No assignable driver has a current license credential/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save plan' })).toBeDisabled();
 });
 it('shows vehicle payload capacity and blocks an overweight shipment plan', async () => {
   vi.mocked(vehiclesApi.list).mockResolvedValue({
@@ -202,6 +214,7 @@ it('rejects oversized loading photos', async () => {
 });
 it('completes legacy loading shipments with retained assignment and saved loading evidence', async () => {
   vi.mocked(deliveriesApi.shipmentPlan).mockResolvedValue({ ...assigned, status: 'in_transit', proofs: [loadingPhoto] });
+  vi.mocked(deliveriesApi.driverOptions).mockResolvedValue([]);
   show({ ...assigned, status: 'loading', proofs: [loadingPhoto] });
   fireEvent.click(await screen.findByRole('button', { name: 'Arrange shipment' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Dispatch shipment' })).toBeEnabled());

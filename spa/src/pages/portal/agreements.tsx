@@ -73,6 +73,11 @@ export default function PortalAgreementsPage({ realm }: PortalAgreementsPageProp
               <li key={document.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="break-words text-sm font-medium text-primary">{document.file_name}</p>
+                  {document.purpose === 'price_agreement_termination' && (
+                    <p className="mt-1 text-xs text-warning-fg">
+                      Price agreement change · Signing this document updates the agreement terms shown in your account.
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-muted">
                     {document.issued_at ? `Issued ${formatDateTime(document.issued_at)}` : 'Issued by your account manager'}
                     {document.signed_name ? ` · Signed by ${document.signed_name}` : ''}

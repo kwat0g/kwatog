@@ -65,10 +65,10 @@ export default function PortalChangePasswordPage() {
   };
 
   return (
-    <Panel title="Set your portal password">
-      <p className="mb-4 text-sm text-muted">Your temporary password must be replaced before you can continue.</p>
+    <Panel title="Change portal password">
+      <p className="mb-4 text-sm text-muted">Enter your current password, or the temporary password from your invitation on first sign-in. You will be signed out after saving.</p>
       <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
-        <Input type="password" label="Temporary password" autoComplete="current-password" value={current} onChange={(event) => setCurrent(event.target.value)} />
+        <Input type="password" label="Current password" autoComplete="current-password" value={current} onChange={(event) => setCurrent(event.target.value)} />
         <Input type="password" label="New password" autoComplete="new-password" minLength={minimumLength} value={password} onChange={(event) => setPassword(event.target.value)} />
         <PasswordStrength password={password} minimumLength={minimumLength} />
         <PasswordRequirements password={password} policy={policy} />

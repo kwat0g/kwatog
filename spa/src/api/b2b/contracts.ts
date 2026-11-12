@@ -22,7 +22,8 @@ export interface PortalAgreementDocument {
   file_size: number;
   uploaded_by?: string | null;
   uploaded_at?: string | null;
-  signature_status: 'draft' | 'pending' | 'signed';
+  signature_status: 'draft' | 'pending' | 'signed' | 'cancelled';
+  purpose?: 'customer_agreement' | 'price_agreement_termination';
   issued_by?: string | null;
   issued_at?: string | null;
   signed_by?: string | null;
@@ -108,9 +109,15 @@ export const portalContractsApi = {
     client.post<ApiSuccess<PortalAgreementDocument>>(`/b2b/portal-access/suppliers/${vendorId}/agreement-documents/${documentId}/issue`)
       .then((response) => response.data.data),
 
-  issueSupplierTemplate: (vendorId: string, templateId: string) => {
+  issueSupplierTemplate: (
+    vendorId: string,
+    templateId: string,
+    dates: { effective_date?: string; expiry_date?: string } = {},
+  ) => {
     const form = new FormData();
     form.append('template_id', templateId);
+    if (dates.effective_date) form.append('effective_date', dates.effective_date);
+    if (dates.expiry_date) form.append('expiry_date', dates.expiry_date);
     return client.post<ApiSuccess<PortalAgreementDocument>>(`/b2b/portal-access/suppliers/${vendorId}/agreement-documents`, form)
       .then((response) => response.data.data);
   },

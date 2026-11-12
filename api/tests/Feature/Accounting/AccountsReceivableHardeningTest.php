@@ -87,6 +87,8 @@ class AccountsReceivableHardeningTest extends TestCase
 
         $response = $this->actingAs($admin)->postJson('/api/v1/customers', [
             'name' => 'Generated-code Customer',
+            'delivery_latitude' => '14.2500000',
+            'delivery_longitude' => '121.1000000',
         ])->assertCreated();
 
         $this->assertMatchesRegularExpression(
@@ -119,6 +121,7 @@ class AccountsReceivableHardeningTest extends TestCase
         ], $by);
 
         $service->approvePrebill($draft, $this->admin());
+
         return $service->finalize($draft, $this->admin());
     }
 
@@ -310,7 +313,7 @@ class AccountsReceivableHardeningTest extends TestCase
             $this->actingAs($user)
                 ->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', [
                     'manual_reason' => 'Verified collection test exception',
-                'cash_account_id' => $cashAccount,
+                    'cash_account_id' => $cashAccount,
                     'collection_date' => '2026-04-05',
                     'amount' => $amount,
                     'payment_method' => 'cash',
@@ -331,7 +334,7 @@ class AccountsReceivableHardeningTest extends TestCase
 
         $this->actingAs($user)->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', [
             'manual_reason' => 'Verified collection test exception',
-                'cash_account_id' => $cashAccount,
+            'cash_account_id' => $cashAccount,
             'collection_date' => '2026-04-05',
             'amount' => '400.00',
             'payment_method' => 'cash',
@@ -350,7 +353,7 @@ class AccountsReceivableHardeningTest extends TestCase
         $cashAccount = Account::query()->where('code', '1010')->firstOrFail()->hash_id;
         $payload = [
             'manual_reason' => 'Verified collection test exception',
-                'cash_account_id' => $cashAccount,
+            'cash_account_id' => $cashAccount,
             'collection_date' => '2026-04-05',
             'amount' => '400.00',
             'payment_method' => 'cash',
@@ -455,15 +458,16 @@ class AccountsReceivableHardeningTest extends TestCase
         $attempt = 0;
         $collect = function (string $amount) use ($user, $invoice, $cashAccount, &$attempt) {
             $attempt++;
+
             return $this->actingAs($user)
-            ->postJson('/api/v1/invoices/'.$invoice->fresh()->hash_id.'/collections', [
-                'manual_reason' => 'Verified collection test exception',
-                'cash_account_id' => $cashAccount,
-                'collection_date' => '2026-04-05',
-                'amount' => $amount,
-                'payment_method' => 'cash',
-                'idempotency_key' => 'ar-payment-application-'.$attempt,
-            ]);
+                ->postJson('/api/v1/invoices/'.$invoice->fresh()->hash_id.'/collections', [
+                    'manual_reason' => 'Verified collection test exception',
+                    'cash_account_id' => $cashAccount,
+                    'collection_date' => '2026-04-05',
+                    'amount' => $amount,
+                    'payment_method' => 'cash',
+                    'idempotency_key' => 'ar-payment-application-'.$attempt,
+                ]);
         };
 
         $collect('1500.00')->assertStatus(422);

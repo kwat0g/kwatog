@@ -513,6 +513,17 @@ class SalesOrderService
             $vat = $quote['vat_amount'];
             $total = $quote['total_amount'];
 
+            $customerTermsSnapshot = $this->customerTermsSnapshot(
+                $customer,
+                $orderDate->toDateString(),
+                $paymentTermsDays,
+                $data['delivery_terms'] ?? null,
+                $data['incoterm'] ?? null,
+            );
+            if (($data['submission_source'] ?? 'internal') === 'customer_portal') {
+                $customerTermsSnapshot['requested_payment_terms_days'] = $paymentTermsDays;
+            }
+
             $so = SalesOrder::create([
                 'so_number' => $this->sequences->generate('sales_order'),
                 'customer_id' => $customerId,
@@ -524,13 +535,7 @@ class SalesOrderService
                     ? SalesOrderStatus::AwaitingConfirmation->value : SalesOrderStatus::Draft->value,
                 'payment_terms_days' => $paymentTermsDays,
                 'payment_method' => $paymentMethod,
-                'customer_terms_snapshot' => $this->customerTermsSnapshot(
-                    $customer,
-                    $orderDate->toDateString(),
-                    $paymentTermsDays,
-                    $data['delivery_terms'] ?? null,
-                    $data['incoterm'] ?? null,
-                ),
+                'customer_terms_snapshot' => $customerTermsSnapshot,
                 'delivery_terms' => $data['delivery_terms'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'incoterm' => $data['incoterm'] ?? null,
@@ -699,13 +704,19 @@ class SalesOrderService
                     : $lockedSo->notes,
             ];
             if ($customerSnapshotChanged) {
-                $updates['customer_terms_snapshot'] = $this->customerTermsSnapshot(
+                $customerTermsSnapshot = $this->customerTermsSnapshot(
                     $customer,
                     $orderDate->toDateString(),
                     (int) ($data['payment_terms_days'] ?? $lockedSo->payment_terms_days),
                     array_key_exists('delivery_terms', $data) ? $data['delivery_terms'] : $lockedSo->delivery_terms,
                     array_key_exists('incoterm', $data) ? $data['incoterm'] : $lockedSo->incoterm?->value,
                 );
+                if ($customerActor !== null) {
+                    $customerTermsSnapshot['requested_payment_terms_days'] = (int) ($data['payment_terms_days'] ?? $lockedSo->payment_terms_days);
+                } elseif (isset($lockedSo->customer_terms_snapshot['requested_payment_terms_days'])) {
+                    $customerTermsSnapshot['requested_payment_terms_days'] = (int) $lockedSo->customer_terms_snapshot['requested_payment_terms_days'];
+                }
+                $updates['customer_terms_snapshot'] = $customerTermsSnapshot;
             }
             $lockedSo->update($updates);
 
@@ -756,6 +767,33 @@ class SalesOrderService
             );
 
             return $this->show($fresh);
+        });
+    }
+
+    public function reviewCustomerPaymentTerms(SalesOrder $so, int $paymentTermsDays): SalesOrder
+    {
+        if ($paymentTermsDays < 0 || $paymentTermsDays > 365) {
+            throw ValidationException::withMessages(['payment_terms_days' => ['Use a whole number from 0 to 365 days.']]);
+        }
+
+        return DB::transaction(function () use ($so, $paymentTermsDays): SalesOrder {
+            $lockedSo = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
+            if ($lockedSo->submission_source !== SalesOrderSubmissionSource::CustomerPortal) {
+                throw new BusinessRuleException('Only customer portal orders have requested payment terms to review.');
+            }
+            if (! $lockedSo->status->isBeforeConfirmation()) {
+                throw new BusinessRuleException('Payment terms can only be reviewed before confirming the order.');
+            }
+
+            $snapshot = is_array($lockedSo->customer_terms_snapshot) ? $lockedSo->customer_terms_snapshot : [];
+            $snapshot['requested_payment_terms_days'] ??= (int) $lockedSo->payment_terms_days;
+            $snapshot['payment_terms_days'] = $paymentTermsDays;
+            $lockedSo->update([
+                'payment_terms_days' => $paymentTermsDays,
+                'customer_terms_snapshot' => $snapshot,
+            ]);
+
+            return $this->show($lockedSo->fresh());
         });
     }
 

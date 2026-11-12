@@ -35,8 +35,8 @@ function CustomerFormHarness({ withAddress = false }: { withAddress?: boolean })
 
   return (
     <FormProvider {...form}>
-      <form onSubmit={form.handleSubmit(() => undefined)}>
-        <CustomerForm requireWarrantyDefaults />
+      <form noValidate onSubmit={form.handleSubmit(() => undefined)}>
+        <CustomerForm />
         <button type="submit">Save customer</button>
       </form>
     </FormProvider>
@@ -58,6 +58,6 @@ describe('CRM customer delivery location form', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save customer' }));
 
-    expect(await screen.findByText('Pin the delivery address on the map.')).toBeTruthy();
+    expect(await screen.findByText('Select the delivery location on the map.')).toBeTruthy();
   });
 });

@@ -9,6 +9,7 @@ export interface SupplierPortalUser {
   name: string;
   email: string;
   must_change_password: boolean;
+  resends_remaining_today: number;
   is_authorized_signatory: boolean;
   is_active: boolean;
   status: 'active' | 'inactive' | 'locked' | 'pending';
@@ -25,6 +26,7 @@ export interface CustomerPortalUser {
   customer_id: string;
   customer_name: string | null;
   must_change_password: boolean;
+  resends_remaining_today: number;
   is_authorized_signatory: boolean;
   is_active: boolean;
   status: 'active' | 'inactive' | 'locked' | 'pending';
@@ -269,6 +271,8 @@ export interface PortalCatalogItem {
   is_customizable?: boolean;
   images?: Array<{ id: string; url: string; position: number; alt_text: string | null; is_primary: boolean }>;
   available_quantity?: string | null;
+  minimum_order_quantity?: string;
+  maximum_order_quantity?: string | null;
   availability_mode?: 'stock_limited' | 'make_to_order';
   warranty_options?: Array<{
     id: string;
@@ -816,8 +820,28 @@ export interface CustomerDashboardData {
   pending_delivery_count: number;
   open_invoice_count: number;
   total_outstanding: string;
+  product_terms?: CustomerAgreementProductTerms[];
   recent_orders: PortalSoSummary[];
   recent_invoices: PortalInvoiceSummary[];
   recent_deliveries: PortalDeliverySummary[];
   recent_complaints: PortalComplaint[];
+}
+
+export interface CustomerAgreementProductTerms {
+  id: string;
+  part_number: string;
+  name: string;
+  unit_of_measure: string | null;
+  minimum_order_quantity: string;
+  maximum_order_quantity: string | null;
+  warranty_options: Array<{
+    id: string;
+    label: string;
+    warranty_duration_days: number | null;
+    warranty_report_window_days: number | null;
+    warranty_start_basis: 'delivery' | 'invoice' | null;
+    warranty_covered_issues: string[] | null;
+    warranty_remedies: string[] | null;
+    additional_terms: string | null;
+  }>;
 }

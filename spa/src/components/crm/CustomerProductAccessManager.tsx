@@ -8,12 +8,19 @@ import { Select } from '@/components/ui/Select';
 import { crmCustomersApi } from '@/api/crm/customers';
 import { usePermission } from '@/hooks/usePermission';
 
+function integerOrderQuantity(value: string | null | undefined, fallback: string): string {
+  if (value == null || value === '') return fallback;
+  const normalized = value.trim();
+  return /^\d+(?:\.0+)?$/.test(normalized) ? String(Number(normalized)) : normalized;
+}
+
 export function CustomerProductAccessManager({ customerId }: { customerId: string }) {
   const queryClient = useQueryClient();
   const { can } = usePermission();
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<'standard' | 'restricted'>('restricted');
   const [productIds, setProductIds] = useState<string[]>([]);
+  const [limits, setLimits] = useState<Record<string, { minimum: string; maximum: string }>>({});
   const query = useQuery({
     queryKey: ['crm', 'customers', customerId, 'product-access'],
     queryFn: () => crmCustomersApi.productAccess(customerId),
@@ -23,7 +30,20 @@ export function CustomerProductAccessManager({ customerId }: { customerId: strin
     if (!query.data) return;
     setMode(query.data.portal_catalog_mode);
     setProductIds(query.data.product_ids);
+    setLimits(Object.fromEntries(query.data.products.map((product) => [product.id, {
+      minimum: integerOrderQuantity(product.minimum_order_quantity, '1'),
+      maximum: integerOrderQuantity(product.maximum_order_quantity, ''),
+    }])));
   }, [query.data]);
+
+  const orderLimitsSupported = query.data?.order_limits_supported === true;
+  const invalidLimits = orderLimitsSupported && productIds.some((productId) => {
+    const limit = limits[productId] ?? { minimum: '1', maximum: '' };
+    const minimum = Number(limit.minimum);
+    const maximum = limit.maximum === '' ? null : Number(limit.maximum);
+    return !/^\d+$/.test(limit.minimum) || !Number.isSafeInteger(minimum) || minimum < 1
+      || (maximum !== null && (!/^\d+$/.test(limit.maximum) || !Number.isSafeInteger(maximum) || maximum < minimum));
+  });
 
   const visibleProducts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
@@ -33,7 +53,18 @@ export function CustomerProductAccessManager({ customerId }: { customerId: strin
   }, [query.data?.products, search]);
 
   const save = useMutation({
-    mutationFn: () => crmCustomersApi.updateProductAccess(customerId, { portal_catalog_mode: mode, product_ids: productIds }),
+    mutationFn: () => crmCustomersApi.updateProductAccess(customerId, {
+      portal_catalog_mode: mode,
+      product_ids: productIds,
+      ...(orderLimitsSupported ? { product_order_limits: productIds.map((productId) => {
+        const limit = limits[productId] ?? { minimum: '1', maximum: '' };
+        return {
+          product_id: productId,
+          minimum_order_quantity: Number(limit.minimum),
+          maximum_order_quantity: limit.maximum === '' ? null : Number(limit.maximum),
+        };
+      }) } : {}),
+    }),
     onSuccess: (data) => {
       queryClient.setQueryData(['crm', 'customers', customerId, 'product-access'], data);
       void queryClient.invalidateQueries({ queryKey: ['crm', 'customers', 'detail', customerId] });
@@ -55,11 +86,11 @@ export function CustomerProductAccessManager({ customerId }: { customerId: strin
             Choose the catalog this customer can order from. New customer accounts start restricted until products are assigned.
           </p>
         </div>
-        {can('accounting.customers.manage') && <Button type="button" size="sm" disabled={save.isPending || query.isLoading} onClick={() => save.mutate()}>
+        {can('accounting.customers.manage') && <Button type="button" size="sm" disabled={save.isPending || query.isLoading || invalidLimits} onClick={() => save.mutate()}>
           {save.isPending ? 'Saving…' : 'Save access'}
         </Button>}
       </div>
-      {query.isError ? <p role="alert" className="text-sm text-danger-fg">Could not load product access.</p> : query.isLoading ? (
+      {query.isError ? <p role="alert" className="text-sm text-danger-fg">Could not load product access.</p> : query.isPending || !query.data ? (
         <p role="status" className="text-sm text-muted">Loading customer catalog…</p>
       ) : (
         <div className="space-y-3">
@@ -88,6 +119,43 @@ export function CustomerProductAccessManager({ customerId }: { customerId: strin
             ))}
             {visibleProducts.length === 0 && <li className="px-3 py-5 text-center text-sm text-muted">No products match this search.</li>}
           </ul>
+          {query.data.order_limits_supported ? (
+            <section aria-labelledby="record-order-limits-heading" className="space-y-2">
+              <div>
+                <h5 id="record-order-limits-heading" className="text-sm font-semibold text-primary">Order quantity limits</h5>
+                <p className="text-xs text-muted">Limits apply to the total quantity of each selected product on one order.</p>
+              </div>
+              {productIds.length === 0 ? <p className="text-sm text-muted">Select products above to configure order limits.</p> : (
+                <ul aria-label="Selected product order limits" className="divide-y divide-default rounded-md border border-default bg-canvas">
+                  {query.data.products.filter((product) => productIds.includes(product.id)).map((product) => {
+                    const limit = limits[product.id] ?? { minimum: '1', maximum: '' };
+                    const minimum = Number(limit.minimum);
+                    const maximum = limit.maximum === '' ? null : Number(limit.maximum);
+                    const minimumError = !/^\d+$/.test(limit.minimum) || !Number.isSafeInteger(minimum) || minimum < 1;
+                    const maximumError = maximum !== null && (!/^\d+$/.test(limit.maximum) || !Number.isSafeInteger(maximum) || maximum < minimum);
+                    return (
+                      <li key={product.id} className="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,0.5fr)_minmax(8rem,0.5fr)] sm:items-end">
+                        <p className="pb-1 font-medium text-primary">{product.part_number} · {product.name}</p>
+                        <Input label={`Minimum order quantity for ${product.part_number}`} type="number" min={1} step={1}
+                          disabled={!can('accounting.customers.manage')} value={limit.minimum}
+                          error={minimumError ? 'Use a whole number of at least 1.' : undefined}
+                          onChange={(event) => setLimits((current) => ({ ...current, [product.id]: { ...limit, minimum: event.target.value } }))} />
+                        <Input label={`Maximum order quantity for ${product.part_number} (optional)`} type="number" min={minimum || 1} step={1}
+                          disabled={!can('accounting.customers.manage')} value={limit.maximum}
+                          error={maximumError ? 'Must be a whole number at least the minimum.' : undefined}
+                          onChange={(event) => setLimits((current) => ({ ...current, [product.id]: { ...limit, maximum: event.target.value } }))} />
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          ) : (
+            <p role="status" className="rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+              Per-customer quantity limits are not enabled in the current database yet.
+            </p>
+          )}
+          {invalidLimits && <p role="alert" className="text-sm text-danger-fg">Fix the selected product quantity limits before saving.</p>}
           <p className="text-xs text-muted">{productIds.length} restricted product{productIds.length === 1 ? '' : 's'} assigned.</p>
         </div>
       )}

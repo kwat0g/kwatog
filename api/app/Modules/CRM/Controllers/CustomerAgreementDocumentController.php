@@ -11,6 +11,9 @@ use App\Modules\B2B\Models\PortalContractTemplate;
 use App\Modules\B2B\Services\PortalContractPdfService;
 use App\Modules\B2B\Services\PortalContractSignatureService;
 use App\Modules\CRM\Models\CustomerAgreementDocument;
+use App\Modules\CRM\Models\CustomerProductWarrantyOption;
+use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Services\PriceAgreementTerminationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +26,7 @@ class CustomerAgreementDocumentController
     public function __construct(
         private readonly PortalContractPdfService $pdfs,
         private readonly PortalContractSignatureService $signatures,
+        private readonly PriceAgreementTerminationService $terminations,
     ) {}
 
     public function index(Customer $customer): JsonResponse
@@ -118,6 +122,7 @@ class CustomerAgreementDocumentController
         $documents = CustomerAgreementDocument::query()
             ->where('customer_id', $user->customer_id)
             ->whereIn('signature_status', ['pending', 'signed'])
+            ->whereNotNull('issued_at')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get()
@@ -143,7 +148,12 @@ class CustomerAgreementDocumentController
         $user = $this->portalUser($request);
         $data = $request->validate(['typed_name' => ['required', 'string', 'max:200']]);
         $record = $this->findCustomerPortalDocument($document, (int) $user->customer_id);
-        $signed = $this->signatures->signCustomerDocument($record, $user, $data['typed_name']);
+        $signed = DB::transaction(function () use ($record, $user, $data): CustomerAgreementDocument {
+            $signed = $this->signatures->signCustomerDocument($record, $user, $data['typed_name']);
+            $this->terminations->applySignedDocument($signed, $user);
+
+            return $signed;
+        });
 
         return response()->json(['data' => $this->serialize($signed)]);
     }
@@ -180,6 +190,14 @@ class CustomerAgreementDocumentController
     /** @return array<string, scalar|null> */
     private function customerValues(Customer $customer): array
     {
+        $latitude = $customer->delivery_latitude;
+        $longitude = $customer->delivery_longitude;
+        $mapPin = is_numeric($latitude) && is_numeric($longitude)
+            && (float) $latitude >= -90 && (float) $latitude <= 90
+            && (float) $longitude >= -180 && (float) $longitude <= 180
+                ? sprintf('%.7f, %.7f', (float) $latitude, (float) $longitude)
+                : null;
+
         return [
             'customer_name' => $customer->name,
             'customer_contact_name' => $customer->contact_person,
@@ -188,12 +206,154 @@ class CustomerAgreementDocumentController
             'customer_phone' => $customer->phone,
             'customer_address' => $customer->address,
             'delivery_address' => $customer->delivery_address,
+            'delivery_map_pin' => $mapPin,
             'payment_terms' => $customer->payment_terms_days === null ? null : $customer->payment_terms_days.' days',
+            'allowed_payment_methods' => $this->paymentMethodsSummary($customer),
+            'shipping_payer' => $customer->shipping_payer === null ? null : ucfirst($customer->shipping_payer),
             'effective_date' => $customer->agreement_starts_on?->format('Y-m-d'),
             'expiry_date' => $customer->agreement_ends_on?->format('Y-m-d'),
-            'allowed_products_summary' => null,
-            'warranty_summary' => null,
+            'allowed_products_summary' => $this->allowedProductsSummary($customer),
+            'warranty_summary' => $this->warrantySummary($customer),
         ];
+    }
+
+    private function paymentMethodsSummary(Customer $customer): ?string
+    {
+        if ($customer->allowed_payment_methods === null) {
+            return 'All supported payment methods';
+        }
+
+        $labels = ['cash' => 'Cash', 'check' => 'Check', 'bank_transfer' => 'Bank transfer'];
+        $methods = collect($customer->allowed_payment_methods)
+            ->map(static fn (string $method): ?string => $labels[$method] ?? null)
+            ->filter()
+            ->values();
+
+        return $methods->isEmpty() ? null : $methods->implode(', ');
+    }
+
+    private function allowedProductsSummary(Customer $customer): ?string
+    {
+        $products = $customer->portalProducts()
+            ->where('products.is_active', true)
+            ->get(['products.id', 'products.part_number', 'products.name'])
+            ->keyBy('id');
+
+        if ($customer->portal_catalog_mode === 'standard') {
+            $standardProducts = Product::query()
+                ->where('is_active', true)
+                ->where('portal_visibility', 'standard')
+                ->get(['id', 'part_number', 'name']);
+            $products = $products->union($standardProducts->keyBy('id'));
+        }
+
+        $summary = $products
+            ->sortBy(static fn (Product $product): string => $product->part_number)
+            ->map(static fn (Product $product): string => $product->part_number.' · '.$product->name)
+            ->values()
+            ->implode("\n");
+
+        return $summary === '' ? null : $summary;
+    }
+
+    private function warrantySummary(Customer $customer): ?string
+    {
+        $options = $customer->warrantyOptions()
+            ->with('product:id,part_number,name')
+            ->orderBy('product_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get();
+        $summaryRows = $options->map(fn (CustomerProductWarrantyOption $option): string => $this->warrantyOptionSummary($option));
+        $fallback = $this->fallbackWarrantySummary($customer);
+        if ($fallback !== null) {
+            $summaryRows->push('Customer fallback (only where no product option applies): '.$fallback);
+        }
+
+        $summary = $summaryRows->filter()->implode("\n");
+
+        return $summary === '' ? null : $summary;
+    }
+
+    private function warrantyOptionSummary(CustomerProductWarrantyOption $option): string
+    {
+        $product = $option->product;
+        $productLabel = $product ? $product->part_number.' · '.$product->name : 'Product';
+        $terms = [$option->label];
+        $terms[] = $option->warranty_duration_days === null
+            ? 'duration to be agreed'
+            : $option->warranty_duration_days.' days';
+        if ($option->warranty_start_basis !== null) {
+            $terms[] = 'from '.$option->warranty_start_basis;
+        }
+        if ($option->warranty_report_window_days !== null) {
+            $terms[] = 'report within '.$option->warranty_report_window_days.' days';
+        }
+
+        $issueLabels = [
+            'manufacturing_defect' => 'Manufacturing defect',
+            'shipping_damage' => 'Shipping damage',
+            'customer_caused_damage' => 'Customer-caused damage',
+        ];
+        $issues = collect($option->warranty_covered_issues ?? [])
+            ->map(static fn (string $issue): ?string => $issueLabels[$issue] ?? null)
+            ->filter()
+            ->values();
+        if ($issues->isNotEmpty()) {
+            $terms[] = 'covers '.$issues->implode(', ');
+        }
+
+        $remedyLabels = ['repair' => 'Repair', 'replace' => 'Replace', 'credit' => 'Credit', 'refund' => 'Refund'];
+        $remedies = collect($option->warranty_remedies ?? [])
+            ->map(static fn (string $remedy): ?string => $remedyLabels[$remedy] ?? null)
+            ->filter()
+            ->values();
+        if ($remedies->isNotEmpty()) {
+            $terms[] = 'remedies '.$remedies->implode(', ');
+        }
+        if (filled($option->additional_terms)) {
+            $terms[] = 'other terms: '.$option->additional_terms;
+        }
+
+        return $productLabel.': '.implode('; ', $terms).'.';
+    }
+
+    private function fallbackWarrantySummary(Customer $customer): ?string
+    {
+        $terms = [];
+        if ($customer->warranty_duration_days !== null) {
+            $terms[] = $customer->warranty_duration_days.' days';
+        }
+        if ($customer->warranty_start_basis !== null) {
+            $terms[] = 'from '.$customer->warranty_start_basis;
+        }
+        if ($customer->warranty_report_window_days !== null) {
+            $terms[] = 'report within '.$customer->warranty_report_window_days.' days';
+        }
+
+        $issueLabels = [
+            'manufacturing_defect' => 'Manufacturing defect',
+            'shipping_damage' => 'Shipping damage',
+            'customer_caused_damage' => 'Customer-caused damage',
+        ];
+        $issues = collect($customer->warranty_covered_issues ?? [])
+            ->map(static fn (string $issue): ?string => $issueLabels[$issue] ?? null)
+            ->filter()
+            ->values();
+        if ($issues->isNotEmpty()) {
+            $terms[] = 'covers '.$issues->implode(', ');
+        }
+
+        $remedyLabels = ['repair' => 'Repair', 'replace' => 'Replace', 'credit' => 'Credit', 'refund' => 'Refund'];
+        $remedies = collect($customer->warranty_remedies ?? [])
+            ->map(static fn (string $remedy): ?string => $remedyLabels[$remedy] ?? null)
+            ->filter()
+            ->values();
+        if ($remedies->isNotEmpty()) {
+            $terms[] = 'remedies '.$remedies->implode(', ');
+        }
+
+        return $terms === [] ? null : implode('; ', $terms).'.';
     }
 
     private function findCustomerPortalDocument(string $hash, int $customerId): CustomerAgreementDocument
@@ -208,6 +368,7 @@ class CustomerAgreementDocumentController
             ->whereKey($id)
             ->where('customer_id', $customerId)
             ->whereIn('signature_status', ['pending', 'signed'])
+            ->whereNotNull('issued_at')
             ->firstOrFail();
     }
 
@@ -253,6 +414,9 @@ class CustomerAgreementDocumentController
             'signed_name' => $document->signed_name,
             'signed_at' => $document->signed_at?->toIso8601String(),
             'template_version' => $document->template_version,
+            'purpose' => str_contains($document->file_path, '/price-terminations/')
+                ? 'price_agreement_termination'
+                : 'customer_agreement',
         ];
     }
 }

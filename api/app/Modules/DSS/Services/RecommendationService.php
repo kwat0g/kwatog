@@ -129,6 +129,7 @@ class RecommendationService
             'cross_module' => 'Connected workflows', 'approvals' => 'Approvals', 'production' => 'Production',
             'accounting' => 'Finance', 'quality' => 'Quality', 'maintenance' => 'Maintenance',
             'payroll' => 'Payroll', 'human_resources' => 'People and training', 'platform' => 'Master data',
+            'inventory' => 'Inventory',
         ];
 
         return [

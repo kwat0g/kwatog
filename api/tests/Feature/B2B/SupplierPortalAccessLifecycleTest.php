@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Events\PortalAccountAccessRevoked;
+use App\Modules\B2B\Mail\PortalAccessInvitationMail;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Services\PortalInvitationService;
 use Database\Seeders\RolePermissionSeeder;
@@ -81,6 +82,33 @@ class SupplierPortalAccessLifecycleTest extends TestCase
         $this->assertSame($vendorA->id, $existing->fresh()->vendor_id);
         $this->assertSame(1, SupplierPortalUser::withTrashed()
             ->whereRaw('LOWER(email) = ?', ['shared-contact@example.test'])->count());
+    }
+
+    public function test_sales_officer_cannot_invite_supplier_contacts_without_portal_access_permission(): void
+    {
+        $vendor = Vendor::factory()->create();
+
+        $this->actingAs($this->operator('sales_officer'))
+            ->postJson("/api/v1/b2b/portal-access/suppliers/{$vendor->hash_id}/invite", [
+                'name' => 'Supplier Contact',
+                'email' => 'supplier-contact@example.test',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_sales_officer_cannot_view_or_resend_supplier_portal_accounts(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->portalUser($vendor, 'supplier-pending@example.test', ['must_change_password' => true]);
+        $salesOfficer = $this->operator('sales_officer');
+
+        $this->actingAs($salesOfficer)
+            ->getJson('/api/v1/b2b/portal-access/suppliers')
+            ->assertForbidden();
+
+        $this->actingAs($salesOfficer)
+            ->postJson("/api/v1/b2b/portal-access/suppliers/{$user->hash_id}/resend")
+            ->assertForbidden();
     }
 
     public function test_invitation_is_case_insensitive_when_detecting_a_cross_vendor_conflict(): void
@@ -182,6 +210,65 @@ class SupplierPortalAccessLifecycleTest extends TestCase
             ->assertStatus(422);
 
         $this->assertFalse((bool) $user->fresh()->is_active);
+    }
+
+    public function test_supplier_resend_uses_the_latest_contact_name_and_email_from_vendor_record(): void
+    {
+        $vendor = Vendor::factory()->create([
+            'contact_person' => 'Updated Supplier Contact',
+            'email' => 'updated-contact@supplier.example',
+        ]);
+        $user = $this->portalUser($vendor, 'old-contact@supplier.example', ['must_change_password' => true]);
+
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/suppliers/{$user->hash_id}/resend")
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Updated Supplier Contact')
+            ->assertJsonPath('data.email', 'updated-contact@supplier.example');
+
+        $this->assertSame($user->id, $user->fresh()->id);
+        $this->assertSame('Updated Supplier Contact', $user->fresh()->name);
+        $this->assertSame('updated-contact@supplier.example', $user->fresh()->email);
+        Mail::assertQueued(PortalAccessInvitationMail::class, fn (PortalAccessInvitationMail $mail): bool =>
+            $mail->portalType === 'supplier'
+            && $mail->hasTo('updated-contact@supplier.example')
+            && ! $mail->hasTo('old-contact@supplier.example')
+        );
+    }
+
+    public function test_supplier_invitation_resends_are_limited_to_three_per_day(): void
+    {
+        $this->travelTo(now()->startOfDay()->addHours(9));
+        $vendor = Vendor::factory()->create();
+        $user = $this->portalUser($vendor, 'supplier-resend-limit@example.test', ['must_change_password' => true]);
+        $operator = $this->operator();
+        $url = "/api/v1/b2b/portal-access/suppliers/{$user->hash_id}/resend";
+
+        foreach ([2, 1, 0] as $remaining) {
+            $this->actingAs($operator)
+                ->postJson($url)
+                ->assertOk()
+                ->assertJsonPath('data.resends_remaining_today', $remaining);
+        }
+
+        $this->actingAs($operator)
+            ->postJson($url)
+            ->assertStatus(429)
+            ->assertJsonPath('message', 'Daily invitation resend limit reached. Try again tomorrow.');
+        $this->assertSame(3, DB::table('audit_logs')->where('action', 'portal_user.resent')->where('model_id', $user->id)->count());
+    }
+
+    public function test_supplier_invitation_cannot_be_resent_after_first_sign_in(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->portalUser($vendor, 'supplier-already-active@example.test', ['must_change_password' => false]);
+
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/suppliers/{$user->hash_id}/resend")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This contact has already completed first sign-in.');
+
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'portal_user.resent', 'model_id' => $user->id]);
     }
 
     public function test_reactivation_restores_access_and_forces_a_new_password(): void

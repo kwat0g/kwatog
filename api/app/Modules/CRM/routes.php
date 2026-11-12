@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\CRM\Controllers\ComplaintController;
 use App\Modules\CRM\Controllers\CustomerAgreementDocumentController;
+use App\Modules\CRM\Controllers\CustomerAgreementSampleController;
 use App\Modules\CRM\Controllers\CustomerProductAccessController;
 use App\Modules\CRM\Controllers\CustomerWarrantyTermsController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
@@ -28,6 +29,11 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
 
     /* ─── Customers (delegated to Accounting CustomerController) ─── */
     Route::get('/customers', [CustomerController::class, 'index'])->middleware('permission:accounting.customers.view');
+    Route::get('/customers/name-check', [CustomerController::class, 'checkName'])->middleware('permission:accounting.customers.manage');
+    Route::get('/customers/product-order-limit-capability', [CustomerProductAccessController::class, 'orderLimitCapability'])
+        ->middleware('permission:accounting.customers.manage');
+    Route::get('/customers/sample-agreement', CustomerAgreementSampleController::class)
+        ->middleware(['permission:accounting.customers.manage', 'throttle:sensitive']);
     Route::get('/customers/{customer}', [CustomerController::class, 'show'])->middleware('permission:accounting.customers.view');
     Route::post('/customers', [CustomerController::class, 'store'])->middleware('permission:accounting.customers.manage');
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])->middleware('permission:accounting.customers.manage');
@@ -46,6 +52,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::get('/customers/{customer}/warranty-terms', [CustomerWarrantyTermsController::class, 'index'])
         ->middleware('permission:accounting.customers.view');
     Route::post('/customers/{customer}/warranty-terms/{product}/options', [CustomerWarrantyTermsController::class, 'storeOption'])
+        ->middleware('permission:accounting.customers.manage')->withTrashed();
+    Route::put('/customers/{customer}/warranty-terms/{product}/options/{option}', [CustomerWarrantyTermsController::class, 'updateOption'])
         ->middleware('permission:accounting.customers.manage')->withTrashed();
     Route::delete('/customers/{customer}/warranty-terms/{product}/options/{option}', [CustomerWarrantyTermsController::class, 'destroyOption'])
         ->middleware('permission:accounting.customers.manage')->withTrashed();
@@ -107,9 +115,20 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/price-requests', [PriceNegotiationController::class, 'store'])->middleware('permission:crm.price_agreements.propose');
     Route::put('/price-requests/{priceRequest}/offer', [PriceNegotiationController::class, 'offer'])->middleware('permission:crm.price_agreements.propose');
     Route::post('/price-requests/{priceRequest}/approve', [PriceNegotiationController::class, 'approve'])->middleware('permission:crm.price_agreements.approve');
+    Route::post('/price-requests/{priceRequest}/reject', [PriceNegotiationController::class, 'reject'])->middleware('permission:crm.price_agreements.propose');
     Route::post('/price-requests/{priceRequest}/withdraw', [PriceNegotiationController::class, 'withdraw'])->middleware('permission_any:crm.price_agreements.propose,crm.price_agreements.approve');
     Route::get('/price-agreements', [PriceAgreementController::class, 'index'])->middleware('permission:crm.price_agreements.view');
     Route::get('/price-agreements/{priceAgreement}', [PriceAgreementController::class, 'show'])->middleware('permission:crm.price_agreements.view');
+    Route::get('/price-agreements/{priceAgreement}/termination-preview', [PriceAgreementController::class, 'terminationPreview'])
+        ->middleware('permission:crm.price_agreements.manage');
+    Route::get('/price-agreements/{priceAgreement}/termination-history', [PriceAgreementController::class, 'terminationHistory'])
+        ->middleware('permission:crm.price_agreements.view')
+        ->withTrashed();
+    Route::post('/price-agreements/{priceAgreement}/termination-requests', [PriceAgreementController::class, 'requestTermination'])
+        ->middleware(['permission:crm.price_agreements.manage', 'throttle:sensitive']);
+    Route::post('/price-agreements/{priceAgreement}/termination-requests/cancel', [PriceAgreementController::class, 'cancelTerminationRequest'])
+        ->middleware(['permission:crm.price_agreements.manage', 'throttle:sensitive']);
+    Route::post('/price-agreements/{priceAgreement}/replacement-proposals', [PriceNegotiationController::class, 'replacementProposal'])->middleware('permission:crm.price_agreements.propose');
     Route::post('/price-agreements', [PriceNegotiationController::class, 'store'])->middleware('permission:crm.price_agreements.propose');
     Route::put('/price-agreements/{priceAgreement}', [PriceAgreementController::class, 'update'])->middleware('permission:crm.price_agreements.manage');
     Route::delete('/price-agreements/{priceAgreement}', [PriceAgreementController::class, 'destroy'])->middleware('permission:crm.price_agreements.manage');
@@ -144,6 +163,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::get('/sales-orders/{salesOrder}/responses', [SalesOrderResponseController::class, 'index'])->middleware('permission:crm.sales_orders.view');
     Route::post('/sales-orders', [SalesOrderController::class, 'store'])->middleware('permission:crm.sales_orders.create');
     Route::put('/sales-orders/{salesOrder}', [SalesOrderController::class, 'update'])->middleware('permission:crm.sales_orders.update');
+    Route::put('/sales-orders/{salesOrder}/review-payment-terms', [SalesOrderController::class, 'reviewCustomerPaymentTerms'])
+        ->middleware('permission_any:crm.sales_orders.update,crm.sales_orders.confirm');
     Route::delete('/sales-orders/{salesOrder}', [SalesOrderController::class, 'destroy'])->middleware('permission:crm.sales_orders.delete');
     Route::patch('/sales-orders/{salesOrder}/restore', [SalesOrderController::class, 'restore'])
         ->withTrashed()

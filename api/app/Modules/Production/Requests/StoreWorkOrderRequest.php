@@ -9,6 +9,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\Production\Support\StockProductionLimits;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreWorkOrderRequest extends FormRequest
@@ -32,7 +33,7 @@ class StoreWorkOrderRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
+        $rules = [
             'qc_workflow' => ['prohibited'],
             'production_purpose' => ['nullable', 'in:stock,internal,order'],
             'request_key' => ['required_if:production_purpose,stock', 'nullable', 'uuid'],
@@ -52,5 +53,11 @@ class StoreWorkOrderRequest extends FormRequest
             'work_order_class' => ['prohibited_if:production_purpose,stock', 'nullable', 'string', 'in:standard,service,non_stock,prototype'],
             'exception_reason' => ['required_if:work_order_class,service,non_stock,prototype', 'nullable', 'string', 'max:2000'],
         ];
+
+        if ($this->input('production_purpose') === 'stock') {
+            $rules['quantity_target'][] = 'max:' . StockProductionLimits::MAX_QUANTITY;
+        }
+
+        return $rules;
     }
 }

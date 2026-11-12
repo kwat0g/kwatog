@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Services;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -12,6 +13,7 @@ use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -21,6 +23,8 @@ use Illuminate\Validation\ValidationException;
  */
 final class CustomerPortalOrderAvailabilityService
 {
+    private ?bool $orderLimitColumnsSupported = null;
+
     public function __construct(private readonly SalesOrderSupplyService $supply) {}
 
     /** @return Collection<int, array{product: Product, available_quantity: ?string, availability_mode: string, warranty_options: Collection<int, CustomerProductWarrantyOption>}> */
@@ -45,8 +49,8 @@ final class CustomerPortalOrderAvailabilityService
             ]);
     }
 
-    /** @return array{available_quantity: ?string, availability_mode: string, warranty_options: Collection<int, CustomerProductWarrantyOption>} */
-    public function forProduct(Customer $customer, Product $product, bool $lock = false): array
+    /** @return array{available_quantity: ?string, availability_mode: string, warranty_options: Collection<int, CustomerProductWarrantyOption>, minimum_order_quantity: string, maximum_order_quantity: ?string, order_limits_supported: bool} */
+    public function forProduct(Customer $customer, Product $product, bool $lock = false, ?int $excludeSalesOrderId = null): array
     {
         $item = Item::withTrashed()->where('code', $product->part_number)->first();
         $mapped = $item !== null;
@@ -67,6 +71,11 @@ final class CustomerPortalOrderAvailabilityService
                 foreach ($this->supply->sources($line, $lock) as $source) {
                     $available = bcadd($available, (string) $source['quantity'], 3);
                 }
+                $committed = $this->outstandingStockDemand((int) $product->id, $lock, $excludeSalesOrderId);
+                $available = bcsub($available, $committed, 3);
+                if (bccomp($available, '0.000', 3) < 0) {
+                    $available = '0.000';
+                }
             }
         }
 
@@ -74,18 +83,28 @@ final class CustomerPortalOrderAvailabilityService
             ->where('customer_id', $customer->id)->where('product_id', $product->id)
             ->orderBy('position')->orderBy('id')->get();
 
+        $orderLimitsSupported = $this->orderLimitColumnsSupported ??= Schema::hasColumns('customer_product_access', [
+            'minimum_order_quantity', 'maximum_order_quantity',
+        ]);
+        $access = $orderLimitsSupported
+            ? DB::table('customer_product_access')->where('customer_id', $customer->id)->where('product_id', $product->id)->first()
+            : null;
+
         return [
             'available_quantity' => $available,
             'availability_mode' => $mapped ? 'stock_limited' : 'make_to_order',
             'warranty_options' => $options,
+            'minimum_order_quantity' => (string) ($access?->minimum_order_quantity ?? '1.000'),
+            'maximum_order_quantity' => $access?->maximum_order_quantity,
+            'order_limits_supported' => $orderLimitsSupported,
         ];
     }
 
     /** @param list<array{product_id: int, quantity: string}> $items */
-    public function assertOrderAvailability(Customer $customer, array $items): void
+    public function assertOrderAvailability(Customer $customer, array $items, ?int $excludeSalesOrderId = null): void
     {
         if (DB::transactionLevel() === 0) {
-            DB::transaction(fn () => $this->assertOrderAvailability($customer, $items), 3);
+            DB::transaction(fn () => $this->assertOrderAvailability($customer, $items, $excludeSalesOrderId), 3);
 
             return;
         }
@@ -95,19 +114,64 @@ final class CustomerPortalOrderAvailabilityService
         sort($productIds);
         $products = Product::query()->active()->whereIn('id', $productIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
 
+        $requestedByProduct = [];
+        $firstLineByProduct = [];
+        $limitsByProduct = [];
         foreach ($items as $index => $line) {
             $product = $products->get((int) $line['product_id']);
             if (! $product || ! $product->isAvailableToCustomer((int) $customer->id)) {
                 throw ValidationException::withMessages(["items.{$index}.product_id" => ['This product is not included in your customer agreement. Contact Sales.']]);
             }
 
-            $availability = $this->forProduct($customer, $product, lock: true);
+            $availability = $this->forProduct($customer, $product, lock: true, excludeSalesOrderId: $excludeSalesOrderId);
             $available = $availability['available_quantity'];
-            if ($available !== null && bccomp((string) $line['quantity'], $available, 3) > 0) {
+            $productId = (int) $product->id;
+            $requestedByProduct[$productId] = bcadd($requestedByProduct[$productId] ?? '0.000', (string) $line['quantity'], 3);
+            $firstLineByProduct[$productId] ??= $index;
+            $limitsByProduct[$productId] = $availability;
+            if ($available !== null && bccomp($requestedByProduct[$productId], $available, 3) > 0) {
                 throw ValidationException::withMessages([
                     "items.{$index}.quantity" => ["Only {$available} units are currently available for this stock item. Request a price and availability review for a larger quantity."],
                 ]);
             }
         }
+
+        foreach ($requestedByProduct as $productId => $quantity) {
+            $limits = $limitsByProduct[$productId];
+            if (bccomp($quantity, $limits['minimum_order_quantity'], 3) < 0) {
+                throw ValidationException::withMessages([
+                    'items.'.$firstLineByProduct[$productId].'.quantity' => ["Order at least {$limits['minimum_order_quantity']} units of this product."],
+                ]);
+            }
+            if ($limits['maximum_order_quantity'] !== null
+                && bccomp($quantity, $limits['maximum_order_quantity'], 3) > 0) {
+                throw ValidationException::withMessages([
+                    'items.'.$firstLineByProduct[$productId].'.quantity' => ["Order no more than {$limits['maximum_order_quantity']} units of this product per sales order."],
+                ]);
+            }
+        }
+    }
+
+    private function outstandingStockDemand(int $productId, bool $lock, ?int $excludeSalesOrderId): string
+    {
+        $lines = SalesOrderItem::query()
+            ->where('product_id', $productId)
+            ->where('fulfillment_policy', 'stock_first')
+            ->whereHas('salesOrder', fn ($orders) => $orders->whereNotIn('status', [
+                SalesOrderStatus::Draft->value,
+                SalesOrderStatus::Closed->value,
+                SalesOrderStatus::Cancelled->value,
+            ]))
+            ->when($excludeSalesOrderId !== null, fn ($query) => $query->where('sales_order_id', '!=', $excludeSalesOrderId))
+            ->orderBy('sales_order_id')->orderBy('id');
+        if ($lock) {
+            $lines->lockForUpdate();
+        }
+
+        return $lines->get()->reduce(function (string $total, SalesOrderItem $line): string {
+            $uncovered = $this->supply->lineCoverage($line)['uncovered'];
+
+            return bcadd($total, (string) $uncovered, 3);
+        }, '0.000');
     }
 }

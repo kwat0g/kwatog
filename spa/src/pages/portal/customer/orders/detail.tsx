@@ -297,12 +297,13 @@ export default function CustomerOrderDetailPage() {
                     : undefined
                 }
               />
-              <StatCard
+                <StatCard
                 label="Payment Terms"
                 value={order.payment_terms_days != null ? `${order.payment_terms_days} days` : '—'}
               />
-              <StatCard label="Delivery Terms" value={order.delivery_terms ?? '—'} />
-            </KpiGrid>
+                <StatCard label="Delivery Terms" value={order.delivery_terms ?? '—'} />
+              </KpiGrid>
+            </div>
 
             {order.advance_requirement && (
               <Panel title="Order deposit">
@@ -633,7 +634,8 @@ export default function CustomerOrderDetailPage() {
               ) : (
                 <EmptyState icon="package" title="No items" />
               )}
-            </Panel>
+              </Panel>
+            </div>
 
             {order.work_orders && order.work_orders.length > 0 && (
               <Panel title="Work Orders" meta={String(order.work_orders.length)} noPadding>

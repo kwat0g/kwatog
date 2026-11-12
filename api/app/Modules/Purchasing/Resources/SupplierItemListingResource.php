@@ -42,6 +42,12 @@ class SupplierItemListingResource extends JsonResource
             'rejection_reason' => $this->rejection_reason,
             'submitted_at' => optional($this->submitted_at)->toIso8601String(),
             'reviewed_at' => optional($this->reviewed_at)?->toIso8601String(),
+            'image' => $this->image_path ? [
+                'original_filename' => $this->image_original_filename,
+                'mime_type' => $this->image_mime_type,
+                'size_bytes' => $this->image_size_bytes,
+                'url' => "/api/v1/purchasing/supplier-listings/{$this->hash_id}/image",
+            ] : null,
             'reviewer' => $this->whenLoaded('reviewer', fn () => $this->reviewer ? [
                 'id' => $this->reviewer->hash_id,
                 'name' => $this->reviewer->name,

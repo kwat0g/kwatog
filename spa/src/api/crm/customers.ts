@@ -7,6 +7,13 @@ export interface CustomerListParams extends ListParams {
  is_active?: boolean | string;
 }
 
+export interface CustomerNameCheck {
+ exists: boolean;
+ count: number;
+ normalized_name: string;
+ matches: Array<{ id: string; name: string; code: string }>;
+}
+
 export interface CustomerPortalProductAccess {
  id: string;
  part_number: string;
@@ -16,10 +23,19 @@ export interface CustomerPortalProductAccess {
  portal_visibility: 'standard' | 'restricted';
  is_explicitly_authorized: boolean;
  is_authorized: boolean;
+  minimum_order_quantity: string;
+  maximum_order_quantity: string | null;
+}
+
+export interface CustomerProductOrderLimit {
+ product_id: string;
+ minimum_order_quantity: number;
+ maximum_order_quantity: number | null;
 }
 
 export interface CustomerProductAccess {
  portal_catalog_mode: 'standard' | 'restricted';
+  order_limits_supported: boolean;
  product_ids: string[];
  products: CustomerPortalProductAccess[];
 }
@@ -39,6 +55,10 @@ export interface CustomerWarrantyOption {
 export const crmCustomersApi = {
  list: (params?: CustomerListParams, signal?: AbortSignal) =>
  client.get<PaginatedResponse<Customer>>('/crm/customers', { params, signal }).then((r) => r.data),
+ checkName: (name: string) =>
+  client.get<ApiSuccess<CustomerNameCheck>>('/crm/customers/name-check', { params: { name } }).then((r) => r.data.data),
+ productOrderLimitCapability: () =>
+  client.get<ApiSuccess<{ supported: boolean }>>('/crm/customers/product-order-limit-capability').then((r) => r.data.data),
  show: (id: string) =>
  client.get<ApiSuccess<Customer>>(`/crm/customers/${id}`).then((r) => r.data.data),
  create: (data: CreateCustomerData) =>
@@ -51,12 +71,14 @@ export const crmCustomersApi = {
   client.patch(`/crm/customers/${id}/restore`),
  productAccess: (id: string) =>
   client.get<ApiSuccess<CustomerProductAccess>>(`/crm/customers/${id}/product-access`).then((r) => r.data.data),
- updateProductAccess: (id: string, data: Pick<CustomerProductAccess, 'portal_catalog_mode' | 'product_ids'>) =>
+ updateProductAccess: (id: string, data: Pick<CustomerProductAccess, 'portal_catalog_mode' | 'product_ids'> & { product_order_limits?: CustomerProductOrderLimit[] }) =>
   client.put<ApiSuccess<CustomerProductAccess>>(`/crm/customers/${id}/product-access`, data).then((r) => r.data.data),
  warrantyOptions: (id: string) =>
   client.get<{ data: CustomerWarrantyOption[] }>(`/crm/customers/${id}/warranty-terms`).then((r) => r.data.data),
  createWarrantyOption: (customerId: string, productId: string, data: Omit<CustomerWarrantyOption, 'id' | 'product'>) =>
   client.post<ApiSuccess<CustomerWarrantyOption>>(`/crm/customers/${customerId}/warranty-terms/${productId}/options`, data).then((r) => r.data.data),
+ updateWarrantyOption: (customerId: string, productId: string, optionId: string, data: Omit<CustomerWarrantyOption, 'id' | 'product'>) =>
+  client.put<ApiSuccess<CustomerWarrantyOption>>(`/crm/customers/${customerId}/warranty-terms/${productId}/options/${optionId}`, data).then((r) => r.data.data),
  deleteWarrantyOption: (customerId: string, productId: string, optionId: string) =>
   client.delete(`/crm/customers/${customerId}/warranty-terms/${productId}/options/${optionId}`),
 };

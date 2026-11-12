@@ -15,6 +15,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { AgreementDocumentManager } from '@/components/contracts/AgreementDocumentManager';
 import { usePermission } from '@/hooks/usePermission';
 import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { formatPeso } from '@/lib/formatNumber';
@@ -190,6 +191,16 @@ export default function VendorDetailPage() {
           )}
         </Panel>
       </div>
+
+      {can('b2b.portal_access.view') && (
+        <div className="px-5 pt-4" data-layout="section">
+          <AgreementDocumentManager
+            realm="supplier"
+            entityId={vendor.id}
+            entityName={vendor.name}
+          />
+        </div>
+      )}
 
       {can('accounting.bills.view') && (
         <div className="px-5 pt-4">

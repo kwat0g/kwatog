@@ -54,6 +54,9 @@ const GRID_BG: CSSProperties = {
 
 export function AuthLayout() {
   const location = useLocation();
+  const passwordPortal = location.pathname === '/portal/customer/change-password'
+    ? 'customer'
+    : location.pathname === '/portal/supplier/change-password' ? 'supplier' : null;
   const [showcaseVisible, setShowcaseVisible] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(DESKTOP_MEDIA).matches,
   );
@@ -98,6 +101,8 @@ export function AuthLayout() {
       '/change-password': 'Change password',
       '/portal/supplier/forgot-password': 'Supplier password reset',
       '/portal/customer/forgot-password': 'Customer password reset',
+      '/portal/supplier/change-password': 'Change supplier portal password',
+      '/portal/customer/change-password': 'Change customer portal password',
       '/portal/password-reset': 'Portal password reset',
     };
     document.title = `${labels[location.pathname] ?? 'Account'} · ERP`;
@@ -293,11 +298,11 @@ export function AuthLayout() {
         </div>
 
         <Link
-          to="/"
+          to={passwordPortal ? `/portal/${passwordPortal}` : '/'}
           className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-muted transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
           <LuArrowLeft size={14} />
-          Back to {legalName || 'home'}
+          Back to {passwordPortal ? `${passwordPortal} portal` : legalName || 'home'}
         </Link>
       </main>
     </div>

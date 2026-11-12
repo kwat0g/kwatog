@@ -25,7 +25,7 @@ The portal is an **Operate** surface. Preserve the established Atelier system do
 ## Goals
 
 1. Store a contact person's job title/role (for example, “Sales Officer”) and require a map pin for the customer's primary delivery location.
-2. Select an existing customer/vendor record to link a portal account, then manually enter the invitee's name and email every time. Never copy these fields automatically from the selected record.
+2. Select an existing customer/vendor record when granting portal access and prefill its contact name and email. Permit manual entry when the record lacks those values.
 3. Keep first-login password change and confirmation required. Add skippable, replayable, role-specific tutorials for customer and supplier portal areas.
 4. Support reusable contract templates and uploaded documents for both customers and suppliers. Allow a fillable PDF template (or a PDF whose fields are mapped once) to auto-fill customer/supplier details and agreement terms when a new agreement is created. Also allow existing PDFs to be attached without auto-fill. Only portal contacts explicitly designated as authorized signatories may sign. Retain signer, timestamp, document version/hash, and audit evidence. Keep customer and supplier records in their owning modules while reusing the workflow/UI where practical.
 5. Let staff configure a customer's permitted products and multiple warranty-duration choices per product under the customer's agreement. Show only approved products in that customer's portal and snapshot the chosen warranty onto the order line.
@@ -55,7 +55,7 @@ The portal is an **Operate** surface. Preserve the established Atelier system do
 
 ## Selected sequence
 
-1. **Customer setup and agreement foundation:** contact role and delivery pin; manually entered portal invitation identity; contract templates/uploads/signature evidence; allowed-product and warranty configuration.
+1. **Customer setup and agreement foundation:** contact role and delivery pin; invitation prefill; contract templates/uploads/signature evidence; allowed-product and warranty configuration.
 2. **Product and customer ordering:** structured product details/gallery/blueprints; agreement-aware product and warranty selection; order-level payment terms; available-stock cap and excess-quantity route; down payment and bank-payment evidence.
 3. **Supplier portal:** supplier agreement workflow, listing images, and invoice attachments.
 4. **Fulfillment, warehouse, and Quality:** driver credentials, capacity/availability gate, shipment date filters, warehouse labels, and defect evidence/severity.

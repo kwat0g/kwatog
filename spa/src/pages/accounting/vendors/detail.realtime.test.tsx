@@ -8,11 +8,15 @@ import type { Vendor } from '@/types/accounting';
 import VendorDetailPage from './detail';
 
 const realtime = vi.hoisted(() => ({ register: vi.fn() }));
+const permissions = vi.hoisted(() => ({ allowed: [] as string[] }));
 
 vi.mock('@/hooks/useRealtimeEvent', () => ({
   useRealtimeEvent: (...args: unknown[]) => realtime.register(...args),
 }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => permissions.allowed.includes(permission) }) }));
+vi.mock('@/components/contracts/AgreementDocumentManager', () => ({
+  AgreementDocumentManager: ({ entityId }: { entityId: string }) => <div data-testid="supplier-agreements-manager">Agreements for {entityId}</div>,
+}));
 vi.mock('@/api/accounting/vendors', () => ({
   vendorsApi: {
     show: vi.fn(),
@@ -57,7 +61,10 @@ function renderPage() {
 }
 
 describe('vendor detail realtime refresh', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    permissions.allowed = [];
+  });
 
   it('refetches the open vendor detail from its authorized record signal', async () => {
     vi.mocked(vendorsApi.show)
@@ -84,5 +91,23 @@ describe('vendor detail realtime refresh', () => {
     expect(await screen.findByText('Updated Vendor')).toBeInTheDocument();
     expect(vendorsApi.show).toHaveBeenCalledTimes(2);
     client.clear();
+  });
+
+  it('shows supplier agreement management on the vendor record to portal-access viewers', async () => {
+    permissions.allowed = ['b2b.portal_access.view'];
+    vi.mocked(vendorsApi.show).mockResolvedValue(vendor('Agreement Supplier'));
+
+    renderPage();
+
+    expect(await screen.findByTestId('supplier-agreements-manager')).toHaveTextContent('Agreements for vendor-1');
+  });
+
+  it('keeps supplier agreements off the vendor record for users without portal-access permission', async () => {
+    vi.mocked(vendorsApi.show).mockResolvedValue(vendor('Private Supplier'));
+
+    renderPage();
+
+    expect(await screen.findByText('Private Supplier')).toBeInTheDocument();
+    expect(screen.queryByTestId('supplier-agreements-manager')).not.toBeInTheDocument();
   });
 });

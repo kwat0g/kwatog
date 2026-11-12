@@ -327,6 +327,22 @@ export interface CreateCustomerData {
   credit_limit?: string | null;
   payment_terms_days?: number;
   portal_catalog_mode?: 'standard' | 'restricted';
+  portal_product_ids?: string[];
+  product_order_limits?: Array<{
+    product_id: string;
+    minimum_order_quantity: number;
+    maximum_order_quantity: number | null;
+  }>;
+  product_warranties?: Array<{
+    product_id: string;
+    label: string;
+    warranty_duration_days: number | null;
+    warranty_report_window_days: number | null;
+    warranty_start_basis: 'delivery' | 'invoice' | null;
+    warranty_covered_issues: ('manufacturing_defect' | 'shipping_damage' | 'customer_caused_damage')[];
+    warranty_remedies: ('repair' | 'replace' | 'credit' | 'refund')[];
+    additional_terms: string | null;
+  }>;
   allowed_payment_methods?: Customer['allowed_payment_methods'];
   shipping_payer?: Customer['shipping_payer'];
   agreement_starts_on?: string | null;

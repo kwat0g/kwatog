@@ -109,14 +109,50 @@ class SalesOrderStockFulfillmentTest extends TestCase
     public function test_customer_catalog_availability_matches_qc_reservation_and_safety_stock_rules(): void
     {
         [$so, $line, $item, $location, $actor] = $this->stockFixture();
+        $so->forceFill(['status' => 'draft'])->save();
         $item->update(['safety_stock' => '3.000']);
         $service = app(CustomerPortalOrderAvailabilityService::class);
 
         $this->assertSame('7.000', $service->forProduct($so->customer, $line->product)['available_quantity']);
 
+        $so->forceFill(['status' => 'confirmed'])->save();
         $line->update(['quantity' => '4.00']);
         app(SalesOrderSupplyService::class)->allocate($so, $actor, Str::uuid()->toString());
         $this->assertSame('3.000', $service->forProduct($so->customer, $line->product)['available_quantity']);
+    }
+
+    public function test_customer_catalog_stock_excludes_demand_from_open_stock_first_orders(): void
+    {
+        [$order, $line] = $this->stockFixture();
+        $order->forceFill([
+            'status' => 'awaiting_confirmation',
+            'submission_source' => 'customer_portal',
+        ])->save();
+        $line->update(['quantity' => '7.00']);
+
+        $availability = app(CustomerPortalOrderAvailabilityService::class)
+            ->forProduct($order->customer, $line->product);
+
+        $this->assertSame('3.000', $availability['available_quantity']);
+    }
+
+    public function test_order_availability_excludes_the_edited_order_and_counts_duplicate_product_lines(): void
+    {
+        [$order, $line] = $this->stockFixture();
+        $order->customer->portalProducts()->attach($line->product_id);
+        $line->update(['quantity' => '7.00']);
+        $availability = app(CustomerPortalOrderAvailabilityService::class);
+
+        $availability->assertOrderAvailability($order->customer, [[
+            'product_id' => $line->product_id,
+            'quantity' => '7.00',
+        ]], $order->id);
+
+        $this->expectException(ValidationException::class);
+        $availability->assertOrderAvailability($order->customer, [
+            ['product_id' => $line->product_id, 'quantity' => '6.00'],
+            ['product_id' => $line->product_id, 'quantity' => '5.00'],
+        ], $order->id);
     }
 
     public function test_unrelated_order_output_and_expired_stock_are_not_eligible(): void

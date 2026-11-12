@@ -599,6 +599,13 @@ export const SECTIONS: NavSection[] = [
     label: 'Finance',
     items: [
       {
+        to: '/crm/price-agreements/requests',
+        label: 'Pricing approvals',
+        icon: PriceAgreementIcon,
+        feature: 'crm',
+        permission: 'crm.price_agreements.approve',
+      },
+      {
         to: '/budgeting',
         label: 'Budgeting',
         icon: LuWallet,
@@ -614,14 +621,6 @@ export const SECTIONS: NavSection[] = [
         permission: 'accounting.invoices.view',
         badgeKey: 'draft_invoices',
         badgeKeys: ['overdue_invoices', 'unpaid_invoices', 'payment_review_invoices', 'draft_invoices'],
-      },
-      {
-        to: '/accounting/customer-advances',
-        label: 'Customer Order Deposits',
-        description: 'Verify customer deposits and manage unused advance balances',
-        icon: LuArrowLeftRight,
-        feature: 'accounting',
-        permission: 'accounting.invoices.collect',
       },
       {
         to: '/accounting/bills',
@@ -818,7 +817,7 @@ export const SECTIONS: NavSection[] = [
         to: '/accounting/portal-access',
         label: 'Portal Access',
         icon: LuKeyRound,
-        permission: 'b2b.portal_access.view',
+        anyPermissions: ['b2b.portal_access.view', 'accounting.customers.manage'],
       },
       {
         to: '/admin/backups',

@@ -19,6 +19,7 @@ vi.mock('@/api/crm/salesOrders', () => ({
     chain: vi.fn(),
     confirm: vi.fn(),
     configureAdvance: vi.fn(),
+    reviewCustomerPaymentTerms: vi.fn(),
     cancel: vi.fn(),
     proposeDeliveryDate: vi.fn(),
   },
@@ -92,6 +93,43 @@ describe('SalesOrderDetailPage activity', () => {
     await waitFor(() => expect(salesOrdersApi.configureAdvance).toHaveBeenCalledWith('so-1', {
       down_payment_amount: null, down_payment_percentage: '25',
     }));
+    queryClient.clear();
+  });
+
+  it('lets Sales save approved order terms while preserving the customer request', async () => {
+    canPermission.mockImplementation((permission) => permission === 'crm.sales_orders.confirm');
+    const requestedOrder = {
+      ...order(),
+      status: 'awaiting_confirmation',
+      status_label: 'Awaiting confirmation',
+      submission_source: 'customer_portal',
+      customer_terms_snapshot: {
+        agreement_status: 'in_effect', agreement_starts_on: null, agreement_ends_on: null,
+        allowed_payment_methods: ['bank_transfer'], shipping_payer: 'customer',
+        payment_terms_days: 45, requested_payment_terms_days: 45,
+        delivery_terms: null, incoterm: null, warranty_defaults: null,
+      },
+      payment_terms_days: 45,
+    } as SalesOrder;
+    const approvedOrder = {
+      ...requestedOrder,
+      payment_terms_days: 30,
+      customer_terms_snapshot: { ...requestedOrder.customer_terms_snapshot, payment_terms_days: 30 },
+    } as SalesOrder;
+    vi.mocked(salesOrdersApi.reviewCustomerPaymentTerms).mockResolvedValue(approvedOrder);
+    const { queryClient } = renderPage(requestedOrder);
+
+    const approvedTerms = await screen.findByRole('spinbutton', { name: 'Approved terms (days)' });
+    expect(approvedTerms).toHaveValue(45);
+    expect(screen.getByText(/Customer requested Net 45 days/)).toBeVisible();
+    fireEvent.change(approvedTerms, { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save approved terms' }));
+
+    await waitFor(() => expect(salesOrdersApi.reviewCustomerPaymentTerms).toHaveBeenCalledWith('so-1', 30));
+    expect(queryClient.getQueryData(['crm', 'sales-orders', 'detail', 'so-1'])).toMatchObject({
+      payment_terms_days: 30,
+      customer_terms_snapshot: { requested_payment_terms_days: 45, payment_terms_days: 30 },
+    });
     queryClient.clear();
   });
 

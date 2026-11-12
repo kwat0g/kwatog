@@ -6,7 +6,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 const CustomerDeliveryLocationMap = lazy(() => import('./CustomerDeliveryLocationMap'));
 
 /** Shared by CRM and Accounting customer forms. A map click and the fields are the same pin. */
-export function CustomerDeliveryLocationPicker() {
+export function CustomerDeliveryLocationPicker({ required = false }: { required?: boolean }) {
   const { control, register, setValue, formState: { errors } } = useFormContext<FieldValues>();
   const latitudeValue = useWatch({ control, name: 'delivery_latitude' });
   const longitudeValue = useWatch({ control, name: 'delivery_longitude' });
@@ -25,8 +25,8 @@ export function CustomerDeliveryLocationPicker() {
   return (
     <div className="mt-4 space-y-3">
       <div>
-        <p className="text-label font-medium text-primary">Delivery map pin</p>
-        <p className="mt-1 text-xs leading-relaxed text-muted">Click the delivery point on the map or enter its coordinates. The map does not look up or change the address.</p>
+        <p className="text-label font-medium text-primary">Delivery map pin{required && <><span aria-hidden="true" className="ml-0.5 text-danger-fg">*</span><span className="sr-only"> required</span></>}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted">Click the map or enter coordinates. The address stays unchanged.</p>
       </div>
       <div role="region" aria-label="Delivery location map" className="relative h-64 overflow-hidden rounded-md border border-default bg-elevated sm:h-72">
         <Suspense fallback={<SkeletonBlock className="absolute inset-0 rounded-none" />}>
@@ -43,7 +43,6 @@ export function CustomerDeliveryLocationPicker() {
           className="font-mono tabular-nums"
           {...register('delivery_latitude')}
           error={latitudeError}
-          placeholder="14.2860000"
         />
         <Input
           label="Delivery longitude"
@@ -53,7 +52,6 @@ export function CustomerDeliveryLocationPicker() {
           className="font-mono tabular-nums"
           {...register('delivery_longitude')}
           error={longitudeError}
-          placeholder="120.9345000"
         />
       </div>
     </div>

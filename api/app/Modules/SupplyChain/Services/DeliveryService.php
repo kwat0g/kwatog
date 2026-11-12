@@ -876,10 +876,10 @@ class DeliveryService
     private function assertDriverCredentialCurrent(int $driverId): void
     {
         $credential = DriverCredential::query()->where('user_id', $driverId)->lockForUpdate()->first();
-        // Drivers who predate credential tracking remain schedulable until a
-        // fleet manager records their credential; an explicitly expired one
-        // is always blocked. The fleet screen identifies missing records.
-        if ($credential && $credential->expires_at?->isBefore(today())) {
+        if (! $credential || trim((string) $credential->license_number) === '' || ! $credential->expires_at) {
+            throw ValidationException::withMessages(['driver_id' => ['Record the driver license number and expiry date before assigning this shipment.']]);
+        }
+        if ($credential->expires_at->isBefore(today())) {
             throw ValidationException::withMessages(['driver_id' => ['The selected driver license has expired. Update the credential before assigning this delivery.']]);
         }
     }

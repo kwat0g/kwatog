@@ -68,6 +68,30 @@ class CustomerWarrantyOptionsTest extends TestCase
             ->assertNoContent();
     }
 
+    public function test_staff_can_edit_a_warranty_choice_and_updates_remain_scoped(): void
+    {
+        $customer = Customer::factory()->create();
+        $other = Customer::factory()->create();
+        $product = Product::factory()->create();
+        $staff = $this->staff();
+        $path = "/api/v1/crm/customers/{$customer->hash_id}/warranty-terms/{$product->hash_id}/options";
+
+        $option = $this->actingAs($staff)->postJson($path, $this->terms('1-year warranty', 365))
+            ->assertCreated()->json('data');
+        $this->putJson("{$path}/{$option['id']}", [
+            ...$this->terms('2-year warranty', 730),
+            'additional_terms' => 'Coverage includes corrosion after delivery.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.id', $option['id'])
+            ->assertJsonPath('data.label', '2-year warranty')
+            ->assertJsonPath('data.warranty_duration_days', 730)
+            ->assertJsonPath('data.additional_terms', 'Coverage includes corrosion after delivery.');
+
+        $this->putJson("/api/v1/crm/customers/{$other->hash_id}/warranty-terms/{$product->hash_id}/options/{$option['id']}", $this->terms('Changed warranty', 90))
+            ->assertNotFound();
+    }
+
     /** @return array<string, mixed> */
     private function terms(string $label, int $duration): array
     {

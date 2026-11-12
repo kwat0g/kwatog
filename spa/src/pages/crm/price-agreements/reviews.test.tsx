@@ -14,6 +14,7 @@ vi.mock('@/api/crm/pricingRequests', () => ({
     show: vi.fn(),
     approve: vi.fn(),
     withdraw: vi.fn(),
+    reject: vi.fn(),
     costs: vi.fn(),
     decideCost: vi.fn(),
     renewCost: vi.fn(),
@@ -48,6 +49,7 @@ const request: PriceRequest = {
     can_withdraw: true,
     can_accept: false,
     can_reject: false,
+    can_cancel: false,
   },
   offer: {
     price: '30.00',
@@ -110,7 +112,9 @@ it('approves the freshly loaded proposal version and cost signature, retaining n
   vi.mocked(pricingRequestsApi.show).mockResolvedValue(reviewed);
   vi.mocked(pricingRequestsApi.approve).mockRejectedValue(new Error('Offline'));
   show(<PricingRequestsPage />, ['crm.price_agreements.approve']);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  expect(await screen.findByRole('heading', { name: 'Pricing approvals' })).toBeVisible();
+  expect(screen.getByRole('tab', { name: 'Pricing approvals' })).toBeVisible();
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Review' }))[0]);
   await screen.findByRole('heading', { name: 'Cost basis' });
   fireEvent.change(screen.getByLabelText(/Review notes/), {
     target: { value: 'Reviewed current material costs' },
@@ -135,7 +139,7 @@ it('blocks Finance approval when manufacturing cost is incomplete', async () => 
     cost_review: { ...reviewed.cost_review!, incomplete: true },
   });
   show(<PricingRequestsPage />, ['crm.price_agreements.approve']);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Review' }))[0]);
   await screen.findByText(/Cost incomplete. Approval blocked/);
   fireEvent.change(screen.getByLabelText(/Review notes/), {
     target: { value: 'Needs production costing' },
@@ -148,11 +152,11 @@ it('lets sales withdraw without exposing Finance approval or losing the withdraw
   vi.mocked(pricingRequestsApi.withdraw).mockRejectedValue(new Error('Offline'));
   show(<PricingRequestsPage />, ['crm.price_agreements.propose']);
   expect(screen.queryByRole('tab', { name: 'Supplier cost reviews' })).not.toBeInTheDocument();
-  fireEvent.click((await screen.findAllByRole('button', { name: 'Withdraw' }))[0]);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Withdraw proposal' }))[0]);
   fireEvent.change(screen.getByLabelText(/Withdrawal reason/), {
     target: { value: 'Customer changed purchasing plan' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Withdraw proposal' }));
   expect(await screen.findByRole('alert')).toBeVisible();
   expect(screen.getByLabelText(/Withdrawal reason/)).toHaveValue(
     'Customer changed purchasing plan',
@@ -162,11 +166,46 @@ it('lets sales withdraw without exposing Finance approval or losing the withdraw
   ).not.toBeInTheDocument();
   expect(pricingRequestsApi.show).not.toHaveBeenCalled();
 });
+it('lets CRM reject a customer-submitted request and hides Withdraw for that request', async () => {
+  const customerRequest: PriceRequest = {
+    ...request,
+    status: 'requested',
+    offer: null,
+    available_actions: {
+      ...request.available_actions!,
+      can_withdraw: false,
+      can_reject: true,
+      can_approve: false,
+    },
+  };
+  vi.mocked(pricingRequestsApi.list).mockResolvedValue(page([customerRequest]));
+  vi.mocked(pricingRequestsApi.reject).mockResolvedValue({
+    ...customerRequest,
+    status: 'sales_rejected',
+    version: 2,
+    available_actions: { ...customerRequest.available_actions!, can_reject: false },
+  });
+  show(<PricingRequestsPage />, ['crm.price_agreements.propose']);
+
+  expect((await screen.findAllByRole('button', { name: 'Reject request' }))[0]).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Withdraw proposal' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Reject request' }))[0]);
+  fireEvent.change(screen.getByLabelText(/Reason for rejection/), {
+    target: { value: 'Requested price is below the approved floor.' },
+  });
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reject request' }));
+  await waitFor(() => expect(pricingRequestsApi.reject).toHaveBeenCalledWith(
+    customerRequest.id,
+    'Requested price is below the approved floor.',
+    customerRequest.version,
+  ));
+});
 it('disables an open withdrawal when the refreshed server row removes that action', async () => {
   vi.mocked(pricingRequestsApi.list).mockResolvedValue(page([request]));
   const queryClient = show(<PricingRequestsPage />, ['crm.price_agreements.propose']);
 
-  fireEvent.click((await screen.findAllByRole('button', { name: 'Withdraw' }))[0]);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Withdraw proposal' }))[0]);
   fireEvent.change(screen.getByLabelText(/Withdrawal reason/), {
     target: { value: 'Customer changed purchasing plan' },
   });
@@ -184,7 +223,7 @@ it('disables an open withdrawal when the refreshed server row removes that actio
 
   await waitFor(() => {
     expect(screen.getAllByText('Awaiting customer').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Withdraw request' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Withdraw proposal' })).toBeDisabled();
   });
   expect(screen.getByLabelText(/Withdrawal reason/)).toHaveValue('Customer changed purchasing plan');
 });
@@ -198,7 +237,7 @@ it('preserves supplier review reason on failure and locks dialog dismissal durin
       }),
   );
   show(<CostReviewsPage />, ['inventory.costs.approve', 'inventory.costs.review']);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Review' }))[0]);
   fireEvent.change(screen.getByLabelText(/Approval or rejection reason/), {
     target: { value: 'Supplier resin cost increase' },
   });
@@ -246,7 +285,7 @@ it('seeds the acting reviewer list from the successful API response', async () =
   ]);
   vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Review' }))[0]);
   fireEvent.change(screen.getByLabelText(/Approval or rejection reason/), {
     target: { value: 'Reviewed supplier evidence' },
   });
@@ -274,7 +313,7 @@ it('updates an open review modal after a peer change and keeps the unsent reason
     'inventory.costs.approve',
   ]);
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Review' }))[0]);
   fireEvent.change(screen.getByLabelText(/Approval or rejection reason/), {
     target: { value: 'My unsent review reason' },
   });

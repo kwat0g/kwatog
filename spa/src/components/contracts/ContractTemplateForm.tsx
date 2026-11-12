@@ -147,12 +147,15 @@ export function ContractTemplateForm({
               );
             })}
           </div>
+          {Object.keys(mappings).length === 0 && (
+            <p role="note" className="text-xs text-muted">Map at least one PDF field to saved customer or supplier data to create an auto-filled draft.</p>
+          )}
         </div>
       )}
 
       <div className="flex flex-wrap justify-end gap-2 border-t border-default pt-4">
         {onCancel && <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>}
-        <Button type="submit" variant="primary" loading={isSubmitting} disabled={!file || fields === null || !name.trim() || isSubmitting}>
+        <Button type="submit" variant="primary" loading={isSubmitting} disabled={!file || fields === null || fields.length === 0 || Object.keys(mappings).length === 0 || !name.trim() || isSubmitting}>
           Save contract template
         </Button>
       </div>

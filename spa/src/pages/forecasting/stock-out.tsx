@@ -2,8 +2,7 @@
  * ADV11 — Stock-out Projection page.
  *
  * Lists every active item projected to fall below safety stock within the
- * chosen horizon, sorted by risk. Operators can jump to "Create PR" for the
- * worst items.
+ * chosen horizon, sorted by risk. Actions follow the item's make-or-buy path.
  */
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -16,6 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Chip } from '@/components/ui/Chip';
 import { forecastingApi } from '@/api/forecasting';
+import { usePermission } from '@/hooks/usePermission';
 import { useDemandForecastRealtime } from '@/hooks/useDemandForecastRealtime';
 import type { StockOutRisk } from '@/types/forecasting';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -39,6 +39,11 @@ const RISK_COLOR: Record<StockOutRisk, string> = {
 
 export default function StockOutProjectionPage() {
  useDemandForecastRealtime();
+ const { can } = usePermission();
+ const canReviewProduction = can('production.work_orders.view');
+ const canCreateWorkOrder = can('production.wo.create');
+ const canViewPurchasing = can('purchasing.view');
+ const canCreatePurchaseRequest = can('purchasing.pr.create');
 
  const [horizon, setHorizon] = useState<number | undefined>(undefined);
 
@@ -174,13 +179,13 @@ export default function StockOutProjectionPage() {
  <thead>
  <tr className={theadTrCls}>
  <Th>Item</Th>
- <Th align="right">On hand</Th>
+ <Th align="right">Usable stock</Th>
  <Th align="right">Safety</Th>
  <Th align="right">Daily demand</Th>
  <Th>Source</Th>
  <Th align="right">Days until stock-out</Th>
- <Th>Order by</Th>
- <Th align="right">Suggested qty</Th>
+ <Th>Review by</Th>
+ <Th align="right">Suggested order qty</Th>
  <Th>Risk</Th>
  <Th align="right" />
  </tr>
@@ -214,10 +219,30 @@ export default function StockOutProjectionPage() {
  <Td>
  <Chip variant={RISK_VARIANT[r.risk]}>{riskLabels.get(r.risk) ?? r.risk}</Chip>
  </Td>
- <Td align="right" mono>
- <Link to="/purchasing/purchase-requests/create">
- <Button size="sm" variant="ghost">Create PR</Button>
+ <Td align="right">
+ {r.item_type === 'finished_good' ? (
+ canReviewProduction ? (
+ <Link to="/production/work-orders">
+ <Button size="sm" variant="ghost">Review production</Button>
  </Link>
+ ) : canCreateWorkOrder ? (
+ <Link to="/production/work-orders/create">
+ <Button size="sm" variant="ghost">Plan production</Button>
+ </Link>
+ ) : (
+ <span className="text-2xs text-muted">Ask Production to plan</span>
+ )
+ ) : canCreatePurchaseRequest ? (
+ <Link to="/purchasing/purchase-requests/create">
+ <Button size="sm" variant="ghost">Create purchase request</Button>
+ </Link>
+ ) : canViewPurchasing ? (
+ <Link to="/purchasing/purchase-requests">
+ <Button size="sm" variant="ghost">Review purchasing</Button>
+ </Link>
+ ) : (
+ <span className="text-2xs text-muted">Ask Purchasing to create a request</span>
+ )}
  </Td>
  </tr>
  ))}

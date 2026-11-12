@@ -68,6 +68,17 @@ class DriverAvailabilityCapacityTest extends TestCase
         $this->assertNull($delivery->fresh()->driver_id);
     }
 
+    public function test_dispatch_plan_rejects_a_driver_without_a_license_credential(): void
+    {
+        [$delivery, $operator, $driver, $vehicle] = $this->shipment();
+        DriverCredential::query()->where('user_id', $driver->id)->delete();
+
+        $this->actingAs($operator)->postJson($this->planUrl($delivery), $this->plan($driver, $vehicle, '100.00'))
+            ->assertUnprocessable()->assertJsonValidationErrors('driver_id');
+
+        $this->assertNull($delivery->fresh()->driver_id);
+    }
+
     public function test_dispatch_plan_rejects_an_inactive_vehicle(): void
     {
         [$delivery, $operator, $driver, $vehicle] = $this->shipment();
@@ -104,6 +115,7 @@ class DriverAvailabilityCapacityTest extends TestCase
     {
         $operator = User::factory()->withRole('impex_officer')->create(['is_active' => true]);
         $driver = User::factory()->withRole('driver')->create(['is_active' => true]);
+        $this->addCurrentCredential($driver);
         $vehicle = Vehicle::create([
             'plate_number' => 'PIN-'.substr(uniqid(), -8), 'name' => 'Pin check van',
             'vehicle_type' => 'van', 'capacity_kg' => '1000.00', 'status' => 'available',
@@ -168,6 +180,7 @@ class DriverAvailabilityCapacityTest extends TestCase
     {
         $operator = User::factory()->withRole('impex_officer')->create(['is_active' => true]);
         $driver = User::factory()->withRole('driver')->create(['is_active' => true]);
+        $this->addCurrentCredential($driver);
         $vehicle = Vehicle::create([
             'plate_number' => 'CAP-'.substr(uniqid(), -8), 'name' => 'Capacity test van',
             'vehicle_type' => 'van', 'capacity_kg' => '1000.00', 'status' => 'available',
@@ -176,6 +189,15 @@ class DriverAvailabilityCapacityTest extends TestCase
         $delivery->forceFill(['scheduled_date' => today()->toDateString()])->save();
 
         return [$delivery->fresh(), $operator, $driver, $vehicle];
+    }
+
+    private function addCurrentCredential(User $driver): void
+    {
+        DriverCredential::query()->create([
+            'user_id' => $driver->id,
+            'license_number' => 'DL-'.substr(uniqid(), -8),
+            'expires_at' => today()->addYear()->toDateString(),
+        ]);
     }
 
     private function plan(User $driver, Vehicle $vehicle, string $weight): array

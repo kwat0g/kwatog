@@ -354,7 +354,7 @@ function MyWorkOrderDetail() {
   const earlierReport = data &&
     (data.can_report_late_production || data.historical_report_only) && (
       <LateProductionEntry
-        collapsed={data.can_record && !data.historical_report_only}
+        collapsed={remaining === 0 || (data.can_record && !data.historical_report_only)}
         workOrderId={id!}
         key={`${userId}-${id}-${data.crew.id}`}
         crew={data.crew}
@@ -547,7 +547,8 @@ function MyWorkOrderDetail() {
                 blocked={data.status !== 'in_progress' || !!pending || latePending || order.isError}
               />
             )}
-            {(data.can_record ||
+            {remaining > 0 &&
+              (data.can_record ||
               ((data.can_report_late_production || data.can_record_trial) &&
                 !data.historical_report_only &&
                 (finishFirst ||

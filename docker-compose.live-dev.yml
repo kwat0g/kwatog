@@ -1,0 +1,96 @@
+# Public hot-reload mode for the current live ERP.
+# The SPA and Laravel application source are mounted read-only from the repo.
+# API requests still use the existing production environment/database and
+# shared document storage. This file deliberately defines no migration service.
+services:
+  nginx:
+    volumes:
+      - ./docker/nginx/prod-live-dev.conf:/etc/nginx/templates/default.conf.template:ro
+
+  api-live-dev:
+    image: ogami-erp-api
+    container_name: ogami-api-live-dev
+    restart: unless-stopped
+    working_dir: /var/www
+    env_file:
+      - path: .env
+        format: raw
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_MAINTENANCE_DRIVER: cache
+      APP_MAINTENANCE_STORE: redis
+    volumes:
+      - ./api/app:/var/www/app:ro
+      - ./api/routes:/var/www/routes:ro
+      - ./docker/php/live-dev-opcache.ini:/usr/local/etc/php/conf.d/zz-live-dev.ini:ro
+      - appstorage:/var/www/storage/app
+    # Development mode keeps config and route files uncached so PHP source
+    # changes are visible without rebuilding. These commands only clear local
+    # Laravel bootstrap/view files; they do not access the database.
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - php artisan config:clear && php artisan route:clear && php artisan view:clear && exec php-fpm -F
+    networks: [ogami-net]
+
+  # Scheduled DSS runs execute in a separate container from the web API.
+  # Mount application source there as well so scheduled recommendations use
+  # the same live code, without rebuilding the worker image or running migrations.
+  scheduler:
+    volumes:
+      - ./api/app:/var/www/app:ro
+      - ./api/routes:/var/www/routes:ro
+      - ./docker/php/live-dev-scheduler.ini:/usr/local/etc/php/conf.d/zzz-live-dev-scheduler.ini:ro
+
+  # The scheduler enqueues DSS jobs; Horizon executes them and needs the same
+  # live application code to discover newly registered detectors.
+  horizon:
+    volumes:
+      - ./api/app:/var/www/app:ro
+      - ./api/routes:/var/www/routes:ro
+      - ./docker/php/live-dev-scheduler.ini:/usr/local/etc/php/conf.d/zzz-live-dev-scheduler.ini:ro
+
+  live-spa:
+    build:
+      context: .
+      dockerfile: docker/dev-hot/Dockerfile
+    image: ogami-erp-live-spa
+    container_name: ogami-spa-live-dev
+    restart: unless-stopped
+    working_dir: /app
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /home/node/.npm:rw,noexec,nosuid,size=128m
+    volumes:
+      - ./spa:/app:ro
+      - live_dev_spa_node_modules:/app/node_modules
+    environment:
+      HOME: /home/node
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+      VITE_DISABLE_API_PROXY: "true"
+      VITE_HMR_HOST: ${SERVER_NAME:-ogamiph.dev}
+      VITE_HMR_PORT: "443"
+      VITE_HMR_PROTOCOL: wss
+      NGINX_PORT: "443"
+      VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-ogami_reverb}
+      VITE_REVERB_HOST: ${VITE_REVERB_HOST:-ogamiph.dev}
+      VITE_REVERB_PORT: ${VITE_REVERB_PORT:-443}
+      VITE_REVERB_SCHEME: https
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    networks: [ogami-net]
+
+volumes:
+  live_dev_spa_node_modules:
+    name: ogami-erp-live-dev-spa-node-modules

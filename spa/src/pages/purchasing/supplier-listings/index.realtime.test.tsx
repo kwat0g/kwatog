@@ -73,6 +73,25 @@ describe('supplier listing realtime review actions', () => {
     }));
   });
 
+  it('shows the supplier-provided product photo in the internal review list', async () => {
+    vi.mocked(supplierListingsApi.list).mockResolvedValue(page([listing({
+      image: {
+        original_filename: 'resin-sample.jpg',
+        mime_type: 'image/jpeg',
+        size_bytes: 1234,
+        url: '/api/v1/purchasing/supplier-listings/listing-1/image',
+      },
+    })]));
+
+    renderPage();
+
+    const photos = await screen.findAllByRole('img', { name: 'Resin supplier listing photo' });
+    expect(photos.length).toBeGreaterThan(0);
+    photos.forEach((photo) => {
+      expect(photo).toHaveAttribute('src', '/api/v1/purchasing/supplier-listings/listing-1/image');
+    });
+  });
+
   it('hides status-derived controls when the server says this row is not actionable', async () => {
     vi.mocked(supplierListingsApi.list).mockResolvedValue(page([listing({
       available_actions: { approve: false, reject: false },

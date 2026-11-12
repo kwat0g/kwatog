@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Support\StockProductionLimits;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\OpenSupplyService;
@@ -78,10 +79,13 @@ final class StockProductionPlanningService
 
                 return app(WorkOrderService::class)->show($prior);
             }
-            if (Carbon::parse($data['planned_end'])->lte(now()) || (int) $data['quantity_target'] > 2147483647
+            if ((int) $data['quantity_target'] > StockProductionLimits::MAX_QUANTITY) {
+                throw new BusinessRuleException('Stock work orders are limited to 5,000 pieces.');
+            }
+            if (Carbon::parse($data['planned_end'])->lte(now())
                 || (int) ($data['minimum_workers'] ?? 1) < 1 || (int) ($data['maximum_workers'] ?? 4) > 4
                 || (int) ($data['maximum_workers'] ?? 4) < (int) ($data['minimum_workers'] ?? 1)) {
-                throw new BusinessRuleException('Stock deadline must be future, quantity within production limits, and workers between 1 and 4.');
+                throw new BusinessRuleException('Stock deadline must be future and workers between 1 and 4.');
             }
             $product = Product::query()->lockForUpdate()->findOrFail($data['product_id']);
             $readiness = $this->productReadiness($product);

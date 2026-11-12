@@ -68,6 +68,68 @@ class CustomerPortalOrderAvailabilityTest extends TestCase
             ->assertJsonPath('data.0.availability_mode', 'make_to_order');
     }
 
+    public function test_customer_product_order_limits_are_returned_and_enforced(): void
+    {
+        [$customer, $portal, $product] = $this->portalProduct(['portal_catalog_mode' => 'restricted']);
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+
+        $this->actingAs($admin)->putJson('/api/v1/crm/customers/'.$customer->hash_id.'/product-access', [
+            'portal_catalog_mode' => 'restricted',
+            'product_ids' => [$product->hash_id],
+            'product_order_limits' => [[
+                'product_id' => $product->hash_id,
+                'minimum_order_quantity' => 5,
+                'maximum_order_quantity' => 20,
+            ]],
+        ])->assertOk()
+            ->assertJsonPath('data.products.0.minimum_order_quantity', '5.000')
+            ->assertJsonPath('data.products.0.maximum_order_quantity', '20.000');
+
+        $this->actingAs($portal, 'customer_portal');
+        $this->postOrder([[
+            'product_id' => $product->hash_id,
+            'quantity' => 4,
+            'delivery_date' => now()->addDays(7)->toDateString(),
+        ]])->assertUnprocessable()->assertJsonValidationErrors('items.0.quantity');
+
+        $this->postOrder([[
+            'product_id' => $product->hash_id,
+            'quantity' => 21,
+            'delivery_date' => now()->addDays(7)->toDateString(),
+        ]])->assertUnprocessable()->assertJsonValidationErrors('items.0.quantity');
+    }
+
+    public function test_customer_portal_order_saves_requested_payment_terms_for_sales_review(): void
+    {
+        [$customer, $portal, $product] = $this->portalProduct(['payment_terms_days' => 30]);
+        $this->actingAs($portal, 'customer_portal');
+
+        $this->postJson('/api/v1/b2b/customer/orders', [
+            'items' => [[
+                'product_id' => $product->hash_id,
+                'quantity' => 2,
+                'delivery_date' => now()->addDays(7)->toDateString(),
+            ]],
+            'payment_method' => 'cash',
+            'payment_terms_days' => 45,
+        ], ['Idempotency-Key' => 'order-payment-terms-'.(++$this->requestNumber)])->assertCreated();
+
+        $order = SalesOrder::query()->where('customer_id', $customer->id)->firstOrFail();
+        $this->assertSame(45, $order->payment_terms_days);
+        $this->assertSame(45, $order->customer_terms_snapshot['requested_payment_terms_days']);
+
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+        $this->actingAs($admin)->putJson('/api/v1/crm/sales-orders/'.$order->hash_id.'/review-payment-terms', [
+            'payment_terms_days' => 30,
+        ])->assertOk()
+            ->assertJsonPath('data.payment_terms_days', 30)
+            ->assertJsonPath('data.customer_terms_snapshot.requested_payment_terms_days', 45);
+    }
+
     public function test_restricted_customer_catalog_contains_only_products_assigned_to_that_customer(): void
     {
         [$customer, $portal, $allowed] = $this->portalProduct(['portal_catalog_mode' => 'restricted']);
@@ -158,6 +220,7 @@ class CustomerPortalOrderAvailabilityTest extends TestCase
         return $this->postJson('/api/v1/b2b/customer/orders', [
             'items' => $items,
             'payment_method' => 'cash',
+            'payment_terms_days' => 30,
         ], ['Idempotency-Key' => 'availability-test-'.(++$this->requestNumber)]);
     }
 }

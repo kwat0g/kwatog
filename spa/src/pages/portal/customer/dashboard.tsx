@@ -16,6 +16,31 @@ import { formatPeso } from '@/lib/formatNumber';
 import { complaintStatusVariant, deliveryStatusVariant, invoiceStatusVariant, salesOrderStatusVariant } from '@/lib/statusVariants';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+const coveredIssueLabels: Record<string, string> = {
+  manufacturing_defect: 'Manufacturing defect',
+  shipping_damage: 'Shipping damage',
+  customer_caused_damage: 'Customer-caused damage',
+};
+
+const remedyLabels: Record<string, string> = {
+  repair: 'Repair',
+  replace: 'Replace',
+  credit: 'Credit',
+  refund: 'Refund',
+};
+
+function agreementQuantityRange(minimum: string, maximum: string | null, unit: string | null): string {
+  const formatter = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 3 });
+  const min = formatter.format(Number(minimum));
+  const unitLabel = unit ? ` ${unit}` : '';
+  if (maximum === null) return `At least ${min}${unitLabel} (no maximum)`;
+  return `${min}–${formatter.format(Number(maximum))}${unitLabel}`;
+}
+
+function warrantyList(values: string[] | null, labels: Record<string, string>): string {
+  return values?.length ? values.map((value) => labels[value] ?? value.replaceAll('_', ' ')).join(', ') : 'Not specified';
+}
+
 export default function CustomerDashboardPage() {
   const dashboard = useQuery({
     queryKey: ['portal', 'customer', 'dashboard'],
@@ -26,7 +51,6 @@ export default function CustomerDashboardPage() {
     queryFn: () => customerPortalApi.me(),
   });
   const terms = account.data?.customer_terms;
-  const warranty = terms?.warranty_defaults;
 
   const viewAll = (to: string) => (
     <Link to={to} className="text-2xs text-accent hover:underline flex items-center gap-1">
@@ -79,16 +103,55 @@ export default function CustomerDashboardPage() {
                   <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
                     <div><dt className="text-xs text-muted">Agreement status</dt><dd className="mt-0.5 capitalize">{terms.agreement_status.replaceAll('_', ' ')}</dd></div>
                     <div><dt className="text-xs text-muted">Agreement period</dt><dd className="mt-0.5">{terms.agreement_starts_on || terms.agreement_ends_on ? `${formatDate(terms.agreement_starts_on)} – ${formatDate(terms.agreement_ends_on)}` : 'Not recorded'}</dd></div>
-                    <div><dt className="text-xs text-muted">Payment terms</dt><dd className="mt-0.5">{terms.payment_terms_days} days</dd></div>
+                    <div><dt className="text-xs text-muted">Account default payment terms</dt><dd className="mt-0.5">{terms.payment_terms_days} days</dd></div>
                     <div><dt className="text-xs text-muted">Allowed payment methods</dt><dd className="mt-0.5">{terms.allowed_payment_methods === null ? 'All supported methods' : terms.allowed_payment_methods.length ? terms.allowed_payment_methods.map((method) => ({ cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer' })[method]).join(', ') : 'None configured'}</dd></div>
                     <div><dt className="text-xs text-muted">Shipping paid by</dt><dd className="mt-0.5">{terms.shipping_payer ? terms.shipping_payer === 'company' ? 'Company' : 'Customer' : 'Not specified'}</dd></div>
-                    <div><dt className="text-xs text-muted">Warranty duration</dt><dd className="mt-0.5">{warranty?.warranty_duration_days != null ? `${warranty.warranty_duration_days} days` : 'Not specified'}</dd></div>
-                    <div><dt className="text-xs text-muted">Report deadline (from delivery)</dt><dd className="mt-0.5">{warranty?.warranty_report_window_days != null ? `${warranty.warranty_report_window_days} days` : 'Not specified'}</dd></div>
-                    <div><dt className="text-xs text-muted">Warranty starts from</dt><dd className="mt-0.5">{warranty?.warranty_start_basis ? warranty.warranty_start_basis[0].toUpperCase() + warranty.warranty_start_basis.slice(1) : 'Not specified'}</dd></div>
-                    <div><dt className="text-xs text-muted">Covered issues</dt><dd className="mt-0.5">{warranty?.warranty_covered_issues?.length ? warranty.warranty_covered_issues.map((issue) => ({ manufacturing_defect: 'Manufacturing defect', shipping_damage: 'Shipping damage', customer_caused_damage: 'Customer-caused damage' })[issue]).join(', ') : 'Not specified'}</dd></div>
-                    <div><dt className="text-xs text-muted">Possible remedies</dt><dd className="mt-0.5">{warranty?.warranty_remedies?.length ? warranty.warranty_remedies.map((remedy) => ({ repair: 'Repair', replace: 'Replace', credit: 'Credit', refund: 'Refund' })[remedy]).join(', ') : 'Not specified'}</dd></div>
                   </dl>
-                  <p className="border-t border-subtle pt-3 text-xs text-muted">Order totals exclude freight. Sales confirms any customer-paid freight separately. Warranty reports are reviewed by our team under these terms.</p>
+                  <section aria-labelledby="customer-product-terms-title" className="space-y-3 border-t border-subtle pt-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <h3 id="customer-product-terms-title" className="text-sm font-semibold text-primary">Product terms</h3>
+                      <span className="text-xs text-muted">{data.product_terms?.length ?? 0} products in your agreement</span>
+                    </div>
+                    {data.product_terms?.length ? (
+                      <ul className="space-y-2">
+                        {data.product_terms.map((product) => (
+                          <li key={product.id} className="rounded-md border border-subtle bg-elevated/20 p-3">
+                            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-medium text-primary">{product.part_number} · {product.name}</h4>
+                                <p className="mt-1 text-xs text-muted">
+                                  Quantity per order: {agreementQuantityRange(product.minimum_order_quantity, product.maximum_order_quantity, product.unit_of_measure)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3 border-t border-subtle pt-3">
+                              <p className="text-xs font-medium text-primary">Warranty choices</p>
+                              {product.warranty_options.length ? (
+                                <ul className="mt-2 space-y-2">
+                                  {product.warranty_options.map((option) => (
+                                    <li key={option.id} className="rounded-sm bg-canvas/70 px-3 py-2">
+                                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                        <span className="text-sm font-medium text-primary">{option.label}</span>
+                                        <span className="text-xs text-muted">{option.warranty_duration_days == null ? 'Duration not specified' : `${option.warranty_duration_days} days`}</span>
+                                      </div>
+                                      <dl className="mt-2 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
+                                        <div><dt className="text-muted">Report deadline (from delivery)</dt><dd className="mt-0.5">{option.warranty_report_window_days == null ? 'Not specified' : `${option.warranty_report_window_days} days`}</dd></div>
+                                        <div><dt className="text-muted">Warranty starts from</dt><dd className="mt-0.5">{option.warranty_start_basis ? option.warranty_start_basis[0].toUpperCase() + option.warranty_start_basis.slice(1) : 'Not specified'}</dd></div>
+                                        <div><dt className="text-muted">Covered issues</dt><dd className="mt-0.5">{warrantyList(option.warranty_covered_issues, coveredIssueLabels)}</dd></div>
+                                        <div><dt className="text-muted">Remedies</dt><dd className="mt-0.5">{warrantyList(option.warranty_remedies, remedyLabels)}</dd></div>
+                                      </dl>
+                                      {option.additional_terms && <p className="mt-2 whitespace-pre-line text-xs text-muted">{option.additional_terms}</p>}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : <p className="mt-1 text-xs text-muted">No product warranty choices are recorded.</p>}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="rounded-md border border-dashed border-subtle px-3 py-4 text-sm text-muted">No products are currently listed in your agreement. Contact Sales if you expect to place an order.</p>}
+                  </section>
+                  <p className="border-t border-subtle pt-3 text-xs text-muted">The account payment term is a default; you may request different terms on each order for Sales to review. Order totals exclude freight. Sales confirms any customer-paid freight separately. Warranty reports are reviewed under the product terms above.</p>
                 </div>
                   : <p className="text-sm text-muted">No account terms are recorded. Contact Sales for details.</p>}
           </Panel>

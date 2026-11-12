@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Resources;
 
+use App\Modules\B2B\Services\PortalAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,6 +12,11 @@ class SupplierPortalUserResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $resendsToday = $this->getAttribute('resends_today');
+        if ($resendsToday === null) {
+            $resendsToday = app(PortalAccessService::class)->resendsToday($this->resource);
+        }
+
         return [
             'id' => $this->hash_id,
             'name' => $this->name,
@@ -18,6 +24,7 @@ class SupplierPortalUserResource extends JsonResource
             'is_active' => (bool) $this->is_active,
             'is_authorized_signatory' => (bool) $this->is_authorized_signatory,
             'must_change_password' => (bool) $this->must_change_password,
+            'resends_remaining_today' => max(0, 3 - (int) $resendsToday),
             'status' => $this->portalStatus(),
             'deleted_at' => optional($this->deleted_at)->toIso8601String(),
             'vendor_id' => app('hashids')->encode((int) $this->vendor_id),

@@ -1,0 +1,71 @@
+# Local-only full-stack hot reload for customer workflow development.
+# Compose this with docker-compose.e2e.yml; it uses the disposable E2E API and
+# database and never publishes a service beyond loopback.
+services:
+  api:
+    environment:
+      FRONTEND_URL: http://127.0.0.1:${DEV_PREVIEW_PORT:-5175}
+      SANCTUM_STATEFUL_DOMAINS: "127.0.0.1:${DEV_PREVIEW_PORT:-5175},localhost:${DEV_PREVIEW_PORT:-5175},127.0.0.1:${E2E_HTTPS_PORT:-18443},localhost:${E2E_HTTPS_PORT:-18443},nginx"
+
+  nginx:
+    networks:
+      - e2e
+      - hot-dev-access
+
+  hot-spa:
+    build:
+      context: .
+      dockerfile: docker/dev-hot/Dockerfile
+    profiles: [hot-dev]
+    working_dir: /app
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /home/node/.npm:rw,noexec,nosuid,size=128m
+    volumes:
+      - ./spa:/app:ro
+      - hot_dev_spa_node_modules:/app/node_modules
+    environment:
+      HOME: /home/node
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+      E2E_ENV: "true"
+      VITE_API_PROXY_TARGET: http://nginx
+      VITE_HMR_HOST: 127.0.0.1
+      VITE_HMR_PORT: ${DEV_PREVIEW_PORT:-5175}
+      VITE_HMR_PROTOCOL: ws
+      NGINX_PORT: ${DEV_PREVIEW_PORT:-5175}
+      VITE_REVERB_APP_KEY: ${VITE_REVERB_APP_KEY:?Set VITE_REVERB_APP_KEY in .env.e2e}
+      VITE_REVERB_HOST: 127.0.0.1
+      VITE_REVERB_PORT: ${E2E_HTTPS_PORT:-18443}
+      VITE_REVERB_SCHEME: https
+    command: ["sh", "-lc", "npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"]
+    ports:
+      - "127.0.0.1:${DEV_PREVIEW_PORT:-5175}:5173"
+    depends_on:
+      nginx:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # Vite's initial optimizer scans a large SPA module graph and needs more
+    # headroom than the runtime's normal idle footprint.
+    mem_limit: 2g
+    networks:
+      - e2e
+      - hot-dev-access
+
+volumes:
+  hot_dev_spa_node_modules:
+    name: ogami-erp-e2e-hot-dev-spa-node-modules
+
+networks:
+  hot-dev-access:
+    name: ogami-erp-hot-dev-access

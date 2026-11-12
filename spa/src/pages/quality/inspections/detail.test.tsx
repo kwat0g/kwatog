@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import toast, { Toaster } from 'react-hot-toast';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import InspectionDetailPage from './detail';
 import { inspectionsApi } from '@/api/quality/inspections';
 import { analyticsApi } from '@/api/quality/analytics';
@@ -94,6 +94,8 @@ const inspection = {
 } as unknown as Inspection;
 
 describe('InspectionDetailPage', () => {
+  beforeEach(() => defectEvidenceMocks.list.mockResolvedValue([]));
+
   afterEach(() => {
     permissionState.can.mockReturnValue(true);
     act(() => toast.dismiss());

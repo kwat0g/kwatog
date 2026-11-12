@@ -82,6 +82,9 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
   const datesValid = !scheduledDate || !expectedDate || expectedDate >= scheduledDate;
   const selectedVehicle = (vehicles.data?.data ?? []).find((vehicle) => vehicle.id === vehicleId)
     ?? (delivery.vehicle?.id === vehicleId ? delivery.vehicle : undefined);
+  const selectedDriver = drivers.data?.find((driver) => driver.id === driverId);
+  const retainedLoadingDriver = delivery.status === 'loading' && delivery.driver?.id === driverId;
+  const driverCredentialValid = selectedDriver?.credential_status === 'valid' || retainedLoadingDriver;
   const vehicleCapacity = selectedVehicle?.capacity_kg ?? null;
   const weightFormatValid = /^\d+(?:\.\d{1,2})?$/.test(shipmentWeight.trim());
   const shipmentWeightHundredths = weightFormatValid ? Math.round(Number(shipmentWeight) * 100) : null;
@@ -96,7 +99,7 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
         ? `Shipment weight exceeds the selected vehicle capacity of ${formatWeight(vehicleCapacity)} kg.`
         : 'Enter a weight greater than zero with up to two decimal places.'
     : undefined);
-  const complete = Boolean(scheduledDate && expectedDate && carrier.trim() && vehicleId && driverId) && weightValid &&
+  const complete = Boolean(scheduledDate && expectedDate && carrier.trim() && vehicleId && driverId) && driverCredentialValid && weightValid &&
     datesValid && (!assignmentChanged || reason.trim().length >= 5);
   const lookupsUnavailable = vehicles.isLoading || vehicles.isError || drivers.isLoading || drivers.isError;
 
@@ -118,17 +121,18 @@ export function ShipmentPlanDialog({ delivery, onClose }: { delivery: Delivery; 
         </Select>
         <Select label="Driver" required value={driverId} onChange={(event) => setDriverId(event.target.value)} error={fieldError('driver_id')} disabled={save.isPending || drivers.isLoading || drivers.isError || delivery.status === 'loading'}>
           <option value="">{drivers.isLoading ? 'Loading drivers…' : 'Select active driver'}</option>
-          {delivery.driver && !drivers.data?.some((driver) => driver.id === delivery.driver?.id) && <option value={delivery.driver.id}>{delivery.driver.name}</option>}
-          {(drivers.data ?? []).map((driver) => <option key={driver.id} value={driver.id} disabled={driver.credential_status === 'expired'}>{driver.name}{driver.credential_status === 'expired' ? ` · license expired${driver.credential_expires_at ? ` ${driver.credential_expires_at}` : ''}` : driver.credential_status === 'missing' ? ' · license not recorded' : ''}</option>)}
+          {delivery.driver && !drivers.data?.some((driver) => driver.id === delivery.driver?.id) && <option value={delivery.driver.id} disabled>{delivery.driver.name}{retainedLoadingDriver ? ' · current assignment' : ' · unavailable; select another driver'}</option>}
+          {(drivers.data ?? []).map((driver) => <option key={driver.id} value={driver.id} disabled={driver.credential_status !== 'valid'}>{driver.name}{driver.credential_status === 'expired' ? ` · license expired${driver.credential_expires_at ? ` ${driver.credential_expires_at}` : ''}` : driver.credential_status === 'missing' ? ' · license credential required' : ''}</option>)}
         </Select>
       </div>
       <div className="space-y-1.5">
         <Input label="Shipment weight (kg)" type="number" min="0.01" max="9999999999.99" step="0.01" required value={shipmentWeight} onChange={(event) => setShipmentWeight(event.target.value)} error={weightError} disabled={save.isPending} />
         {vehicleCapacity !== null && <p className="text-xs text-muted">Vehicle payload capacity: {formatWeight(vehicleCapacity)} kg</p>}
       </div>
-      {delivery.status === 'loading' && <p className="text-xs text-muted">Vehicle and driver are fixed after loading begins.</p>}
+      {delivery.status === 'loading' && <p className="text-xs text-muted">Vehicle and driver are fixed after loading begins. Fleet must keep the assigned driver’s license current.</p>}
       {vehicles.isError && <p role="alert" className="text-sm text-danger-fg">Could not load vehicles. <Button size="sm" type="button" onClick={() => vehicles.refetch()}>Retry vehicles</Button></p>}
       {drivers.isError && <p role="alert" className="text-sm text-danger-fg">Could not load drivers. <Button size="sm" type="button" onClick={() => drivers.refetch()}>Retry drivers</Button></p>}
+      {!lookupsUnavailable && !(drivers.data ?? []).some((driver) => driver.credential_status === 'valid') && !retainedLoadingDriver && <p role="status" className="text-sm text-warning-fg">No assignable driver has a current license credential. Ask Fleet to record a license number and expiry date.</p>}
       {!lookupsUnavailable && ((!vehicles.data?.data.length && !delivery.vehicle) || (!drivers.data?.length && !delivery.driver)) && <p role="status" className="text-sm text-warning-fg">No available vehicle or active driver. Ask dispatch to check fleet and driver availability.</p>}
       <Textarea label={assignmentChanged ? 'Reason for reassignment' : 'Shipment instructions (optional)'} required={assignmentChanged} minLength={assignmentChanged ? 5 : undefined} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} error={fieldError('reason')} disabled={save.isPending} rows={2} />
       <div className="space-y-2 border-t border-default pt-4">

@@ -60,7 +60,13 @@ class SupplierAgreementDocumentController
         $data = $request->validate([
             'file' => ['nullable', 'file', 'mimes:pdf', 'max:10240', 'required_without:template_id'],
             'template_id' => ['nullable', 'string', 'required_without:file'],
+            'effective_date' => ['nullable', 'date_format:Y-m-d'],
+            'expiry_date' => ['nullable', 'date_format:Y-m-d'],
         ]);
+        if (! empty($data['effective_date']) && ! empty($data['expiry_date'])
+            && $data['expiry_date'] < $data['effective_date']) {
+            throw ValidationException::withMessages(['expiry_date' => ['Agreement end date must be on or after its start date.']]);
+        }
         if ($request->hasFile('file') === filled($data['template_id'] ?? null)) {
             throw ValidationException::withMessages(['file' => 'Attach one PDF or choose one contract template.']);
         }
@@ -72,7 +78,7 @@ class SupplierAgreementDocumentController
             $filename = $this->safeFilename($upload->getClientOriginalName());
         } else {
             $template = $this->findTemplate((string) $data['template_id']);
-            $content = $this->filledTemplate($template, $this->vendorValues($vendor));
+            $content = $this->filledTemplate($template, $this->vendorValues($vendor, $data));
             $filename = $this->safeFilename(pathinfo($template->filename, PATHINFO_FILENAME).'-supplier-agreement.pdf');
         }
         if (! is_string($content) || ! str_starts_with($content, '%PDF-')) {
@@ -172,7 +178,7 @@ class SupplierAgreementDocumentController
     }
 
     /** @return array<string, scalar|null> */
-    private function vendorValues(Vendor $vendor): array
+    private function vendorValues(Vendor $vendor, array $agreementValues = []): array
     {
         return [
             'vendor_name' => $vendor->name,
@@ -181,8 +187,8 @@ class SupplierAgreementDocumentController
             'vendor_phone' => $vendor->phone,
             'vendor_address' => $vendor->address,
             'payment_terms' => $vendor->payment_terms_days === null ? null : $vendor->payment_terms_days.' days',
-            'effective_date' => null,
-            'expiry_date' => null,
+            'effective_date' => $agreementValues['effective_date'] ?? null,
+            'expiry_date' => $agreementValues['expiry_date'] ?? null,
         ];
     }
 

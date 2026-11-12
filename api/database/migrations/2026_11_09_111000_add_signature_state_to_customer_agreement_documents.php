@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('customer_agreement_documents', function (Blueprint $table): void {
-            $table->string('signature_status', 20)->default('pending');
+            $table->string('signature_status', 20)->default('draft');
             $table->string('document_sha256', 64)->nullable();
             $table->foreignId('template_id')->nullable()->constrained('portal_contract_templates')->nullOnDelete();
             $table->unsignedInteger('template_version')->nullable();

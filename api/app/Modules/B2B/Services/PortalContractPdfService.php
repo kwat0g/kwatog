@@ -15,8 +15,8 @@ final class PortalContractPdfService
     private const ALLOWED_KEYS = [
         'customer' => [
             'customer_name', 'customer_contact_name', 'customer_contact_role', 'customer_email', 'customer_phone',
-            'customer_address', 'delivery_address', 'payment_terms', 'effective_date', 'expiry_date',
-            'allowed_products_summary', 'warranty_summary',
+            'customer_address', 'delivery_address', 'delivery_map_pin', 'payment_terms', 'allowed_payment_methods',
+            'shipping_payer', 'effective_date', 'expiry_date', 'allowed_products_summary', 'warranty_summary',
         ],
         'supplier' => [
             'vendor_name', 'vendor_contact_name', 'vendor_email', 'vendor_phone', 'vendor_address',

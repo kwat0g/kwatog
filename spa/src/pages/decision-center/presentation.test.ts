@@ -62,6 +62,44 @@ describe('decisionView', () => {
     }
   });
 
+  it('explains inventory stockouts and routes finished goods toward production', () => {
+    const view = decisionView(
+      recommendationFixture({
+        detector_id: 'dss.inventory_stockout',
+        domain: 'inventory',
+        type: 'inventory_stockout',
+        data_sufficiency: 'partial',
+        rationale: {
+          rule: 'zero_usable_stock',
+          item_code: 'PC-001',
+          item_name: 'Pivot Cap Cover Type A',
+          item_type: 'finished_good',
+          usable_quantity: '0.000',
+          active_threshold: null,
+          threshold_source: 'finished_good_stockout',
+          shortage_quantity: '0.000',
+          replenishment_path: 'production',
+        },
+        action: { route: '/production/work-orders', label: 'Review production →' },
+      }),
+    );
+
+    expect(view).toMatchObject({
+      title: 'Finished good out of stock · PC-001',
+      area: 'Inventory',
+      summary: expect.stringContaining('production'),
+      evidenceLabel: 'Limited evidence',
+      actionLabel: 'Review production planning',
+      facts: [
+        { label: 'Item', value: 'PC-001' },
+        { label: 'Name', value: 'Pivot Cap Cover Type A' },
+        { label: 'Usable stock', value: '0' },
+        { label: 'Trigger', value: 'No usable stock' },
+        { label: 'Planning threshold', value: 'Not configured' },
+      ],
+    });
+  });
+
   it('limits rows and references, preserves underscores, and rejects invalid numeric values', () => {
     const rows = Array.from({ length: 7 }, (_, i) => ({
       document: `DOC_${i}`,

@@ -15,6 +15,7 @@ use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Events\LowStockPrCreated;
 use App\Modules\Dashboard\Events\BadgesChanged;
@@ -62,6 +63,13 @@ class AutoReplenishmentService
             if (! $item->is_active) {
                 $this->clearBlocked($item);
 
+                return null;
+            }
+
+            // Finished goods are made through stock production planning. The
+            // supplier replenishment path is for purchased inputs and must not
+            // create a purchase request for the company's own sellable product.
+            if ($item->item_type === ItemType::FinishedGood) {
                 return null;
             }
 

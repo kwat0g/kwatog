@@ -19,6 +19,7 @@ import { ShipToAddress } from '@/components/supply-chain/ShipToAddress';
 import { CustomerProductAccessManager } from '@/components/crm/CustomerProductAccessManager';
 import { CustomerWarrantyOptionsManager } from '@/components/crm/CustomerWarrantyOptionsManager';
 import { AgreementDocumentManager } from '@/components/contracts/AgreementDocumentManager';
+import { customerAgreementPreviewValues } from '@/components/contracts/customerAgreementPreview';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
@@ -43,6 +44,18 @@ export default function CrmCustomerDetailPage() {
  queryKey: ['crm', 'customers', 'detail', id],
  queryFn: () => crmCustomersApi.show(id),
  enabled: !!id,
+ });
+
+ const { data: productAccess } = useQuery({
+  queryKey: ['crm', 'customers', id, 'product-access'],
+  queryFn: () => crmCustomersApi.productAccess(id),
+  enabled: !!id,
+ });
+
+ const { data: warrantyOptions } = useQuery({
+  queryKey: ['crm', 'customers', id, 'warranty-options'],
+  queryFn: () => crmCustomersApi.warrantyOptions(id),
+  enabled: !!id,
  });
 
  const { data: ordersData } = useQuery({
@@ -126,6 +139,17 @@ export default function CrmCustomerDetailPage() {
  { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.is_currently_active ? 'success' : 'neutral'}>{r.is_currently_active ? 'active' : 'expired'}</Chip> },
  ];
 
+ const latitude = customer.delivery_latitude == null ? null : Number(customer.delivery_latitude);
+ const longitude = customer.delivery_longitude == null ? null : Number(customer.delivery_longitude);
+ const hasDeliveryPin = latitude !== null && longitude !== null
+  && Number.isFinite(latitude) && Number.isFinite(longitude)
+  && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+ const deliveryPinUrl = hasDeliveryPin
+  ? `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`
+  : null;
+ const authorizedProductCount = productAccess?.products.filter((product) => product.is_authorized).length;
+ const warrantyChoiceCount = warrantyOptions?.length;
+
  return (
  <div>
  <PageHeader
@@ -169,68 +193,85 @@ export default function CrmCustomerDetailPage() {
  bottom={hasFeatureTabs ? <Tabs label="Customer sections" idPrefix="customer-sections" value={activeTab} onChange={setTab} items={availableTabs} className="border-b-0" /> : null}
  />
 
- <div className="space-y-6 px-5 py-5">
+ <div className="space-y-5 px-5 py-5">
  {activeTab === 'details' ? <>
  <div id={hasFeatureTabs ? 'customer-sections-panel-' + activeTab : undefined} role={hasFeatureTabs ? 'tabpanel' : undefined} aria-labelledby={hasFeatureTabs ? 'customer-sections-tab-' + activeTab : undefined} className="space-y-6">
- <div className="grid gap-6 xl:grid-cols-3">
- <Panel title="Customer profile" className="min-w-0">
- <dl className="space-y-3 text-sm">
+ <div className="grid gap-4 xl:grid-cols-3">
+ <Panel title="Customer and billing" className="min-w-0">
+ <dl className="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
  <div><dt className="text-muted text-xs">Contact person</dt><dd>{customer.contact_person ?? <span className="text-muted">—</span>}</dd></div>
+ <div><dt className="text-muted text-xs">Contact role / title</dt><dd>{customer.contact_person_role ?? <span className="text-muted">—</span>}</dd></div>
  <div><dt className="text-muted text-xs">Email</dt><dd>{customer.email ? <a href={'mailto:' + customer.email} className="break-words text-accent hover:underline">{customer.email}</a> : <span className="text-muted">—</span>}</dd></div>
  <div><dt className="text-muted text-xs">Phone</dt><dd className="font-mono">{customer.phone ?? <span className="text-muted">—</span>}</dd></div>
- <div><dt className="text-muted text-xs">Billing address</dt><dd className="break-words whitespace-pre-wrap">{customer.address ?? <span className="text-muted">—</span>}</dd></div>
- <div><dt className="text-muted text-xs">Payment terms</dt><dd className="font-mono tabular-nums">{customer.payment_terms_days} days</dd></div>
- <div><dt className="text-muted text-xs">Credit limit</dt><dd className="font-mono tabular-nums">{customer.credit_limit ? formatPeso(customer.credit_limit) : <span className="text-muted">—</span>}</dd></div>
+ <div className="sm:col-span-2"><dt className="text-muted text-xs">Billing address</dt><dd className="break-words whitespace-pre-wrap">{customer.address ?? <span className="text-muted">—</span>}</dd></div>
  </dl>
  </Panel>
 
  <Panel title="Delivery" className="min-w-0">
  <ShipToAddress heading={customer.name} address={customer.delivery_address} contactPerson={customer.delivery_contact_person} contactPhone={customer.delivery_contact_phone} emptyHint="No delivery address on file. Deliveries fall back to the billing address above." />
+ <div className="mt-4 border-t border-default pt-3 text-sm">
+  <p className="text-xs text-muted">Required delivery map pin</p>
+  {hasDeliveryPin && deliveryPinUrl ? (
+   <div className="mt-1 space-y-1">
+    <p className="font-mono tabular-nums">{latitude!.toFixed(7)}, {longitude!.toFixed(7)}</p>
+    <a href={deliveryPinUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-accent underline underline-offset-2 hover:text-accent-hover xl:min-h-0">Open delivery pin in map</a>
+   </div>
+  ) : <p role="status" className="mt-1 text-muted">No map pin saved.</p>}
+ </div>
  </Panel>
 
- <Panel title="Agreement terms" className="min-w-0">
- <div className="space-y-4 text-sm">
- <dl className="space-y-3">
+ <Panel title="Commercial terms" className="min-w-0">
+ <div className="space-y-3 text-sm">
+ <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+ <div><dt className="text-muted text-xs">Default payment terms</dt><dd className="font-mono tabular-nums">{customer.payment_terms_days} days <span className="font-sans text-muted">· order can override</span></dd></div>
  <div><dt className="text-muted text-xs">Allowed payment methods</dt><dd>{customer.allowed_payment_methods === null ? 'All supported methods' : customer.allowed_payment_methods.length ? customer.allowed_payment_methods.map((method) => ({ cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer' })[method]).join(', ') : 'None configured'}</dd></div>
+ <div><dt className="text-muted text-xs">Credit limit (optional)</dt><dd className="font-mono tabular-nums">{customer.credit_limit && Number(customer.credit_limit) > 0 ? formatPeso(customer.credit_limit) : 'Not set'}{customer.credit_limit && Number(customer.credit_limit) > 0 && <span className="font-sans text-muted"> · reference</span>}</dd></div>
  <div><dt className="text-muted text-xs">Shipping paid by</dt><dd>{customer.shipping_payer ? ({ customer: 'Customer', company: 'Company' }[customer.shipping_payer]) : <span className="text-muted">—</span>}</dd></div>
  <div><dt className="text-muted text-xs">Agreement period</dt><dd>{customer.agreement_starts_on || customer.agreement_ends_on ? (customer.agreement_starts_on ? formatDate(customer.agreement_starts_on) : '—') + ' to ' + (customer.agreement_ends_on ? formatDate(customer.agreement_ends_on) : '—') : <span className="text-muted">—</span>}</dd></div>
  </dl>
- <div className="space-y-3 border-t border-default pt-4">
- <h4 className="text-label font-semibold text-primary">Warranty defaults</h4>
- <dl className="space-y-3">
- <div><dt className="text-muted text-xs">Duration</dt><dd>{customer.warranty_duration_days != null ? customer.warranty_duration_days + ' days' : <span className="text-muted">—</span>}</dd></div>
- <div><dt className="text-muted text-xs">Report window</dt><dd>{customer.warranty_report_window_days != null ? customer.warranty_report_window_days + ' days' : <span className="text-muted">—</span>}</dd></div>
- <div><dt className="text-muted text-xs">Starts from</dt><dd>{customer.warranty_start_basis ?? <span className="text-muted">—</span>}</dd></div>
- <div><dt className="text-muted text-xs">Covered issues</dt><dd>{customer.warranty_covered_issues?.length ? customer.warranty_covered_issues.map((issue) => ({ manufacturing_defect: 'Manufacturing defect', shipping_damage: 'Shipping damage', customer_caused_damage: 'Customer-caused damage' })[issue]).join(', ') : <span className="text-muted">—</span>}</dd></div>
- <div><dt className="text-muted text-xs">Remedies</dt><dd>{customer.warranty_remedies?.length ? customer.warranty_remedies.map((remedy) => ({ repair: 'Repair', replace: 'Replace', credit: 'Credit', refund: 'Refund' })[remedy]).join(', ') : <span className="text-muted">—</span>}</dd></div>
- </dl>
- </div>
- </div>
+ <details className="border-t border-default pt-3">
+  <summary className="cursor-pointer text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Fallback warranty</summary>
+  <p className="mt-2 text-xs text-muted">Used when no product-specific choice applies.</p>
+  <dl className="mt-3 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
+   <div><dt className="text-muted text-xs">Duration</dt><dd>{customer.warranty_duration_days != null ? customer.warranty_duration_days + ' days' : <span className="text-muted">Not set</span>}</dd></div>
+   <div><dt className="text-muted text-xs">Report window</dt><dd>{customer.warranty_report_window_days != null ? customer.warranty_report_window_days + ' days' : <span className="text-muted">Not set</span>}</dd></div>
+   <div><dt className="text-muted text-xs">Starts from</dt><dd>{customer.warranty_start_basis ?? <span className="text-muted">—</span>}</dd></div>
+   <div><dt className="text-muted text-xs">Covered issues</dt><dd>{customer.warranty_covered_issues?.length ? customer.warranty_covered_issues.map((issue) => ({ manufacturing_defect: 'Manufacturing defect', shipping_damage: 'Shipping damage', customer_caused_damage: 'Customer-caused damage' })[issue]).join(', ') : <span className="text-muted">—</span>}</dd></div>
+   <div><dt className="text-muted text-xs">Remedies</dt><dd>{customer.warranty_remedies?.length ? customer.warranty_remedies.map((remedy) => ({ repair: 'Repair', replace: 'Replace', credit: 'Credit', refund: 'Refund' })[remedy]).join(', ') : <span className="text-muted">—</span>}</dd></div>
+  </dl>
+ </details>
  {customer.agreement_status === 'expired' && <p className="mt-4 rounded border border-warning p-3 text-xs text-warning-fg">Agreement expired. Review terms with the customer; this does not deactivate the customer.</p>}
  {customer.agreement_status === 'not_yet_effective' && <p className="mt-4 rounded border border-warning p-3 text-xs text-warning-fg">Agreement start date is in the future. Review before applying these terms.</p>}
- <CustomerProductAccessManager customerId={customer.id} />
- <CustomerWarrantyOptionsManager customerId={customer.id} />
+ </div>
  </Panel>
  </div>
 
- <AgreementDocumentManager
-  realm="customer"
-  entityId={customer.id}
-  entityName={customer.name}
-  previewValues={{
-   customer_name: customer.name,
-   customer_contact_name: customer.contact_person,
-   customer_contact_role: customer.contact_person_role,
-   customer_email: customer.email,
-   customer_phone: customer.phone,
-   customer_address: customer.address,
-   delivery_address: customer.delivery_address,
-   payment_terms: customer.payment_terms_days == null ? null : `${customer.payment_terms_days} days`,
-   effective_date: customer.agreement_starts_on,
-   expiry_date: customer.agreement_ends_on,
-   warranty_summary: customer.warranty_duration_days == null ? null : `${customer.warranty_duration_days} days from ${customer.warranty_start_basis ?? 'the agreed start date'}`,
-  }}
- />
+ <details className="rounded-md border border-default bg-surface px-4 py-3">
+  <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+   <span className="font-semibold text-primary">Product ordering setup</span>
+   <span className="text-xs text-muted">{authorizedProductCount == null ? 'Manage access and warranties' : `${authorizedProductCount} allowed ${authorizedProductCount === 1 ? 'product' : 'products'} · ${warrantyChoiceCount ?? 0} ${warrantyChoiceCount === 1 ? 'warranty choice' : 'warranty choices'}`}</span>
+  </summary>
+  <section aria-labelledby="customer-ordering-setup-heading" className="mt-4 space-y-4 border-t border-default pt-4">
+   <h2 id="customer-ordering-setup-heading" className="sr-only">Product ordering setup</h2>
+   <CustomerProductAccessManager customerId={customer.id} />
+   <CustomerWarrantyOptionsManager customerId={customer.id} />
+  </section>
+ </details>
+
+ <details className="rounded-md border border-default bg-surface px-4 py-3">
+  <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+   <span className="font-semibold text-primary">Agreement documents</span>
+   <span className="text-xs text-muted">Attach a PDF or prepare a template draft</span>
+  </summary>
+  <div className="mt-4 border-t border-default pt-4">
+   <AgreementDocumentManager
+    realm="customer"
+    entityId={customer.id}
+    entityName={customer.name}
+    previewValues={customerAgreementPreviewValues(customer, productAccess, warrantyOptions)}
+   />
+  </div>
+ </details>
 
  </div>
  </> : activeTab === 'orders' ? (

@@ -7,6 +7,7 @@ export function PricingNavigation({
   current: 'agreements' | 'requests' | 'cost-reviews';
 }) {
   const { can, canAny } = usePermission();
+  const isFinanceReviewer = can('crm.price_agreements.approve') && !can('crm.price_agreements.propose');
   return (
     <TabNavigation
       defaultKey={current}
@@ -19,7 +20,7 @@ export function PricingNavigation({
           'crm.price_agreements.propose',
           'crm.price_agreements.approve',
         )
-          ? [{ key: 'requests', label: 'Pricing requests', to: '/crm/price-agreements/requests' }]
+          ? [{ key: 'requests', label: isFinanceReviewer ? 'Pricing approvals' : 'Pricing requests', to: '/crm/price-agreements/requests' }]
           : []),
         ...(can('inventory.costs.review')
           ? [

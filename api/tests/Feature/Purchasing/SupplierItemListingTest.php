@@ -20,6 +20,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
@@ -338,6 +339,30 @@ class SupplierItemListingTest extends TestCase
         $this->actingAs($this->purchasingOfficer)
             ->getJson('/api/v1/purchasing/supplier-listings')
             ->assertOk();
+    }
+
+    public function test_internal_review_queue_includes_a_permission_protected_listing_image(): void
+    {
+        Storage::fake('local');
+        $path = 'supplier-listing-images/review-photo.png';
+        Storage::disk('local')->put($path, 'fake image bytes');
+        $listing = $this->makeListing([
+            'item_id' => Item::factory()->create()->id,
+            'image_path' => $path,
+            'image_original_filename' => 'resin-sample.png',
+            'image_mime_type' => 'image/png',
+            'image_size_bytes' => 16,
+        ]);
+
+        $this->actingAs($this->purchasingOfficer)
+            ->getJson('/api/v1/purchasing/supplier-listings?id='.$listing->hash_id)
+            ->assertOk()
+            ->assertJsonPath('data.0.image.original_filename', 'resin-sample.png')
+            ->assertJsonPath('data.0.image.url', "/api/v1/purchasing/supplier-listings/{$listing->hash_id}/image");
+
+        $this->get("/api/v1/purchasing/supplier-listings/{$listing->hash_id}/image")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
     }
 
     public function test_pending_review_badge_matches_queue_and_requires_view_and_review_access(): void

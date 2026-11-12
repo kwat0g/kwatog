@@ -26,6 +26,7 @@ class StorePortalOrderRequest extends FormRequest
             'idempotency_key' => ['required', 'string', 'max:128', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
             'date' => ['sometimes', 'nullable', 'date'],
             'payment_method' => ['required', 'string', Rule::in(['cash', 'check', 'bank_transfer'])],
+            'payment_terms_days' => ['required', 'integer', 'between:0,365'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'string', 'distinct'],

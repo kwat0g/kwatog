@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Events\PortalAccountAccessRevoked;
+use App\Modules\B2B\Mail\PortalAccessInvitationMail;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Services\PortalInvitationService;
 use Database\Seeders\RolePermissionSeeder;
@@ -144,6 +145,39 @@ class CustomerPortalAccessLifecycleTest extends TestCase
             'new_values->customer_id' => $active->id,
             'new_values->email' => 'active-contact@example.test',
         ]);
+    }
+
+    public function test_sales_officer_can_invite_a_customer_contact(): void
+    {
+        $customer = Customer::factory()->create();
+
+        $this->actingAs($this->operator('sales_officer'))
+            ->postJson("/api/v1/b2b/portal-access/customers/{$customer->hash_id}/invite", [
+                'name' => $customer->contact_person,
+                'email' => $customer->email,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.email', strtolower($customer->email));
+    }
+
+    public function test_sales_officer_can_view_customer_accounts_and_resend_pending_invitations(): void
+    {
+        $customer = Customer::factory()->create([
+            'contact_person' => 'Current Honda Contact',
+            'email' => 'current-contact@honda.example',
+        ]);
+        $user = $this->portalUser($customer, 'old-contact@honda.example', ['must_change_password' => true]);
+        $salesOfficer = $this->operator('sales_officer');
+
+        $this->actingAs($salesOfficer)
+            ->getJson('/api/v1/b2b/portal-access/customers')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $user->hash_id);
+
+        $this->actingAs($salesOfficer)
+            ->postJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/resend")
+            ->assertOk()
+            ->assertJsonPath('data.email', 'current-contact@honda.example');
     }
 
     public function test_inactive_customer_parent_revokes_portal_access(): void
@@ -328,7 +362,7 @@ class CustomerPortalAccessLifecycleTest extends TestCase
     public function test_customer_resend_rotates_the_credential_when_active(): void
     {
         $customer = Customer::factory()->create();
-        $user = $this->portalUser($customer, 'cust-rotate@example.test');
+        $user = $this->portalUser($customer, 'cust-rotate@example.test', ['must_change_password' => true]);
         $oldHash = $user->password;
 
         $this->actingAs($this->operator())
@@ -342,6 +376,65 @@ class CustomerPortalAccessLifecycleTest extends TestCase
         $this->assertSame(1, DB::table('event_outbox')
             ->where('event_type', PortalAccountAccessRevoked::class)
             ->count());
+    }
+
+    public function test_customer_resend_uses_the_latest_contact_name_and_email_from_crm(): void
+    {
+        $customer = Customer::factory()->create([
+            'contact_person' => 'Updated Honda Contact',
+            'email' => 'updated-contact@honda.example',
+        ]);
+        $user = $this->portalUser($customer, 'old-contact@honda.example', ['must_change_password' => true]);
+
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/resend")
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Updated Honda Contact')
+            ->assertJsonPath('data.email', 'updated-contact@honda.example');
+
+        $this->assertSame($user->id, $user->fresh()->id);
+        $this->assertSame('Updated Honda Contact', $user->fresh()->name);
+        $this->assertSame('updated-contact@honda.example', $user->fresh()->email);
+        Mail::assertQueued(PortalAccessInvitationMail::class, fn (PortalAccessInvitationMail $mail): bool =>
+            $mail->portalType === 'customer'
+            && $mail->hasTo('updated-contact@honda.example')
+            && ! $mail->hasTo('old-contact@honda.example')
+        );
+    }
+
+    public function test_customer_invitation_resends_are_limited_to_three_per_day(): void
+    {
+        $this->travelTo(now()->startOfDay()->addHours(9));
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'customer-resend-limit@example.test', ['must_change_password' => true]);
+        $operator = $this->operator();
+        $url = "/api/v1/b2b/portal-access/customers/{$user->hash_id}/resend";
+
+        foreach ([2, 1, 0] as $remaining) {
+            $this->actingAs($operator)
+                ->postJson($url)
+                ->assertOk()
+                ->assertJsonPath('data.resends_remaining_today', $remaining);
+        }
+
+        $this->actingAs($operator)
+            ->postJson($url)
+            ->assertStatus(429)
+            ->assertJsonPath('message', 'Daily invitation resend limit reached. Try again tomorrow.');
+        $this->assertSame(3, DB::table('audit_logs')->where('action', 'portal_user.resent')->where('model_id', $user->id)->count());
+    }
+
+    public function test_customer_invitation_cannot_be_resent_after_first_sign_in(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'customer-already-active@example.test', ['must_change_password' => false]);
+
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/resend")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This contact has already completed first sign-in.');
+
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'portal_user.resent', 'model_id' => $user->id]);
     }
 
     public function test_the_customer_list_never_returns_a_password_or_temporary_credential(): void

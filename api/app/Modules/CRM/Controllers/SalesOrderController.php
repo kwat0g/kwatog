@@ -10,6 +10,7 @@ use App\Modules\CRM\Exceptions\SalesOrderStateConflictException;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Requests\CancelSalesOrderRequest;
 use App\Modules\CRM\Requests\ListSalesOrderRequest;
+use App\Modules\CRM\Requests\ReviewCustomerPaymentTermsRequest;
 use App\Modules\CRM\Requests\StoreSalesOrderRequest;
 use App\Modules\CRM\Requests\UpdateSalesOrderRequest;
 use App\Modules\CRM\Resources\SalesOrderResource;
@@ -59,6 +60,17 @@ class SalesOrderController
     {
         try {
             $so = $this->service->update($salesOrder, $request->validated());
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new SalesOrderResource($so);
+    }
+
+    public function reviewCustomerPaymentTerms(ReviewCustomerPaymentTermsRequest $request, SalesOrder $salesOrder): SalesOrderResource|JsonResponse
+    {
+        try {
+            $so = $this->service->reviewCustomerPaymentTerms($salesOrder, (int) $request->validated('payment_terms_days'));
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

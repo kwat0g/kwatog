@@ -57,6 +57,7 @@ export default function SalesOrderDetailPage() {
   const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
   const [advanceMode, setAdvanceMode] = useState<'none' | 'fixed' | 'percentage'>('none');
   const [advanceValue, setAdvanceValue] = useState('');
+  const [reviewPaymentTermsDays, setReviewPaymentTermsDays] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'sales-orders', 'detail', id],
@@ -69,6 +70,11 @@ export default function SalesOrderDetailPage() {
     setAdvanceMode(data.advance_requirement.percentage !== null ? 'percentage' : 'fixed');
     setAdvanceValue(data.advance_requirement.percentage ?? data.advance_requirement.required_amount);
   }, [data?.advance_requirement]);
+  const paymentTermsOrderId = data?.id;
+  const orderPaymentTermsDays = data?.payment_terms_days;
+  useEffect(() => {
+    if (orderPaymentTermsDays != null) setReviewPaymentTermsDays(String(orderPaymentTermsDays));
+  }, [paymentTermsOrderId, orderPaymentTermsDays]);
   const refreshSalesOrder = (fresh?: SalesOrder) => {
     const orderId = id ?? fresh?.id;
     if (!orderId) return;
@@ -163,6 +169,17 @@ export default function SalesOrderDetailPage() {
       const errors = e.response?.data?.errors;
       setConfirmError({ message: msg, errors, code: e.response?.data?.code });
       toast.error(msg);
+    },
+  });
+
+  const reviewPaymentTerms = useMutation({
+    mutationFn: () => salesOrdersApi.reviewCustomerPaymentTerms(id!, Number(reviewPaymentTermsDays)),
+    onSuccess: (updated) => {
+      refreshSalesOrder(updated);
+      toast.success('Payment terms saved. Review them before confirming this order.');
+    },
+    onError: (error: AxiosError<{ message?: string }>) => {
+      toast.error(error.response?.data?.message ?? 'Could not save payment terms.');
     },
   });
 
@@ -622,6 +639,13 @@ export default function SalesOrderDetailPage() {
                 )}
                 <dt className="text-muted">Payment terms</dt>
                 <dd className="col-span-2 font-mono">Net {data.payment_terms_days}</dd>
+                {data.submission_source === 'customer_portal'
+                  && data.customer_terms_snapshot?.requested_payment_terms_days != null && (
+                    <>
+                      <dt className="text-muted">Customer request</dt>
+                      <dd className="col-span-2 font-mono">Net {data.customer_terms_snapshot.requested_payment_terms_days} days</dd>
+                    </>
+                  )}
                 <dt className="text-muted">Payment method</dt>
                 <dd className="col-span-2">{data.payment_method ? ({ cash: 'Cash', check: 'Check', bank_transfer: 'Bank transfer' }[data.payment_method]) : 'Not selected'}</dd>
                 <dt className="text-muted">Delivery terms</dt>
@@ -645,6 +669,25 @@ export default function SalesOrderDetailPage() {
                   {data.notes ?? <span className="text-muted">—</span>}
                 </dd>
               </dl>
+              {data.submission_source === 'customer_portal'
+                && data.status !== 'confirmed' && data.status !== 'in_production' && data.status !== 'cancelled' && data.status !== 'closed'
+                && (can('crm.sales_orders.update') || can('crm.sales_orders.confirm')) && (
+                  <form onSubmit={(event) => { event.preventDefault(); reviewPaymentTerms.mutate(); }} className="mt-5 space-y-3 border-t border-default pt-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-primary">Review requested payment terms</h3>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">
+                        Customer requested Net {data.customer_terms_snapshot?.requested_payment_terms_days ?? data.payment_terms_days} days. Save the terms Sales approves before confirming.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <Input className="w-40 font-mono" label="Approved terms (days)" type="number" min={0} max={365} step={1} required
+                        value={reviewPaymentTermsDays} onChange={(event) => setReviewPaymentTermsDays(event.target.value)} />
+                      <Button type="submit" variant="secondary" disabled={reviewPaymentTerms.isPending || !/^\d+$/.test(reviewPaymentTermsDays) || Number(reviewPaymentTermsDays) > 365}>
+                        {reviewPaymentTerms.isPending ? 'Saving…' : 'Save approved terms'}
+                      </Button>
+                    </div>
+                  </form>
+                )}
             </Panel>
             <OrderAgreementsPanel orderId={data.id} realm="internal" />
 

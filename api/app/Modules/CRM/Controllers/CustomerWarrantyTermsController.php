@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Controllers;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Support\CustomerInputSanitizer;
 use App\Modules\CRM\Models\CustomerProductWarrantyOption;
 use App\Modules\CRM\Models\CustomerProductWarrantyOverride;
 use App\Modules\CRM\Models\Product;
@@ -31,18 +32,7 @@ class CustomerWarrantyTermsController
 
     public function storeOption(Request $request, Customer $customer, Product $product): JsonResponse
     {
-        $validated = Validator::make($request->all(), [
-            'label' => ['required', 'string', 'max:120', Rule::unique('customer_product_warranty_options', 'label')
-                ->where('customer_id', $customer->id)->where('product_id', $product->id)],
-            'warranty_duration_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
-            'warranty_report_window_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
-            'warranty_start_basis' => ['nullable', Rule::in(['delivery', 'invoice'])],
-            'warranty_covered_issues' => ['nullable', 'array'],
-            'warranty_covered_issues.*' => ['string', 'distinct', Rule::in(['manufacturing_defect', 'shipping_damage', 'customer_caused_damage'])],
-            'warranty_remedies' => ['nullable', 'array'],
-            'warranty_remedies.*' => ['string', 'distinct', Rule::in(['repair', 'replace', 'credit', 'refund'])],
-            'additional_terms' => ['nullable', 'string', 'max:2000'],
-        ])->validate();
+        $validated = $this->validateOptionInput($request, $customer, $product);
 
         $option = DB::transaction(function () use ($customer, $product, $validated): CustomerProductWarrantyOption {
             Customer::query()->lockForUpdate()->findOrFail($customer->id);
@@ -70,6 +60,85 @@ class CustomerWarrantyTermsController
         return response()->json(['data' => $this->serializeOption($option)], 201);
     }
 
+    public function updateOption(Request $request, Customer $customer, Product $product, CustomerProductWarrantyOption $option): JsonResponse
+    {
+        abort_unless((int) $option->customer_id === (int) $customer->id
+            && (int) $option->product_id === (int) $product->id, 404);
+
+        $validated = $this->validateOptionInput($request, $customer, $product, $option);
+        $option = DB::transaction(function () use ($customer, $product, $option, $validated): CustomerProductWarrantyOption {
+            Customer::query()->lockForUpdate()->findOrFail($customer->id);
+            Product::query()->lockForUpdate()->findOrFail($product->id);
+            $lockedOption = CustomerProductWarrantyOption::query()
+                ->where('customer_id', $customer->id)
+                ->where('product_id', $product->id)
+                ->lockForUpdate()
+                ->findOrFail($option->id);
+
+            if (CustomerProductWarrantyOption::query()
+                ->where('customer_id', $customer->id)
+                ->where('product_id', $product->id)
+                ->where('label', $validated['label'])
+                ->where($lockedOption->getKeyName(), '<>', $lockedOption->getKey())
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'label' => ['A warranty choice with this name already exists for this product.'],
+                ]);
+            }
+
+            $lockedOption->update($validated);
+
+            return $lockedOption;
+        });
+        $option->load(['product' => fn ($query) => $query->withTrashed()->select('id', 'part_number', 'name', 'unit_of_measure')]);
+
+        return response()->json(['data' => $this->serializeOption($option)]);
+    }
+
+    /** @return array<string, mixed> */
+    private function validateOptionInput(Request $request, Customer $customer, Product $product, ?CustomerProductWarrantyOption $option = null): array
+    {
+        $input = $request->all();
+        if (isset($input['label']) && is_string($input['label'])) {
+            $input['label'] = CustomerInputSanitizer::normalizeText($input['label']);
+        }
+        if (isset($input['additional_terms']) && is_string($input['additional_terms'])) {
+            $input['additional_terms'] = CustomerInputSanitizer::normalizeText($input['additional_terms'], multiline: true);
+        }
+        $uniqueLabel = Rule::unique('customer_product_warranty_options', 'label')
+            ->where('customer_id', $customer->id)
+            ->where('product_id', $product->id);
+        if ($option !== null) {
+            $uniqueLabel->ignore($option->getKey());
+        }
+
+        return Validator::make($input, [
+            'label' => [
+                'required', 'string', 'min:2', 'max:120', 'regex:'.CustomerInputSanitizer::WARRANTY_LABEL_PATTERN,
+                $uniqueLabel,
+                static function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (is_string($value) && CustomerInputSanitizer::isPlaceholder($value)) {
+                        $fail('Enter the actual warranty option name, not a placeholder.');
+                    }
+                },
+            ],
+            'warranty_duration_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'warranty_report_window_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'warranty_start_basis' => ['nullable', Rule::in(['delivery', 'invoice'])],
+            'warranty_covered_issues' => ['nullable', 'array', 'list'],
+            'warranty_covered_issues.*' => ['required', 'string', 'distinct', Rule::in(['manufacturing_defect', 'shipping_damage', 'customer_caused_damage'])],
+            'warranty_remedies' => ['nullable', 'array', 'list'],
+            'warranty_remedies.*' => ['required', 'string', 'distinct', Rule::in(['repair', 'replace', 'credit', 'refund'])],
+            'additional_terms' => ['nullable', 'string', 'max:2000', static function (string $attribute, mixed $value, \Closure $fail): void {
+                if (is_string($value) && preg_match('/<\/?[a-z][^>]*>/i', $value) === 1) {
+                    $fail('Enter warranty terms as plain text without HTML markup.');
+                } elseif (is_string($value) && CustomerInputSanitizer::hasInvalidOtherCoveredIssue($value)) {
+                    $fail('Describe the other covered issue using real plain text.');
+                }
+            }],
+        ])->validate();
+    }
+
     public function destroyOption(Customer $customer, Product $product, CustomerProductWarrantyOption $option): JsonResponse
     {
         abort_unless((int) $option->customer_id === (int) $customer->id
@@ -92,9 +161,9 @@ class CustomerWarrantyTermsController
             'warranty_report_window_days' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:3650'],
             'warranty_start_basis' => ['sometimes', 'nullable', Rule::in(['delivery', 'invoice'])],
             'warranty_covered_issues' => ['sometimes', 'nullable', 'array'],
-            'warranty_covered_issues.*' => ['string', 'distinct', Rule::in(['manufacturing_defect', 'shipping_damage', 'customer_caused_damage'])],
+            'warranty_covered_issues.*' => ['required', 'string', 'distinct', Rule::in(['manufacturing_defect', 'shipping_damage', 'customer_caused_damage'])],
             'warranty_remedies' => ['sometimes', 'nullable', 'array'],
-            'warranty_remedies.*' => ['string', 'distinct', Rule::in(['repair', 'replace', 'credit', 'refund'])],
+            'warranty_remedies.*' => ['required', 'string', 'distinct', Rule::in(['repair', 'replace', 'credit', 'refund'])],
         ])->validate();
 
         $term = DB::transaction(function () use ($customer, $product, $validated): CustomerProductWarrantyOverride {

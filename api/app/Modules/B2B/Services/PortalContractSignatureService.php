@@ -68,6 +68,7 @@ final class PortalContractSignatureService
             abort_unless((int) $locked->{$ownerColumn} === (int) $signerOwnerId, 404);
             abort_if($locked->signed_at !== null || $locked->signature_status === 'signed', 409, 'This agreement has already been signed.');
             abort_unless($locked->signature_status === 'pending', 404);
+            abort_unless($locked->issued_at !== null, 404, 'This agreement has not been issued.');
 
             $disk = Storage::disk('local');
             abort_unless($disk->exists($locked->file_path), 404);

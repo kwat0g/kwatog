@@ -6,6 +6,9 @@ namespace App\Modules\Forecasting\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Forecasting\Enums\DemandSource;
+use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\Inventory\Support\DemandBasis;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +19,8 @@ use Illuminate\Support\Facades\DB;
  * For each active inventory item, project the number of days remaining until
  * stock falls below the safety_stock threshold. Inputs:
  *
- *   - on_hand   : sum(stock_levels.quantity - stock_levels.reserved_quantity)
+ *   - available : usable stock after reservations, quality holds, lot expiry,
+ *                 and inactive, blocked, quarantine, or scrap locations
  *   - daily_demand :
  *        a) if a forecast exists for the configured forecast period → daily rate
  *        b) else → average over the configured demand-history window
@@ -29,7 +33,10 @@ use Illuminate\Support\Facades\DB;
  */
 class StockOutProjectionService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly StockLocationSummaryService $stockAvailability,
+    ) {}
 
     /** @return array<int, array<string, mixed>> */
     public function projectAll(?int $horizonDays = null): array
@@ -38,27 +45,30 @@ class StockOutProjectionService
         $now = Carbon::now();
         $monthY = $now->year;
         $monthM = $now->month;
+        $defaultLeadTime = $this->settings->requiredInt('mrp.default_lead_time_days', 0, 365);
 
-        // 1) Pull all active items with their on-hand/safety/reorder levels and lead time.
+        // 1) Pull active item master data, then calculate the same usable stock
+        //    quantity as inventory, production, DSS, and customer order checks.
         $items = DB::table('items')
-            ->leftJoin('stock_levels', 'stock_levels.item_id', '=', 'items.id')
             ->where('items.is_active', true)
-            ->groupBy(
-                'items.id', 'items.code', 'items.name', 'items.unit_of_measure',
+            ->select(
+                'items.id', 'items.code', 'items.name', 'items.item_type', 'items.unit_of_measure',
                 'items.safety_stock', 'items.reorder_point', 'items.minimum_order_quantity',
                 'items.lead_time_days'
-            )
-            ->select(
-                'items.id', 'items.code', 'items.name', 'items.unit_of_measure',
-                'items.safety_stock', 'items.reorder_point', 'items.minimum_order_quantity',
-                'items.lead_time_days',
-                DB::raw('COALESCE(SUM(stock_levels.quantity - stock_levels.reserved_quantity), 0) as available')
             )
             ->get();
 
         if ($items->isEmpty()) {
             return [];
         }
+
+        $stockLevels = StockLevel::query()
+            ->whereIn('item_id', $items->pluck('id'))
+            ->with('location.zone.warehouse')
+            ->get();
+        $availabilityByItem = $stockLevels->isEmpty()
+            ? collect()
+            : $this->stockAvailability->availabilityByItem($stockLevels);
 
         // 2) Average daily consumption over the configured history window.
         //    `material_issue` is negative; take the absolute and derive a daily rate.
@@ -93,10 +103,15 @@ class StockOutProjectionService
 
         $rows = [];
         foreach ($items as $it) {
-            $available = bcsub((string) $it->available, '0', 3);
+            $availability = $availabilityByItem->get((int) $it->id, []);
+            $available = bcadd((string) ($availability['usable_quantity'] ?? '0.000'), '0', 3);
             $safety = bcadd((string) ($it->safety_stock ?? '0.000'), '0', 3);
             $reorder = bcadd((string) ($it->reorder_point ?? '0.000'), '0', 3);
             $leadTime = (int) ($it->lead_time_days ?? 0);
+            if ($leadTime <= 0) {
+                $leadTime = $defaultLeadTime;
+            }
+            $isFinishedGood = $it->item_type === ItemType::FinishedGood->value;
 
             // Daily demand: forecast first, else configured moving average.
             $dailyDemand = '0.000000';
@@ -123,14 +138,16 @@ class StockOutProjectionService
             if ($daysUntilStockout !== null) {
                 // Order in time for lead time + 1 buffer day before depletion.
                 $reorderDate = $now->copy()->addDays(max(0, $daysUntilStockout - $leadTime))->toDateString();
-                // Suggested qty = MAX(MOQ, lead_time × daily_demand × configured safety buffer).
-                $leadTimeQuantity = $leadTime > 0
-                    ? bcmul(bcmul((string) $leadTime, $dailyDemand, 6), $coverageBuffer, 6)
-                    : bcmul($reorder, $zeroLeadRatio, 6);
-                $minimumOrderQuantity = bcadd((string) ($it->minimum_order_quantity ?? '0.000'), '0', 3);
-                $suggestedQty = bccomp($minimumOrderQuantity, $leadTimeQuantity, 6) >= 0
-                    ? $minimumOrderQuantity
-                    : bcadd($leadTimeQuantity, '0.0005', 3);
+                if (! $isFinishedGood) {
+                    // Suggested qty = MAX(MOQ, lead_time × daily_demand × configured safety buffer).
+                    $leadTimeQuantity = $leadTime > 0
+                        ? bcmul(bcmul((string) $leadTime, $dailyDemand, 6), $coverageBuffer, 6)
+                        : bcmul($reorder, $zeroLeadRatio, 6);
+                    $minimumOrderQuantity = bcadd((string) ($it->minimum_order_quantity ?? '0.000'), '0', 3);
+                    $suggestedQty = bccomp($minimumOrderQuantity, $leadTimeQuantity, 6) >= 0
+                        ? $minimumOrderQuantity
+                        : bcadd($leadTimeQuantity, '0.0005', 3);
+                }
             }
 
             $risk = 'ok';
@@ -153,6 +170,7 @@ class StockOutProjectionService
 
             $rows[] = [
                 'item_id' => app('hashids')->encode((int) $it->id),
+                'item_type' => $it->item_type,
                 'code' => $it->code,
                 'name' => $it->name,
                 'unit_of_measure' => $it->unit_of_measure,

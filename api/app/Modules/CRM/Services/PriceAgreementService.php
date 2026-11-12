@@ -14,6 +14,7 @@ use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Support\PriceAgreementAuditContext;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -35,8 +36,15 @@ class PriceAgreementService
             || ($checkAccess && ! $product->isAvailableToCustomer($customerId))) {
             throw ValidationException::withMessages(['product_id' => ['This product is not available to your customer account.']]);
         }
-        $agreement = PriceAgreement::query()->where('customer_id', $customerId)->where('product_id', $productId)
-            ->activeOn($date)->orderByDesc('effective_from')->first();
+        $agreementQuery = PriceAgreement::query()->where('customer_id', $customerId)->where('product_id', $productId)
+            ->activeOn($date)->orderByDesc('effective_from');
+        // Order writes already hold their product/customer coordination locks.
+        // Lock the matched agreement too, so an order and an early-end action
+        // serialize before either snapshots a price for a delivery date.
+        if (DB::transactionLevel() > 0) {
+            $agreementQuery->lockForUpdate();
+        }
+        $agreement = $agreementQuery->first();
         $tier = null;
         if ($agreement) {
             $price = $this->resolveUnitPrice($agreement, $quantity);
@@ -106,21 +114,30 @@ class PriceAgreementService
               ->whereDate('effective_to', '>=', $filters['active_on']);
         }
 
-        return $q->orderByDesc('effective_from')
+        $page = $q->orderByDesc('effective_from')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        app(PriceAgreementTerminationService::class)->withSummary($page->getCollection());
+
+        return $page;
     }
 
     public function listForCustomer(int $customerId): Collection
     {
-        return PriceAgreement::with(['product.activeBom', 'customer'])
+        $agreements = PriceAgreement::with(['product.activeBom', 'customer'])
             ->where('customer_id', $customerId)
             ->orderByDesc('effective_from')
             ->get();
+        app(PriceAgreementTerminationService::class)->withSummary($agreements);
+
+        return $agreements;
     }
 
     public function show(PriceAgreement $a): PriceAgreement
     {
-        return $a->load(['product.activeBom', 'customer']);
+        $agreement = $a->load(['product.activeBom', 'customer']);
+        app(PriceAgreementTerminationService::class)->withSummary(collect([$agreement]));
+
+        return $agreement;
     }
 
     public function create(array $data): PriceAgreement
@@ -163,6 +180,10 @@ class PriceAgreementService
             if ($locked->product_id !== $a->product_id || $locked->customer_id !== $a->customer_id) {
                 throw new BusinessRuleException('Agreement references changed while saving. Refresh and retry.');
             }
+            $terminationWorkflow = app(PriceAgreementTerminationService::class);
+            if ($terminationWorkflow->hasPendingTermination($locked) || $terminationWorkflow->hasSignedTermination($locked)) {
+                throw new BusinessRuleException('A customer-signed termination or pending signature request locks these agreement terms. Create a dated replacement instead.');
+            }
             $data = $this->normalisePricingData($data, $locked);
             $productId = (int) ($data['product_id'] ?? $locked->product_id);
             $customerId = (int) ($data['customer_id'] ?? $locked->customer_id);
@@ -193,6 +214,10 @@ class PriceAgreementService
             if ($locked->product_id !== $current->product_id || $locked->customer_id !== $current->customer_id) {
                 throw new BusinessRuleException('Agreement references changed. Refresh and retry.');
             }
+            $terminationWorkflow = app(PriceAgreementTerminationService::class);
+            if ($terminationWorkflow->hasPendingTermination($locked)) {
+                throw new BusinessRuleException('Cancel the pending customer signature request before archiving this agreement.');
+            }
             $locked->delete();
             app(PricingReviewService::class)->request([(int) $locked->product_id], 'agreement_archived');
         });
@@ -207,6 +232,9 @@ class PriceAgreementService
 
             if (! $locked->trashed()) {
                 return $locked->fresh()->load(['product.activeBom', 'customer']);
+            }
+            if (app(PriceAgreementTerminationService::class)->hasSignedTermination($locked)) {
+                throw new BusinessRuleException('A customer-signed termination cannot be restored. Create a new agreement for later pricing.');
             }
             if ($locked->effective_to->toDateString() >= today()->toDateString()) {
                 throw new BusinessRuleException('Restoring unexpired pricing requires a new proposal and customer acceptance.');

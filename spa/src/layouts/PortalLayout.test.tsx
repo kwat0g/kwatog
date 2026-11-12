@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { landingApi } from '@/api/landing';
 import { customerPortalApi } from '@/api/b2b/customer';
+import { supplierPortalApi } from '@/api/b2b/supplier';
 import PortalLayout from './PortalLayout';
 
 const realtimeSignalSpy = vi.hoisted(() => vi.fn());
@@ -32,6 +33,9 @@ beforeEach(() => {
   vi.mocked(customerPortalApi.businessPolicies).mockResolvedValue({
     functional_currency_code: 'PHP',
   } as Awaited<ReturnType<typeof customerPortalApi.businessPolicies>>);
+  vi.mocked(supplierPortalApi.businessPolicies).mockResolvedValue({
+    functional_currency_code: 'PHP',
+  } as Awaited<ReturnType<typeof supplierPortalApi.businessPolicies>>);
   vi.mocked(customerPortalApi.invoiceSignals).mockResolvedValue({ unpaid: 5, overdue: 2 });
   vi.mocked(landingApi.contact).mockResolvedValue({
     legal_name: null,
@@ -127,4 +131,29 @@ it('revalidates cached customer invoice signals when the portal shell mounts', a
 
   await waitFor(() => expect(customerPortalApi.invoiceSignals).toHaveBeenCalledTimes(1));
   client.clear();
+});
+
+it.each([
+  ['customer', '/portal/customer/change-password'],
+  ['supplier', '/portal/supplier/change-password'],
+] as const)('provides a password change link in the %s portal account menu', async (type, expectedPath) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[`/portal/${type}`]}>
+        <PortalLayout
+          type={type}
+          user={{ id: `${type}-user`, name: 'Portal Contact', email: `${type}@example.test` }}
+          onLogout={() => {}}
+          title={`${type} Portal`}
+          subtitle="Dashboard"
+        >
+          <div>Page</div>
+        </PortalLayout>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Account menu for Portal Contact' }));
+  expect(screen.getByRole('link', { name: 'Change password' })).toHaveAttribute('href', expectedPath);
 });

@@ -11,6 +11,8 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierAgreementDocument;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Models\PortalContractTemplate;
+use App\Modules\B2B\Services\PortalContractPdfProcessor;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -69,6 +71,58 @@ class SupplierAgreementSignatureTest extends TestCase
         $this->actingAs($signer, 'supplier_portal')
             ->postJson("/api/v1/b2b/supplier/agreement-documents/{$document->hash_id}/sign", ['typed_name' => $signer->name])
             ->assertStatus(409);
+    }
+
+    public function test_supplier_template_fills_agreement_dates_supplied_when_creating_the_draft(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $staff = $this->staffWithPortalAccessPermission();
+        $templatePath = 'portal-contract-templates/supplier/supplier-dates.pdf';
+        $templateBytes = "%PDF-1.4\nsupplier agreement\n%%EOF";
+        Storage::disk('local')->put($templatePath, $templateBytes);
+        $template = PortalContractTemplate::query()->create([
+            'name' => 'Supplier terms with dates',
+            'realm' => 'supplier',
+            'file_path' => $templatePath,
+            'filename' => 'supplier-dates.pdf',
+            'size' => strlen($templateBytes),
+            'pdf_fields' => [
+                ['name' => 'StartDate', 'type' => 'Text'],
+                ['name' => 'EndDate', 'type' => 'Text'],
+            ],
+            'field_mappings' => [
+                'StartDate' => 'effective_date',
+                'EndDate' => 'expiry_date',
+            ],
+            'required_fields' => ['StartDate', 'EndDate'],
+            'version' => 1,
+            'source_sha256' => hash('sha256', $templateBytes),
+            'created_by' => $staff->id,
+        ]);
+
+        $filledPath = tempnam(sys_get_temp_dir(), 'ogami-supplier-agreement-');
+        file_put_contents($filledPath, "%PDF-1.4\nfilled supplier agreement\n%%EOF");
+        $processor = \Mockery::mock(PortalContractPdfProcessor::class);
+        $processor->shouldReceive('fill')
+            ->once()
+            ->withArgs(function (string $path, array $values): bool {
+                $this->assertSame('2026-11-01', $values['StartDate']);
+                $this->assertSame('2027-10-31', $values['EndDate']);
+
+                return true;
+            })
+            ->andReturn($filledPath);
+        $this->app->instance(PortalContractPdfProcessor::class, $processor);
+
+        $this->actingAs($staff)->postJson(
+            "/api/v1/b2b/portal-access/suppliers/{$vendor->hash_id}/agreement-documents",
+            [
+                'template_id' => $template->hash_id,
+                'effective_date' => '2026-11-01',
+                'expiry_date' => '2027-10-31',
+            ],
+        )->assertCreated()
+            ->assertJsonPath('data.signature_status', 'draft');
     }
 
     private function staffWithPortalAccessPermission(): User

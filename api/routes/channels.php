@@ -1282,6 +1282,25 @@ Broadcast::channel('approval-delegation.user.{userHashId}', function (User $user
 
 // Chain entity list channels carry only the content-free refresh ping. The
 // API remains responsible for row-level scope when each viewer refetches.
+// Register these exact channels before the generic entity matcher below so
+// their module-specific permissions are not shadowed by its fallback.
+Broadcast::channel('entity.delivery_schedule.visible', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.b2b_portals')
+    && $user->is_active
+    && $user->hasPermission('b2b.portal_access.view'));
+
+Broadcast::channel('entity.b2b_portal_access.visible', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.b2b_portals')
+    && $user->is_active
+    && $user->hasPermission('b2b.portal_access.view'));
+
+Broadcast::channel('entity.shipment.visible', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.supply_chain')
+    && $user->is_active
+    && ($user->hasPermission('supply_chain.view')
+        || $user->hasPermission('supply_chain.shipments.view')));
+
+Broadcast::channel('entity.vehicle.visible', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.supply_chain')
+    && $user->is_active
+    && $user->hasPermission('supply_chain.view'));
+
 Broadcast::channel('entity.{entityType}.{scope}', function (User $user, string $entityType, string $scope): bool {
     if ($entityType === 'customer') {
         $canReadDirectory = $user->hasPermission('accounting.customers.view')
@@ -1658,17 +1677,6 @@ Broadcast::channel('customer.delivery-schedule.{customerHashId}', function (Cust
         && Customer::query()->whereKey($customerId)->where('is_active', true)->exists();
 }, ['guards' => ['customer_portal']]);
 
-// Internal schedule list and detail refreshes match the read permission used
-// by the portal-access endpoints; the ping contains no schedule fields.
-Broadcast::channel('entity.delivery_schedule.visible', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.b2b_portals')
-    && $user->is_active
-    && $user->hasPermission('b2b.portal_access.view'));
-
-// Portal-access administration refreshes contain no account identity or details.
-Broadcast::channel('entity.b2b_portal_access.visible', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.b2b_portals')
-    && $user->is_active
-    && $user->hasPermission('b2b.portal_access.view'));
-
 Broadcast::channel('delivery-schedule.{hashId}', function (User $user, string $hashId): bool {
     if (! app(SettingsService::class)->requiredBool('modules.b2b_portals')
         || ! $user->is_active
@@ -1771,13 +1779,6 @@ Broadcast::channel('shipment.{hashId}', function (User $user, string $hashId): b
     return $id !== null && Shipment::query()->whereKey($id)->exists();
 });
 
-Broadcast::channel('entity.shipment.visible', function (User $user): bool {
-    return app(SettingsService::class)->requiredBool('modules.supply_chain')
-        && $user->is_active
-        && ($user->hasPermission('supply_chain.view')
-            || $user->hasPermission('supply_chain.shipments.view'));
-});
-
 // Vehicle pings contain refresh metadata only; access matches the fleet API.
 Broadcast::channel('vehicle.{hashId}', function (User $user, string $hashId): bool {
     if (! app(SettingsService::class)->requiredBool('modules.supply_chain')
@@ -1789,12 +1790,6 @@ Broadcast::channel('vehicle.{hashId}', function (User $user, string $hashId): bo
     $id = Vehicle::tryDecodeHash($hashId);
 
     return $id !== null && Vehicle::withTrashed()->whereKey($id)->exists();
-});
-
-Broadcast::channel('entity.vehicle.visible', function (User $user): bool {
-    return app(SettingsService::class)->requiredBool('modules.supply_chain')
-        && $user->is_active
-        && $user->hasPermission('supply_chain.view');
 });
 
 // Fulfillment previews are also readable by Production confirmers without

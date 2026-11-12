@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 class PortalAccessService
 {
@@ -31,6 +32,15 @@ class PortalAccessService
     {
         $query = SupplierPortalUser::withTrashed()
             ->with('vendor:id,name,is_active')
+            ->addSelect([
+                'resends_today' => DB::table('audit_logs')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('audit_logs.model_id', 'supplier_portal_users.id')
+                    ->where('audit_logs.model_type', (new SupplierPortalUser())->getMorphClass())
+                    ->where('audit_logs.action', 'portal_user.resent')
+                    ->where('audit_logs.created_at', '>=', now()->startOfDay())
+                    ->where('audit_logs.created_at', '<', now()->addDay()->startOfDay()),
+            ])
             ->when($filters['search'] ?? null, function (Builder $query, string $search): void {
                 $term = '%'.strtolower(trim($search)).'%';
                 $query->where(function (Builder $nested) use ($term): void {
@@ -61,6 +71,15 @@ class PortalAccessService
     {
         $query = CustomerPortalUser::withTrashed()
             ->with('customer:id,name,is_active')
+            ->addSelect([
+                'resends_today' => DB::table('audit_logs')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('audit_logs.model_id', 'customer_portal_users.id')
+                    ->where('audit_logs.model_type', (new CustomerPortalUser())->getMorphClass())
+                    ->where('audit_logs.action', 'portal_user.resent')
+                    ->where('audit_logs.created_at', '>=', now()->startOfDay())
+                    ->where('audit_logs.created_at', '<', now()->addDay()->startOfDay()),
+            ])
             ->when($filters['search'] ?? null, function (Builder $query, string $search): void {
                 $term = '%'.strtolower(trim($search)).'%';
                 $query->where(function (Builder $nested) use ($term): void {
@@ -128,23 +147,47 @@ class PortalAccessService
         User $actor,
         Request $request,
     ): SupplierPortalUser {
-        if (! $portalUser->is_active || $portalUser->trashed()) {
-            throw new BusinessRuleException('Reactivate the supplier account before sending a new invitation.');
-        }
+        return DB::transaction(function () use ($portalUser, $actor, $request): SupplierPortalUser {
+            $portalUser = SupplierPortalUser::withTrashed()->lockForUpdate()->findOrFail($portalUser->getKey());
+            if (! $portalUser->is_active || $portalUser->trashed()) {
+                throw new BusinessRuleException('Reactivate the supplier account before sending a new invitation.');
+            }
+            if (! $portalUser->must_change_password) {
+                throw new BusinessRuleException('This contact has already completed first sign-in.');
+            }
+            $this->assertResendAvailable($portalUser);
 
-        $portalUser = $portalUser->load('vendor:id,name,is_active');
-        $result = $this->invitations->inviteSupplier($portalUser->vendor, $portalUser->name, $portalUser->email);
-        $user = $result['user']->load('vendor:id,name,is_active');
+            $portalUser = $portalUser->load('vendor:id,name,is_active');
+            $vendor = $portalUser->vendor;
+            $contactName = trim((string) $vendor?->contact_person);
+            $contactEmail = strtolower(trim((string) $vendor?->email));
+            if (! $vendor || $contactName === '' || filter_var($contactEmail, FILTER_VALIDATE_EMAIL) === false) {
+                throw new BusinessRuleException('Update the supplier contact name and email before resending the invitation.');
+            }
 
-        $this->record($user, 'portal_user.resent', [
-            'is_active' => (bool) $portalUser->is_active,
-            'must_change_password' => (bool) $portalUser->must_change_password,
-        ], [
-            'is_active' => true,
-            'must_change_password' => true,
-        ], $actor, $request);
+            $emailInUse = SupplierPortalUser::withTrashed()
+                ->whereRaw('LOWER(email) = ?', [$contactEmail])
+                ->where('id', '<>', $portalUser->getKey())
+                ->lockForUpdate()
+                ->exists();
+            if ($emailInUse) {
+                throw new BusinessRuleException('The supplier contact email is already assigned to another portal account.');
+            }
 
-        return $user;
+            $portalUser->forceFill(['name' => $contactName, 'email' => $contactEmail])->save();
+            $result = $this->invitations->inviteSupplier($vendor, $contactName, $contactEmail);
+            $user = $result['user']->load('vendor:id,name,is_active');
+
+            $this->record($user, 'portal_user.resent', [
+                'is_active' => (bool) $portalUser->is_active,
+                'must_change_password' => (bool) $portalUser->must_change_password,
+            ], [
+                'is_active' => true,
+                'must_change_password' => true,
+            ], $actor, $request);
+
+            return $user->setAttribute('resends_today', $this->resendsToday($user));
+        });
     }
 
     public function deactivate(
@@ -288,30 +331,76 @@ class PortalAccessService
         User $actor,
         Request $request,
     ): CustomerPortalUser {
-        if (! $portalUser->is_active || $portalUser->trashed()) {
-            throw new BusinessRuleException('Reactivate the customer account before sending a new invitation.');
+        return DB::transaction(function () use ($portalUser, $actor, $request): CustomerPortalUser {
+            $portalUser = CustomerPortalUser::withTrashed()->lockForUpdate()->findOrFail($portalUser->getKey());
+            if (! $portalUser->is_active || $portalUser->trashed()) {
+                throw new BusinessRuleException('Reactivate the customer account before sending a new invitation.');
+            }
+            if (! $portalUser->must_change_password) {
+                throw new BusinessRuleException('This contact has already completed first sign-in.');
+            }
+            $this->assertResendAvailable($portalUser);
+
+            $portalUser = $portalUser->load('customer');
+            if (! $portalUser->customer) {
+                throw new BusinessRuleException('The customer account has no linked customer; cannot re-invite.');
+            }
+            $contactName = trim((string) $portalUser->customer->contact_person);
+            $contactEmail = strtolower(trim((string) $portalUser->customer->email));
+            if ($contactName === '' || filter_var($contactEmail, FILTER_VALIDATE_EMAIL) === false) {
+                throw new BusinessRuleException('Update the customer contact name and email before resending the invitation.');
+            }
+
+            $emailInUse = CustomerPortalUser::withTrashed()
+                ->whereRaw('LOWER(email) = ?', [$contactEmail])
+                ->where('id', '<>', $portalUser->getKey())
+                ->lockForUpdate()
+                ->exists();
+            if ($emailInUse) {
+                throw new BusinessRuleException('The customer contact email is already assigned to another portal account.');
+            }
+
+            $portalUser->forceFill(['name' => $contactName, 'email' => $contactEmail])->save();
+            $result = $this->invitations->inviteCustomer(
+                $portalUser->customer,
+                $contactName,
+                $contactEmail,
+            );
+            $user = $result['user']->load('customer:id,name,is_active');
+
+            $this->record($user, 'portal_user.resent', [
+                'is_active' => (bool) $portalUser->is_active,
+                'must_change_password' => (bool) $portalUser->must_change_password,
+            ], [
+                'is_active' => true,
+                'must_change_password' => true,
+            ], $actor, $request);
+
+            return $user->setAttribute('resends_today', $this->resendsToday($user));
+        });
+    }
+
+    /** Number of invitation resend audit events for this portal account today. */
+    public function resendsToday(Model $portalUser): int
+    {
+        $start = now()->startOfDay();
+        $end = $start->copy()->addDay();
+
+        return AuditLog::query()
+            ->where('model_type', $portalUser->getMorphClass())
+            ->where('model_id', $portalUser->getKey())
+            ->where('action', 'portal_user.resent')
+            ->where('created_at', '>=', $start)
+            ->where('created_at', '<', $end)
+            ->count();
+    }
+
+    private function assertResendAvailable(Model $portalUser): void
+    {
+        if ($this->resendsToday($portalUser) >= 3) {
+            $retryAfter = max(1, (int) now()->diffInSeconds(now()->endOfDay()));
+            throw new TooManyRequestsHttpException($retryAfter, 'Daily invitation resend limit reached. Try again tomorrow.');
         }
-
-        $portalUser = $portalUser->load('customer');
-        if (! $portalUser->customer) {
-            throw new BusinessRuleException('The customer account has no linked customer; cannot re-invite.');
-        }
-        $result = $this->invitations->inviteCustomer(
-            $portalUser->customer,
-            $portalUser->name,
-            $portalUser->email,
-        );
-        $user = $result['user']->load('customer:id,name,is_active');
-
-        $this->record($user, 'portal_user.resent', [
-            'is_active' => (bool) $portalUser->is_active,
-            'must_change_password' => (bool) $portalUser->must_change_password,
-        ], [
-            'is_active' => true,
-            'must_change_password' => true,
-        ], $actor, $request);
-
-        return $user;
     }
 
     /** @param Builder<SupplierPortalUser|CustomerPortalUser> $query */

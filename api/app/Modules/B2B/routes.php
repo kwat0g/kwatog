@@ -119,11 +119,14 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
     ->prefix('b2b/portal-access')
     ->group(function (): void {
         Route::get('customers', [PortalAccessController::class, 'customers'])
-            ->middleware('permission:b2b.portal_access.view');
+            ->middleware('permission_any:b2b.portal_access.view,accounting.customers.manage');
         Route::post('customers/{customer}/invite', [PortalAccessController::class, 'inviteCustomer'])
-            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+            // Customer managers can invite the contact while creating or
+            // maintaining that customer's CRM record. Supplier access remains
+            // gated by the separate portal-access permission below.
+            ->middleware(['permission_any:b2b.portal_access.manage,accounting.customers.manage', 'throttle:sensitive']);
         Route::post('customers/{customerPortalUser}/resend', [PortalAccessController::class, 'resendCustomer'])
-            ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive'])
+            ->middleware(['permission_any:b2b.portal_access.manage,accounting.customers.manage', 'throttle:sensitive'])
             ->withTrashed();
         Route::patch('customers/{customerPortalUser}/deactivate', [PortalAccessController::class, 'deactivateCustomer'])
             ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive'])
@@ -225,9 +228,11 @@ Route::prefix('b2b/customer')->group(function () {
             Route::get('catalog', [CustomerPortalController::class, 'catalog']);
             Route::get('catalog/{product}/image', [ProductImageController::class, 'showForCustomer']);
             Route::get('catalog/{product}/images/{image}', [ProductImageController::class, 'showForCustomerGallery']);
+            Route::get('price-requests/open', [PriceNegotiationController::class, 'portalOpenIndex']);
             Route::get('price-requests', [PriceNegotiationController::class, 'portalIndex']);
             Route::post('price-requests', [PriceNegotiationController::class, 'portalStore'])->middleware('throttle:sensitive');
             Route::post('price-requests/{priceRequest}/respond', [PriceNegotiationController::class, 'respond'])->middleware('throttle:sensitive');
+            Route::post('price-requests/{priceRequest}/cancel', [PriceNegotiationController::class, 'portalCancel'])->middleware('throttle:sensitive');
             Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
             Route::post('orders/quote', [CustomerPortalController::class, 'quoteOrder']);
             Route::post('orders', [CustomerPortalController::class, 'storeOrder'])->middleware('throttle:sensitive');

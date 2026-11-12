@@ -32,7 +32,7 @@ const product: PortalCatalogItem = {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const portalUser = { id: 'portal-user', name: 'Buyer', email: 'buyer@example.test', customer_id: 'customer-1', customer_name: 'Honda', must_change_password: false, is_active: true, status: 'active', deleted_at: null, customer: { id: 'customer-1', name: 'Honda' } };
+  const portalUser = { id: 'portal-user', name: 'Buyer', email: 'buyer@example.test', customer_id: 'customer-1', customer_name: 'Honda', must_change_password: false, resends_remaining_today: 3, is_active: true, status: 'active', deleted_at: null, customer: { id: 'customer-1', name: 'Honda' }, customer_terms: { payment_terms_days: 30, allowed_payment_methods: ['cash'], shipping_payer: 'company', agreement_starts_on: null, agreement_ends_on: null, agreement_status: 'in_effect', warranty_defaults: null } };
   render(<QueryClientProvider client={client}><MemoryRouter><Routes><Route element={<Outlet context={portalUser} />}><Route path="*" element={<CustomerPlaceOrderPage />} /></Route></Routes></MemoryRouter></QueryClientProvider>);
 }
 
@@ -53,7 +53,7 @@ beforeEach(() => {
   } satisfies BusinessPolicies);
   vi.mocked(customerPortalApi.me).mockResolvedValue({
     id: 'portal-user', name: 'Buyer', email: 'buyer@example.test', customer_id: 'customer-1', customer_name: 'Honda',
-    must_change_password: false, is_active: true, is_authorized_signatory: false, last_login_at: null, created_at: orderDate(),
+    must_change_password: false, resends_remaining_today: 3, is_active: true, is_authorized_signatory: false, last_login_at: null, created_at: orderDate(),
     status: 'active', deleted_at: null, customer: { id: 'customer-1', name: 'Honda' },
     customer_terms: { allowed_payment_methods: ['cash'], shipping_payer: 'company', agreement_starts_on: null, agreement_ends_on: null,
       agreement_status: 'in_effect', payment_terms_days: 30, warranty_defaults: null },
@@ -65,7 +65,7 @@ describe('customer order entry', () => {
   it('reuses the order form to edit a customer draft without changing its order date', async () => {
     vi.mocked(useParams).mockReturnValue({ id: 'so-1' });
     const requestedDate = dateAfterToday(7);
-    const existing = { id: 'so-1', so_number: 'SO-1', date: '2026-10-01', status: 'draft', total_amount: '22.50', created_at: '2026-10-01', payment_method: 'cash' as const,
+    const existing = { id: 'so-1', so_number: 'SO-1', date: '2026-10-01', status: 'draft', total_amount: '22.50', created_at: '2026-10-01', payment_method: 'cash' as const, payment_terms_days: 45,
       notes: 'Original note', requested_delivery_dates: [requestedDate], delivery_dates: [requestedDate], capabilities: { can_edit: true, can_cancel: true, can_respond: false, can_confirm: false },
       items: [{ id: 'item-1', product, quantity: '1', unit_price: '22.50', total: '22.50', delivery_date: requestedDate }],
     };
@@ -76,11 +76,12 @@ describe('customer order entry', () => {
     expect(screen.getByLabelText('Order date')).toHaveValue('2026-10-01');
     expect(screen.getByLabelText('Order date')).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Requested delivery date')).toHaveValue(requestedDate);
+    expect(screen.getByRole('spinbutton', { name: 'Requested payment terms (days)' })).toHaveValue(45);
     fireEvent.change(quantity, { target: { value: '50' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/portal/customer/orders/so-1'));
-    expect(customerPortalApi.updateOrder).toHaveBeenCalledWith('so-1', { notes: 'Original note', payment_method: 'cash', quote_signature: 'a'.repeat(64), items: [
+    expect(customerPortalApi.updateOrder).toHaveBeenCalledWith('so-1', { notes: 'Original note', payment_method: 'cash', payment_terms_days: 45, quote_signature: 'a'.repeat(64), items: [
       { product_id: product.id, quantity: '50', delivery_date: requestedDate },
     ] });
     expect(customerPortalApi.createOrder).not.toHaveBeenCalled();
@@ -190,6 +191,8 @@ describe('customer order entry', () => {
       } });
     renderPage();
     fireEvent.change(screen.getByLabelText(/Payment method/), { target: { value: 'cash' } });
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Requested payment terms (days)' })).toHaveValue(30));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Requested payment terms (days)' }), { target: { value: '45' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
     fireEvent.click(await screen.findByRole('button', { name: `Add ${product.name} to order` }));
     fireEvent.click(screen.getByRole('button', { name: 'Add Heavy Duty Bushing to order' }));
@@ -210,7 +213,7 @@ describe('customer order entry', () => {
     fireEvent.click(screen.getByRole('button', { name: /Submit order for review/ }));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/portal/customer/orders/so-1'));
     const calls = vi.mocked(customerPortalApi.createOrder).mock.calls;
-    expect(calls[0][0]).toEqual({ notes: 'Test delivery', payment_method: 'cash', quote_signature: 'a'.repeat(64), items: [{ product_id: product.id, quantity: '100', delivery_date: requestedDate }, { product_id: 'product-2', quantity: '1', delivery_date: requestedDate }] });
+    expect(calls[0][0]).toEqual({ notes: 'Test delivery', payment_method: 'cash', payment_terms_days: 45, quote_signature: 'a'.repeat(64), items: [{ product_id: product.id, quantity: '100', delivery_date: requestedDate }, { product_id: 'product-2', quantity: '1', delivery_date: requestedDate }] });
     expect(calls[1]).toEqual(calls[0]);
     expect(calls[0][1]).toMatch(/^[0-9a-f-]{36}$/);
   });
@@ -239,6 +242,24 @@ describe('customer order entry', () => {
     expect(screen.getByText('Maximum available is 2.000.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Submit order for review' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Request price and availability' })).toBeVisible();
+  });
+
+  it('uses the agreement quantity range as the per-order minimum and maximum', async () => {
+    vi.mocked(customerPortalApi.listCatalog).mockResolvedValue([{
+      ...product, minimum_order_quantity: '5.000', maximum_order_quantity: '20.000',
+    }]);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Add products' }));
+    fireEvent.click(await screen.findByRole('button', { name: `Add ${product.name} to order` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done selecting products' }));
+    const quantity = screen.getByRole('spinbutton', { name: 'Quantity for WB-001' });
+    expect(quantity).toHaveValue(5);
+    expect(quantity).toHaveAttribute('min', '5');
+    expect(quantity).toHaveAttribute('max', '20');
+    fireEvent.change(quantity, { target: { value: '4' } });
+    expect(screen.getByText('Minimum order quantity is 5.000.')).toBeVisible();
+    fireEvent.change(quantity, { target: { value: '21' } });
+    expect(screen.getByText('Maximum order quantity is 20.000 per sales order.')).toBeVisible();
   });
 
   it('shows every customer-visible product gallery image', async () => {

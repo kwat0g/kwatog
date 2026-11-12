@@ -57,6 +57,8 @@ export default function CustomerPlaceOrderPage() {
   const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'check' | 'bank_transfer' | ''>('');
+  const [paymentTermsDays, setPaymentTermsDays] = useState('');
+  const paymentTermsTouchedRef = useRef(false);
   const [lines, setLines] = useState<OrderLine[]>([]);
   const addProductsRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -92,21 +94,35 @@ export default function CustomerPlaceOrderPage() {
     setDeliveryDate(existingOrder.requested_delivery_dates?.[0] ?? existingOrder.items?.[0]?.delivery_date ?? '');
     setNotes(existingOrder.notes ?? '');
     setPaymentMethod(existingOrder.payment_method ?? '');
+    setPaymentTermsDays(String(existingOrder.payment_terms_days ?? ''));
     setLines((existingOrder.items ?? []).flatMap((item) => item.product ? [{
       product: { ...item.product, part_number: item.product.part_number ?? '', name: item.product.name ?? '', unit_of_measure: item.product.unit_of_measure ?? '', unit_price: item.unit_price, price_source: item.price_source, pricing_method: 'flat' },
       quantity: item.quantity,
       warranty_option_id: item.warranty_terms_snapshot?.warranty_option_id,
     }] : []));
   }, [id, existingOrder]);
+  useEffect(() => {
+    if (id || !portalUser || paymentTermsTouchedRef.current) return;
+    setPaymentTermsDays(String(portalUser.customer_terms?.payment_terms_days ?? ''));
+  }, [id, portalUser]);
   const taxReady = !!policies?.vat_status && (!vatRegistered || (rate != null && Number.isFinite(rate) && rate >= 0 && rate <= 1));
   const invalidLines = lines.filter((line) => {
     const quantity = Number(line.quantity);
+    const minimum = Number(line.product.minimum_order_quantity ?? 1);
+    const maximum = line.product.maximum_order_quantity == null ? null : Number(line.product.maximum_order_quantity);
     const exceedsStock = line.product.availability_mode === 'stock_limited'
       && line.product.available_quantity != null
       && quantity > Number(line.product.available_quantity);
+    const belowMinimum = Number.isFinite(minimum) && quantity < minimum;
+    const exceedsAgreementMaximum = maximum !== null && Number.isFinite(maximum) && quantity > maximum;
     const warrantyRequired = (line.product.warranty_options?.length ?? 0) > 1 && !line.warranty_option_id;
-    return !(Number.isSafeInteger(quantity) && quantity >= 1) || exceedsStock || warrantyRequired;
+    return !(Number.isSafeInteger(quantity) && quantity >= 1) || belowMinimum || exceedsAgreementMaximum || exceedsStock || warrantyRequired;
   });
+  const paymentTermsValue = Number(paymentTermsDays);
+  const paymentTermsValid = /^\d+$/.test(paymentTermsDays) && Number.isSafeInteger(paymentTermsValue)
+    && paymentTermsValue >= 0 && paymentTermsValue <= 365;
+  const paymentTermsError = paymentTermsValid ? undefined
+    : paymentTermsDays === '' ? 'Enter the payment terms requested for this order.' : 'Use a whole number from 0 to 365 days.';
   const deliveryError = !deliveryDate ? 'Choose a delivery date.'
     : deliveryDate < earliestDeliveryDate ? 'Choose a date more than 3 days from today.' : undefined;
   const quotePayload = JSON.stringify({
@@ -136,9 +152,10 @@ export default function CustomerPlaceOrderPage() {
     const unitPrice = product.unit_price;
     if (unitPrice === null) return;
     if (lines.some((line) => line.product.id === product.id)) return;
+    const minimum = Math.max(1, Math.ceil(Number(product.minimum_order_quantity ?? 1)));
     setLines([...lines, {
       product: { ...product, unit_price: unitPrice },
-      quantity: '1',
+      quantity: String(minimum),
       warranty_option_id: product.warranty_options?.length === 1 ? product.warranty_options[0].id : undefined,
     }]);
   };
@@ -159,6 +176,7 @@ export default function CustomerPlaceOrderPage() {
       const payload = {
         notes: notes.trim() || undefined,
         payment_method: paymentMethod || undefined,
+        payment_terms_days: paymentTermsValue,
         quote_signature: quote?.signature,
         items: lines.map((line) => ({
           product_id: line.product.id,
@@ -168,7 +186,7 @@ export default function CustomerPlaceOrderPage() {
         })),
       };
       if (id) return customerPortalApi.updateOrder(id, payload);
-      const fingerprint = JSON.stringify({ notes: payload.notes, payment_method: payload.payment_method, items: payload.items });
+      const fingerprint = JSON.stringify({ notes: payload.notes, payment_method: payload.payment_method, payment_terms_days: payload.payment_terms_days, items: payload.items });
       if (orderRequestRef.current?.fingerprint !== fingerprint) {
         orderRequestRef.current = { fingerprint, key: window.crypto.randomUUID() };
       }
@@ -186,7 +204,7 @@ export default function CustomerPlaceOrderPage() {
   });
 
   const canSubmit =
-    (!id || !!existingOrder?.capabilities?.can_edit) && !!portalUser && !!paymentMethod && paymentMethodOptions.some((method) => method.value === paymentMethod) && taxReady && !!quote && !deliveryError && lines.length > 0 && invalidLines.length === 0 && !createMut.isPending;
+    (!id || !!existingOrder?.capabilities?.can_edit) && !!portalUser && !!paymentMethod && paymentMethodOptions.some((method) => method.value === paymentMethod) && paymentTermsValid && taxReady && !!quote && !deliveryError && lines.length > 0 && invalidLines.length === 0 && !createMut.isPending;
   const submissionError = createMut.isError
     ? createMut.error.response?.data?.message ?? 'Unable to submit your order. Your items are saved on this page; please try again.'
     : null;
@@ -229,7 +247,12 @@ export default function CustomerPlaceOrderPage() {
                 <option value="">Choose payment method</option>
                 {paymentMethodOptions.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}
               </Select>
-              <p className="col-span-2 -mt-1 text-xs text-muted">Payment terms: {portalUser?.customer_terms?.payment_terms_days ?? '—'} days. Terms come from your customer agreement. Finance records payment against the invoice.</p>
+              <Input fieldSize="lg" containerClassName="col-span-2" label="Requested payment terms (days)" aria-label="Requested payment terms (days)"
+                type="number" min={0} max={365} step={1} inputMode="numeric" required value={paymentTermsDays}
+                error={paymentTermsDays !== '' && !paymentTermsValid ? paymentTermsError : undefined}
+                helper={`Customer default: ${portalUser?.customer_terms?.payment_terms_days ?? '—'} days. Sales reviews your request before confirming the order.`}
+                onChange={(event) => { paymentTermsTouchedRef.current = true; setPaymentTermsDays(event.target.value); }} />
+              {!paymentTermsValid && paymentTermsDays === '' && <p role="status" className="col-span-2 -mt-2 text-xs text-warning-fg">{paymentTermsError}</p>}
               {paymentMethodOptions.length === 0 && <p role="alert" className="col-span-2 text-sm text-warning-fg">No payment methods are configured for this account. Contact Sales before placing an order.</p>}
             </div>
           </section>
@@ -343,13 +366,25 @@ export default function CustomerPlaceOrderPage() {
                           </div>
                         </Td>
                         <Td>
-                          <Input fieldSize="lg" aria-label={`Quantity for ${line.product.part_number}`} type="number" min={1}
-                            max={line.product.availability_mode === 'stock_limited' && line.product.available_quantity != null ? Number(line.product.available_quantity) : undefined}
+                          {(() => {
+                            const minimum = Math.max(1, Math.ceil(Number(line.product.minimum_order_quantity ?? 1)));
+                            const agreementMaximum = line.product.maximum_order_quantity == null ? null : Number(line.product.maximum_order_quantity);
+                            const stockMaximum = line.product.availability_mode === 'stock_limited' && line.product.available_quantity != null
+                              ? Number(line.product.available_quantity) : null;
+                            const maximum = agreementMaximum == null ? stockMaximum
+                              : stockMaximum == null ? agreementMaximum : Math.min(agreementMaximum, stockMaximum);
+                            const quantity = Number(line.quantity);
+                            const error = !(Number.isSafeInteger(quantity) && quantity >= 1) ? 'Enter a whole number of at least 1.'
+                              : quantity < minimum ? `Minimum order quantity is ${line.product.minimum_order_quantity ?? '1.000'}.`
+                                : agreementMaximum !== null && quantity > agreementMaximum ? `Maximum order quantity is ${line.product.maximum_order_quantity} per sales order.`
+                                  : stockMaximum !== null && quantity > stockMaximum ? `Maximum available is ${line.product.available_quantity}.` : undefined;
+                            return <Input fieldSize="lg" aria-label={`Quantity for ${line.product.part_number}`} type="number" min={minimum}
+                            max={maximum ?? undefined}
                             step={1} inputMode="numeric" required
                             className="font-mono tabular-nums" value={line.quantity}
-                            error={!(Number.isSafeInteger(Number(line.quantity)) && Number(line.quantity) >= 1) ? 'Enter a whole number of at least 1.'
-                              : line.product.availability_mode === 'stock_limited' && line.product.available_quantity != null && Number(line.quantity) > Number(line.product.available_quantity) ? `Maximum available is ${line.product.available_quantity}.` : undefined}
-                            onChange={(e) => updateQuantity(idx, e.target.value)} />
+                            helper={`Allowed: ${line.product.minimum_order_quantity ?? '1.000'}–${line.product.maximum_order_quantity ?? 'no maximum'}${stockMaximum === null ? '' : ` · Available: ${line.product.available_quantity}`}`}
+                            error={error} onChange={(e) => updateQuantity(idx, e.target.value)} />;
+                          })()}
                           {line.product.availability_mode === 'stock_limited' && Number(line.quantity) > Number(line.product.available_quantity ?? 0) && <button type="button" className="mt-1 text-xs font-medium text-accent underline underline-offset-2" onClick={() => navigate(`/portal/customer/pricing?product_id=${encodeURIComponent(line.product.id)}&quantity=${encodeURIComponent(line.quantity)}`)}>Request price and availability</button>}
                         </Td>
                         <Td align="right" mono className="whitespace-nowrap text-muted">{quotedLine(line) ? formatPeso(quotedLine(line)!.unit_price) : pricingError ? 'Unavailable' : 'Pending'}<p className="mt-1 font-sans text-xs">{quotedLine(line)?.price_source === 'agreement' ? 'Agreed price' : quotedLine(line)?.price_source === 'base' ? 'Standard price' : quote ? 'Price unavailable' : pricingError ? 'Price check failed' : 'Checking price…'}</p></Td>

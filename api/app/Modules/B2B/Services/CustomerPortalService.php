@@ -50,6 +50,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -125,11 +126,70 @@ class CustomerPortalService
             'pending_delivery_count' => $pendingDeliveryCount,
             'open_invoice_count' => $openInvoiceCount,
             'total_outstanding' => Money::add((string) $totalOutstanding),
+            'product_terms' => $this->agreementProductTerms($customerId),
             'recent_orders' => $recentOrders,
             'recent_invoices' => $recentInvoices,
             'recent_deliveries' => $recentDeliveries,
             'recent_complaints' => $recentComplaints,
         ];
+    }
+
+    /**
+     * Customer-visible catalog terms without running the stock availability
+     * calculation used by order entry. Warranty and order limits are scoped to
+     * the authenticated customer's saved agreement.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function agreementProductTerms(int $customerId): array
+    {
+        $customer = Customer::query()->findOrFail($customerId);
+        $products = Product::query()->active()
+            ->where(function ($query) use ($customer): void {
+                $query->whereHas('portalCustomers', fn ($customers) => $customers->whereKey($customer->id));
+                if ($customer->portal_catalog_mode === 'standard') {
+                    $query->orWhere('portal_visibility', 'standard');
+                }
+            })
+            ->with(['customerWarrantyOptions' => fn ($options) => $options
+                ->where('customer_id', $customer->id)
+                ->orderBy('position')->orderBy('id')])
+            ->orderBy('part_number')
+            ->get(['id', 'part_number', 'name', 'unit_of_measure']);
+
+        $limitsSupported = Schema::hasColumns('customer_product_access', [
+            'minimum_order_quantity', 'maximum_order_quantity',
+        ]);
+        $limits = $limitsSupported
+            ? DB::table('customer_product_access')->where('customer_id', $customer->id)->get([
+                'product_id', 'minimum_order_quantity', 'maximum_order_quantity',
+            ])->keyBy('product_id')
+            : collect();
+
+        return $products->map(function (Product $product) use ($limits): array {
+            $limit = $limits->get($product->id);
+
+            return [
+                'id' => $product->hash_id,
+                'part_number' => $product->part_number,
+                'name' => $product->name,
+                'unit_of_measure' => $product->unit_of_measure,
+                'minimum_order_quantity' => (string) ($limit?->minimum_order_quantity ?? '1.000'),
+                'maximum_order_quantity' => $limit?->maximum_order_quantity === null
+                    ? null
+                    : (string) $limit->maximum_order_quantity,
+                'warranty_options' => $product->customerWarrantyOptions->map(fn ($option): array => [
+                    'id' => $option->hash_id,
+                    'label' => $option->label,
+                    'warranty_duration_days' => $option->warranty_duration_days,
+                    'warranty_report_window_days' => $option->warranty_report_window_days,
+                    'warranty_start_basis' => $option->warranty_start_basis,
+                    'warranty_covered_issues' => $option->warranty_covered_issues,
+                    'warranty_remedies' => $option->warranty_remedies,
+                    'additional_terms' => $option->additional_terms,
+                ])->values()->all(),
+            ];
+        })->values()->all();
     }
 
     /* ─── Sales Orders ───────────────────────────────────────────── */
@@ -183,6 +243,9 @@ class CustomerPortalService
                 'is_customizable' => (bool) $product->is_customizable,
                 'available_quantity' => $entry['available_quantity'],
                 'availability_mode' => $entry['availability_mode'],
+                'minimum_order_quantity' => $entry['minimum_order_quantity'],
+                'maximum_order_quantity' => $entry['maximum_order_quantity'],
+                'order_limits_supported' => $entry['order_limits_supported'],
                 'warranty_options' => $entry['warranty_options']->map(fn ($option): array => [
                     'id' => $option->hash_id,
                     'label' => $option->label,
@@ -243,6 +306,7 @@ class CustomerPortalService
             'date' => $orderDateString,
             'notes' => $data['notes'] ?? null,
             'payment_method' => $data['payment_method'] ?? null,
+            'payment_terms_days' => (int) $data['payment_terms_days'],
             'items' => $items,
         ];
 
@@ -259,6 +323,7 @@ class CustomerPortalService
             $fingerprintData,
             $portalUser,
         ): array {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             // Serialise first-order submissions per customer. The unique index
             // below is still the final arbiter; this lock also makes retries
             // return the original order rather than surfacing a unique-key 500.
@@ -297,6 +362,7 @@ class CustomerPortalService
                     'items' => $items,
                     'notes' => $data['notes'] ?? null,
                     'payment_method' => $data['payment_method'] ?? null,
+                    'payment_terms_days' => (int) $data['payment_terms_days'],
                     'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
                     'quote_signature' => $data['quote_signature'] ?? null,
                     'portal_idempotency_key' => $idempotencyKey,
@@ -473,7 +539,7 @@ class CustomerPortalService
             }
             $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date'], 'warranty_option_id' => $optionId];
         }
-        $this->orderAvailability->assertOrderAvailability(Customer::query()->findOrFail($user->customer_id), $items);
+        $this->orderAvailability->assertOrderAvailability(Customer::query()->findOrFail($user->customer_id), $items, $existing?->id);
         $quote = $this->salesOrderService->quoteOrder($user->customer_id, $items, $existing, true);
         $quote['items'] = array_map(function ($line): array {
             $line['product_id'] = app('hashids')->encode($line['product_id']);
@@ -497,6 +563,7 @@ class CustomerPortalService
     public function updateOrder(SalesOrder $salesOrder, CustomerPortalUser $user, array $data): SalesOrder
     {
         return DB::transaction(function () use ($salesOrder, $user, $data): SalesOrder {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             $row = SalesOrder::query()->lockForUpdate()->findOrFail($salesOrder->id);
             abort_if($row->customer_id !== $user->customer_id, 403);
             $before = $this->salesOrderDetail($user->customer_id, $row)->toArray();
@@ -516,9 +583,15 @@ class CustomerPortalService
                 $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date'], 'warranty_option_id' => $optionId];
             }
             $customer = Customer::query()->lockForUpdate()->findOrFail($user->customer_id);
-            $this->orderAvailability->assertOrderAvailability($customer, $items);
+            $this->orderAvailability->assertOrderAvailability($customer, $items, $row->id);
             $updated = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->update(
-                $row, ['items' => $items, 'notes' => $data['notes'] ?? null, 'payment_method' => $data['payment_method'] ?? $row->payment_method, 'quote_signature' => $data['quote_signature'] ?? null], $user,
+                $row, [
+                    'items' => $items,
+                    'notes' => $data['notes'] ?? null,
+                    'payment_method' => $data['payment_method'] ?? $row->payment_method,
+                    'payment_terms_days' => $data['payment_terms_days'] ?? $row->payment_terms_days,
+                    'quote_signature' => $data['quote_signature'] ?? null,
+                ], $user,
             ));
             $this->recordCustomerAudit('customer.order.updated', $updated, $user->id, $user->customer_id, [
                 'before' => $before, 'after' => $updated->toArray(),

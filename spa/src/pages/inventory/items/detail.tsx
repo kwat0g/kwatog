@@ -40,6 +40,7 @@ export default function ItemDetailPage() {
   const reorderMethodLabel = itemOptions?.reorder_methods?.find(
     (option) => option.value === data?.reorder_method,
   )?.label;
+  const isFinishedGood = data?.item_type === 'finished_good';
   const stockStatusLabel = itemOptions?.stock_statuses?.find(
     (option) => option.value === data?.stock_status,
   )?.label;
@@ -157,32 +158,42 @@ export default function ItemDetailPage() {
               <dt className="text-caption text-muted">Unit of measure</dt>
               <dd>{data.unit_of_measure}</dd>
             </div>
+            {!isFinishedGood && (
+              <div>
+                <dt className="text-caption text-muted">Reorder method</dt>
+                <dd>{reorderMethodLabel ?? data.reorder_method}</dd>
+              </div>
+            )}
             <div>
-              <dt className="text-caption text-muted">Reorder method</dt>
-              <dd>{reorderMethodLabel ?? data.reorder_method}</dd>
-            </div>
-            <div>
-              <dt className="text-caption text-muted">Reorder point</dt>
+              <dt className="text-caption text-muted">
+                {isFinishedGood ? 'Production planning threshold' : 'Reorder point'}
+              </dt>
               <dd className="font-sans tabular-nums">{formatQuantity(data.reorder_point)}</dd>
             </div>
             <div>
               <dt className="text-caption text-muted">Safety stock</dt>
               <dd className="font-sans tabular-nums">{formatQuantity(data.safety_stock)}</dd>
             </div>
+            {!isFinishedGood && (
+              <div>
+                <dt className="text-caption text-muted">MOQ</dt>
+                <dd className="font-sans tabular-nums">
+                  {formatQuantity(data.minimum_order_quantity)}
+                </dd>
+              </div>
+            )}
             <div>
-              <dt className="text-caption text-muted">MOQ</dt>
-              <dd className="font-sans tabular-nums">
-                {formatQuantity(data.minimum_order_quantity)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-caption text-muted">Lead time</dt>
+              <dt className="text-caption text-muted">
+                {isFinishedGood ? 'Production lead time' : 'Lead time'}
+              </dt>
               <dd className="font-sans tabular-nums">
                 {data.lead_time_days ||
                   itemOptions?.replenishment_basis?.default_lead_time_days ||
                   0}{' '}
                 days
-                {data.lead_time_days === 0 && <span className="ml-1 text-muted">(default)</span>}
+                {data.lead_time_days === 0 && (
+                  <span className="ml-1 text-muted">(default)</span>
+                )}
               </dd>
             </div>
             <div>
@@ -191,7 +202,9 @@ export default function ItemDetailPage() {
             </div>
           </dl>
         </Panel>
-        {data.reorder_method === 'days_of_supply' && itemOptions?.replenishment_basis && (
+        {!isFinishedGood &&
+          data.reorder_method === 'days_of_supply' &&
+          itemOptions?.replenishment_basis && (
           <p className="text-md text-muted mb-4">
             Replenishment uses average daily issues, deliveries, and scrap over{' '}
             {itemOptions.replenishment_basis.demand_history_days} days, multiplied by effective lead

@@ -284,9 +284,15 @@ describe('role-aligned sidebar permissions', () => {
       features: allFeatures,
       roleSlug: 'purchasing_officer',
     };
+    const salesOfficer = {
+      permissions: new Set(['accounting.customers.manage']),
+      features: allFeatures,
+      roleSlug: 'sales_officer',
+    };
 
     expect(isNavItemVisible(item('/accounting/portal-access'), finance)).toBe(true);
     expect(isNavItemVisible(item('/accounting/portal-access'), purchasing)).toBe(false);
+    expect(isNavItemVisible(item('/accounting/portal-access'), salesOfficer)).toBe(true);
   });
 
   it('exposes the merged Warehouse Map only to warehouse structure managers', () => {
@@ -453,15 +459,26 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(item('/dashboard'), employee)).toBe(true);
     expect(isNavItemVisible(item('/budgeting'), finance)).toBe(true);
     expect(isNavItemVisible(item('/budgeting'), employee)).toBe(false);
-    // Pricing requests / cost reviews live as tabs on /crm/price-agreements, not in the sidebar.
-    expect(SECTIONS.flatMap((section) => section.items).some((entry) => entry.to.startsWith('/crm/price-agreements/'))).toBe(false);
+    const pricingApprovals = SECTIONS.find((section) => section.label === 'Finance')?.items.find(
+      (entry) => entry.to === '/crm/price-agreements/requests',
+    );
+    expect(pricingApprovals).toMatchObject({
+      label: 'Pricing approvals',
+      permission: 'crm.price_agreements.approve',
+      feature: 'crm',
+    });
+    expect(isNavItemVisible(pricingApprovals!, finance)).toBe(true);
+    expect(isNavItemVisible(pricingApprovals!, employee)).toBe(false);
+    expect(SECTIONS.find((section) => section.label === 'Finance')?.items.some(
+      (entry) => entry.to === '/accounting/customer-advances',
+    )).toBe(false);
 
     const financePaths = SECTIONS.find((section) => section.label === 'Finance')?.items.map(
       (entry) => entry.to,
     );
     expect(financePaths).toEqual([
+      '/crm/price-agreements/requests',
       '/budgeting',
-      '/budgeting/transfers',
       '/accounting/invoices',
       '/accounting/bills',
       '/accounting/vendors',
