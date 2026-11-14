@@ -13,6 +13,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 
 function parseUserAgent(ua: string | null): string {
  if (!ua) return '—';
@@ -68,7 +69,7 @@ export default function SessionsPage() {
  const { data, isLoading, isError } = useQuery({
  queryKey: ['admin', 'sessions'],
  queryFn: sessionsApi.list,
- refetchInterval: 30_000,
+ refetchInterval: refetchIntervalUnlessClientHttpError(30_000),
  });
 
  const terminate = useMutation({

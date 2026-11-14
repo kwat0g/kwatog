@@ -18,6 +18,7 @@ import { LuPlus } from '@/lib/icons';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { refetchUnlessClientHttpError, refetchOnMountUnlessClientError } from '@/lib/httpErrorPolicy';
 
 export default function BudgetOverviewPage() {
   const { can } = usePermission();
@@ -36,7 +37,7 @@ export default function BudgetOverviewPage() {
     queryFn: () => budgetingApi.fiscalYears(),
     enabled: canView,
     staleTime: 300_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const fiscalYears = useMemo(() => fiscalYearsQuery.data ?? [], [fiscalYearsQuery.data]);
   useEffect(() => {
@@ -52,8 +53,8 @@ export default function BudgetOverviewPage() {
     queryFn: () => budgetingApi.overview(selectedFiscalYearId),
     enabled: canView && !!selectedFiscalYearId,
     staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnMount: refetchOnMountUnlessClientError,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const { data: overview, isLoading: overviewLoading, error } = overviewQuery;
 
@@ -68,8 +69,8 @@ export default function BudgetOverviewPage() {
     }),
     enabled: !canView || !!selectedFiscalYearId,
     staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnMount: refetchOnMountUnlessClientError,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
 
   const { data: budgetOptions } = useQuery({
@@ -77,7 +78,7 @@ export default function BudgetOverviewPage() {
     queryFn: () => budgetingApi.options(),
     enabled: canView,
     staleTime: 300_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
 
   useEffect(() => setPage(1), [selectedFiscalYearId, selectedStatus, awaitingMyApproval, perPage]);

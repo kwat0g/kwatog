@@ -869,6 +869,11 @@ it('keeps a filtered sidebar destination active', () => {
   expect(link).toHaveAttribute('aria-current', 'page');
 });
 
+it('keeps a legacy sidebar destination active at its compact URL', () => {
+  render(<MemoryRouter initialEntries={['/inq']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  expect(screen.getByRole('link', { name: 'Customer Inquiries' })).toHaveAttribute('aria-current', 'page');
+});
+
 it('widens the rail after 150ms and reveals labels on keyboard focus', () => {
   useSidebarStore.getState().setCollapsed(true);
   render(<MemoryRouter><Sidebar roleSlug="system_admin" /></MemoryRouter>);

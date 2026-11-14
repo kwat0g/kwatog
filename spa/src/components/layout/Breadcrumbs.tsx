@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { LuChevronRight } from '@/lib/icons';
 import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 import { MODULE_LABELS } from '@/lib/moduleLabels';
+import { expandAppPath } from '@/lib/appPaths';
 
 /**
  * Path-derived breadcrumbs — the app's ONE trail.
@@ -103,7 +104,8 @@ export function Breadcrumbs() {
  // left out, so the trail names the record where document.title also reports its
  // status. Only trust it for the route that registered it.
  const override = useBreadcrumbStore((s) => (s.path === pathname ? s.label : null));
- const segments = pathname.split('/').filter(Boolean);
+ const legacyPathname = expandAppPath(pathname);
+ const segments = legacyPathname.split('/').filter(Boolean);
 
  if (segments.length === 0) return null;
 

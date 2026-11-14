@@ -30,11 +30,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { expandAppPath } from '@/lib/appPaths';
 
 export default function MobileWorkOrderDetail() {
   const { id: mwoId } = useParams<{ id: string }>();
   const { can, canAny } = usePermission();
-  const selfService = useLocation().pathname.startsWith('/self-service/');
+  const selfService = expandAppPath(useLocation().pathname).startsWith('/self-service/');
   const isSupervisor = useAuthStore((state) => state.user?.role.slug === 'maintenance_supervisor');
   const queryClient = useQueryClient();
   useRealtimeRecord('maintenance_work_order', mwoId);

@@ -32,6 +32,7 @@ import { reduceMotion } from '@/lib/motionPrefs';
 
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { landingApi } from '@/api/landing';
+import { expandAppPath } from '@/lib/appPaths';
 
 // `AuthLayout` is reachable statically from `App.tsx` (via `authRoutes`), so a
 // static import here lands in the entry chunk for EVERY route — someone deep
@@ -54,9 +55,10 @@ const GRID_BG: CSSProperties = {
 
 export function AuthLayout() {
   const location = useLocation();
-  const passwordPortal = location.pathname === '/portal/customer/change-password'
+  const legacyPathname = expandAppPath(location.pathname);
+  const passwordPortal = legacyPathname === '/portal/customer/change-password'
     ? 'customer'
-    : location.pathname === '/portal/supplier/change-password' ? 'supplier' : null;
+    : legacyPathname === '/portal/supplier/change-password' ? 'supplier' : null;
   const [showcaseVisible, setShowcaseVisible] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(DESKTOP_MEDIA).matches,
   );
@@ -105,7 +107,7 @@ export function AuthLayout() {
       '/portal/customer/change-password': 'Change customer portal password',
       '/portal/password-reset': 'Portal password reset',
     };
-    document.title = `${labels[location.pathname] ?? 'Account'} · ERP`;
+    document.title = `${labels[expandAppPath(location.pathname)] ?? 'Account'} · ERP`;
   }, [location.pathname]);
 
   const asideRef = useRef<HTMLElement>(null);

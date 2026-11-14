@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { LuRefreshCw } from '@/lib/icons';
 import { usePermission } from '@/hooks/usePermission';
 import { kpiApi } from '@/api/kpi';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 import { settingsApi, type SystemInfo } from '@/api/admin/settings';
 import { AdminSystemHealthPanel } from '@/components/admin/AdminSystemHealthPanel';
 import { BarComparison } from '@/components/charts/BarComparison';
@@ -45,7 +46,7 @@ export default function AdminDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'admin'],
   queryFn: () => dashboardsApi.admin(),
-  refetchInterval: DASHBOARD_REFRESH_FAST_MS,
+  refetchInterval: refetchIntervalUnlessClientHttpError(DASHBOARD_REFRESH_FAST_MS),
   });
  const systemInfoQuery = useQuery({
   queryKey: ['admin', 'system-info'],
@@ -57,7 +58,7 @@ export default function AdminDashboard() {
   queryKey: ['admin', 'system-health'],
   queryFn: settingsApi.systemHealth,
   enabled: canViewSettings,
-  refetchInterval: canViewSettings ? DASHBOARD_REFRESH_FAST_MS : false,
+  refetchInterval: refetchIntervalUnlessClientHttpError(canViewSettings ? DASHBOARD_REFRESH_FAST_MS : false),
   refetchIntervalInBackground: false,
  });
 

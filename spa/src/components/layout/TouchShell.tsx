@@ -10,6 +10,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { OfflineBanner, usePausedMutationCount } from '@/components/ui/OfflineBanner';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { focusRingInset } from '@/lib/focus';
+import { expandAppPath } from '@/lib/appPaths';
 import { cn } from '@/lib/cn';
 
 import { ErrorBoundary } from '@/components/guards/ErrorBoundary';
@@ -79,7 +80,11 @@ export function TouchShell({
   }, [eyebrow]);
 
   function isActive(to: string, exact?: boolean) {
-    return exact ? location.pathname === to : location.pathname.startsWith(to);
+    const path = to.split('?')[0];
+    const currentPath = expandAppPath(location.pathname);
+    return exact
+      ? currentPath === path
+      : currentPath === path || currentPath.startsWith(`${path}/`);
   }
 
   const hasTabs = Boolean(tabs?.length);

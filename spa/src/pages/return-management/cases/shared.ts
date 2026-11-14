@@ -1,7 +1,9 @@
 import type { ReturnCaseRealm } from '@/types/returnCases';
 import { returnCaseStatusVariant } from '@/lib/statusVariants';
+import { expandAppPath } from '@/lib/appPaths';
 
 export function realmFromPath(pathname: string): ReturnCaseRealm {
+  pathname = expandAppPath(pathname);
   if (pathname.startsWith('/portal/customer/problems')) return 'customer';
   if (pathname.startsWith('/portal/supplier/problems')) return 'supplier';
   return 'internal';

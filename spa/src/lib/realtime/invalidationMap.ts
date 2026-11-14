@@ -2,6 +2,7 @@ import { partialMatchKey, type QueryClient, type QueryKey } from '@tanstack/reac
 import type { ChainEntityType } from '@/types/chain';
 import { purchaseOrderQueryKeys } from '@/lib/queryKeys/purchasing';
 import { setRealtimeLastUpdatedAt } from './status';
+import { isClientHttpError } from '@/lib/httpErrorPolicy';
 
 export type RealtimeEntityType = ChainEntityType
   | 'kpi_snapshot'
@@ -1537,8 +1538,13 @@ async function invalidatePrefixesOnce(
       && keyStartsWith(query.queryKey, key)
       && keyStartsWith(key, query.queryKey),
   );
-  const matches = (query: { queryKey: QueryKey; isActive(): boolean; state: { fetchStatus: string } }) =>
-    !isExcluded(query) && prefixes.some((prefix) => keyStartsWith(query.queryKey, prefix));
+  const matches = (query: {
+    queryKey: QueryKey;
+    isActive(): boolean;
+    state: { fetchStatus: string; error: unknown };
+  }) => !isExcluded(query)
+    && !isClientHttpError(query.state.error)
+    && prefixes.some((prefix) => keyStartsWith(query.queryKey, prefix));
 
   // A fresh mutation response may already have been installed while an older
   // request for the same key is still pending. Snapshot that data, cancel with
@@ -1583,7 +1589,7 @@ async function invalidatePrefixesOnce(
   const stillInvalidated = (query: {
     queryKey: QueryKey;
     isActive(): boolean;
-    state: { fetchStatus: string; isInvalidated: boolean };
+    state: { fetchStatus: string; isInvalidated: boolean; error: unknown };
   }) => matches(query) && query.isActive()
     && query.state.fetchStatus === 'idle'
     && query.state.isInvalidated;
@@ -1835,6 +1841,7 @@ export async function catchUpRealtimeQueries(queryClient: QueryClient): Promise<
   const activeReadsToRepeat = new Set(queryClient.getQueryCache().findAll()
     .filter((query) => query.isActive()
       && isRealtimeManagedQuery(query)
+      && !isClientHttpError(query.state.error)
       && query.state.fetchStatus === 'fetching'
       && !isEventRefresh(query))
     .map((query) => query.queryHash));
@@ -1842,7 +1849,9 @@ export async function catchUpRealtimeQueries(queryClient: QueryClient): Promise<
   // A catch-up started by focus/reconnect can overlap a just-received record
   // event. Let the event's newer authorized read finish instead of canceling it.
   await queryClient.invalidateQueries({
-    predicate: (query) => query.isActive() && isRealtimeManagedQuery(query),
+    predicate: (query) => query.isActive()
+      && isRealtimeManagedQuery(query)
+      && !isClientHttpError(query.state.error),
     refetchType: 'active',
   }, { cancelRefetch: false });
 
@@ -1855,9 +1864,10 @@ export async function catchUpRealtimeQueries(queryClient: QueryClient): Promise<
   const stillInvalidated = (query: {
     isActive(): boolean;
     queryKey: QueryKey;
-    state: { fetchStatus: string; isInvalidated: boolean };
+    state: { fetchStatus: string; isInvalidated: boolean; error: unknown };
   }) => query.isActive()
     && isRealtimeManagedQuery(query)
+    && !isClientHttpError(query.state.error)
     && query.state.fetchStatus === 'idle'
     && query.state.isInvalidated;
   if (queryClient.getQueryCache().findAll({ predicate: stillInvalidated }).length) {

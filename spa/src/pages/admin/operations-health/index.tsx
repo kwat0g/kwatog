@@ -10,13 +10,14 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 
 export default function OperationsHealthPage() {
   const { can } = usePermission();
   const query = useQuery({
     queryKey: ['rollout-health'],
     queryFn: rolloutHealthApi.get,
-    refetchInterval: 60_000,
+    refetchInterval: refetchIntervalUnlessClientHttpError(60_000),
   });
 
   if (query.isLoading) return <SkeletonTable rows={7} columns={4} />;

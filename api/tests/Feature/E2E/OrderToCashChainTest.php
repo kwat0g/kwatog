@@ -133,6 +133,7 @@ class OrderToCashChainTest extends TestCase
         $cash = Account::query()
             ->where('type', 'asset')
             ->where('is_active', true)
+            ->where(fn ($query) => $query->where('code', '1020')->orWhere('code', 'like', '1020-%'))
             ->whereNotExists(function ($q): void {
                 $q->selectRaw(1)
                     ->from('accounts as children')
@@ -333,15 +334,13 @@ class OrderToCashChainTest extends TestCase
 
         // The assigned driver records receipt; that evidence advances the shipment.
         $this->actingAs($this->driver)
-            ->post("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/proofs", [
-                'proof_type' => 'signed_dr',
-                'file' => UploadedFile::fake()->image('signed-dr.jpg'),
-                'notes' => 'Signed by receiver',
+            ->post("/api/v1/driver/deliveries/{$delivery->hash_id}/receipt", [
+                'photo' => UploadedFile::fake()->image('signed-dr.jpg'),
             ])
             ->assertSuccessful();
         $proof = DeliveryProof::query()
             ->where('delivery_id', $delivery->id)
-            ->where('proof_type', 'signed_dr')
+            ->where('proof_type', 'photo')
             ->sole();
         $this->assertSame($this->driver->id, (int) $proof->uploaded_by);
         $delivery = Delivery::query()->findOrFail($delivery->id);

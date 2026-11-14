@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Models\OutboxMessage;
+use App\Common\Services\OutboxDispatcher;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -63,6 +66,7 @@ class SalesOrderChainBridgeTest extends TestCase
         [$so, $product, $item] = $this->makeSoWithBom();
 
         $confirmed = $this->soService->confirm($so);
+        $this->dispatchConfirmationEvent($so);
 
         $this->assertSame(SalesOrderStatus::Confirmed->value, $confirmed->status->value);
 
@@ -79,7 +83,7 @@ class SalesOrderChainBridgeTest extends TestCase
         $this->assertSame('planned', $wos->first()->status->value);
     }
 
-    public function test_confirm_so_returns_chain_result_summary(): void
+    public function test_confirm_so_returns_queued_chain_summary_and_dispatches_planning_from_outbox(): void
     {
         [$so] = $this->makeSoWithBom();
 
@@ -91,30 +95,20 @@ class SalesOrderChainBridgeTest extends TestCase
 
         $cr = $result['chain_result'];
         $this->assertSame($so->so_number, $cr['so_number']);
-        $this->assertGreaterThanOrEqual(1, $cr['work_orders_created']);
+        $this->assertSame('queued', $cr['planning_status']);
+        $this->assertSame(0, $cr['work_orders_created']);
         $this->assertIsInt($cr['auto_scheduled']);
         $this->assertIsInt($cr['needs_manual']);
         $this->assertIsInt($cr['shortages']);
         $this->assertIsInt($cr['prs_created']);
         $this->assertIsArray($cr['work_orders']);
         $this->assertIsArray($cr['scheduling_conflicts']);
-        $this->assertSame('completed', $cr['planning_status'],
-            'With the sync queue driver the MRP run has completed before the response is built.');
-        $this->assertNotEmpty(
-            $cr['scheduling_conflicts'],
-            'The chain response must expose the capacity planner conflict for the unassigned work order.',
-        );
-        $productionStep = collect($this->soService->chain($result['so']))->firstWhere('key', 'in_production');
-        $this->assertStringContainsString('QC: configure the actual inspection specification', $productionStep['description']);
+        $this->dispatchConfirmationEvent($so);
+        $this->assertDatabaseHas('mrp_plans', ['sales_order_id' => $so->id, 'status' => 'active']);
+        $this->assertDatabaseHas('work_orders', ['sales_order_id' => $so->id, 'status' => 'planned']);
+        $productionStep = collect($this->soService->chain($so->fresh()))->firstWhere('key', 'in_production');
+        $this->assertSame('pending', $productionStep['state']);
 
-        // Each WO summary has required keys.
-        foreach ($cr['work_orders'] as $woSummary) {
-            $this->assertArrayHasKey('id', $woSummary);
-            $this->assertArrayHasKey('wo_number', $woSummary);
-            $this->assertArrayHasKey('status', $woSummary);
-            $this->assertArrayHasKey('quantity_target', $woSummary);
-            $this->assertArrayHasKey('needs_manual_scheduling', $woSummary);
-        }
     }
 
     public function test_completed_production_without_outgoing_inspection_stays_pending_in_order_funnel(): void
@@ -155,13 +149,13 @@ class SalesOrderChainBridgeTest extends TestCase
         [$so, , $rawItem] = $this->makeSoWithBom(stockQuantity: 0);
 
         $result = $this->soService->confirmWithChainResult($so);
-
-        $cr = $result['chain_result'];
-        $this->assertGreaterThanOrEqual(1, $cr['shortages'], 'Shortages expected when no stock.');
-        $this->assertGreaterThanOrEqual(1, $cr['prs_created'], 'Auto-PR expected for shortage.');
+        $this->assertSame('queued', $result['chain_result']['planning_status']);
+        $this->dispatchConfirmationEvent($so);
 
         // Verify the PR exists.
         $plan = MrpPlan::where('sales_order_id', $so->id)->first();
+        $this->assertNotNull($plan);
+        $this->assertGreaterThanOrEqual(1, (int) $plan->shortages_found, 'Shortages expected when no stock.');
         $pr = PurchaseRequest::where('mrp_plan_id', $plan->id)->first();
         $this->assertNotNull($pr, 'Purchase request should be created for shortages.');
         $this->assertTrue((bool) $pr->is_auto_generated, 'PR should be marked auto-generated.');
@@ -200,6 +194,7 @@ class SalesOrderChainBridgeTest extends TestCase
         // No stock → MRP raises a draft auto-PR for the shortfall.
         [$so] = $this->makeSoWithBom(stockQuantity: 0);
         $this->soService->confirmWithChainResult($so);
+        $this->dispatchConfirmationEvent($so);
 
         $plan = MrpPlan::where('sales_order_id', $so->id)->firstOrFail();
         $pr = PurchaseRequest::where('mrp_plan_id', $plan->id)->firstOrFail();
@@ -223,11 +218,13 @@ class SalesOrderChainBridgeTest extends TestCase
         $rawItem->update(['is_active' => false]);
 
         $cr = $this->soService->confirmWithChainResult($so)['chain_result'];
+        $this->assertSame('queued', $cr['planning_status']);
+        $this->dispatchConfirmationEvent($so);
 
-        $this->assertSame('failed', $cr['planning_status'],
-            'A completed-but-failed planning run must not be reported as queued.');
-        $this->assertNotNull($cr['planning_error']);
-        $this->assertStringContainsString('inactive', $cr['planning_error']['message']);
+        $run = MrpRun::query()->orderByDesc('id')->firstOrFail();
+        $this->assertSame('partial', $run->status->value);
+        $perOrder = collect($run->summary['per_sales_order'] ?? [])->firstWhere('so_id', $so->id);
+        $this->assertStringContainsString('inactive', (string) ($perOrder['error'] ?? ''));
         $this->assertNull($so->fresh()->mrp_plan_id);
         $step = collect($this->soService->chain($so->fresh()))->firstWhere('key', 'mrp_planned');
         $this->assertSame('rejected', $step['state']);
@@ -265,6 +262,7 @@ class SalesOrderChainBridgeTest extends TestCase
         [$so, $product] = $this->makeSoWithoutBom();
 
         $result = $this->soService->confirmWithChainResult($so);
+        $this->dispatchConfirmationEvent($so);
 
         $cr = $result['chain_result'];
         $this->assertSame(0, $cr['work_orders_created'],
@@ -401,6 +399,19 @@ class SalesOrderChainBridgeTest extends TestCase
      *
      * @return array{0: SalesOrder, 1: Product, 2: Item}
      */
+    private function dispatchConfirmationEvent(SalesOrder $order): void
+    {
+        $message = OutboxMessage::query()
+            ->where('event_type', SalesOrderConfirmed::class)
+            ->where('status', OutboxMessage::STATUS_PENDING)
+            ->get()
+            ->first(static fn (OutboxMessage $row): bool =>
+                (int) data_get($row->payload, 'salesOrder.id') === (int) $order->id);
+
+        $this->assertNotNull($message, 'Confirmation must persist a durable outbox message.');
+        app(OutboxDispatcher::class)->dispatch((string) $message->getKey());
+    }
+
     private function makeSoWithBom(float $stockQuantity = 1000): array
     {
         $customer = Customer::create([

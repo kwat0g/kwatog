@@ -3,6 +3,7 @@ import { Button } from './Button';
 import { EmptyState } from './EmptyState';
 import { usePermission } from '@/hooks/usePermission';
 import { emptyStateCopyFor } from '@/lib/emptyStateCopy';
+import { expandAppPath } from '@/lib/appPaths';
 
 interface Props {
   /**
@@ -34,7 +35,7 @@ export function ListEmptyState({ searchTerm, route, action }: Props) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { can } = usePermission();
-  const copy = emptyStateCopyFor(route ?? pathname);
+  const copy = emptyStateCopyFor(route ?? expandAppPath(pathname));
 
   if (searchTerm) {
     return (

@@ -21,6 +21,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { chartColor } from '@/lib/chartPalette';
 import { usePermission } from '@/hooks/usePermission';
 import { invalidateRealtimeList } from '@/lib/realtime/invalidationMap';
+import { refetchUnlessClientHttpError, refetchOnMountUnlessClientError } from '@/lib/httpErrorPolicy';
 import toast from 'react-hot-toast';
 
 export default function BudgetVsActualPage() {
@@ -33,7 +34,7 @@ export default function BudgetVsActualPage() {
     queryKey: ['budget-fiscal-years'],
     queryFn: () => budgetingApi.fiscalYears(),
     staleTime: 300_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const fiscalYears = useMemo(() => fiscalYearsQuery.data ?? [], [fiscalYearsQuery.data]);
   useEffect(() => {
@@ -46,16 +47,16 @@ export default function BudgetVsActualPage() {
     queryFn: () => budgetingApi.budgetVsActual(selectedFiscalYearId),
     enabled: !!selectedFiscalYearId,
     staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnMount: refetchOnMountUnlessClientError,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const syncStatusQuery = useQuery({
     queryKey: ['budget-sync-status', selectedFiscalYearId],
     queryFn: () => budgetingApi.syncStatus(selectedFiscalYearId),
     enabled: !!selectedFiscalYearId,
     staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnMount: refetchOnMountUnlessClientError,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const syncActuals = useMutation({
     mutationFn: () => budgetingApi.syncActuals(selectedFiscalYearId),

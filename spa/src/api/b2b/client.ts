@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { queryClient } from '@/lib/queryClient';
+import { expandAppPath } from '@/lib/appPaths';
 
 export type PortalRealm = 'supplier' | 'customer';
 
@@ -36,11 +37,12 @@ export const createPortalClient = (realm: PortalRealm = 'supplier') => {
           }
         }
 
-        if (typeof window !== 'undefined' && window.location.pathname !== `/portal/${realm}/login`) {
+        const currentPath = typeof window !== 'undefined' ? expandAppPath(window.location.pathname) : '';
+        if (typeof window !== 'undefined' && currentPath !== `/portal/${realm}/login`) {
           queryClient.clear();
           const portalPath = `/portal/${realm}`;
-          const from = window.location.pathname === portalPath || window.location.pathname.startsWith(`${portalPath}/`)
-            ? window.location.pathname
+          const from = currentPath === portalPath || currentPath.startsWith(`${portalPath}/`)
+            ? currentPath
             : portalPath;
           window.location.assign(`/portal/${realm}/login?from=${encodeURIComponent(from)}`);
         }
@@ -52,7 +54,7 @@ export const createPortalClient = (realm: PortalRealm = 'supplier') => {
       && error.response.data?.code === 'password_expired'
       && typeof window !== 'undefined') {
       const changePasswordPath = `/portal/${realm}/change-password`;
-      if (window.location.pathname !== changePasswordPath) {
+      if (expandAppPath(window.location.pathname) !== changePasswordPath) {
         window.location.assign(changePasswordPath);
       }
     }

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { useRealtimeRecord } from '@/hooks/useRealtimeRecord';
 import { invalidateRealtimeChange } from '@/lib/realtime/invalidationMap';
+import { refetchUnlessClientHttpError, refetchOnMountUnlessClientError } from '@/lib/httpErrorPolicy';
 import { accountsApi } from '@/api/accounting/accounts';
 import { departmentsApi } from '@/api/hr/departments';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -58,15 +59,15 @@ export default function BudgetCreatePage() {
     queryKey: ['budget-fiscal-years'],
     queryFn: () => budgetingApi.fiscalYears(),
     staleTime: 300_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const budgetQuery = useQuery<Budget>({
     queryKey: ['budget', id],
     queryFn: () => budgetingApi.show(id!),
     enabled: editing,
     staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnMount: refetchOnMountUnlessClientError,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const accountsQuery = useQuery({ queryKey: ['accounts', 'budget-options'], queryFn: () => accountsApi.list({ per_page: 200 }) });
   const departmentsQuery = useQuery({ queryKey: ['departments'], queryFn: () => departmentsApi.tree() });
@@ -74,7 +75,7 @@ export default function BudgetCreatePage() {
     queryKey: ['budgets', 'options'],
     queryFn: () => budgetingApi.options(),
     staleTime: 300_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const fiscalYears = yearsQuery.data;
   const budget = budgetQuery.data;

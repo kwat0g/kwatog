@@ -134,21 +134,19 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
   || (typeof data === 'string' && /Just a moment|cdn-cgi\/challenge-platform|cf_chl_opt/.test(data))
  );
 
- // Push every 4xx/5xx into the in-memory dev log so the floating
- // DevErrorPanel can show Laravel's exception details inline.
- if (status && status >= 400) {
+ // Keep expected client responses (validation, permissions, missing records)
+ // out of the panel labelled "Server errors". It is for actual API failures.
+ if (status !== undefined && status >= 500 && status < 600) {
  useErrorLogStore.getState().push({
  method: (error.config?.method ?? 'get').toUpperCase(),
  url: error.config?.url ?? '(unknown)',
  status,
- message: cloudflareChallenge
-  ? `Cloudflare security challenge blocked the request${cloudflareRayId ? ` (Ray ID ${String(cloudflareRayId)})` : ''}.`
-  : data?.message ?? error.message ?? 'Unknown error',
+ message: data?.message ?? error.message ?? 'Unknown error',
  exception: data?.exception,
  file: data?.file,
  line: data?.line,
  trace: data?.trace,
- raw: cloudflareChallenge ? undefined : data,
+ raw: data,
  });
  }
 
@@ -166,12 +164,6 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  // so timed-out requests get a clear message rather than the generic
  // network-error fallback in the `default` branch.
  if (error.code === 'ECONNABORTED') {
- useErrorLogStore.getState().push({
- method: (error.config?.method ?? 'get').toUpperCase(),
- url: error.config?.url ?? '(unknown)',
- status: 0,
- message: `Timeout after ${error.config?.timeout ?? 30_000}ms`,
- });
  if (requestConfig?.skipErrorToast !== true) {
  markReported(error);
  toast.error('The server took too long to respond. Nothing was saved — please try again.', {

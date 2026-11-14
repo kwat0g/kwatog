@@ -29,6 +29,7 @@ import { legalRoutes } from '@/routes/legalRoutes';
 import { driverRoutes } from '@/routes/driverRoutes';
 import { factoryRoutes } from '@/routes/factoryRoutes';
 import { maintenanceMobileRoutes } from '@/routes/maintenanceMobileRoutes';
+import { compactRouteTree, legacyRouteAliases } from '@/routes/shortRoutes';
 
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
@@ -54,30 +55,34 @@ export default function App() {
  </AuthGuard>
  }
  >
- {dashboardRoutes}
- {adminRoutes}
- {hrRoutes}
- {payrollRoutes}
- {accountingRoutes}
- {inventoryRoutes}
- {purchasingRoutes}
- {crmRoutes}
- {mrpRoutes}
- {qualityRoutes}
- {supplyChainRoutes}
- {productionRoutes}
- {maintenanceRoutes}
- {maintenanceMobileRoutes}
- {assetsRoutes}
- {advancedRoutes}
- {selfServiceRoutes}
- {driverRoutes}
+ {compactRouteTree(
+  <>
+   {dashboardRoutes}
+   {adminRoutes}
+   {hrRoutes}
+   {payrollRoutes}
+   {accountingRoutes}
+   {inventoryRoutes}
+   {purchasingRoutes}
+   {crmRoutes}
+   {mrpRoutes}
+   {qualityRoutes}
+   {supplyChainRoutes}
+   {productionRoutes}
+   {maintenanceRoutes}
+   {maintenanceMobileRoutes}
+   {assetsRoutes}
+   {advancedRoutes}
+   {selfServiceRoutes}
+   {driverRoutes}
+  </>,
+ )}
  </Route>
 
  {/* Factory Floor PWA — Mobile-first for shop floor operators.
   Uses AuthGuard with the main session (operators sign in via /sign-in).
  FactoryFloorLayout renders a mobile-first shell with bottom nav. */}
- {factoryRoutes}
+ {compactRouteTree(factoryRoutes)}
 
  {/* B2B Portals — Supplier + Customer
  SECURITY: Portal routes are deliberately outside the main AuthGuard
@@ -85,7 +90,10 @@ export default function App() {
  Each portal layout (SupplierPortalLayout / CustomerPortalLayout) performs
  its own bootstrap + redirect-to-login. Never render a portal page
  outside its layout wrapper — that would bypass auth entirely. */}
- {portalRoutes}
+ {compactRouteTree(portalRoutes)}
+
+ {/* Old module paths keep working and redirect to their compact route. */}
+ {legacyRouteAliases}
 
  {/* 404 */}
  <Route path="*" element={<NotFoundPage />} />

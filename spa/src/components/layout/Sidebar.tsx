@@ -65,6 +65,7 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { cn } from '@/lib/cn';
 import { focusRingInset } from '@/lib/focus';
+import { expandAppPath } from '@/lib/appPaths';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { Badge } from '@/components/ui/Badge';
@@ -1090,7 +1091,8 @@ export const Sidebar = memo(function Sidebar({ permissions, delegatedApprovals, 
         .flatMap((s) => s.visibleItems)
         .filter((item) => {
           const path = item.to.split('?')[0];
-          return pathname === path || pathname.startsWith(path + '/');
+          const legacyPathname = expandAppPath(pathname);
+          return legacyPathname === path || legacyPathname.startsWith(path + '/');
         })
         .sort((a, b) => b.to.split('?')[0].length - a.to.split('?')[0].length)[0],
     [visibleSections, pathname],

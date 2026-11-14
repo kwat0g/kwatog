@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 /**
- * Captures the last N HTTP errors so the floating Dev panel can surface
+ * Captures the last N HTTP 5xx errors so the floating Dev panel can surface
  * Laravel's exception details (class, file, line, trace) inline in the SPA
  * without forcing the user to dig through `storage/logs/laravel.log`.
  *

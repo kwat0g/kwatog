@@ -86,7 +86,14 @@ export const portalRoutes = (
         element={<PortalForgotPasswordPage portalType="customer" />}
       />
       <Route path="/portal/password-reset" element={<PortalPasswordResetPage />} />
-      <Route path="/portal/:type/change-password" element={<PortalChangePasswordPage />} />
+      <Route
+        path="/portal/customer/change-password"
+        element={<PortalChangePasswordPage portalType="customer" />}
+      />
+      <Route
+        path="/portal/supplier/change-password"
+        element={<PortalChangePasswordPage portalType="supplier" />}
+      />
     </Route>
     <Route element={<SupplierPortalLayout />}>
       <Route path="/portal/supplier" element={<SupplierPortalDashboardPage />} />

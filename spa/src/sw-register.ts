@@ -1,3 +1,5 @@
+import { expandAppPath } from '@/lib/appPaths';
+
 // Each touch PWA installs as its own home-screen app: distinct manifest, title
 // and icon so "Add to Home Screen" lands the operator in the right sub-app.
 const PWA_MANIFESTS: Array<{
@@ -37,7 +39,7 @@ export async function clearPwaCaches(): Promise<boolean> {
 export function registerSW() {
   // Swap the manifest link based on which PWA sub-app we're in.
   const manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-  const app = PWA_MANIFESTS.find((m) => window.location.pathname.startsWith(m.prefix));
+  const app = PWA_MANIFESTS.find((m) => expandAppPath(window.location.pathname).startsWith(m.prefix));
   if (manifestLink && app) {
     manifestLink.href = app.manifest;
     const titleMeta = document.querySelector<HTMLMetaElement>(
