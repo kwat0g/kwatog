@@ -14,6 +14,7 @@ import {
   offsetScheduleDate,
 } from '@/components/production/scheduleDates';
 import { reconcileRealtimeMutationResponse } from '@/lib/realtime/invalidationMap';
+import { isClientHttpError, refetchUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import type { WorkOrder } from '@/types/production';
@@ -68,6 +69,7 @@ export function StartProductionDialog({
     queryFn: () => workOrdersApi.executionReadiness(woId),
     staleTime: 0,
     refetchInterval: (query) => {
+      if (isClientHttpError(query.state.error)) return false;
       if (rescheduling || changingWorkers) return false;
       const nextRefreshAt = query.state.data?.next_refresh_at;
       if (!nextRefreshAt) return false;
@@ -75,8 +77,8 @@ export function StartProductionDialog({
       return Number.isFinite(remaining) ? Math.max(250, remaining) : false;
     },
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
+    refetchOnReconnect: refetchUnlessClientHttpError,
     retry: false,
   });
   const suggestion = useQuery({

@@ -25,6 +25,7 @@ import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
+import { refetchUnlessClientHttpError, refetchOnMountUnlessClientError } from '@/lib/httpErrorPolicy';
 const MONTHS = [
   'Jan',
   'Feb',
@@ -56,8 +57,8 @@ export default function BudgetDetailPage() {
     queryFn: () => budgetingApi.show(id!),
     enabled: !!id,
     staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnMount: refetchOnMountUnlessClientError,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
   });
   const { data: budget, isLoading } = budgetQuery;
   useRealtimeRecord('budget', canContinueViewing ? id : undefined);

@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { SparkLine } from '@/components/charts/SparkLine';
 import { kpiDashboardLink } from '@/lib/dashboardKpis';
 import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
+import { shouldRetryQuery } from '@/lib/httpErrorPolicy';
 import { kpiGridCols } from './DashboardShell';
 import type { KpiScorecardItem } from '@/types/dashboard/kpi';
 
@@ -93,7 +94,7 @@ export function KpiStrip({ codes, className, linkByCode, compact }: KpiStripProp
     // query still fires on every mount of those pages.
     enabled: codes.length > 0,
     staleTime: 5 * 60_000,
-    retry: 1,
+    retry: shouldRetryQuery,
   });
 
   const { data: trends } = useQuery({
@@ -105,7 +106,7 @@ export function KpiStrip({ codes, className, linkByCode, compact }: KpiStripProp
     // status dot + delta only, no trends fetch.
     enabled: (compact ?? false) && codes.length > 0,
     staleTime: 5 * 60_000,
-    retry: 1,
+    retry: shouldRetryQuery,
   });
 
   // Nothing requested (admin compute panel, default widget home) — render nothing.

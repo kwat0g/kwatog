@@ -231,8 +231,8 @@ export function CommandPalette({ open, onClose }: Props) {
         .get<SearchResponse>('/search', { params: { q: debouncedTerm }, signal })
         .then((r) => r.data.data),
     enabled,
-    // The global default is `retry: 1`. On this endpoint that is actively
-    // harmful: `/search` is throttled at 30/min, so an automatic retry spends
+    // The global policy retries transient failures once. On this endpoint
+    // that is actively harmful: `/search` is throttled at 30/min, so a retry spends
     // a second token against the limit that just rejected us and pushes the
     // window further out. One attempt, then an explicit Retry the user drives.
     retry: false,

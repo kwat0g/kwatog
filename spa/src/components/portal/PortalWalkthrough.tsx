@@ -10,6 +10,7 @@ import {
   type PortalGuideTarget,
 } from './portalWalkthroughs';
 import './PortalWalkthrough.css';
+import { expandAppPath } from '@/lib/appPaths';
 
 type PortalRealm = 'customer' | 'supplier';
 type GuideMode = 'overview' | 'page';
@@ -93,7 +94,7 @@ export function PortalWalkthrough({
   const location = useLocation();
   const storageKey = useMemo(() => portalGuideStorageKey(realm, userId), [realm, userId]);
   const overviewSteps = useMemo(() => portalWalkthroughSteps(realm, sections), [realm, sections]);
-  const pageGuide = portalPageGuideForPath(realm, location.pathname);
+  const pageGuide = portalPageGuideForPath(realm, expandAppPath(location.pathname));
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<GuideMode>('overview');
   const [stepIndex, setStepIndex] = useState(0);

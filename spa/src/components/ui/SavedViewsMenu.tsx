@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { LuChevronDown, LuStar, LuTrash2 } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
+import { expandAppPath } from '@/lib/appPaths';
 import { useTablePrefsStore, type SavedFilterView } from '@/stores/tablePrefsStore';
 
 interface SavedViewsMenuProps {
@@ -40,7 +41,7 @@ export function SavedViewsMenu({ values, searchValue, searchable, onApply }: Sav
     .filter((key) => !TRANSIENT_KEYS.has(key))
     .sort()
     .join(',') || (searchable ? 'search' : 'filters');
-  const preferenceKey = `list:${location.pathname}:${filterShape}`;
+  const preferenceKey = `list:${expandAppPath(location.pathname)}:${filterShape}`;
   const views = useTablePrefsStore((state) => state.byTable[preferenceKey]?.savedViews ?? EMPTY_VIEWS);
   const setSavedViews = useTablePrefsStore((state) => state.setSavedViews);
   const [open, setOpen] = useState(false);

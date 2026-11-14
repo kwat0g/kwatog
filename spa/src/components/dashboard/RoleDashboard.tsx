@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { alertLink, chainStageLink, kpiLink } from '@/lib/dashboardLinks';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatPeso } from '@/lib/formatNumber';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 
 import { LuCheck, LuMinus } from '@/lib/icons';
 interface ChainStage { key: string; label: string; count: number; percent: number; color?: string }
@@ -34,7 +35,7 @@ export function RoleDashboard({ role }: { role: Role }) {
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['dashboard', role],
  queryFn: () => dashboardsApi[role](),
- refetchInterval: 60_000,
+ refetchInterval: refetchIntervalUnlessClientHttpError(60_000),
  });
 
  if (isLoading) {

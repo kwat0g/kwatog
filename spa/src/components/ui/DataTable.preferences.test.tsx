@@ -27,12 +27,21 @@ describe('DataTable preferences', () => {
   it('applies and persists density even when the page has no explicit table key', () => {
     const { container } = render(<DataTable columns={columns} data={data} />);
     expect(container.querySelector('[data-layout="data-table"]')).toHaveAttribute('data-density', 'compact');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Density' }), { target: { value: 'compact' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Compact' }));
 
     expect(container.querySelector('[data-layout="data-table"]')).toHaveAttribute('data-density', 'compact');
     expect(container.querySelector('tbody tr')).toHaveClass('h-row-compact');
     const payload = vi.mocked(authApi.updatePreferences).mock.calls[0]?.[0].table_preferences;
     expect(Object.values(payload ?? {})[0]).toEqual({ density: 'compact' });
+  });
+
+  it('keeps automatic preference keys stable when a route is compacted', () => {
+    window.history.replaceState({}, '', '/ac/journal-entries');
+    render(<DataTable columns={columns} data={data} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Spacious' }));
+
+    const payload = vi.mocked(authApi.updatePreferences).mock.calls[0]?.[0].table_preferences;
+    expect(Object.keys(payload ?? {})[0]).toContain('auto:/accounting/journal-entries:');
   });
 
   it('restores a saved density and renders zebra rows using the active theme token', () => {

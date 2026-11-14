@@ -8,10 +8,9 @@ import { CopyButton } from '@/components/ui/CopyButton';
 import { focusRing, focusRingInset } from '@/lib/focus';
 
 /**
- * Floating bottom-right panel that surfaces every 4xx/5xx HTTP response
- * captured by the axios interceptor — including Laravel's debug payload
- * (exception class, file, line, stack trace). Visible only in dev so the
- * user doesn't have to open `storage/logs/laravel.log` to diagnose 500s.
+ * Floating bottom-right panel for HTTP 5xx responses captured by the axios
+ * interceptor, including Laravel's debug payload (exception class, file, line,
+ * stack trace). Visible only in dev to help diagnose API failures.
  */
 
 const showDevPanel = import.meta.env.DEV;

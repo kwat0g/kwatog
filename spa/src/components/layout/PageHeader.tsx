@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import { RefreshingIndicator } from './RefreshingIndicator';
 import { Chip } from '@/components/ui/Chip';
 import { MODULE_LABELS } from '@/lib/moduleLabels';
+import { expandAppPath } from '@/lib/appPaths';
 import { useBreadcrumbStore } from '@/stores/breadcrumbStore';
 
 interface PageHeaderBaseProps {
@@ -114,7 +115,7 @@ export function PageHeader(props: PageHeaderProps) {
     // "PO-202604-0015 · Procurement · ERP" beats "PO-202604-0015 · ERP" in a
     // strip of a dozen pinned tabs, where the document number alone says
     // nothing about which part of the ERP it belongs to.
-    const module = MODULE_LABELS[pathname.split('/').filter(Boolean)[0] ?? ''];
+    const module = MODULE_LABELS[expandAppPath(pathname).split('/').filter(Boolean)[0] ?? ''];
     document.title = module && module !== documentTitle
       ? `${documentTitle} · ${module} · ERP`
       : `${documentTitle} · ERP`;

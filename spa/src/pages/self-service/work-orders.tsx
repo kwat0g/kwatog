@@ -27,6 +27,7 @@ import { DraftRestoreBanner } from '@/components/ui/DraftRestoreBanner';
 import { createRequestKey } from '@/lib/requestKey';
 import { workOrderStatusVariant } from '@/lib/statusVariants';
 import { useAssignedWorkOrderRealtime } from '@/hooks/useAssignedWorkOrderRealtime';
+import { refetchUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 
 export default function MyWorkOrdersPage() {
   useAssignedWorkOrderRealtime();
@@ -36,7 +37,7 @@ export default function MyWorkOrdersPage() {
   const [historyPage, setHistoryPage] = useState(1);
   const orders = useQuery({
     queryKey: ['my-work-orders', userId, page],
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
     queryFn: () => workOrdersApi.myWorkOrders(page),
   });
   const history = useQuery({
@@ -216,7 +217,7 @@ function MyWorkOrderDetail() {
   const qc = useQueryClient();
   const order = useQuery({
     queryKey: ['my-work-orders', userId, id, ncrId, crewId],
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: refetchUnlessClientHttpError,
     queryFn: () => workOrdersApi.myWorkOrder(id!, ncrId, crewId),
     enabled: !!id,
   });

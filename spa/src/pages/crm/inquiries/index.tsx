@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { inquiriesApi, type InquiryListParams } from '@/api/crm/inquiries';
@@ -21,6 +22,7 @@ const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'ne
  in_progress: 'warning',
  closed: 'neutral',
 };
+const inquiryStatuses = new Set<ContactInquiryStatus>(['new', 'in_progress', 'closed']);
 
 export default function InquiryListPage() {
  useRealtimeSignal('contact_inquiries_changed', 'entity.contact_inquiry.visible', '.crm.contact-inquiry.changed');
@@ -28,11 +30,21 @@ export default function InquiryListPage() {
  const user = useAuthStore((state) => state.user);
  const identity = realtimeIdentityKey(user);
  const [filters, setFilters] = useUrlFilters<InquiryListParams>({ page: 1, per_page: 25 });
+ const status = filters.status;
+ const statusIsValid = !status || inquiryStatuses.has(status as ContactInquiryStatus);
+ const requestFilters = statusIsValid ? filters : { ...filters, status: undefined };
 
- const queryKey = ['crm', 'inquiries', filters, identity] as const;
+ useEffect(() => {
+  if (statusIsValid) return;
+  setFilters((current) => current.status === status
+   ? { ...current, status: undefined, page: 1 }
+   : current);
+ }, [setFilters, status, statusIsValid]);
+
+ const queryKey = ['crm', 'inquiries', requestFilters, identity] as const;
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey,
- queryFn: () => inquiriesApi.list(filters),
+ queryFn: () => inquiriesApi.list(requestFilters),
  placeholderData: (previous, previousQuery) =>
    sameQueryExceptPage(previousQuery?.queryKey, queryKey, 2) ? previous : undefined });
  const { data: inquiryOptions } = useQuery({
@@ -71,7 +83,7 @@ export default function InquiryListPage() {
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'inquiry' : 'inquiries'}` : undefined} />
  <FilterBar
  filters={filterConfig}
- values={filters}
+ values={requestFilters}
  onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
  searchPlaceholder="Search name, company, email, or inquiry #…"

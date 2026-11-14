@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { reportMutationError } from '@/lib/formErrors';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 import {
   LuBuilding2,
   LuCalendar,
@@ -224,7 +225,9 @@ export default function SettingsPage() {
     queryKey: ['admin', 'system-health'],
     queryFn: settingsApi.systemHealth,
     enabled: activeTab === 'all' || activeTab === 'system',
-    refetchInterval: activeTab === 'all' || activeTab === 'system' ? 30_000 : false,
+    refetchInterval: refetchIntervalUnlessClientHttpError(
+      activeTab === 'all' || activeTab === 'system' ? 30_000 : false,
+    ),
     refetchIntervalInBackground: false,
   });
 

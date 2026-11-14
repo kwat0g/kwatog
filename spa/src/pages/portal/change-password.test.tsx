@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { authApi } from '@/api/auth';
+import { compactRouteTree, legacyRouteAliases } from '@/routes/shortRoutes';
 import PortalChangePasswordPage from './change-password';
 
 vi.mock('@/api/auth', () => ({ authApi: { passwordPolicy: vi.fn() } }));
@@ -25,7 +26,13 @@ it('explains password changes for an already signed-in portal user', async () =>
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/portal/customer/change-password']}>
         <Routes>
-          <Route path="/portal/:type/change-password" element={<PortalChangePasswordPage />} />
+          {compactRouteTree(
+            <Route
+              path="/portal/customer/change-password"
+              element={<PortalChangePasswordPage portalType="customer" />}
+            />,
+          )}
+          {legacyRouteAliases}
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

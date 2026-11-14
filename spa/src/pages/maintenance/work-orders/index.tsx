@@ -24,6 +24,7 @@ import type { MaintenanceWorkOrder } from '@/types/maintenance';
 import { formatPeso } from '@/lib/formatNumber';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
+import { expandAppPath } from '@/lib/appPaths';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: WorkOrderListParams = {
@@ -32,7 +33,7 @@ const DEFAULT_FILTERS: WorkOrderListParams = {
 
 export default function MaintenanceWorkOrdersListPage() {
  const navigate = useNavigate();
- const selfService = useLocation().pathname.startsWith('/self-service/');
+ const selfService = expandAppPath(useLocation().pathname).startsWith('/self-service/');
  const orderPath = selfService ? '/self-service/maintenance-work-orders' : '/maintenance/work-orders';
  const { can } = usePermission();
  const employeeId = useAuthStore((s) => s.user?.employee?.id);

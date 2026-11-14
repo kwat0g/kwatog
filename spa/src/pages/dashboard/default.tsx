@@ -24,6 +24,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { realtimeIdentityKey } from '@/lib/realtime/identity';
 import { invalidateRealtimeSignal } from '@/lib/realtime/invalidationMap';
 import { usePermission } from '@/hooks/usePermission';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 
 /**
  * Task D1 — Default (widget-layout) dashboard.
@@ -59,7 +60,7 @@ export default function DashboardDefaultPage() {
   queryKey: dashboardLayoutQueryKeys.widgetData(dashboardIdentity, widgetKeys),
   queryFn: () => dashboardLayoutApi.data(widgetKeys),
   enabled: widgetKeys.length > 0,
-  refetchInterval: DASHBOARD_REFRESH_MS,
+  refetchInterval: refetchIntervalUnlessClientHttpError(DASHBOARD_REFRESH_MS),
   });
 
   // Freshness for the shell stale badge: newest widget-data timestamp.

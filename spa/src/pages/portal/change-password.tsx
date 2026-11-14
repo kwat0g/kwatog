@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
@@ -19,8 +19,12 @@ import { publishAuthSessionSignal, serializeAuthSessionMutation } from '@/lib/au
 import { clearPwaCaches } from '@/sw-register';
 import { clearLocalAuthSession, useAuthStore } from '@/stores/authStore';
 
-export default function PortalChangePasswordPage() {
-  const { type = 'customer' } = useParams<{ type: 'customer' | 'supplier' }>();
+export default function PortalChangePasswordPage({
+  portalType,
+}: {
+  portalType: 'customer' | 'supplier';
+}) {
+  const type = portalType;
   const navigate = useNavigate();
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');

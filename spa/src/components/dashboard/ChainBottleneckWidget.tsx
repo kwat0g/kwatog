@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { usePermission } from '@/hooks/usePermission';
 import { useRealtimeSignal } from '@/hooks/useRealtimeSignal';
 import { formatDateTime } from '@/lib/formatDate';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 import type { ChainAutomationSummary, ChainBottleneckGroup, ChainBottleneckRow } from '@/types/chain';
 
 interface Props {
@@ -43,7 +44,7 @@ export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', h
  queryFn: () => chainApi.bottlenecks(audience),
  // Bottlenecks can become overdue as time passes without a record write.
  // Keep this periodic dashboard freshness check alongside immediate signals.
- refetchInterval: 60_000,
+ refetchInterval: refetchIntervalUnlessClientHttpError(60_000),
  staleTime: 0,
  });
 

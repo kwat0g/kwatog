@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { focusRingInset } from '@/lib/focus';
+import { expandAppPath } from '@/lib/appPaths';
 import { cn } from '@/lib/cn';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { customerPortalApi } from '@/api/b2b/customer';
@@ -359,7 +360,10 @@ function PortalSidebar({
     () =>
       sections
         .flatMap((s) => s.items)
-        .filter((item) => pathname === item.to || pathname.startsWith(item.to + '/'))
+        .filter((item) => {
+          const legacyPathname = expandAppPath(pathname);
+          return legacyPathname === item.to || legacyPathname.startsWith(`${item.to}/`);
+        })
         .sort((a, b) => b.to.length - a.to.length)[0],
     [sections, pathname],
   );

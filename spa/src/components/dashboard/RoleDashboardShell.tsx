@@ -10,6 +10,7 @@ import { dashboardLayoutApi, dashboardLayoutQueryKeys } from '@/api/dashboard-la
 import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { useAuthStore } from '@/stores/authStore';
 import { realtimeIdentityKey } from '@/lib/realtime/identity';
+import { refetchIntervalUnlessClientHttpError } from '@/lib/httpErrorPolicy';
 
 /** The layout envelope the render prop receives. Named so the JSX open tag does
  * not need a four-deep generic argument list, which the TSX parser reads as
@@ -70,7 +71,7 @@ export function RoleDashboardShell({
     queryKey: dashboardLayoutQueryKeys.widgetData(dashboardIdentity, widgetKeys),
     queryFn: () => dashboardLayoutApi.data(widgetKeys),
     enabled: widgetKeys.length > 0,
-    refetchInterval: DASHBOARD_REFRESH_MS,
+    refetchInterval: refetchIntervalUnlessClientHttpError(DASHBOARD_REFRESH_MS),
   });
 
   // Freshness for the shell's stale badge: the newest widget-data timestamp.

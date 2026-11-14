@@ -13,6 +13,7 @@ import { LuArrowDown, LuArrowUp, LuChevronDown } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { horizontalScrollEdges } from '@/lib/horizontalScrollEdges';
 import { focusRingInset } from '@/lib/focus';
+import { expandAppPath } from '@/lib/appPaths';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import { RowContextMenu, type RowContextMenuItem } from './RowContextMenu';
@@ -244,7 +245,8 @@ export function DataTable<T>({
 
   // ─── Persistent prefs ─────────────────────────────────────
   const tableInstanceId = useId();
-  const preferenceKey = tableKey ?? `auto:${typeof window === 'undefined' ? '/' : window.location.pathname}:${tableInstanceId}`;
+  const routePathname = typeof window === 'undefined' ? '/' : expandAppPath(window.location.pathname);
+  const preferenceKey = tableKey ?? `auto:${routePathname}:${tableInstanceId}`;
   const prefs = useTablePrefsStore((s) => s.byTable[preferenceKey]);
   const setStoreDensity = useTablePrefsStore((s) => s.setDensity);
   const setStoreHidden = useTablePrefsStore((s) => s.setHiddenColumns);

@@ -6,6 +6,11 @@ import {
  type MutationState,
 } from '@tanstack/react-query';
 import { isRealtimeManagedQueryKey } from './realtime/queryFreshness';
+import {
+ isClientHttpError,
+ refetchUnlessClientHttpError,
+ shouldRetryQuery,
+} from './httpErrorPolicy';
 
 class SessionScopedQueryClient extends QueryClient {
  #sessionScopeRevision = 0;
@@ -95,9 +100,13 @@ export const queryClient = new SessionScopedQueryClient({
  // A realtime event can be missed while no screen is mounted. Revalidate
  // mapped record/aggregate families on mount even where an older hook still
  // declares a longer staleTime. Unmapped reference/option keys retain their TTL.
- refetchOnMount: (query) => isRealtimeManagedQueryKey(query.queryKey) ? 'always' : true,
- retry: 1,
+ refetchOnMount: (query) => {
+  if (isClientHttpError(query.state.error)) return false;
+  return isRealtimeManagedQueryKey(query.queryKey) ? 'always' : true;
+ },
+ retry: shouldRetryQuery,
  refetchOnWindowFocus: false,
+ refetchOnReconnect: refetchUnlessClientHttpError,
  networkMode: 'offlineFirst',
  },
  mutations: {

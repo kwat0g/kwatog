@@ -6,6 +6,8 @@ namespace Tests\Support;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Common\Services\SettingsService;
+use App\Common\Models\OutboxMessage;
+use App\Common\Services\OutboxDispatcher;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
@@ -30,11 +32,13 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Services\WorkOrderOutputService;
+use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionMode;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Events\InspectionPassed;
 use App\Modules\Quality\Services\InspectionSpecService;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
@@ -291,6 +295,7 @@ trait ReceivesProductionOutput
             ->assertSuccessful()
             ->assertJsonPath('data.status', 'completed');
         $this->assertSame('completed', $workOrder->fresh()->status->value);
+        $this->dispatchOutboxForModel(WorkOrderCompleted::class, 'workOrder', (int) $workOrder->id);
 
         $inspection = Inspection::query()
             ->where('stage', InspectionStage::Outgoing->value)
@@ -416,6 +421,24 @@ trait ReceivesProductionOutput
             $inspection->refresh();
         }
 
+        if ($inspection->stage === InspectionStage::Outgoing && $inspection->status === InspectionStatus::Passed) {
+            $this->dispatchOutboxForModel(InspectionPassed::class, 'inspection', (int) $inspection->id);
+        }
+
         return $inspection;
+    }
+
+    private function dispatchOutboxForModel(string $eventType, string $modelParameter, int $modelId): void
+    {
+        $message = OutboxMessage::query()
+            ->where('event_type', $eventType)
+            ->where('status', OutboxMessage::STATUS_PENDING)
+            ->get()
+            ->first(static fn (OutboxMessage $row): bool =>
+                (int) data_get($row->payload, $modelParameter.'.id') === $modelId);
+
+        if ($message) {
+            app(OutboxDispatcher::class)->dispatch((string) $message->getKey());
+        }
     }
 }
